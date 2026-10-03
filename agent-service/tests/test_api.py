@@ -1,16 +1,61 @@
 from httpx import AsyncClient
 
+REGISTER_PAYLOAD = {
+    "email": "student@example.com",
+    "password": "correct-horse-42",
+    "display_name": "小航",
+}
+
+ONBOARDING_PAYLOAD = {
+    "school": "杭州电子科技大学",
+    "campus": "下沙校区",
+    "semester": "2026-2027 第一学期",
+    "timetable": [
+        {
+            "date": "2026-10-01",
+            "title": "操作系统",
+            "start_time": "08:05",
+            "end_time": "09:40",
+            "location": "第7教研楼北406",
+            "teacher": "叶可齐",
+        }
+    ],
+    "campus_map": {
+        "campus_name": "杭州电子科技大学下沙校区",
+        "places": [
+            {
+                "name": "图书馆",
+                "category": "公共空间",
+                "zone": "教学区",
+                "aliases": [],
+            }
+        ],
+        "warnings": [],
+    },
+}
+
+
+async def register(client: AsyncClient) -> None:
+    response = await client.post("/api/v1/auth/register", json=REGISTER_PAYLOAD)
+    assert response.status_code == 201
+
+
+async def complete_onboarding(client: AsyncClient) -> None:
+    response = await client.put("/api/v1/onboarding", json=ONBOARDING_PAYLOAD)
+    assert response.status_code == 200
+
 
 async def test_frontend_is_served(client: AsyncClient) -> None:
     page = await client.get("/")
     script = await client.get("/static/app.js")
 
     assert page.status_code == 200
-    assert "CampusFlow" in page.text
+    assert "创建账户" in page.text
+    assert "课表识别" in page.text
     assert "deepseek-v4-pro" in page.text
     assert "deepseek-flash" in page.text
     assert script.status_code == 200
-    assert 'fetch("/api/v1/chat"' in script.text
+    assert "fetch(path, options)" in script.text
 
 
 async def test_health(client: AsyncClient) -> None:
@@ -23,40 +68,94 @@ async def test_health(client: AsyncClient) -> None:
     }
 
 
-async def test_chat_and_history(client: AsyncClient) -> None:
-    payload = {
-        "user_id": "student-001",
-        "session_id": "session-001",
+async def test_register_me_logout_and_login(client: AsyncClient) -> None:
+    await register(client)
+
+    me = await client.get("/api/v1/me")
+    assert me.status_code == 200
+    assert me.json()["display_name"] == "小航"
+    assert me.json()["onboarding_complete"] is False
+
+    logout = await client.post("/api/v1/auth/logout")
+    assert logout.status_code == 204
+    assert (await client.get("/api/v1/me")).status_code == 401
+
+    login = await client.post(
+        "/api/v1/auth/login",
+        json={"email": REGISTER_PAYLOAD["email"], "password": REGISTER_PAYLOAD["password"]},
+    )
+    assert login.status_code == 200
+    assert login.json()["token_type"] == "bearer"
+
+
+async def test_duplicate_registration_is_rejected(client: AsyncClient) -> None:
+    await register(client)
+    duplicate = await client.post("/api/v1/auth/register", json=REGISTER_PAYLOAD)
+    assert duplicate.status_code == 409
+
+
+async def test_visual_import_onboarding_chat_and_history(client: AsyncClient) -> None:
+    await register(client)
+    image_payload = {
         "api_key": "test-key",
-        "model": "deepseek-v4-pro",
-        "message": "帮我安排明天下午的学习计划",
+        "image_data": "data:image/png;base64,aGVsbG8td29ybGQtaW1hZ2U=",
     }
-    chat = await client.post("/api/v1/chat", json=payload)
+
+    timetable = await client.post("/api/v1/onboarding/parse-timetable", json=image_payload)
+    campus_map = await client.post("/api/v1/onboarding/parse-map", json=image_payload)
+    assert timetable.status_code == 200
+    assert timetable.json()["entries"][0]["title"] == "操作系统"
+    assert campus_map.status_code == 200
+    assert campus_map.json()["places"][0]["name"] == "图书馆"
+
+    onboarding = await client.put("/api/v1/onboarding", json=ONBOARDING_PAYLOAD)
+    assert onboarding.status_code == 200
+    assert onboarding.json()["user"]["onboarding_complete"] is True
+    assert onboarding.json()["timetable_count"] == 1
+
+    chat = await client.post(
+        "/api/v1/chat",
+        json={
+            "session_id": "session-001",
+            "api_key": "test-key",
+            "model": "deepseek-v4-pro",
+            "message": "查询我的课表",
+        },
+    )
     assert chat.status_code == 200
-    assert chat.json()["session_id"] == "session-001"
     assert chat.json()["message"].startswith("测试回复：")
 
-    history = await client.get(
-        "/api/v1/sessions/session-001/history",
-        params={"user_id": "student-001"},
-    )
+    history = await client.get("/api/v1/sessions/session-001/history")
     assert history.status_code == 200
     assert [item["role"] for item in history.json()] == ["user", "assistant"]
 
 
+async def test_chat_requires_login_and_onboarding(client: AsyncClient) -> None:
+    payload = {
+        "session_id": "session-001",
+        "api_key": "test-key",
+        "model": "deepseek-v4-pro",
+        "message": "你好",
+    }
+    assert (await client.post("/api/v1/chat", json=payload)).status_code == 401
+    await register(client)
+    response = await client.post("/api/v1/chat", json=payload)
+    assert response.status_code == 403
+
+
 async def test_unknown_proposal_returns_404(client: AsyncClient) -> None:
-    response = await client.post(
-        "/api/v1/actions/not-found/confirm",
-        params={"user_id": "student-001"},
-    )
+    await register(client)
+    await complete_onboarding(client)
+    response = await client.post("/api/v1/actions/not-found/confirm")
     assert response.status_code == 404
 
 
 async def test_unsupported_model_is_rejected(client: AsyncClient) -> None:
+    await register(client)
+    await complete_onboarding(client)
     response = await client.post(
         "/api/v1/chat",
         json={
-            "user_id": "student-001",
             "session_id": "session-001",
             "api_key": "test-key",
             "model": "unsupported-model",

@@ -1,21 +1,63 @@
+const $ = (selector) => document.querySelector(selector);
+const $$ = (selector) => document.querySelectorAll(selector);
+
 const elements = {
-  apiKey: document.querySelector("#apiKey"),
-  toggleSecret: document.querySelector("#toggleSecret"),
-  sessionId: document.querySelector("#sessionId"),
-  newSessionButton: document.querySelector("#newSessionButton"),
-  modelBadge: document.querySelector("#modelBadge"),
-  messages: document.querySelector("#messages"),
-  emptyState: document.querySelector("#emptyState"),
-  composer: document.querySelector("#composer"),
-  messageInput: document.querySelector("#messageInput"),
-  sendButton: document.querySelector("#sendButton"),
-  traceList: document.querySelector("#traceList"),
-  systemState: document.querySelector("#systemState"),
-  toast: document.querySelector("#toast"),
+  authView: $("#authView"),
+  onboardingView: $("#onboardingView"),
+  appView: $("#appView"),
+  authTitle: $("#authTitle"),
+  authSubtitle: $("#authSubtitle"),
+  loginForm: $("#loginForm"),
+  registerForm: $("#registerForm"),
+  setupProgress: $("#setupProgress"),
+  setupApiKey: $("#setupApiKey"),
+  schoolInput: $("#schoolInput"),
+  campusInput: $("#campusInput"),
+  semesterInput: $("#semesterInput"),
+  timetableFile: $("#timetableFile"),
+  timetablePreview: $("#timetablePreview"),
+  parseTimetableButton: $("#parseTimetableButton"),
+  timetableStatus: $("#timetableStatus"),
+  timetableReview: $("#timetableReview"),
+  timetableSummary: $("#timetableSummary"),
+  timetableTable: $("#timetableTable"),
+  mapFile: $("#mapFile"),
+  mapPreview: $("#mapPreview"),
+  parseMapButton: $("#parseMapButton"),
+  mapStatus: $("#mapStatus"),
+  mapReview: $("#mapReview"),
+  campusMapName: $("#campusMapName"),
+  placeCount: $("#placeCount"),
+  placeCloud: $("#placeCloud"),
+  setupBackButton: $("#setupBackButton"),
+  setupNextButton: $("#setupNextButton"),
+  setupLogoutButton: $("#setupLogoutButton"),
+  apiKey: $("#apiKey"),
+  toggleSecret: $("#toggleSecret"),
+  sessionId: $("#sessionId"),
+  newSessionButton: $("#newSessionButton"),
+  modelBadge: $("#modelBadge"),
+  messages: $("#messages"),
+  emptyState: $("#emptyState"),
+  composer: $("#composer"),
+  messageInput: $("#messageInput"),
+  sendButton: $("#sendButton"),
+  traceList: $("#traceList"),
+  systemState: $("#systemState"),
+  userInitial: $("#userInitial"),
+  userName: $("#userName"),
+  contextLine: $("#contextLine"),
+  logoutButton: $("#logoutButton"),
+  toast: $("#toast"),
 };
 
 const state = {
-  userId: "demo-student",
+  user: null,
+  setupStep: 1,
+  timetableImage: "",
+  mapImage: "",
+  timetable: null,
+  campusMap: null,
   sessionId: createSessionId(),
   sending: false,
   hasTraces: false,
@@ -26,8 +68,343 @@ function createSessionId() {
   return `web-${id}`;
 }
 
+async function responseError(response) {
+  try {
+    const payload = await response.json();
+    if (Array.isArray(payload.detail)) {
+      return payload.detail.map((item) => item.msg).join("；");
+    }
+    return payload.detail || `请求失败（${response.status}）`;
+  } catch {
+    return `请求失败（${response.status}）`;
+  }
+}
+
+async function api(path, options = {}) {
+  const response = await fetch(path, options);
+  if (!response.ok) throw new Error(await responseError(response));
+  if (response.status === 204) return null;
+  return response.json();
+}
+
+function showToast(message, kind = "info") {
+  elements.toast.textContent = message;
+  elements.toast.classList.toggle("error", kind === "error");
+  elements.toast.classList.add("show");
+  clearTimeout(showToast.timer);
+  showToast.timer = setTimeout(() => elements.toast.classList.remove("show"), 3000);
+}
+
+function showOnly(view) {
+  elements.authView.hidden = view !== "auth";
+  elements.onboardingView.hidden = view !== "onboarding";
+  elements.appView.hidden = view !== "app";
+  document.body.style.overflow = view === "app" ? "hidden" : "auto";
+}
+
+function setButtonBusy(button, busy, label) {
+  button.disabled = busy;
+  const span = button.querySelector(".action-label") ?? button.querySelector("span");
+  if (span) {
+    if (!button.dataset.originalLabel) button.dataset.originalLabel = span.textContent;
+    span.textContent = busy ? label : button.dataset.originalLabel;
+  }
+}
+
+function switchAuth(mode) {
+  const register = mode === "register";
+  elements.loginForm.hidden = register;
+  elements.registerForm.hidden = !register;
+  elements.authTitle.textContent = register ? "创建你的校园空间" : "登录你的校园空间";
+  elements.authSubtitle.textContent = register
+    ? "三步连接学校、课表和校园地图。"
+    : "继续使用你的课表、校区信息和 Agent 记忆。";
+  $$('[data-auth-tab]').forEach((button) => {
+    button.classList.toggle("active", button.dataset.authTab === mode);
+  });
+}
+
+async function submitAuth(form, endpoint) {
+  const button = form.querySelector("button[type='submit']");
+  const body = Object.fromEntries(new FormData(form));
+  setButtonBusy(button, true, "正在建立连接…");
+  try {
+    const payload = await api(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    state.user = payload.user;
+    if (state.user.onboarding_complete) showApp();
+    else showOnboarding();
+  } catch (error) {
+    showToast(error.message, "error");
+  } finally {
+    setButtonBusy(button, false, "");
+  }
+}
+
+async function logout() {
+  try {
+    await api("/api/v1/auth/logout", { method: "POST" });
+  } catch {
+    // The local UI should still clear its volatile state if the session already expired.
+  }
+  state.user = null;
+  state.timetable = null;
+  state.campusMap = null;
+  state.timetableImage = "";
+  state.mapImage = "";
+  elements.apiKey.value = "";
+  elements.setupApiKey.value = "";
+  resetSession(false);
+  elements.loginForm.reset();
+  elements.registerForm.reset();
+  switchAuth("login");
+  showOnly("auth");
+}
+
+function showOnboarding() {
+  state.setupStep = 1;
+  showOnly("onboarding");
+  renderSetupStep();
+}
+
+function renderSetupStep() {
+  $$('[data-setup-step]').forEach((panel) => {
+    panel.hidden = Number(panel.dataset.setupStep) !== state.setupStep;
+  });
+  $$('[data-step-indicator]').forEach((indicator) => {
+    const step = Number(indicator.dataset.stepIndicator);
+    indicator.classList.toggle("active", step === state.setupStep);
+    indicator.classList.toggle("done", step < state.setupStep);
+  });
+  elements.setupProgress.style.width = `${state.setupStep * 33.333}%`;
+  elements.setupBackButton.disabled = state.setupStep === 1;
+  const labels = {
+    1: "继续：导入课表",
+    2: "继续：导入地图",
+    3: "确认并进入 CampusFlow",
+  };
+  elements.setupNextButton.querySelector(".action-label").textContent = labels[state.setupStep];
+}
+
+function validateSetupStep() {
+  if (state.setupStep === 1) {
+    if (!elements.schoolInput.value.trim() || !elements.campusInput.value.trim() || !elements.semesterInput.value.trim()) {
+      throw new Error("请完整填写学校、校区和学期。");
+    }
+  }
+  if (state.setupStep === 2 && !state.timetable?.entries?.length) {
+    throw new Error("请先上传、解析并确认课表。");
+  }
+  if (state.setupStep === 3 && !state.campusMap?.places?.length) {
+    throw new Error("请先上传并确认校园地图地点。");
+  }
+}
+
+async function advanceSetup() {
+  try {
+    validateSetupStep();
+    if (state.setupStep < 3) {
+      state.setupStep += 1;
+      renderSetupStep();
+      return;
+    }
+    await completeOnboarding();
+  } catch (error) {
+    showToast(error.message, "error");
+  }
+}
+
+function readImage(file) {
+  return new Promise((resolve, reject) => {
+    if (!file || !["image/png", "image/jpeg", "image/webp", "image/gif"].includes(file.type)) {
+      reject(new Error("请选择 PNG、JPEG、GIF 或 WebP 图片。"));
+      return;
+    }
+    if (file.size > 16 * 1024 * 1024) {
+      reject(new Error("图片不得超过 16 MiB。"));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error("图片读取失败。"));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function handleImageFile(file, kind) {
+  try {
+    const dataUrl = await readImage(file);
+    const preview = kind === "timetable" ? elements.timetablePreview : elements.mapPreview;
+    preview.replaceChildren();
+    const image = document.createElement("img");
+    image.src = dataUrl;
+    image.alt = kind === "timetable" ? "待解析课表" : "待解析校园地图";
+    preview.append(image);
+    if (kind === "timetable") {
+      state.timetableImage = dataUrl;
+      state.timetable = null;
+      elements.parseTimetableButton.disabled = false;
+      setParseStatus(elements.timetableStatus, "图片已载入，等待解析", "");
+      elements.timetableReview.hidden = true;
+    } else {
+      state.mapImage = dataUrl;
+      state.campusMap = null;
+      elements.parseMapButton.disabled = false;
+      setParseStatus(elements.mapStatus, "图片已载入，等待解析", "");
+      elements.mapReview.hidden = true;
+    }
+  } catch (error) {
+    showToast(error.message, "error");
+  }
+}
+
+function setParseStatus(element, text, kind) {
+  element.textContent = text;
+  element.className = `parse-status${kind ? ` ${kind}` : ""}`;
+}
+
+async function parseImage(kind) {
+  const apiKey = elements.setupApiKey.value.trim();
+  const isTimetable = kind === "timetable";
+  const imageData = isTimetable ? state.timetableImage : state.mapImage;
+  const button = isTimetable ? elements.parseTimetableButton : elements.parseMapButton;
+  const statusElement = isTimetable ? elements.timetableStatus : elements.mapStatus;
+  if (!apiKey) {
+    elements.setupApiKey.focus();
+    showToast("请填写 DeepSeek API Key 用于图片解析。", "error");
+    return;
+  }
+  if (!imageData) return;
+
+  setButtonBusy(button, true, "Flash 正在识别…");
+  setParseStatus(statusElement, "正在读取图片并生成结构化数据，通常需要 20–60 秒…", "working");
+  try {
+    const payload = await api(`/api/v1/onboarding/parse-${isTimetable ? "timetable" : "map"}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ api_key: apiKey, image_data: imageData }),
+    });
+    if (isTimetable) {
+      state.timetable = payload;
+      renderTimetable();
+      setParseStatus(statusElement, `识别完成：${payload.entries.length} 条课程，请检查后继续。`, "success");
+    } else {
+      state.campusMap = payload;
+      renderCampusMap();
+      setParseStatus(statusElement, `数据包已生成：${payload.places.length} 个地点，请检查后继续。`, "success");
+    }
+  } catch (error) {
+    setParseStatus(statusElement, error.message, "error");
+    showToast(error.message, "error");
+  } finally {
+    setButtonBusy(button, false, "");
+    button.disabled = false;
+  }
+}
+
+function courseInput(entry, field, type = "text") {
+  const input = document.createElement("input");
+  input.type = type;
+  input.value = entry[field] ?? "";
+  input.title = field;
+  input.addEventListener("change", () => {
+    entry[field] = input.value;
+  });
+  return input;
+}
+
+function renderTimetable() {
+  elements.timetableTable.replaceChildren();
+  const entries = state.timetable?.entries ?? [];
+  elements.timetableSummary.textContent = `${entries.length} 条课程记录`;
+  elements.timetableReview.hidden = false;
+  entries.forEach((entry, index) => {
+    const row = document.createElement("div");
+    row.className = "course-row";
+    row.append(
+      courseInput(entry, "date", "date"),
+      courseInput(entry, "title"),
+      courseInput(entry, "start_time", "time"),
+      courseInput(entry, "end_time", "time"),
+      courseInput(entry, "location"),
+      courseInput(entry, "teacher"),
+    );
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.textContent = "×";
+    remove.setAttribute("aria-label", `删除 ${entry.title}`);
+    remove.addEventListener("click", () => {
+      state.timetable.entries.splice(index, 1);
+      renderTimetable();
+    });
+    row.append(remove);
+    elements.timetableTable.append(row);
+  });
+}
+
+function renderCampusMap() {
+  const places = state.campusMap?.places ?? [];
+  elements.campusMapName.textContent = state.campusMap?.campus_name || "未命名校区";
+  elements.placeCount.textContent = `${places.length} 个地点`;
+  elements.placeCloud.replaceChildren();
+  elements.mapReview.hidden = false;
+  places.forEach((place, index) => {
+    const tag = document.createElement("div");
+    tag.className = "place-tag";
+    const name = document.createElement("span");
+    name.textContent = place.name;
+    const category = document.createElement("small");
+    category.textContent = place.category;
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.textContent = "×";
+    remove.setAttribute("aria-label", `删除 ${place.name}`);
+    remove.addEventListener("click", () => {
+      state.campusMap.places.splice(index, 1);
+      renderCampusMap();
+    });
+    tag.append(name, category, remove);
+    elements.placeCloud.append(tag);
+  });
+}
+
+async function completeOnboarding() {
+  setButtonBusy(elements.setupNextButton, true, "正在创建校园空间…");
+  try {
+    const payload = await api("/api/v1/onboarding", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        school: elements.schoolInput.value.trim(),
+        campus: elements.campusInput.value.trim(),
+        semester: elements.semesterInput.value.trim(),
+        timetable: state.timetable.entries,
+        campus_map: state.campusMap,
+      }),
+    });
+    state.user = payload.user;
+    elements.apiKey.value = elements.setupApiKey.value;
+    showToast(`已连接 ${payload.timetable_count} 条课程和 ${payload.campus_place_count} 个地点`);
+    showApp();
+  } finally {
+    setButtonBusy(elements.setupNextButton, false, "");
+  }
+}
+
+function showApp() {
+  showOnly("app");
+  elements.userName.textContent = state.user.display_name;
+  elements.userInitial.textContent = state.user.display_name.slice(0, 1).toUpperCase();
+  elements.contextLine.textContent = `已连接：${state.user.school} · ${state.user.campus} · ${state.user.semester}。密钥仅随本次请求发送。`;
+  setSessionId();
+  elements.messageInput.focus();
+}
+
 function selectedModel() {
-  return document.querySelector('input[name="model"]:checked').value;
+  return $('input[name="model"]:checked').value;
 }
 
 function modelLabel(model = selectedModel()) {
@@ -37,14 +414,6 @@ function modelLabel(model = selectedModel()) {
 function setSessionId() {
   elements.sessionId.textContent = state.sessionId;
   elements.sessionId.title = state.sessionId;
-}
-
-function showToast(message, kind = "info") {
-  elements.toast.textContent = message;
-  elements.toast.classList.toggle("error", kind === "error");
-  elements.toast.classList.add("show");
-  clearTimeout(showToast.timer);
-  showToast.timer = setTimeout(() => elements.toast.classList.remove("show"), 2800);
 }
 
 function setServiceState(online, label) {
@@ -65,24 +434,19 @@ function appendMessage(role, content, options = {}) {
   clearEmptyState();
   const article = document.createElement("article");
   article.className = `message ${role}${options.loading ? " loading" : ""}`;
-
   const meta = document.createElement("div");
   meta.className = "meta";
-  meta.textContent = role === "user" ? "YOU / 任务输入" : `AGENT / ${modelLabel()}`;
-
+  meta.textContent = role === "user" ? `${state.user?.display_name ?? "YOU"} / 任务输入` : `AGENT / ${modelLabel()}`;
   const bubble = document.createElement("div");
   bubble.className = "bubble";
   if (options.loading) {
     const typing = document.createElement("span");
     typing.className = "typing";
-    for (let index = 0; index < 3; index += 1) {
-      typing.append(document.createElement("span"));
-    }
+    for (let index = 0; index < 3; index += 1) typing.append(document.createElement("span"));
     bubble.append(typing);
   } else {
     bubble.textContent = content;
   }
-
   article.append(meta, bubble);
   elements.messages.append(article);
   scrollMessages();
@@ -108,7 +472,6 @@ function renderToolTrace(trace) {
   ensureTraceArea();
   const card = document.createElement("details");
   card.className = "trace-card";
-
   const summary = document.createElement("summary");
   const kind = document.createElement("span");
   kind.className = "trace-kind";
@@ -116,13 +479,8 @@ function renderToolTrace(trace) {
   const name = document.createElement("span");
   name.textContent = trace.tool_name;
   summary.append(kind, name);
-
   const details = document.createElement("pre");
-  details.textContent = safeJson({
-    arguments: trace.arguments,
-    result: trace.result,
-    tool_call_id: trace.tool_call_id,
-  });
+  details.textContent = safeJson({ arguments: trace.arguments, result: trace.result, tool_call_id: trace.tool_call_id });
   card.append(summary, details);
   elements.traceList.prepend(card);
 }
@@ -140,7 +498,6 @@ function renderPendingAction(action) {
   ensureTraceArea();
   const card = document.createElement("section");
   card.className = "action-card";
-
   const label = document.createElement("div");
   label.className = "action-label";
   label.textContent = `PENDING / ${action.action.toUpperCase()}`;
@@ -152,7 +509,6 @@ function renderPendingAction(action) {
   button.type = "button";
   button.textContent = "确认执行此操作";
   button.addEventListener("click", () => confirmAction(action.proposal_id, card, button, label));
-
   card.append(label, title, description, button);
   elements.traceList.prepend(card);
 }
@@ -161,12 +517,7 @@ async function confirmAction(proposalId, card, button, label) {
   button.disabled = true;
   button.textContent = "正在确认…";
   try {
-    const response = await fetch(
-      `/api/v1/actions/${encodeURIComponent(proposalId)}/confirm?user_id=${encodeURIComponent(state.userId)}`,
-      { method: "POST" },
-    );
-    const payload = await response.json();
-    if (!response.ok) throw new Error(payload.detail || "确认失败");
+    const payload = await api(`/api/v1/actions/${encodeURIComponent(proposalId)}/confirm`, { method: "POST" });
     card.classList.add("confirmed");
     label.textContent = "CONFIRMED / 已写入";
     button.textContent = "已确认";
@@ -178,18 +529,6 @@ async function confirmAction(proposalId, card, button, label) {
   }
 }
 
-async function responseError(response) {
-  try {
-    const payload = await response.json();
-    if (Array.isArray(payload.detail)) {
-      return payload.detail.map((item) => item.msg).join("；");
-    }
-    return payload.detail || `请求失败（${response.status}）`;
-  } catch {
-    return `请求失败（${response.status}）`;
-  }
-}
-
 async function sendMessage(message) {
   const apiKey = elements.apiKey.value.trim();
   if (!apiKey) {
@@ -198,27 +537,22 @@ async function sendMessage(message) {
     return;
   }
   if (!message || state.sending) return;
-
   state.sending = true;
   elements.sendButton.disabled = true;
   elements.messageInput.disabled = true;
   appendMessage("user", message);
   const loading = appendMessage("assistant", "", { loading: true });
-
   try {
-    const response = await fetch("/api/v1/chat", {
+    const payload = await api("/api/v1/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        user_id: state.userId,
         session_id: state.sessionId,
         api_key: apiKey,
         model: selectedModel(),
         message,
       }),
     });
-    if (!response.ok) throw new Error(await responseError(response));
-    const payload = await response.json();
     loading.remove();
     appendMessage("assistant", payload.message);
     payload.tool_traces.forEach(renderToolTrace);
@@ -243,70 +577,67 @@ function resizeComposer() {
   elements.messageInput.style.height = `${Math.min(elements.messageInput.scrollHeight, 140)}px`;
 }
 
-function resetSession() {
+function resetSession(notify = true) {
   state.sessionId = createSessionId();
   state.hasTraces = false;
   setSessionId();
-  elements.messages.innerHTML = `
-    <div class="empty-state" id="emptyState">
-      <div class="orb"><span></span><span></span><span></span></div>
-      <p class="eyebrow">NEW CONTEXT</p>
-      <h3>新会话已就绪</h3>
-      <p>模型选择和当前输入框中的 API Key 保持不变，会话记忆与执行轨迹已经清空。</p>
-    </div>`;
-  elements.emptyState = document.querySelector("#emptyState");
-  elements.traceList.innerHTML = '<div class="trace-empty">尚无工具调用<br /><span>新会话不会继承上一轮上下文</span></div>';
-  showToast("已创建独立会话");
+  elements.messages.innerHTML = '<div class="empty-state" id="emptyState"><div class="orb"><span></span><span></span><span></span></div><p class="eyebrow">NEW CONTEXT</p><h3>新会话已就绪</h3><p>个人课表和校园数据继续可用，对话上下文与执行轨迹已经清空。</p></div>';
+  elements.emptyState = $("#emptyState");
+  elements.traceList.innerHTML = '<div class="trace-empty">尚无工具调用<br /><span>新会话不会继承上一轮对话</span></div>';
+  if (notify) showToast("已创建独立会话");
 }
 
 async function checkHealth() {
   try {
-    const response = await fetch("/health");
-    if (!response.ok) throw new Error();
-    const payload = await response.json();
-    const modelCount = payload.supported_models?.length ?? 0;
-    setServiceState(true, `服务在线 · ${modelCount} 个模型`);
+    const payload = await api("/health");
+    setServiceState(true, `服务在线 · ${payload.supported_models?.length ?? 0} 个模型`);
   } catch {
     setServiceState(false, "服务连接失败");
   }
 }
 
-elements.composer.addEventListener("submit", (event) => {
-  event.preventDefault();
-  sendMessage(elements.messageInput.value.trim());
-});
+async function initialize() {
+  checkHealth();
+  try {
+    state.user = await api("/api/v1/me");
+    if (state.user.onboarding_complete) showApp();
+    else showOnboarding();
+  } catch {
+    showOnly("auth");
+    switchAuth("login");
+  }
+}
 
+$$('[data-auth-tab]').forEach((button) => button.addEventListener("click", () => switchAuth(button.dataset.authTab)));
+elements.loginForm.addEventListener("submit", (event) => { event.preventDefault(); submitAuth(elements.loginForm, "/api/v1/auth/login"); });
+elements.registerForm.addEventListener("submit", (event) => { event.preventDefault(); submitAuth(elements.registerForm, "/api/v1/auth/register"); });
+elements.setupLogoutButton.addEventListener("click", logout);
+elements.logoutButton.addEventListener("click", logout);
+elements.setupBackButton.addEventListener("click", () => { if (state.setupStep > 1) { state.setupStep -= 1; renderSetupStep(); } });
+elements.setupNextButton.addEventListener("click", advanceSetup);
+elements.timetableFile.addEventListener("change", () => handleImageFile(elements.timetableFile.files[0], "timetable"));
+elements.mapFile.addEventListener("change", () => handleImageFile(elements.mapFile.files[0], "map"));
+elements.parseTimetableButton.addEventListener("click", () => parseImage("timetable"));
+elements.parseMapButton.addEventListener("click", () => parseImage("map"));
+elements.composer.addEventListener("submit", (event) => { event.preventDefault(); sendMessage(elements.messageInput.value.trim()); });
 elements.messageInput.addEventListener("input", resizeComposer);
 elements.messageInput.addEventListener("keydown", (event) => {
-  if (event.key === "Enter" && !event.shiftKey) {
-    event.preventDefault();
-    elements.composer.requestSubmit();
-  }
+  if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); elements.composer.requestSubmit(); }
 });
-
 elements.toggleSecret.addEventListener("click", () => {
   const reveal = elements.apiKey.type === "password";
   elements.apiKey.type = reveal ? "text" : "password";
   elements.toggleSecret.textContent = reveal ? "隐藏" : "显示";
 });
-
-document.querySelectorAll('input[name="model"]').forEach((radio) => {
-  radio.addEventListener("change", () => {
-    elements.modelBadge.textContent = modelLabel();
-    showToast(`已切换至 ${modelLabel()}`);
-  });
-});
-
-document.querySelectorAll("[data-prompt]").forEach((button) => {
-  button.addEventListener("click", () => {
-    elements.messageInput.value = button.dataset.prompt;
-    resizeComposer();
-    elements.messageInput.focus();
-  });
-});
-
+$$('input[name="model"]').forEach((radio) => radio.addEventListener("change", () => {
+  elements.modelBadge.textContent = modelLabel();
+  showToast(`已切换至 ${modelLabel()}`);
+}));
+$$('[data-prompt]').forEach((button) => button.addEventListener("click", () => {
+  elements.messageInput.value = button.dataset.prompt;
+  resizeComposer();
+  elements.messageInput.focus();
+}));
 elements.newSessionButton.addEventListener("click", resetSession);
 
-setSessionId();
-checkHealth();
-elements.messageInput.focus();
+initialize();

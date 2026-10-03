@@ -15,7 +15,6 @@ ArkUI-X 官方 Samples 将共享 ArkTS 页面放在 `entry/src/main/ets`，Andro
 
 ```json
 {
-  "user_id": "demo-student",
   "session_id": "session-001",
   "api_key": "用户在客户端填写的 DeepSeek API Key",
   "model": "deepseek-v4-pro",
@@ -36,13 +35,15 @@ ArkUI-X 官方 Samples 将共享 ArkTS 页面放在 `entry/src/main/ets`，Andro
 
 ### 确认事务操作
 
-`POST /api/v1/actions/{proposal_id}/confirm?user_id=demo-student`
+`POST /api/v1/actions/{proposal_id}/confirm`
 
 只有用户点击客户端确认按钮后才调用该接口。
 
 ### 会话历史
 
-`GET /api/v1/sessions/{session_id}/history?user_id=demo-student`
+`GET /api/v1/sessions/{session_id}/history`
+
+以上接口需要登录。ArkUI-X 客户端先调用 `/api/v1/auth/register` 或 `/api/v1/auth/login`，然后在请求头中携带 `Authorization: Bearer <access_token>`。Web 测试台使用 HttpOnly Cookie。
 
 ## ArkTS 请求示意
 
@@ -50,7 +51,6 @@ ArkUI-X 官方 Samples 将共享 ArkTS 页面放在 `entry/src/main/ets`，Andro
 
 ```ts
 interface ChatRequest {
-  user_id: string
   session_id: string
   api_key: string
   model: 'deepseek-v4-pro' | 'deepseek-flash'

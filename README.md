@@ -11,6 +11,9 @@ CampusFlow 是面向高校学生的跨端 AI Agent。客户端计划采用 ArkUI
 - 事务创建/修改/删除的“提案—确认”安全流程
 - FastAPI HTTP+JSON 接口
 - 不调用真实模型即可运行的单元测试
+- SQLite 账户、登录会话与首次配置状态
+- DeepSeek Flash 课表/校园地图视觉解析与人工确认
+- 将确认后的个人课表和校园地点注入 Agent 工具
 
 ## 目录
 
@@ -46,32 +49,34 @@ Copy-Item .env.example .env
 uvicorn campusflow_agent.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-打开 `http://127.0.0.1:8000/` 使用图形化测试台。API Key 由页面随请求提交，只保存在当前输入框中，不写入浏览器存储、会话历史或服务端存储。`http://127.0.0.1:8000/docs` 可使用 Swagger 调试接口。
+打开 `http://127.0.0.1:8000/` 注册账户并完成三步首次配置：学校/校区、课表图片识别、校园地图识别。图片由 DeepSeek Flash 解析，保存前可人工修改或删除错误记录；原图和 API Key 不写入 CampusFlow 数据库。`http://127.0.0.1:8000/docs` 可使用 Swagger 调试接口。
 
 ## 最小调用示例
 
 ```powershell
+$session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+$register = @{
+  email = "student@example.com"
+  password = "至少八位密码"
+  display_name = "小航"
+} | ConvertTo-Json
+
+Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:8000/api/v1/auth/register" `
+  -ContentType "application/json" -Body $register -WebSession $session
+```
+
+完成首次配置后，使用同一个会话对象调用 Agent。多轮对话保持相同的 `session_id`；用户身份由 HttpOnly Cookie 或 Bearer Token 确定，不接受客户端伪造 `user_id`：
+
+```powershell
 $body = @{
-  user_id = "demo-student"
   session_id = "demo-session"
   api_key = "你的 DeepSeek API Key"
   model = "deepseek-v4-pro"
-  message = "请结合我明天的课程和天气，安排两个小时复习高数"
+  message = "请结合我的课表和校园地图安排两个小时复习"
 } | ConvertTo-Json
 
-Invoke-RestMethod `
-  -Method Post `
-  -Uri "http://127.0.0.1:8000/api/v1/chat" `
-  -ContentType "application/json" `
-  -Body $body
-```
-
-多轮对话时保持相同的 `user_id` 和 `session_id`。当返回 `pending_actions` 时，客户端应展示确认卡片，再调用：
-
-```powershell
-Invoke-RestMethod `
-  -Method Post `
-  -Uri "http://127.0.0.1:8000/api/v1/actions/<proposal_id>/confirm?user_id=demo-student"
+Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:8000/api/v1/chat" `
+  -ContentType "application/json" -Body $body -WebSession $session
 ```
 
 详细测试方式见本文末尾的“测试”以及 [ArkUI-X 联调说明](docs/arkui-x-integration.md)。

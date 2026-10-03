@@ -11,6 +11,10 @@ HarmonyOS / Android / iOS
           HTTP + JSON
               │
         FastAPI API Layer
+        ┌─────┴──────────┐
+   AccountStore     Vision Import
+     SQLite        DeepSeek Flash
+        └─────┬──────────┘
               │
        LangChain Agent Graph
         ┌─────┼─────────┐
@@ -31,17 +35,24 @@ HarmonyOS / Android / iOS
 4. 生成可执行计划，检查时间冲突并提供备选方案。
 5. 创建、修改、删除事务时只生成提案，不直接写入。
 6. 客户端展示提案，用户显式确认后调用确认 API。
-7. 使用同一 `user_id + session_id` 继续多轮对话。
+7. 服务端从登录会话确定 `user_id`，客户端保持同一 `session_id` 继续多轮对话。
 
 ## 初版边界
 
-- 校园数据使用内存中的演示数据，后续由外部接口负责人替换。
+- 账户、学校、课表和地图结构化结果保存到本地 SQLite；天气和校园通知仍使用演示数据。
 - 多轮上下文使用 LangGraph `InMemorySaver`，服务重启后上下文会丢失。
 - API 历史由当前进程记录，正式环境应替换为 MySQL/PostgreSQL。
-- 客户端负责本地持久化敏感学生资料，服务端只接收完成任务所需的最小数据。
+- 课表和地图原图只用于当次视觉解析，不在服务端持久化；确认后的结构化结果写入 SQLite。
 - 写操作通过独立确认 API 完成，模型没有直接提交写操作的工具。
-- 当前尚未接入正式身份认证；提案确认已校验 `user_id` 归属，生产环境仍需使用登录令牌替代客户端自报的用户 ID。
+- 已接入 PBKDF2 密码存储、HttpOnly Web Cookie 与 Bearer Token；所有个人数据和提案均从登录身份确定归属。
 - DeepSeek API Key 由客户端逐次提交，只用于创建该次模型调用，不写入 Store、Checkpointer 或日志；测试页面刷新后密钥丢失。
+
+## 视觉导入安全边界
+
+- 仅接受最大 16 MiB 的 PNG、JPEG、GIF 或 WebP base64 data URL，不接受服务端主动抓取的任意 URL。
+- 课表和地图交给 `deepseek-flash` 生成候选 JSON，Pydantic 校验后才返回客户端。
+- 图片被视为不可信数据；提示词明确忽略图中指令、二维码和行为要求。
+- 用户可以修改或删除识别结果，只有显式完成首次配置后才写入账户上下文。
 
 ## 后续演进
 
@@ -50,5 +61,5 @@ HarmonyOS / Android / iOS
 3. 接入教务、天气、地图、图书馆和教室预约 API。
 4. 增加 SSE 流式返回和工具执行事件。
 5. 增加用户偏好记忆与校园通知 RAG。
-6. 增加鉴权、限流、审计和脱敏日志。
+6. 增加限流、审计、令牌轮换和脱敏日志。
 

@@ -3,9 +3,16 @@ from collections.abc import AsyncIterator
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 
+from campusflow_agent.accounts import AccountStore
 from campusflow_agent.agent import AgentReply
 from campusflow_agent.api import create_app
 from campusflow_agent.config import Settings
+from campusflow_agent.schemas import (
+    CampusMapParseResult,
+    CampusPlace,
+    TimetableEntry,
+    TimetableParseResult,
+)
 from campusflow_agent.store import CampusStore
 
 
@@ -30,14 +37,48 @@ class FakeAgentService:
         return AgentReply(message=answer)
 
 
+class FakeVisionService:
+    async def parse_timetable(self, *, api_key: str, image_data: str) -> TimetableParseResult:
+        assert api_key
+        assert image_data
+        return TimetableParseResult(
+            academic_year="2026-2027",
+            semester="第一学期",
+            week_number=3,
+            entries=[
+                TimetableEntry(
+                    date="2026-10-01",
+                    title="操作系统",
+                    start_time="08:05",
+                    end_time="09:40",
+                    location="第7教研楼北406",
+                    teacher="叶可齐",
+                )
+            ],
+        )
+
+    async def parse_map(self, *, api_key: str, image_data: str) -> CampusMapParseResult:
+        assert api_key
+        assert image_data
+        return CampusMapParseResult(
+            campus_name="杭州电子科技大学下沙校区",
+            places=[
+                CampusPlace(name="图书馆", category="公共空间", zone="教学区"),
+                CampusPlace(name="第7教学楼", category="教学楼", zone="教学区"),
+            ],
+        )
+
+
 @pytest_asyncio.fixture
 async def client() -> AsyncIterator[AsyncClient]:
     store = CampusStore()
-    settings = Settings(app_env="test")
+    settings = Settings(app_env="test", database_path=":memory:")
     app = create_app(
         settings=settings,
         store=store,
         agent_service=FakeAgentService(store),  # type: ignore[arg-type]
+        account_store=AccountStore(":memory:"),
+        vision_service=FakeVisionService(),  # type: ignore[arg-type]
     )
     async with AsyncClient(
         transport=ASGITransport(app=app),

@@ -14,6 +14,44 @@ def test_schedule_tool_returns_demo_course() -> None:
     assert result[0]["title"] == "高等数学"
 
 
+def test_tools_use_confirmed_user_timetable_and_campus_map() -> None:
+    store = CampusStore()
+    store.set_user_context(
+        "student-001",
+        timetable=[
+            {
+                "date": "2026-10-01",
+                "title": "操作系统",
+                "start_time": "08:05",
+                "end_time": "09:40",
+                "location": "第7教研楼北406",
+                "teacher": "叶可齐",
+            }
+        ],
+        campus_map={
+            "places": [
+                {
+                    "name": "第7教学楼",
+                    "category": "教学楼",
+                    "zone": "教学区",
+                    "aliases": ["7教"],
+                }
+            ]
+        },
+    )
+    tools = tool_map(store)
+    token = CURRENT_USER_ID.set("student-001")
+    try:
+        schedule = tools["get_schedule"].invoke({"date": "2026-10-01"})
+        places = tools["find_campus_places"].invoke({"query": "7教"})
+    finally:
+        CURRENT_USER_ID.reset(token)
+
+    assert schedule[0]["title"] == "操作系统"
+    assert schedule[0]["source"] == "用户确认的课表"
+    assert places[0]["name"] == "第7教学楼"
+
+
 def test_proposal_requires_confirmation_before_write() -> None:
     store = CampusStore()
     tools = tool_map(store)

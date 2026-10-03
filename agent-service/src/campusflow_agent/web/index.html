@@ -3,90 +3,198 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="CampusFlow 大学规划与执行 Agent 测试台" />
-    <title>CampusFlow · Agent Lab</title>
+    <meta name="description" content="CampusFlow 大学规划与执行 Agent" />
+    <title>CampusFlow · Campus Operating System</title>
     <link rel="stylesheet" href="/static/styles.css" />
   </head>
   <body>
     <div class="grain" aria-hidden="true"></div>
-    <header class="topbar">
-      <a class="brand" href="/" aria-label="CampusFlow 首页">
-        <span class="brand-mark">CF</span>
-        <span><strong>CampusFlow</strong><small>AGENT LAB / 01</small></span>
-      </a>
-      <div class="system-state" id="systemState">
-        <span class="pulse"></span><span>正在检查服务</span>
+
+    <section class="gate-view" id="authView" hidden>
+      <div class="gate-story">
+        <a class="brand brand-light" href="/" aria-label="CampusFlow 首页">
+          <span class="brand-mark">CF</span>
+          <span><strong>CampusFlow</strong><small>CAMPUS OPERATING SYSTEM</small></span>
+        </a>
+        <div class="gate-copy">
+          <div class="section-index">STUDENT LIFE / ORCHESTRATED</div>
+          <h1>让每一天<br />从校园数据中<br /><em>自动生长</em></h1>
+          <p>连接你的课表、校区与目标。Agent 会理解时间和地点，把一句想法变成可执行的校园行动。</p>
+        </div>
+        <div class="gate-orbit" aria-hidden="true"><span>COURSE</span><span>PLACE</span><span>PLAN</span></div>
+        <div class="gate-foot">HARMONYOS · ANDROID · AGENT</div>
       </div>
-      <button class="line-button" id="newSessionButton" type="button">新建会话</button>
-    </header>
 
-    <main class="workspace">
-      <aside class="control-panel panel">
-        <div class="section-index">01 / CONNECTION</div>
-        <h1>把目标交给<br /><em>执行型</em> Agent</h1>
-        <p class="intro">密钥仅随本次请求发送。刷新页面即清空，不写入浏览器存储与服务端历史。</p>
-
-        <label class="field-label" for="apiKey">DeepSeek API Key</label>
-        <div class="secret-field">
-          <input id="apiKey" type="password" autocomplete="off" spellcheck="false" placeholder="sk-••••••••••••" />
-          <button id="toggleSecret" type="button" aria-label="显示或隐藏 API Key">显示</button>
-        </div>
-
-        <fieldset class="model-switcher">
-          <legend>模型路由</legend>
-          <label>
-            <input type="radio" name="model" value="deepseek-v4-pro" checked />
-            <span><b>V4 PRO</b><small>复杂规划 · 更强推理</small></span>
-          </label>
-          <label>
-            <input type="radio" name="model" value="deepseek-flash" />
-            <span><b>FLASH</b><small>快速对话 · 成本更低</small></span>
-          </label>
-        </fieldset>
-
-        <div class="session-meta">
-          <span>SESSION</span><code id="sessionId"></code>
-        </div>
-
-        <div class="quick-prompts">
-          <div class="field-label">快速场景</div>
-          <button type="button" data-prompt="请结合我明天的课程和天气，安排两个小时复习高数。如果信息不足请先追问我。">课程 + 天气规划</button>
-          <button type="button" data-prompt="查询最近的图书馆通知，并帮我找一个今晚可以自习的地点。">通知 + 地点查询</button>
-          <button type="button" data-prompt="明天晚上七点到九点创建一个复习高数的事务，提前二十分钟提醒。">生成事务提案</button>
-        </div>
-      </aside>
-
-      <section class="chat-panel panel">
-        <div class="chat-heading">
-          <div><span class="section-index">02 / DIALOGUE</span><h2>任务会话</h2></div>
-          <div class="model-badge" id="modelBadge">V4 PRO</div>
-        </div>
-        <div class="messages" id="messages" aria-live="polite">
-          <div class="empty-state" id="emptyState">
-            <div class="orb"><span></span><span></span><span></span></div>
-            <p class="eyebrow">CAMPUS ORCHESTRATOR</p>
-            <h3>从一句目标开始</h3>
-            <p>Agent 会追问缺失信息、调用校园工具、检查冲突，并把写操作转换成可确认的行动卡片。</p>
+      <div class="auth-stage">
+        <div class="auth-card">
+          <div class="auth-kicker">WELCOME / 01</div>
+          <h2 id="authTitle">登录你的校园空间</h2>
+          <p id="authSubtitle">继续使用你的课表、校区信息和 Agent 记忆。</p>
+          <div class="auth-tabs" role="tablist">
+            <button class="active" type="button" data-auth-tab="login">登录</button>
+            <button type="button" data-auth-tab="register">创建账户</button>
           </div>
-        </div>
-        <form class="composer" id="composer">
-          <textarea id="messageInput" rows="1" maxlength="8000" placeholder="例如：明天下午帮我安排两小时复习高数…"></textarea>
-          <div class="composer-footer">
-            <span><kbd>Enter</kbd> 发送 · <kbd>Shift</kbd> + <kbd>Enter</kbd> 换行</span>
-            <button id="sendButton" type="submit"><span>发送任务</span><i>↗</i></button>
-          </div>
-        </form>
-      </section>
 
-      <aside class="trace-panel panel">
-        <div class="section-index">03 / TRACE</div>
-        <h2>执行轨迹</h2>
-        <p class="trace-intro">查看 Agent 调用了什么，以及哪些操作仍在等待你的确认。</p>
-        <div class="trace-list" id="traceList">
-          <div class="trace-empty">尚无工具调用<br /><span>发送包含课程、天气或地点的任务进行测试</span></div>
+          <form class="auth-form" id="loginForm">
+            <label>邮箱<input name="email" type="email" autocomplete="email" required placeholder="student@example.com" /></label>
+            <label>密码<input name="password" type="password" autocomplete="current-password" minlength="8" required placeholder="至少 8 位" /></label>
+            <button class="primary-action" type="submit"><span class="action-label">进入 CampusFlow</span><i>↗</i></button>
+          </form>
+
+          <form class="auth-form" id="registerForm" hidden>
+            <label>怎么称呼你<input name="display_name" autocomplete="nickname" maxlength="48" required placeholder="例如：小航" /></label>
+            <label>邮箱<input name="email" type="email" autocomplete="email" required placeholder="student@example.com" /></label>
+            <label>密码<input name="password" type="password" autocomplete="new-password" minlength="8" required placeholder="至少 8 位" /></label>
+            <button class="primary-action" type="submit"><span class="action-label">创建我的校园空间</span><i>↗</i></button>
+          </form>
+          <p class="privacy-line">密码使用 PBKDF2 加盐存储；浏览器通过 HttpOnly 会话 Cookie 登录。</p>
         </div>
-      </aside>
-    </main>
+      </div>
+    </section>
+
+    <section class="onboarding-view" id="onboardingView" hidden>
+      <header class="setup-header">
+        <a class="brand" href="/" aria-label="CampusFlow 首页">
+          <span class="brand-mark">CF</span>
+          <span><strong>CampusFlow</strong><small>FIRST RUN / SETUP</small></span>
+        </a>
+        <div class="setup-meter"><i id="setupProgress"></i></div>
+        <button class="line-button" id="setupLogoutButton" type="button">退出登录</button>
+      </header>
+
+      <main class="setup-layout">
+        <aside class="setup-rail">
+          <div class="section-index">PERSONAL CONTEXT</div>
+          <h1>把你的校园<br />装进 Agent</h1>
+          <ol class="setup-steps" id="setupSteps">
+            <li class="active" data-step-indicator="1"><b>01</b><span>基础身份<small>学校、校区与学期</small></span></li>
+            <li data-step-indicator="2"><b>02</b><span>课表识别<small>上传、解析与确认</small></span></li>
+            <li data-step-indicator="3"><b>03</b><span>校园地图<small>生成地点数据包</small></span></li>
+          </ol>
+          <label class="setup-key-label" for="setupApiKey">DeepSeek API Key</label>
+          <input class="setup-key" id="setupApiKey" type="password" autocomplete="off" placeholder="仅用于两次图片解析" />
+          <p class="setup-note">图片会发送给 DeepSeek Flash 识别；原图和密钥不会写入 CampusFlow 数据库。</p>
+        </aside>
+
+        <section class="setup-canvas">
+          <div class="setup-step" data-setup-step="1">
+            <div class="step-number">01 / PROFILE</div>
+            <h2>先确定你在哪里学习</h2>
+            <p class="step-lead">这些信息会决定课表时间、校园地点和后续 Skills 的数据范围。</p>
+            <div class="profile-grid">
+              <label>学校<input id="schoolInput" value="杭州电子科技大学" maxlength="100" /></label>
+              <label>校区<input id="campusInput" value="下沙校区" maxlength="100" /></label>
+              <label class="wide">当前学期<input id="semesterInput" value="2026-2027 第一学期" maxlength="80" /></label>
+            </div>
+            <div class="context-preview">
+              <span>即将创建</span>
+              <strong>杭州电子科技大学 · 下沙校区</strong>
+              <p>后续可在“我的”中调整，变更校区后需要重新确认地图数据包。</p>
+            </div>
+          </div>
+
+          <div class="setup-step" data-setup-step="2" hidden>
+            <div class="step-number">02 / TIMETABLE VISION</div>
+            <h2>上传一张清晰的周课表</h2>
+            <p class="step-lead">Flash 会把课程、教师、教室和时间转为结构化数据；保存前请逐项确认。</p>
+            <div class="upload-grid">
+              <label class="drop-zone" for="timetableFile">
+                <input id="timetableFile" type="file" accept="image/png,image/jpeg,image/webp,image/gif" />
+                <span class="drop-icon">＋</span><b>选择课表图片</b><small>PNG / JPEG / WebP · 最大 16 MiB</small>
+              </label>
+              <div class="image-preview" id="timetablePreview"><span>课表预览</span></div>
+            </div>
+            <button class="analyze-button" id="parseTimetableButton" type="button" disabled><span>使用 Flash 解析课表</span><i>VISION ↗</i></button>
+            <div class="parse-status" id="timetableStatus">等待上传</div>
+            <div class="data-review" id="timetableReview" hidden>
+              <div class="review-heading"><div><span>解析结果</span><h3 id="timetableSummary">0 门课程</h3></div><small>可以直接修改或删除识别错误的记录</small></div>
+              <div class="timetable-table" id="timetableTable"></div>
+            </div>
+          </div>
+
+          <div class="setup-step" data-setup-step="3" hidden>
+            <div class="step-number">03 / CAMPUS PACK</div>
+            <h2>把校园地图变成可查询地点</h2>
+            <p class="step-lead">地图会被转换为地点目录。二维码不会被读取，图片中的文字也不会被当作系统指令。</p>
+            <div class="upload-grid">
+              <label class="drop-zone" for="mapFile">
+                <input id="mapFile" type="file" accept="image/png,image/jpeg,image/webp,image/gif" />
+                <span class="drop-icon">＋</span><b>选择校园地图</b><small>建议使用官方平面图</small>
+              </label>
+              <div class="image-preview map-preview" id="mapPreview"><span>地图预览</span></div>
+            </div>
+            <button class="analyze-button" id="parseMapButton" type="button" disabled><span>生成校园数据包</span><i>VISION ↗</i></button>
+            <div class="parse-status" id="mapStatus">等待上传</div>
+            <div class="data-review" id="mapReview" hidden>
+              <div class="review-heading"><div><span>校区识别</span><h3 id="campusMapName">尚未识别</h3></div><small id="placeCount">0 个地点</small></div>
+              <div class="place-cloud" id="placeCloud"></div>
+            </div>
+          </div>
+
+          <footer class="setup-actions">
+            <button class="ghost-action" id="setupBackButton" type="button" disabled>← 上一步</button>
+            <button class="primary-action" id="setupNextButton" type="button"><span class="action-label">继续：导入课表</span><i>↗</i></button>
+          </footer>
+        </section>
+      </main>
+    </section>
+
+    <div class="app-shell" id="appView" hidden>
+      <header class="topbar">
+        <a class="brand" href="/" aria-label="CampusFlow 首页">
+          <span class="brand-mark">CF</span>
+          <span><strong>CampusFlow</strong><small>AGENT LAB / 02</small></span>
+        </a>
+        <div class="system-state" id="systemState"><span class="pulse"></span><span>正在检查服务</span></div>
+        <div class="topbar-actions">
+          <button class="user-chip" id="userChip" type="button"><span id="userInitial">U</span><b id="userName">User</b></button>
+          <button class="line-button" id="newSessionButton" type="button">新建会话</button>
+          <button class="line-button quiet" id="logoutButton" type="button">退出</button>
+        </div>
+      </header>
+
+      <main class="workspace">
+        <aside class="control-panel panel">
+          <div class="section-index">01 / CONNECTION</div>
+          <h1>把目标交给<br /><em>执行型</em> Agent</h1>
+          <p class="intro" id="contextLine">正在载入你的校园上下文…</p>
+          <label class="field-label" for="apiKey">DeepSeek API Key</label>
+          <div class="secret-field">
+            <input id="apiKey" type="password" autocomplete="off" spellcheck="false" placeholder="sk-••••••••••••" />
+            <button id="toggleSecret" type="button" aria-label="显示或隐藏 API Key">显示</button>
+          </div>
+          <fieldset class="model-switcher">
+            <legend>模型路由</legend>
+            <label><input type="radio" name="model" value="deepseek-v4-pro" checked /><span><b>V4 PRO</b><small>复杂规划 · 更强推理</small></span></label>
+            <label><input type="radio" name="model" value="deepseek-flash" /><span><b>FLASH</b><small>快速对话 · 成本更低</small></span></label>
+          </fieldset>
+          <div class="session-meta"><span>SESSION</span><code id="sessionId"></code></div>
+          <div class="quick-prompts">
+            <div class="field-label">快速场景</div>
+            <button type="button" data-prompt="请根据我2026-10-01的课表和校园地图，帮我安排当天的复习地点与时间。">基于已导入课表规划</button>
+            <button type="button" data-prompt="查询校园地图中有哪些教学楼和图书馆，并推荐一个适合自习的地点。">查询校园地图</button>
+            <button type="button" data-prompt="为我创建一个两小时的复习事务，先生成待确认提案。">生成事务提案</button>
+          </div>
+        </aside>
+
+        <section class="chat-panel panel">
+          <div class="chat-heading"><div><span class="section-index">02 / DIALOGUE</span><h2>任务会话</h2></div><div class="model-badge" id="modelBadge">V4 PRO</div></div>
+          <div class="messages" id="messages" aria-live="polite">
+            <div class="empty-state" id="emptyState"><div class="orb"><span></span><span></span><span></span></div><p class="eyebrow">PERSONAL CAMPUS CONTEXT</p><h3>从你的课表开始</h3><p>Agent 已连接你确认过的课程和校园地点，可以据此检查冲突、选择地点并生成行动计划。</p></div>
+          </div>
+          <form class="composer" id="composer">
+            <textarea id="messageInput" rows="1" maxlength="8000" placeholder="例如：根据周四的课表帮我安排两小时复习…"></textarea>
+            <div class="composer-footer"><span><kbd>Enter</kbd> 发送 · <kbd>Shift</kbd> + <kbd>Enter</kbd> 换行</span><button id="sendButton" type="submit"><span>发送任务</span><i>↗</i></button></div>
+          </form>
+        </section>
+
+        <aside class="trace-panel panel">
+          <div class="section-index">03 / TRACE</div><h2>执行轨迹</h2><p class="trace-intro">查看 Agent 使用了哪些个人数据，以及哪些操作仍在等待确认。</p>
+          <div class="trace-list" id="traceList"><div class="trace-empty">尚无工具调用<br /><span>尝试询问已导入课表或校园地点</span></div></div>
+        </aside>
+      </main>
+    </div>
+
     <div class="toast" id="toast" role="status"></div>
     <script src="/static/app.js" defer></script>
   </body>

@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     app_env: Literal["development", "test", "production"] = "development"
     app_host: str = "0.0.0.0"
     app_port: int = 8000
+    database_path: str = "data/campusflow.db"
 
     deepseek_base_url: str = "https://api.deepseek.com"
     deepseek_reasoning_effort: Literal["low", "high", "max"] = "high"

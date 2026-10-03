@@ -15,6 +15,7 @@ htmlcov/
 *.sqlite
 *.sqlite3
 logs/
+data/
 
 # IDE / OS
 .idea/

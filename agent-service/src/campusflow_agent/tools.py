@@ -29,7 +29,7 @@ def build_tools(store: CampusStore) -> list[BaseTool]:
     @tool
     def find_campus_places(query: str) -> list[dict]:
         """查询校园地点、开放状态和步行时间，例如图书馆、自习室、快递站。"""
-        return store.find_places(query)
+        return store.find_places(query, CURRENT_USER_ID.get())
 
     @tool
     def propose_task_change(

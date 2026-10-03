@@ -1,11 +1,10 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, SecretStr
 
 
 class ChatRequest(BaseModel):
-    user_id: str = Field(min_length=1, max_length=64, examples=["demo-student"])
     session_id: str = Field(min_length=1, max_length=128, examples=["session-001"])
     api_key: SecretStr = Field(
         min_length=1,
@@ -56,3 +55,85 @@ class HealthResponse(BaseModel):
     status: Literal["ok"] = "ok"
     api_key_mode: Literal["request"] = "request"
     supported_models: list[str]
+
+
+class RegisterRequest(BaseModel):
+    email: str = Field(min_length=5, max_length=254)
+    password: str = Field(min_length=8, max_length=128)
+    display_name: str = Field(min_length=1, max_length=48)
+
+
+class LoginRequest(BaseModel):
+    email: str = Field(min_length=5, max_length=254)
+    password: str = Field(min_length=8, max_length=128)
+
+
+class UserProfile(BaseModel):
+    user_id: str
+    email: str
+    display_name: str
+    school: str | None = None
+    campus: str | None = None
+    semester: str | None = None
+    onboarding_complete: bool = False
+
+
+class AuthResponse(BaseModel):
+    user: UserProfile
+    access_token: str
+    token_type: Literal["bearer"] = "bearer"
+
+
+class TimetableEntry(BaseModel):
+    date: date
+    title: str = Field(min_length=1, max_length=100)
+    start_time: str = Field(pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
+    end_time: str = Field(pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
+    location: str = Field(default="", max_length=120)
+    teacher: str = Field(default="", max_length=80)
+
+
+class TimetableParseResult(BaseModel):
+    academic_year: str = ""
+    semester: str = ""
+    week_number: int | None = None
+    entries: list[TimetableEntry] = Field(default_factory=list, max_length=100)
+    warnings: list[str] = Field(default_factory=list, max_length=20)
+
+
+class CampusPlace(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    category: str = Field(default="其他", max_length=40)
+    zone: str = Field(default="", max_length=80)
+    aliases: list[str] = Field(default_factory=list, max_length=10)
+
+
+class CampusMapParseResult(BaseModel):
+    campus_name: str = ""
+    places: list[CampusPlace] = Field(default_factory=list, max_length=120)
+    warnings: list[str] = Field(default_factory=list, max_length=20)
+
+
+class ImageParseRequest(BaseModel):
+    api_key: SecretStr = Field(
+        min_length=1,
+        description="仅用于本次 DeepSeek Flash 图片解析，不写入数据库。",
+    )
+    image_data: str = Field(
+        min_length=32,
+        description="PNG/JPEG/GIF/WebP 的 base64 data URL。",
+    )
+
+
+class OnboardingRequest(BaseModel):
+    school: str = Field(min_length=1, max_length=100)
+    campus: str = Field(min_length=1, max_length=100)
+    semester: str = Field(min_length=1, max_length=80)
+    timetable: list[TimetableEntry] = Field(default_factory=list, max_length=100)
+    campus_map: CampusMapParseResult
+
+
+class OnboardingResponse(BaseModel):
+    user: UserProfile
+    timetable_count: int
+    campus_place_count: int
