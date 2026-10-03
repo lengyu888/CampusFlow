@@ -1,0 +1,52 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "campusflow-agent"
+version = "0.1.0"
+description = "CampusFlow planning agent service built with FastAPI, LangChain and DeepSeek"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.115,<1.0",
+  "uvicorn[standard]>=0.34,<1.0",
+  "pydantic-settings>=2.7,<3.0",
+  "langchain>=1.0,<2.0",
+  "langchain-openai>=1.0,<2.0",
+  "langgraph>=1.0,<2.0",
+  "openai>=2.0,<3.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "httpx>=0.28,<1.0",
+  "pytest>=8.3,<9.0",
+  "pytest-asyncio>=0.25,<1.0",
+  "ruff>=0.9,<1.0",
+]
+
+[tool.hatch.build]
+include = [
+  "src/campusflow_agent/**/*.py",
+  "src/campusflow_agent/web/*",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/campusflow_agent"]
+
+[tool.pytest.ini_options]
+addopts = "-m 'not integration'"
+asyncio_mode = "auto"
+markers = [
+  "integration: calls the real DeepSeek API and may incur cost",
+]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+

@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+.venv/
+
+# Runtime data and secrets
+.env
+*.db
+*.sqlite
+*.sqlite3
+logs/
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# ArkUI-X generated outputs
+**/build/
+**/.hvigor/
+**/oh_modules/
+**/.arkui-x/android/.gradle/
+**/.arkui-x/android/local.properties
+**/.arkui-x/ios/Pods/
+**/.arkui-x/ios/DerivedData/
+

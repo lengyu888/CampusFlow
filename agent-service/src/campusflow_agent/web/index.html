@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="CampusFlow 大学规划与执行 Agent 测试台" />
+    <title>CampusFlow · Agent Lab</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="grain" aria-hidden="true"></div>
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="CampusFlow 首页">
+        <span class="brand-mark">CF</span>
+        <span><strong>CampusFlow</strong><small>AGENT LAB / 01</small></span>
+      </a>
+      <div class="system-state" id="systemState">
+        <span class="pulse"></span><span>正在检查服务</span>
+      </div>
+      <button class="line-button" id="newSessionButton" type="button">新建会话</button>
+    </header>
+
+    <main class="workspace">
+      <aside class="control-panel panel">
+        <div class="section-index">01 / CONNECTION</div>
+        <h1>把目标交给<br /><em>执行型</em> Agent</h1>
+        <p class="intro">密钥仅随本次请求发送。刷新页面即清空，不写入浏览器存储与服务端历史。</p>
+
+        <label class="field-label" for="apiKey">DeepSeek API Key</label>
+        <div class="secret-field">
+          <input id="apiKey" type="password" autocomplete="off" spellcheck="false" placeholder="sk-••••••••••••" />
+          <button id="toggleSecret" type="button" aria-label="显示或隐藏 API Key">显示</button>
+        </div>
+
+        <fieldset class="model-switcher">
+          <legend>模型路由</legend>
+          <label>
+            <input type="radio" name="model" value="deepseek-v4-pro" checked />
+            <span><b>V4 PRO</b><small>复杂规划 · 更强推理</small></span>
+          </label>
+          <label>
+            <input type="radio" name="model" value="deepseek-flash" />
+            <span><b>FLASH</b><small>快速对话 · 成本更低</small></span>
+          </label>
+        </fieldset>
+
+        <div class="session-meta">
+          <span>SESSION</span><code id="sessionId"></code>
+        </div>
+
+        <div class="quick-prompts">
+          <div class="field-label">快速场景</div>
+          <button type="button" data-prompt="请结合我明天的课程和天气，安排两个小时复习高数。如果信息不足请先追问我。">课程 + 天气规划</button>
+          <button type="button" data-prompt="查询最近的图书馆通知，并帮我找一个今晚可以自习的地点。">通知 + 地点查询</button>
+          <button type="button" data-prompt="明天晚上七点到九点创建一个复习高数的事务，提前二十分钟提醒。">生成事务提案</button>
+        </div>
+      </aside>
+
+      <section class="chat-panel panel">
+        <div class="chat-heading">
+          <div><span class="section-index">02 / DIALOGUE</span><h2>任务会话</h2></div>
+          <div class="model-badge" id="modelBadge">V4 PRO</div>
+        </div>
+        <div class="messages" id="messages" aria-live="polite">
+          <div class="empty-state" id="emptyState">
+            <div class="orb"><span></span><span></span><span></span></div>
+            <p class="eyebrow">CAMPUS ORCHESTRATOR</p>
+            <h3>从一句目标开始</h3>
+            <p>Agent 会追问缺失信息、调用校园工具、检查冲突，并把写操作转换成可确认的行动卡片。</p>
+          </div>
+        </div>
+        <form class="composer" id="composer">
+          <textarea id="messageInput" rows="1" maxlength="8000" placeholder="例如：明天下午帮我安排两小时复习高数…"></textarea>
+          <div class="composer-footer">
+            <span><kbd>Enter</kbd> 发送 · <kbd>Shift</kbd> + <kbd>Enter</kbd> 换行</span>
+            <button id="sendButton" type="submit"><span>发送任务</span><i>↗</i></button>
+          </div>
+        </form>
+      </section>
+
+      <aside class="trace-panel panel">
+        <div class="section-index">03 / TRACE</div>
+        <h2>执行轨迹</h2>
+        <p class="trace-intro">查看 Agent 调用了什么，以及哪些操作仍在等待你的确认。</p>
+        <div class="trace-list" id="traceList">
+          <div class="trace-empty">尚无工具调用<br /><span>发送包含课程、天气或地点的任务进行测试</span></div>
+        </div>
+      </aside>
+    </main>
+    <div class="toast" id="toast" role="status"></div>
+    <script src="/static/app.js" defer></script>
+  </body>
+</html>
