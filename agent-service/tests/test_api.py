@@ -57,6 +57,8 @@ async def test_frontend_is_served(client: AsyncClient) -> None:
     assert "deepseek-flash" in page.text
     assert 'name="api_key"' in page.text
     assert "用户管理" in page.text
+    assert "历史会话" in page.text
+    assert "校园 Skills" in page.text
     assert script.status_code == 200
     assert "fetch(path, options)" in script.text
 
@@ -130,6 +132,21 @@ async def test_visual_import_onboarding_chat_and_history(client: AsyncClient) ->
     history = await client.get("/api/v1/sessions/session-001/history")
     assert history.status_code == 200
     assert [item["role"] for item in history.json()] == ["user", "assistant"]
+
+    sessions = await client.get("/api/v1/sessions")
+    assert sessions.status_code == 200
+    assert sessions.json()[0]["session_id"] == "session-001"
+    assert sessions.json()[0]["message_count"] == 2
+
+    renamed = await client.put(
+        "/api/v1/sessions/session-001",
+        json={"title": "周四复习规划"},
+    )
+    assert renamed.status_code == 200
+    assert renamed.json()["title"] == "周四复习规划"
+
+    search = await client.get("/api/v1/sessions", params={"query": "周四"})
+    assert [item["session_id"] for item in search.json()] == ["session-001"]
 
 
 async def test_chat_requires_login_and_onboarding(client: AsyncClient) -> None:

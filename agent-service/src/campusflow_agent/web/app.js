@@ -50,6 +50,23 @@ const elements = {
   contextLine: $("#contextLine"),
   logoutButton: $("#logoutButton"),
   userChip: $("#userChip"),
+  historyButton: $("#historyButton"),
+  agentHistoryButton: $("#agentHistoryButton"),
+  historyDrawer: $("#historyDrawer"),
+  historyCloseButton: $("#historyCloseButton"),
+  drawerScrim: $("#drawerScrim"),
+  historySearch: $("#historySearch"),
+  historyList: $("#historyList"),
+  todayGreeting: $("#todayGreeting"),
+  todayDate: $("#todayDate"),
+  todayCourseCount: $("#todayCourseCount"),
+  todayCourseList: $("#todayCourseList"),
+  nextCourseTitle: $("#nextCourseTitle"),
+  nextCourseMeta: $("#nextCourseMeta"),
+  todayPlaceCount: $("#todayPlaceCount"),
+  todayHistoryCount: $("#todayHistoryCount"),
+  todaySuggestion: $("#todaySuggestion"),
+  planList: $("#planList"),
   settingsBackButton: $("#settingsBackButton"),
   settingsInitial: $("#settingsInitial"),
   settingsName: $("#settingsName"),
@@ -85,6 +102,8 @@ const state = {
   sending: false,
   hasTraces: false,
   settingsContext: null,
+  appTab: "today",
+  sessions: [],
 };
 
 function createSessionId() {
@@ -182,6 +201,7 @@ async function logout() {
   state.mapImage = "";
   elements.settingsApiKey.value = "";
   resetSession(false);
+  state.appTab = "today";
   elements.loginForm.reset();
   elements.registerForm.reset();
   switchAuth("login");
@@ -427,7 +447,101 @@ function showApp() {
     ? `已配置 ${state.user.api_key_hint} · 点击管理`
     : "未配置 · 点击管理";
   setSessionId();
+  switchAppTab(state.appTab);
+}
+
+function switchAppTab(tab) {
+  state.appTab = tab;
+  $$('[data-app-tab]').forEach((button) => {
+    button.classList.toggle("active", button.dataset.appTab === tab);
+  });
+  $$('[data-app-surface]').forEach((surface) => {
+    surface.hidden = surface.dataset.appSurface !== tab;
+  });
+  if (tab === "today") loadTodayDashboard();
+  if (tab === "plans") loadPlans();
+  if (tab === "agent") elements.messageInput.focus();
+}
+
+function openAgentWithPrompt(prompt = "") {
+  switchAppTab("agent");
+  if (prompt) {
+    elements.messageInput.value = prompt;
+    resizeComposer();
+  }
   elements.messageInput.focus();
+}
+
+function formatCampusDate(date) {
+  return new Intl.DateTimeFormat("zh-CN", {
+    month: "long",
+    day: "numeric",
+    weekday: "long",
+  }).format(date);
+}
+
+async function loadTodayDashboard() {
+  const now = new Date();
+  const hour = now.getHours();
+  elements.todayGreeting.textContent = `${hour < 11 ? "早上" : hour < 18 ? "下午" : "晚上"}好，${state.user.display_name}`;
+  elements.todayDate.textContent = `${formatCampusDate(now)} · ${state.user.campus ?? "校园"}`;
+  try {
+    const [context, sessions] = await Promise.all([
+      state.settingsContext ?? api("/api/v1/me/context"),
+      api("/api/v1/sessions"),
+    ]);
+    state.settingsContext = context;
+    state.sessions = sessions;
+    const localDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    const courses = (context.timetable ?? []).filter((item) => item.date === localDate);
+    const upcoming = (context.timetable ?? [])
+      .filter((item) => item.date >= localDate)
+      .sort((left, right) => `${left.date} ${left.start_time}`.localeCompare(`${right.date} ${right.start_time}`));
+    elements.todayCourseCount.textContent = `${courses.length} 节课`;
+    elements.todayPlaceCount.textContent = context.campus_map?.places?.length ?? 0;
+    elements.todayHistoryCount.textContent = sessions.length;
+    elements.todayCourseList.replaceChildren();
+    if (courses.length) {
+      courses.forEach((course, index) => {
+        const item = document.createElement("article");
+        item.innerHTML = `<time>${course.start_time}<small>${course.end_time}</small></time><i></i><div><span>0${index + 1} / COURSE</span><h3></h3><p></p></div>`;
+        item.querySelector("h3").textContent = course.title;
+        item.querySelector("p").textContent = `${course.location || "地点待定"}${course.teacher ? ` · ${course.teacher}` : ""}`;
+        elements.todayCourseList.append(item);
+      });
+      elements.todaySuggestion.textContent = `今天有 ${courses.length} 节课。建议在最后一节课后留出 30 分钟整理笔记，再开始新的学习任务。`;
+    } else {
+      const emptyDay = contextListItem("今天没有排课", "可以安排一段 90–120 分钟的深度学习时间");
+      emptyDay.className = "day-empty";
+      elements.todayCourseList.append(emptyDay);
+      elements.todaySuggestion.textContent = "今天是无课日。可以从最近课程中选择一个薄弱主题，安排一次完整的复习闭环。";
+    }
+    const next = upcoming[0];
+    elements.nextCourseTitle.textContent = next?.title ?? "近期没有课程";
+    elements.nextCourseMeta.textContent = next
+      ? `${next.date} · ${next.start_time} · ${next.location || "地点待定"}`
+      : "适合安排自主学习或完善本周计划。";
+  } catch (error) {
+    showToast(error.message, "error");
+  }
+}
+
+async function loadPlans() {
+  elements.planList.innerHTML = '<div class="plan-empty">正在读取已确认事务…</div>';
+  try {
+    const payload = await api("/api/v1/tasks");
+    elements.planList.replaceChildren();
+    if (!payload.tasks.length) {
+      elements.planList.innerHTML = '<div class="plan-empty"><b>还没有已确认事务</b><span>让 Agent 创建提案，并在执行轨迹中确认后会出现在这里。</span></div>';
+      return;
+    }
+    payload.tasks.forEach((task) => {
+      const item = contextListItem(task.title, task.start_at ? new Date(task.start_at).toLocaleString("zh-CN") : "未指定时间");
+      elements.planList.append(item);
+    });
+  } catch (error) {
+    showToast(error.message, "error");
+  }
 }
 
 function selectedModel() {
@@ -577,6 +691,12 @@ async function sendMessage(message) {
     appendMessage("assistant", payload.message);
     payload.tool_traces.forEach(renderToolTrace);
     payload.pending_actions.forEach(renderPendingAction);
+    try {
+      state.sessions = await api("/api/v1/sessions");
+      elements.todayHistoryCount.textContent = state.sessions.length;
+    } catch {
+      // The completed answer remains usable if refreshing session metadata fails.
+    }
     setServiceState(true, "Agent 服务在线");
   } catch (error) {
     loading.remove();
@@ -604,7 +724,143 @@ function resetSession(notify = true) {
   elements.messages.innerHTML = '<div class="empty-state" id="emptyState"><div class="orb"><span></span><span></span><span></span></div><p class="eyebrow">NEW CONTEXT</p><h3>新会话已就绪</h3><p>个人课表和校园数据继续可用，对话上下文与执行轨迹已经清空。</p></div>';
   elements.emptyState = $("#emptyState");
   elements.traceList.innerHTML = '<div class="trace-empty">尚无工具调用<br /><span>新会话不会继承上一轮对话</span></div>';
+  closeHistory();
+  switchAppTab("agent");
   if (notify) showToast("已创建独立会话");
+}
+
+function openHistory() {
+  elements.historyDrawer.hidden = false;
+  elements.drawerScrim.hidden = false;
+  elements.historySearch.value = "";
+  loadHistory();
+  setTimeout(() => elements.historySearch.focus(), 0);
+}
+
+function closeHistory() {
+  elements.historyDrawer.hidden = true;
+  elements.drawerScrim.hidden = true;
+}
+
+function sessionTime(value) {
+  const date = new Date(value);
+  const today = new Date();
+  if (date.toDateString() === today.toDateString()) {
+    return date.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
+  }
+  return date.toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" });
+}
+
+function renderHistorySessions(sessions) {
+  elements.historyList.replaceChildren();
+  if (!sessions.length) {
+    elements.historyList.innerHTML = '<div class="history-empty"><b>还没有匹配的会话</b><span>开始一次 Agent 对话后，会自动保存在这里。</span></div>';
+    return;
+  }
+  sessions.forEach((session) => {
+    const card = document.createElement("article");
+    card.className = `history-card${session.session_id === state.sessionId ? " active" : ""}`;
+    const open = document.createElement("button");
+    open.type = "button";
+    open.className = "history-open";
+    const heading = document.createElement("span");
+    const title = document.createElement("b");
+    const time = document.createElement("time");
+    title.textContent = session.title;
+    time.textContent = sessionTime(session.updated_at);
+    heading.append(title, time);
+    const preview = document.createElement("p");
+    preview.textContent = session.last_message;
+    const meta = document.createElement("small");
+    meta.textContent = `${session.message_count} 条消息 · ${session.model_name === "deepseek-flash" ? "FLASH" : "V4 PRO"}`;
+    open.append(heading, preview, meta);
+    open.addEventListener("click", () => openSession(session.session_id));
+    const rename = document.createElement("button");
+    rename.type = "button";
+    rename.className = "history-rename";
+    rename.textContent = "改名";
+    rename.addEventListener("click", () => showRenameSession(session, card));
+    card.append(open, rename);
+    elements.historyList.append(card);
+  });
+}
+
+async function loadHistory(query = "") {
+  elements.historyList.innerHTML = '<div class="history-empty">正在载入会话…</div>';
+  try {
+    const suffix = query ? `?query=${encodeURIComponent(query)}` : "";
+    state.sessions = await api(`/api/v1/sessions${suffix}`);
+    elements.todayHistoryCount.textContent = state.sessions.length;
+    renderHistorySessions(state.sessions);
+  } catch (error) {
+    elements.historyList.innerHTML = '<div class="history-empty">载入失败</div>';
+    showToast(error.message, "error");
+  }
+}
+
+async function openSession(sessionId) {
+  try {
+    const history = await api(`/api/v1/sessions/${encodeURIComponent(sessionId)}/history`);
+    const session = state.sessions.find((item) => item.session_id === sessionId);
+    state.sessionId = sessionId;
+    state.hasTraces = false;
+    if (session?.model_name) {
+      const modelInput = $(`input[name="model"][value="${session.model_name}"]`);
+      if (modelInput) modelInput.checked = true;
+      elements.modelBadge.textContent = modelLabel(session.model_name);
+    }
+    setSessionId();
+    elements.messages.replaceChildren();
+    history.forEach((message) => appendMessage(message.role, message.content));
+    elements.traceList.innerHTML = '<div class="trace-empty">已恢复对话文本<br /><span>新的工具调用会继续显示在这里</span></div>';
+    closeHistory();
+    switchAppTab("agent");
+    showToast(`已恢复 ${history.length} 条消息`);
+  } catch (error) {
+    showToast(error.message, "error");
+  }
+}
+
+function showRenameSession(session, card) {
+  const form = document.createElement("form");
+  form.className = "history-rename-form";
+  const input = document.createElement("input");
+  input.maxLength = 80;
+  input.value = session.title;
+  input.setAttribute("aria-label", "新的会话名称");
+  const save = document.createElement("button");
+  save.type = "submit";
+  save.textContent = "保存";
+  const cancel = document.createElement("button");
+  cancel.type = "button";
+  cancel.textContent = "取消";
+  cancel.addEventListener("click", () => renderHistorySessions(state.sessions));
+  form.append(input, save, cancel);
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    renameSession(session, input.value.trim());
+  });
+  card.replaceChildren(form);
+  input.focus();
+  input.select();
+}
+
+async function renameSession(session, title) {
+  if (!title || title === session.title) {
+    renderHistorySessions(state.sessions);
+    return;
+  }
+  try {
+    await api(`/api/v1/sessions/${encodeURIComponent(session.session_id)}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title }),
+    });
+    await loadHistory(elements.historySearch.value.trim());
+    showToast("会话名称已更新");
+  } catch (error) {
+    showToast(error.message, "error");
+  }
 }
 
 function fillSettingsProfile() {
@@ -788,6 +1044,14 @@ elements.logoutButton.addEventListener("click", logout);
 elements.userChip.addEventListener("click", openSettings);
 elements.credentialCard.addEventListener("click", openSettings);
 elements.settingsBackButton.addEventListener("click", showApp);
+elements.historyButton.addEventListener("click", openHistory);
+elements.agentHistoryButton.addEventListener("click", openHistory);
+elements.historyCloseButton.addEventListener("click", closeHistory);
+elements.drawerScrim.addEventListener("click", closeHistory);
+elements.historySearch.addEventListener("input", () => {
+  clearTimeout(elements.historySearch.searchTimer);
+  elements.historySearch.searchTimer = setTimeout(() => loadHistory(elements.historySearch.value.trim()), 180);
+});
 elements.settingsForm.addEventListener("submit", saveSettings);
 elements.editOnboardingButton.addEventListener("click", editLearningData);
 $$('[data-settings-tab]').forEach((button) => button.addEventListener("click", () => switchSettingsTab(button.dataset.settingsTab)));
@@ -812,5 +1076,8 @@ $$('[data-prompt]').forEach((button) => button.addEventListener("click", () => {
   elements.messageInput.focus();
 }));
 elements.newSessionButton.addEventListener("click", resetSession);
+$$('[data-app-tab]').forEach((button) => button.addEventListener("click", () => switchAppTab(button.dataset.appTab)));
+$$('[data-app-action="settings"]').forEach((button) => button.addEventListener("click", openSettings));
+$$('[data-open-agent]').forEach((button) => button.addEventListener("click", () => openAgentWithPrompt(button.dataset.prompt)));
 
 initialize();

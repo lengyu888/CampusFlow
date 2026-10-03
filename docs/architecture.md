@@ -40,8 +40,8 @@ HarmonyOS / Android / iOS
 ## 初版边界
 
 - 账户、学校、课表和地图结构化结果保存到本地 SQLite；天气和校园通知仍使用演示数据。
-- 多轮上下文使用 LangGraph `InMemorySaver`，服务重启后上下文会丢失。
-- API 历史由当前进程记录，正式环境应替换为 MySQL/PostgreSQL。
+- 会话目录和消息历史写入 SQLite；每次 Agent 调用会重新装载该会话历史，因此刷新页面或重启服务后仍可继续对话。
+- 正式环境应将 SQLite 会话表替换为 MySQL/PostgreSQL，并对长会话增加摘要和上下文裁剪。
 - 课表和地图原图只用于当次视觉解析，不在服务端持久化；确认后的结构化结果写入 SQLite。
 - 写操作通过独立确认 API 完成，模型没有直接提交写操作的工具。
 - 已接入 PBKDF2 密码存储、HttpOnly Web Cookie 与 Bearer Token；所有个人数据和提案均从登录身份确定归属。
@@ -58,7 +58,7 @@ HarmonyOS / Android / iOS
 ## 后续演进
 
 1. 把 `CampusStore` 替换为 MySQL Repository。
-2. 把内存 Checkpointer 替换为持久化 LangGraph Checkpointer。
+2. 为长会话增加持久化 Checkpointer、摘要压缩和 Token 预算管理。
 3. 接入教务、天气、地图、图书馆和教室预约 API。
 4. 增加 SSE 流式返回和工具执行事件。
 5. 增加用户偏好记忆与校园通知 RAG。

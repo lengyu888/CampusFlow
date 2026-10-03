@@ -42,6 +42,10 @@ ArkUI-X 官方 Samples 将共享 ArkTS 页面放在 `entry/src/main/ets`，Andro
 
 `GET /api/v1/sessions/{session_id}/history`
 
+会话目录使用 `GET /api/v1/sessions?query=关键词`，会话改名使用
+`PUT /api/v1/sessions/{session_id}`。客户端恢复会话时使用返回的 `session_id`
+继续调用 `/api/v1/chat`，服务端会从 SQLite 装载历史上下文。
+
 以上接口需要登录。ArkUI-X 客户端先调用 `/api/v1/auth/register` 或 `/api/v1/auth/login`，然后在请求头中携带 `Authorization: Bearer <access_token>`。Web 测试台使用 HttpOnly Cookie。
 
 ## ArkTS 请求示意

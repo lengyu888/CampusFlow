@@ -37,6 +37,8 @@ from .schemas import (
     OnboardingRequest,
     OnboardingResponse,
     RegisterRequest,
+    SessionRenameRequest,
+    SessionSummary,
     TimetableParseResult,
     UserContextResponse,
     UserProfile,
@@ -128,7 +130,7 @@ def create_app(
     api_key_vault: ApiKeyVault | None = None,
 ) -> FastAPI:
     settings = settings or get_settings()
-    store = store or CampusStore()
+    store = store or CampusStore(settings.database_path)
     account_store = account_store or AccountStore(settings.database_path)
     agent_service = agent_service or AgentService(settings, store)
     vision_service = vision_service or VisionService(settings)
@@ -136,7 +138,7 @@ def create_app(
 
     app = FastAPI(
         title="CampusFlow Agent API",
-        version="0.3.0",
+        version="0.4.0",
         description="带账户、首次配置与视觉导入能力的大学规划执行 Agent",
     )
     app.add_middleware(
@@ -394,6 +396,27 @@ def create_app(
     )
     async def history(session_id: str, user: CurrentUser) -> list[HistoryMessage]:
         return store.get_history(user.user_id, session_id)
+
+    @app.get("/api/v1/sessions", response_model=list[SessionSummary])
+    async def sessions(user: CurrentUser, query: str = "") -> list[SessionSummary]:
+        return store.list_sessions(user.user_id, query)
+
+    @app.put("/api/v1/sessions/{session_id}", response_model=SessionSummary)
+    async def rename_session(
+        session_id: str,
+        payload: SessionRenameRequest,
+        user: CurrentUser,
+    ) -> SessionSummary:
+        try:
+            return store.rename_session(user.user_id, session_id, payload.title)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="会话不存在。") from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    @app.get("/api/v1/tasks")
+    async def tasks(user: CurrentUser) -> dict[str, list[dict]]:
+        return {"tasks": store.get_tasks(user.user_id)}
 
     @app.post(
         "/api/v1/actions/{proposal_id}/confirm",

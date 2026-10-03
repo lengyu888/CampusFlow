@@ -13,5 +13,8 @@
 - 对话：`POST /api/v1/chat`
 - 工具清单：`GET /api/v1/tools`
 - 历史：`GET /api/v1/sessions/{session_id}/history`
+- 会话目录/搜索：`GET /api/v1/sessions?query=`
+- 会话改名：`PUT /api/v1/sessions/{session_id}`
+- 已确认事务：`GET /api/v1/tasks`
 - 确认事务：`POST /api/v1/actions/{proposal_id}/confirm`
 

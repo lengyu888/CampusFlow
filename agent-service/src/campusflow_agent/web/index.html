@@ -141,20 +141,36 @@
     </section>
 
     <div class="app-shell" id="appView" hidden>
-      <header class="topbar">
-        <a class="brand" href="/" aria-label="CampusFlow 首页">
-          <span class="brand-mark">CF</span>
-          <span><strong>CampusFlow</strong><small>AGENT LAB / 02</small></span>
-        </a>
+      <header class="topbar app-topbar">
+        <a class="brand" href="/" aria-label="CampusFlow 首页"><span class="brand-mark">CF</span><span><strong>CampusFlow</strong><small>CAMPUS OS / APP</small></span></a>
         <div class="system-state" id="systemState"><span class="pulse"></span><span>正在检查服务</span></div>
-        <div class="topbar-actions">
-          <button class="user-chip" id="userChip" type="button"><span id="userInitial">U</span><b id="userName">User</b></button>
-          <button class="line-button" id="newSessionButton" type="button">新建会话</button>
-          <button class="line-button quiet" id="logoutButton" type="button">退出</button>
-        </div>
+        <div class="topbar-actions"><button class="line-button quiet" id="historyButton" type="button">历史会话</button><button class="user-chip" id="userChip" type="button"><span id="userInitial">U</span><b id="userName">User</b></button><button class="line-button quiet" id="logoutButton" type="button">退出</button></div>
       </header>
 
-      <main class="workspace">
+      <div class="app-body">
+        <nav class="app-nav" aria-label="主导航">
+          <button class="active" type="button" data-app-tab="today"><i>今</i><span>今日</span></button>
+          <button type="button" data-app-tab="agent"><i>AI</i><span>Agent</span></button>
+          <button type="button" data-app-tab="plans"><i>划</i><span>规划</span></button>
+          <button type="button" data-app-tab="skills"><i>技</i><span>Skills</span></button>
+          <button type="button" data-app-action="settings"><i>我</i><span>我的</span></button>
+        </nav>
+
+        <div class="app-stage">
+          <section class="app-surface today-surface" data-app-surface="today">
+            <div class="today-hero"><div><span class="section-index">TODAY / CAMPUS PULSE</span><h1 id="todayGreeting">早上好</h1><p id="todayDate">正在载入今天…</p></div><button class="primary-action" type="button" data-open-agent data-prompt="请结合我的课表，为今天生成一份可执行的学习安排。"><span>让 Agent 安排今天</span><i>↗</i></button></div>
+            <div class="today-grid">
+              <section class="day-timeline dashboard-card"><div class="card-heading"><span>01 / SCHEDULE</span><h2>今日节奏</h2><b id="todayCourseCount">0 节课</b></div><div class="today-course-list" id="todayCourseList"></div></section>
+              <aside class="today-side">
+                <section class="dashboard-card next-focus"><span>UP NEXT</span><h2 id="nextCourseTitle">今天没有课程</h2><p id="nextCourseMeta">适合安排一段完整的自主学习时间。</p><button type="button" data-open-agent data-prompt="根据我的近期课程，推荐今天最值得优先复习的内容和地点。">获取下一步建议 →</button></section>
+                <section class="dashboard-card context-health"><span>CONNECTED CONTEXT</span><div><strong id="todayPlaceCount">—</strong><small>校园地点</small></div><div><strong id="todayHistoryCount">—</strong><small>历史会话</small></div><div><strong>SAFE</strong><small>账户凭据</small></div></section>
+              </aside>
+            </div>
+            <div class="suggestion-strip"><span>AGENT SIGNAL</span><p id="todaySuggestion">正在结合你的课程和校园信息生成今日建议…</p><button type="button" data-open-agent data-prompt="查看我的课表和校园地点，为我生成一个今天就能完成的小目标。">开始行动</button></div>
+          </section>
+
+          <section class="app-surface" data-app-surface="agent" hidden>
+            <div class="workspace">
         <aside class="control-panel panel">
           <div class="section-index">01 / CONNECTION</div>
           <h1>把目标交给<br /><em>执行型</em> Agent</h1>
@@ -167,6 +183,7 @@
             <label><input type="radio" name="model" value="deepseek-flash" /><span><b>FLASH</b><small>快速对话 · 成本更低</small></span></label>
           </fieldset>
           <div class="session-meta"><span>SESSION</span><code id="sessionId"></code></div>
+          <button class="session-history-button" id="agentHistoryButton" type="button">浏览历史会话 <span>↗</span></button>
           <div class="quick-prompts">
             <div class="field-label">快速场景</div>
             <button type="button" data-prompt="请根据我2026-10-01的课表和校园地图，帮我安排当天的复习地点与时间。">基于已导入课表规划</button>
@@ -190,7 +207,28 @@
           <div class="section-index">03 / TRACE</div><h2>执行轨迹</h2><p class="trace-intro">查看 Agent 使用了哪些个人数据，以及哪些操作仍在等待确认。</p>
           <div class="trace-list" id="traceList"><div class="trace-empty">尚无工具调用<br /><span>尝试询问已导入课表或校园地点</span></div></div>
         </aside>
-      </main>
+            </div>
+          </section>
+
+          <section class="app-surface plans-surface" data-app-surface="plans" hidden>
+            <div class="surface-heading"><div><span>PLANS / EXECUTION</span><h1>规划与行动</h1></div><p>所有由 Agent 生成并经你确认的事务都会汇聚在这里。</p></div>
+            <div class="plan-board"><section><span>ACTIVE TASKS</span><h2>已确认事务</h2><div class="plan-list" id="planList"></div></section><aside><div class="phase-stamp">PHASE 03</div><h2>从目标到提醒</h2><p>下一阶段将加入里程碑拆解、冲突检测、待办和系统闹钟。当前版本先展示 Agent 已确认的事务。</p><button class="primary-action" type="button" data-open-agent data-prompt="帮我把本周学习目标拆成可执行计划，并先生成待确认事务。"><span>用 Agent 创建规划</span><i>↗</i></button></aside></div>
+          </section>
+
+          <section class="app-surface skills-surface" data-app-surface="skills" hidden>
+            <div class="surface-heading"><div><span>OFFICIAL / SKILL LIBRARY</span><h1>校园 Skills</h1></div><p>官方能力将以清晰权限、版本和数据范围供用户安装。</p></div>
+            <div class="skill-grid"><article><span>01 · OFFICIAL</span><h2>课表规划师</h2><p>读取已确认课表，检查冲突并生成学习时间块。</p><b>已内置</b></article><article><span>02 · OFFICIAL</span><h2>校园地点助手</h2><p>基于地图数据查找教学楼、自习区与生活服务。</p><b>已内置</b></article><article><span>03 · PREVIEW</span><h2>DDL 守望者</h2><p>连接待办与提醒，在截止日前给出风险提示。</p><b>即将开放</b></article></div>
+          </section>
+        </div>
+      </div>
+
+      <aside class="history-drawer" id="historyDrawer" hidden>
+        <div class="history-head"><div><span>CONVERSATION ARCHIVE</span><h2>历史会话</h2></div><button id="historyCloseButton" type="button" aria-label="关闭历史会话">×</button></div>
+        <label class="history-search">搜索<input id="historySearch" type="search" placeholder="搜索标题或消息内容" /></label>
+        <div class="history-list" id="historyList"></div>
+        <button class="primary-action history-new" id="newSessionButton" type="button"><span>新建 Agent 会话</span><i>＋</i></button>
+      </aside>
+      <div class="drawer-scrim" id="drawerScrim" hidden></div>
     </div>
 
     <section class="settings-view" id="settingsView" hidden>
@@ -200,7 +238,7 @@
           <span><strong>CampusFlow</strong><small>ACCOUNT / CONTROL ROOM</small></span>
         </a>
         <div class="system-state online"><span class="pulse"></span><span>账户配置中心</span></div>
-        <button class="line-button" id="settingsBackButton" type="button">← 返回 Agent</button>
+        <button class="line-button" id="settingsBackButton" type="button">← 返回 CampusFlow</button>
       </header>
       <main class="settings-layout">
         <aside class="settings-rail">

@@ -41,6 +41,20 @@ class HistoryMessage(BaseModel):
     created_at: datetime
 
 
+class SessionSummary(BaseModel):
+    session_id: str
+    title: str
+    model_name: Literal["deepseek-v4-pro", "deepseek-flash"]
+    last_message: str
+    message_count: int
+    created_at: datetime
+    updated_at: datetime
+
+
+class SessionRenameRequest(BaseModel):
+    title: str = Field(min_length=1, max_length=80)
+
+
 class ConfirmActionResponse(BaseModel):
     action: PendingAction
     applied: bool

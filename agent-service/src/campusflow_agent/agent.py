@@ -7,7 +7,6 @@ from typing import Any
 from langchain.agents import create_agent
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langchain_openai import ChatOpenAI
-from langgraph.checkpoint.memory import InMemorySaver
 
 from .config import Settings
 from .schemas import PendingAction, ToolTrace
@@ -43,7 +42,6 @@ class AgentService:
     def __init__(self, settings: Settings, store: CampusStore) -> None:
         self.settings = settings
         self.store = store
-        self._checkpointer = InMemorySaver()
 
     def _build_graph(self, *, api_key: str, model_name: str) -> Any:
         if not api_key.strip():
@@ -68,7 +66,6 @@ class AgentService:
             model=model,
             tools=build_tools(self.store),
             system_prompt=SYSTEM_PROMPT,
-            checkpointer=self._checkpointer,
         )
 
     async def chat(
@@ -81,11 +78,18 @@ class AgentService:
         message: str,
     ) -> AgentReply:
         graph = self._build_graph(api_key=api_key, model_name=model_name)
+        history = self.store.get_history(user_id, session_id)
+        conversation = [
+            HumanMessage(content=item.content)
+            if item.role == "user"
+            else AIMessage(content=item.content)
+            for item in history
+        ]
+        conversation.append(HumanMessage(content=message))
         token = CURRENT_USER_ID.set(user_id)
         try:
             result = await graph.ainvoke(
-                {"messages": [HumanMessage(content=message)]},
-                config={"configurable": {"thread_id": f"{user_id}:{session_id}"}},
+                {"messages": conversation},
             )
         finally:
             CURRENT_USER_ID.reset(token)
@@ -94,8 +98,8 @@ class AgentService:
         answer = self._last_answer(new_messages)
         traces, pending = self._extract_tool_activity(new_messages)
 
-        self.store.append_history(user_id, session_id, "user", message)
-        self.store.append_history(user_id, session_id, "assistant", answer)
+        self.store.append_history(user_id, session_id, "user", message, model_name)
+        self.store.append_history(user_id, session_id, "assistant", answer, model_name)
         return AgentReply(message=answer, tool_traces=traces, pending_actions=pending)
 
     @staticmethod
