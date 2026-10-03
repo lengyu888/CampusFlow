@@ -45,9 +45,11 @@
             <label>怎么称呼你<input name="display_name" autocomplete="nickname" maxlength="48" required placeholder="例如：小航" /></label>
             <label>邮箱<input name="email" type="email" autocomplete="email" required placeholder="student@example.com" /></label>
             <label>密码<input name="password" type="password" autocomplete="new-password" minlength="8" required placeholder="至少 8 位" /></label>
+            <label>DeepSeek API Key<input name="api_key" type="password" autocomplete="off" required placeholder="sk-••••••••••••" /></label>
+            <p class="form-note">仅用于你的 Agent 与图片识别；提交后加密保存，平台管理员无法查看明文。</p>
             <button class="primary-action" type="submit"><span class="action-label">创建我的校园空间</span><i>↗</i></button>
           </form>
-          <p class="privacy-line">密码使用 PBKDF2 加盐存储；浏览器通过 HttpOnly 会话 Cookie 登录。</p>
+          <p class="privacy-line">密码使用 PBKDF2 加盐存储；API Key 使用独立主密钥加密；会话使用 HttpOnly Cookie。</p>
         </div>
       </div>
     </section>
@@ -71,9 +73,8 @@
             <li data-step-indicator="2"><b>02</b><span>课表识别<small>上传、解析与确认</small></span></li>
             <li data-step-indicator="3"><b>03</b><span>校园地图<small>生成地点数据包</small></span></li>
           </ol>
-          <label class="setup-key-label" for="setupApiKey">DeepSeek API Key</label>
-          <input class="setup-key" id="setupApiKey" type="password" autocomplete="off" placeholder="仅用于两次图片解析" />
-          <p class="setup-note">图片会发送给 DeepSeek Flash 识别；原图和密钥不会写入 CampusFlow 数据库。</p>
+          <div class="vault-status"><span>✓</span><div><b>AI 凭据已连接</b><small id="setupKeyHint">加密保存在你的账户中</small></div></div>
+          <p class="setup-note">课表和地图会通过 DeepSeek Flash 识别；后续登录无需再次配置密钥。</p>
         </aside>
 
         <section class="setup-canvas">
@@ -158,11 +159,8 @@
           <div class="section-index">01 / CONNECTION</div>
           <h1>把目标交给<br /><em>执行型</em> Agent</h1>
           <p class="intro" id="contextLine">正在载入你的校园上下文…</p>
-          <label class="field-label" for="apiKey">DeepSeek API Key</label>
-          <div class="secret-field">
-            <input id="apiKey" type="password" autocomplete="off" spellcheck="false" placeholder="sk-••••••••••••" />
-            <button id="toggleSecret" type="button" aria-label="显示或隐藏 API Key">显示</button>
-          </div>
+          <div class="field-label">DeepSeek Credential</div>
+          <button class="credential-card" id="credentialCard" type="button"><span class="credential-dot"></span><span><b>Secure Vault</b><small id="credentialHint">已配置 · 点击管理</small></span><i>↗</i></button>
           <fieldset class="model-switcher">
             <legend>模型路由</legend>
             <label><input type="radio" name="model" value="deepseek-v4-pro" checked /><span><b>V4 PRO</b><small>复杂规划 · 更强推理</small></span></label>
@@ -194,6 +192,60 @@
         </aside>
       </main>
     </div>
+
+    <section class="settings-view" id="settingsView" hidden>
+      <header class="topbar settings-topbar">
+        <a class="brand" href="/" aria-label="CampusFlow 首页">
+          <span class="brand-mark">CF</span>
+          <span><strong>CampusFlow</strong><small>ACCOUNT / CONTROL ROOM</small></span>
+        </a>
+        <div class="system-state online"><span class="pulse"></span><span>账户配置中心</span></div>
+        <button class="line-button" id="settingsBackButton" type="button">← 返回 Agent</button>
+      </header>
+      <main class="settings-layout">
+        <aside class="settings-rail">
+          <div class="settings-identity"><span id="settingsInitial">U</span><div><b id="settingsName">User</b><small id="settingsEmail">user@example.com</small></div></div>
+          <div class="section-index">ACCOUNT SURFACES</div>
+          <nav class="settings-nav">
+            <button class="active" type="button" data-settings-tab="profile"><span>01</span>个人配置</button>
+            <button type="button" data-settings-tab="data"><span>02</span>学习数据</button>
+            <button id="adminTabButton" type="button" data-settings-tab="admin" hidden><span>03</span>用户管理</button>
+          </nav>
+          <div class="settings-rail-note"><b>PRIVACY BY DESIGN</b><p>API Key 只显示尾号，更新后立即重新加密。任何页面都不会回显完整密钥。</p></div>
+        </aside>
+
+        <section class="settings-canvas">
+          <div class="settings-panel" data-settings-panel="profile">
+            <div class="settings-heading"><div><span>01 / PROFILE</span><h1>个人配置</h1></div><p>这些信息会成为 Agent 理解你校园生活的长期上下文。</p></div>
+            <form class="settings-form" id="settingsForm">
+              <label>昵称<input id="settingsDisplayName" name="display_name" maxlength="48" required /></label>
+              <label>登录邮箱<input id="settingsEmailInput" disabled /></label>
+              <label>学校<input id="settingsSchool" name="school" maxlength="100" /></label>
+              <label>校区<input id="settingsCampus" name="campus" maxlength="100" /></label>
+              <label class="wide">当前学期<input id="settingsSemester" name="semester" maxlength="80" /></label>
+              <div class="key-setting wide">
+                <div><span>DEEPSEEK CREDENTIAL</span><h3 id="settingsKeyState">已安全连接</h3><p>输入新 Key 可替换现有凭据；留空则保持不变。</p></div>
+                <label>更新 API Key<input id="settingsApiKey" name="api_key" type="password" autocomplete="off" placeholder="留空以保留当前密钥" /></label>
+              </div>
+              <button class="primary-action settings-save" type="submit"><span class="action-label">保存配置</span><i>↗</i></button>
+            </form>
+          </div>
+
+          <div class="settings-panel" data-settings-panel="data" hidden>
+            <div class="settings-heading"><div><span>02 / PERSONAL DATA</span><h1>学习数据</h1></div><p>查看 Agent 当前连接的课表与校园地图数据。</p></div>
+            <div class="data-stats"><article><strong id="settingsCourseCount">—</strong><span>课程记录</span></article><article><strong id="settingsPlaceCount">—</strong><span>校园地点</span></article><article><strong id="settingsSemesterCard">—</strong><span>当前学期</span></article></div>
+            <div class="data-columns"><section><div class="data-title"><span>COURSES</span><h2>已连接课表</h2></div><div class="context-list" id="settingsCourseList"></div></section><section><div class="data-title"><span>PLACES</span><h2>校园地点样本</h2></div><div class="context-list" id="settingsPlaceList"></div></section></div>
+            <button class="line-button data-edit-button" id="editOnboardingButton" type="button">重新配置课表与地图 ↗</button>
+          </div>
+
+          <div class="settings-panel" data-settings-panel="admin" hidden>
+            <div class="settings-heading"><div><span>03 / ADMIN CONSOLE</span><h1>注册用户</h1></div><p>平台运营视图仅展示账户状态和数据规模，不展示任何 API Key 内容。</p></div>
+            <div class="admin-summary"><strong id="adminUserCount">—</strong><span>REGISTERED ACCOUNTS</span><small>密钥明文可见：0</small></div>
+            <div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>用户</th><th>角色</th><th>校园</th><th>数据</th><th>AI 凭据</th><th>注册时间</th></tr></thead><tbody id="adminUserRows"></tbody></table></div>
+          </div>
+        </section>
+      </main>
+    </section>
 
     <div class="toast" id="toast" role="status"></div>
     <script src="/static/app.js" defer></script>

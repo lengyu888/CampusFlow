@@ -4,6 +4,7 @@ REGISTER_PAYLOAD = {
     "email": "student@example.com",
     "password": "correct-horse-42",
     "display_name": "小航",
+    "api_key": "sk-test-secret-value",
 }
 
 ONBOARDING_PAYLOAD = {
@@ -54,6 +55,8 @@ async def test_frontend_is_served(client: AsyncClient) -> None:
     assert "课表识别" in page.text
     assert "deepseek-v4-pro" in page.text
     assert "deepseek-flash" in page.text
+    assert 'name="api_key"' in page.text
+    assert "用户管理" in page.text
     assert script.status_code == 200
     assert "fetch(path, options)" in script.text
 
@@ -63,7 +66,7 @@ async def test_health(client: AsyncClient) -> None:
     assert response.status_code == 200
     assert response.json() == {
         "status": "ok",
-        "api_key_mode": "request",
+        "api_key_mode": "encrypted_account",
         "supported_models": ["deepseek-v4-pro", "deepseek-flash"],
     }
 
@@ -75,6 +78,9 @@ async def test_register_me_logout_and_login(client: AsyncClient) -> None:
     assert me.status_code == 200
     assert me.json()["display_name"] == "小航"
     assert me.json()["onboarding_complete"] is False
+    assert me.json()["role"] == "admin"
+    assert me.json()["api_key_configured"] is True
+    assert me.json()["api_key_hint"] == "•••• alue"
 
     logout = await client.post("/api/v1/auth/logout")
     assert logout.status_code == 204
@@ -96,10 +102,7 @@ async def test_duplicate_registration_is_rejected(client: AsyncClient) -> None:
 
 async def test_visual_import_onboarding_chat_and_history(client: AsyncClient) -> None:
     await register(client)
-    image_payload = {
-        "api_key": "test-key",
-        "image_data": "data:image/png;base64,aGVsbG8td29ybGQtaW1hZ2U=",
-    }
+    image_payload = {"image_data": "data:image/png;base64,aGVsbG8td29ybGQtaW1hZ2U="}
 
     timetable = await client.post("/api/v1/onboarding/parse-timetable", json=image_payload)
     campus_map = await client.post("/api/v1/onboarding/parse-map", json=image_payload)
@@ -117,7 +120,6 @@ async def test_visual_import_onboarding_chat_and_history(client: AsyncClient) ->
         "/api/v1/chat",
         json={
             "session_id": "session-001",
-            "api_key": "test-key",
             "model": "deepseek-v4-pro",
             "message": "查询我的课表",
         },
@@ -133,7 +135,6 @@ async def test_visual_import_onboarding_chat_and_history(client: AsyncClient) ->
 async def test_chat_requires_login_and_onboarding(client: AsyncClient) -> None:
     payload = {
         "session_id": "session-001",
-        "api_key": "test-key",
         "model": "deepseek-v4-pro",
         "message": "你好",
     }
@@ -157,9 +158,49 @@ async def test_unsupported_model_is_rejected(client: AsyncClient) -> None:
         "/api/v1/chat",
         json={
             "session_id": "session-001",
-            "api_key": "test-key",
             "model": "unsupported-model",
             "message": "你好",
         },
     )
     assert response.status_code == 422
+
+
+async def test_settings_context_and_admin_user_console(client: AsyncClient) -> None:
+    await register(client)
+    await complete_onboarding(client)
+
+    settings = await client.put(
+        "/api/v1/me/settings",
+        json={
+            "display_name": "小航同学",
+            "school": "杭州电子科技大学",
+            "campus": "文一校区",
+            "semester": "2026-2027 第一学期",
+            "api_key": "sk-updated-secret",
+        },
+    )
+    assert settings.status_code == 200
+    assert settings.json()["display_name"] == "小航同学"
+    assert settings.json()["api_key_hint"] == "•••• cret"
+
+    context = await client.get("/api/v1/me/context")
+    assert context.status_code == 200
+    assert context.json()["timetable"][0]["title"] == "操作系统"
+    assert context.json()["campus_map"]["places"][0]["name"] == "图书馆"
+
+    admin_users = await client.get("/api/v1/admin/users")
+    assert admin_users.status_code == 200
+    assert admin_users.json()[0]["api_key_configured"] is True
+    assert "api_key" not in admin_users.json()[0]
+    assert admin_users.json()[0]["timetable_count"] == 1
+
+
+async def test_non_admin_cannot_list_users(client: AsyncClient) -> None:
+    await register(client)
+    await client.post("/api/v1/auth/logout")
+    second = dict(REGISTER_PAYLOAD)
+    second.update(email="second@example.com", display_name="普通用户")
+    response = await client.post("/api/v1/auth/register", json=second)
+    assert response.status_code == 201
+    assert response.json()["user"]["role"] == "user"
+    assert (await client.get("/api/v1/admin/users")).status_code == 403

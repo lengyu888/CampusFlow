@@ -34,11 +34,22 @@ def main() -> None:
             json={"email": email, "password": password},
         )
         login.raise_for_status()
+        profile = login.json()["user"]
+        settings = client.put(
+            "/api/v1/me/settings",
+            json={
+                "display_name": profile["display_name"],
+                "school": profile.get("school"),
+                "campus": profile.get("campus"),
+                "semester": profile.get("semester"),
+                "api_key": api_key,
+            },
+        )
+        settings.raise_for_status()
 
         timetable = client.post(
             "/api/v1/onboarding/parse-timetable",
             json={
-                "api_key": api_key,
                 "image_data": image_data_url(require_env("CAMPUSFLOW_TIMETABLE_IMAGE")),
             },
         )
@@ -47,7 +58,6 @@ def main() -> None:
         campus_map = client.post(
             "/api/v1/onboarding/parse-map",
             json={
-                "api_key": api_key,
                 "image_data": image_data_url(require_env("CAMPUSFLOW_MAP_IMAGE")),
             },
         )

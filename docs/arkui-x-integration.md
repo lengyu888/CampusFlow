@@ -16,7 +16,6 @@ ArkUI-X 官方 Samples 将共享 ArkTS 页面放在 `entry/src/main/ets`，Andro
 ```json
 {
   "session_id": "session-001",
-  "api_key": "用户在客户端填写的 DeepSeek API Key",
   "model": "deepseek-v4-pro",
   "message": "明天下午帮我安排两小时复习高数"
 }
@@ -52,7 +51,6 @@ ArkUI-X 官方 Samples 将共享 ArkTS 页面放在 `entry/src/main/ets`，Andro
 ```ts
 interface ChatRequest {
   session_id: string
-  api_key: string
   model: 'deepseek-v4-pro' | 'deepseek-flash'
   message: string
 }
@@ -86,5 +84,5 @@ idle → sending → planning → calling_tool → waiting_confirm → completed
                                       └──→ failed / retry
 ```
 
-客户端应显示 `tool_traces`，并把 `pending_actions` 渲染为确认卡片。不要根据模型自然语言直接执行日程写入。API Key 应保存在页面内存/输入控件中，禁止写入本地数据库、日志或版本库。
+客户端应显示 `tool_traces`，并把 `pending_actions` 渲染为确认卡片。不要根据模型自然语言直接执行日程写入。API Key 在注册或用户设置中提交给服务端加密保管；ArkUI-X 客户端不在本地数据库、日志或版本库保存密钥，也不需要在每次 Agent 请求中重复发送。
 

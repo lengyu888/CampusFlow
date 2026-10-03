@@ -7,6 +7,8 @@ def test_account_password_session_and_onboarding() -> None:
         email=" Student@Example.com ",
         password="correct-horse-42",
         display_name="小航",
+        api_key_encrypted="encrypted-test-key",
+        api_key_hint="•••• test",
     )
     assert user.email == "student@example.com"
     assert user.onboarding_complete is False
@@ -37,10 +39,22 @@ def test_account_password_session_and_onboarding() -> None:
 
 def test_duplicate_email_and_bad_password_are_rejected() -> None:
     accounts = AccountStore(":memory:")
-    accounts.register(email="student@example.com", password="password-123", display_name="A")
+    accounts.register(
+        email="student@example.com",
+        password="password-123",
+        display_name="A",
+        api_key_encrypted="encrypted-a",
+        api_key_hint="•••• test",
+    )
 
     try:
-        accounts.register(email="student@example.com", password="password-456", display_name="B")
+        accounts.register(
+            email="student@example.com",
+            password="password-456",
+            display_name="B",
+            api_key_encrypted="encrypted-b",
+            api_key_hint="•••• test",
+        )
     except AccountConflictError:
         pass
     else:

@@ -5,12 +5,13 @@ const elements = {
   authView: $("#authView"),
   onboardingView: $("#onboardingView"),
   appView: $("#appView"),
+  settingsView: $("#settingsView"),
   authTitle: $("#authTitle"),
   authSubtitle: $("#authSubtitle"),
   loginForm: $("#loginForm"),
   registerForm: $("#registerForm"),
   setupProgress: $("#setupProgress"),
-  setupApiKey: $("#setupApiKey"),
+  setupKeyHint: $("#setupKeyHint"),
   schoolInput: $("#schoolInput"),
   campusInput: $("#campusInput"),
   semesterInput: $("#semesterInput"),
@@ -32,8 +33,8 @@ const elements = {
   setupBackButton: $("#setupBackButton"),
   setupNextButton: $("#setupNextButton"),
   setupLogoutButton: $("#setupLogoutButton"),
-  apiKey: $("#apiKey"),
-  toggleSecret: $("#toggleSecret"),
+  credentialCard: $("#credentialCard"),
+  credentialHint: $("#credentialHint"),
   sessionId: $("#sessionId"),
   newSessionButton: $("#newSessionButton"),
   modelBadge: $("#modelBadge"),
@@ -48,6 +49,28 @@ const elements = {
   userName: $("#userName"),
   contextLine: $("#contextLine"),
   logoutButton: $("#logoutButton"),
+  userChip: $("#userChip"),
+  settingsBackButton: $("#settingsBackButton"),
+  settingsInitial: $("#settingsInitial"),
+  settingsName: $("#settingsName"),
+  settingsEmail: $("#settingsEmail"),
+  settingsForm: $("#settingsForm"),
+  settingsDisplayName: $("#settingsDisplayName"),
+  settingsEmailInput: $("#settingsEmailInput"),
+  settingsSchool: $("#settingsSchool"),
+  settingsCampus: $("#settingsCampus"),
+  settingsSemester: $("#settingsSemester"),
+  settingsApiKey: $("#settingsApiKey"),
+  settingsKeyState: $("#settingsKeyState"),
+  adminTabButton: $("#adminTabButton"),
+  settingsCourseCount: $("#settingsCourseCount"),
+  settingsPlaceCount: $("#settingsPlaceCount"),
+  settingsSemesterCard: $("#settingsSemesterCard"),
+  settingsCourseList: $("#settingsCourseList"),
+  settingsPlaceList: $("#settingsPlaceList"),
+  editOnboardingButton: $("#editOnboardingButton"),
+  adminUserCount: $("#adminUserCount"),
+  adminUserRows: $("#adminUserRows"),
   toast: $("#toast"),
 };
 
@@ -61,6 +84,7 @@ const state = {
   sessionId: createSessionId(),
   sending: false,
   hasTraces: false,
+  settingsContext: null,
 };
 
 function createSessionId() {
@@ -99,7 +123,8 @@ function showOnly(view) {
   elements.authView.hidden = view !== "auth";
   elements.onboardingView.hidden = view !== "onboarding";
   elements.appView.hidden = view !== "app";
-  document.body.style.overflow = view === "app" ? "hidden" : "auto";
+  elements.settingsView.hidden = view !== "settings";
+  document.body.style.overflow = ["app", "settings"].includes(view) ? "hidden" : "auto";
 }
 
 function setButtonBusy(button, busy, label) {
@@ -155,8 +180,7 @@ async function logout() {
   state.campusMap = null;
   state.timetableImage = "";
   state.mapImage = "";
-  elements.apiKey.value = "";
-  elements.setupApiKey.value = "";
+  elements.settingsApiKey.value = "";
   resetSession(false);
   elements.loginForm.reset();
   elements.registerForm.reset();
@@ -166,6 +190,12 @@ async function logout() {
 
 function showOnboarding() {
   state.setupStep = 1;
+  elements.schoolInput.value = state.user?.school ?? elements.schoolInput.value;
+  elements.campusInput.value = state.user?.campus ?? elements.campusInput.value;
+  elements.semesterInput.value = state.user?.semester ?? elements.semesterInput.value;
+  elements.setupKeyHint.textContent = state.user?.api_key_hint
+    ? `账户凭据 ${state.user.api_key_hint}`
+    : "加密保存在你的账户中";
   showOnly("onboarding");
   renderSetupStep();
 }
@@ -267,16 +297,10 @@ function setParseStatus(element, text, kind) {
 }
 
 async function parseImage(kind) {
-  const apiKey = elements.setupApiKey.value.trim();
   const isTimetable = kind === "timetable";
   const imageData = isTimetable ? state.timetableImage : state.mapImage;
   const button = isTimetable ? elements.parseTimetableButton : elements.parseMapButton;
   const statusElement = isTimetable ? elements.timetableStatus : elements.mapStatus;
-  if (!apiKey) {
-    elements.setupApiKey.focus();
-    showToast("请填写 DeepSeek API Key 用于图片解析。", "error");
-    return;
-  }
   if (!imageData) return;
 
   setButtonBusy(button, true, "Flash 正在识别…");
@@ -285,7 +309,7 @@ async function parseImage(kind) {
     const payload = await api(`/api/v1/onboarding/parse-${isTimetable ? "timetable" : "map"}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ api_key: apiKey, image_data: imageData }),
+      body: JSON.stringify({ image_data: imageData }),
     });
     if (isTimetable) {
       state.timetable = payload;
@@ -386,7 +410,7 @@ async function completeOnboarding() {
       }),
     });
     state.user = payload.user;
-    elements.apiKey.value = elements.setupApiKey.value;
+    state.settingsContext = { timetable: state.timetable.entries, campus_map: state.campusMap };
     showToast(`已连接 ${payload.timetable_count} 条课程和 ${payload.campus_place_count} 个地点`);
     showApp();
   } finally {
@@ -398,7 +422,10 @@ function showApp() {
   showOnly("app");
   elements.userName.textContent = state.user.display_name;
   elements.userInitial.textContent = state.user.display_name.slice(0, 1).toUpperCase();
-  elements.contextLine.textContent = `已连接：${state.user.school} · ${state.user.campus} · ${state.user.semester}。密钥仅随本次请求发送。`;
+  elements.contextLine.textContent = `已连接：${state.user.school} · ${state.user.campus} · ${state.user.semester}。AI 凭据由账户安全托管。`;
+  elements.credentialHint.textContent = state.user.api_key_hint
+    ? `已配置 ${state.user.api_key_hint} · 点击管理`
+    : "未配置 · 点击管理";
   setSessionId();
   elements.messageInput.focus();
 }
@@ -530,12 +557,6 @@ async function confirmAction(proposalId, card, button, label) {
 }
 
 async function sendMessage(message) {
-  const apiKey = elements.apiKey.value.trim();
-  if (!apiKey) {
-    elements.apiKey.focus();
-    showToast("请先填写 DeepSeek API Key", "error");
-    return;
-  }
   if (!message || state.sending) return;
   state.sending = true;
   elements.sendButton.disabled = true;
@@ -548,7 +569,6 @@ async function sendMessage(message) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         session_id: state.sessionId,
-        api_key: apiKey,
         model: selectedModel(),
         message,
       }),
@@ -587,6 +607,158 @@ function resetSession(notify = true) {
   if (notify) showToast("已创建独立会话");
 }
 
+function fillSettingsProfile() {
+  const user = state.user;
+  elements.settingsInitial.textContent = user.display_name.slice(0, 1).toUpperCase();
+  elements.settingsName.textContent = user.display_name;
+  elements.settingsEmail.textContent = user.email;
+  elements.settingsDisplayName.value = user.display_name;
+  elements.settingsEmailInput.value = user.email;
+  elements.settingsSchool.value = user.school ?? "";
+  elements.settingsCampus.value = user.campus ?? "";
+  elements.settingsSemester.value = user.semester ?? "";
+  elements.settingsApiKey.value = "";
+  elements.settingsKeyState.textContent = user.api_key_configured
+    ? `已安全连接 ${user.api_key_hint ?? ""}`
+    : "尚未配置";
+  elements.adminTabButton.hidden = user.role !== "admin";
+}
+
+function switchSettingsTab(tab) {
+  $$('[data-settings-tab]').forEach((button) => {
+    button.classList.toggle("active", button.dataset.settingsTab === tab);
+  });
+  $$('[data-settings-panel]').forEach((panel) => {
+    panel.hidden = panel.dataset.settingsPanel !== tab;
+  });
+  if (tab === "data") loadSettingsContext();
+  if (tab === "admin") loadAdminUsers();
+}
+
+function openSettings() {
+  fillSettingsProfile();
+  switchSettingsTab("profile");
+  showOnly("settings");
+}
+
+function contextListItem(primary, secondary) {
+  const item = document.createElement("article");
+  const title = document.createElement("b");
+  const detail = document.createElement("span");
+  title.textContent = primary;
+  detail.textContent = secondary;
+  item.append(title, detail);
+  return item;
+}
+
+async function loadSettingsContext(force = false) {
+  if (!state.settingsContext || force) {
+    try {
+      state.settingsContext = await api("/api/v1/me/context");
+    } catch (error) {
+      showToast(error.message, "error");
+      return;
+    }
+  }
+  const courses = state.settingsContext.timetable ?? [];
+  const places = state.settingsContext.campus_map?.places ?? [];
+  elements.settingsCourseCount.textContent = courses.length;
+  elements.settingsPlaceCount.textContent = places.length;
+  elements.settingsSemesterCard.textContent = state.user.semester ?? "未设置";
+  elements.settingsCourseList.replaceChildren();
+  elements.settingsPlaceList.replaceChildren();
+  courses.slice(0, 8).forEach((course) => {
+    elements.settingsCourseList.append(contextListItem(
+      course.title,
+      `${course.date} · ${course.start_time}–${course.end_time} · ${course.location || "地点待定"}`,
+    ));
+  });
+  places.slice(0, 10).forEach((place) => {
+    elements.settingsPlaceList.append(contextListItem(
+      place.name,
+      `${place.category || "其他"}${place.zone ? ` · ${place.zone}` : ""}`,
+    ));
+  });
+  if (!courses.length) elements.settingsCourseList.append(contextListItem("暂无课表", "请重新配置学习数据"));
+  if (!places.length) elements.settingsPlaceList.append(contextListItem("暂无地点", "请重新配置校园地图"));
+}
+
+function adminStatus(text, kind) {
+  const badge = document.createElement("span");
+  badge.className = `table-badge ${kind}`;
+  badge.textContent = text;
+  return badge;
+}
+
+async function loadAdminUsers() {
+  elements.adminUserRows.innerHTML = '<tr><td colspan="6" class="table-loading">正在读取账户目录…</td></tr>';
+  try {
+    const users = await api("/api/v1/admin/users");
+    elements.adminUserCount.textContent = users.length;
+    elements.adminUserRows.replaceChildren();
+    users.forEach((user) => {
+      const row = document.createElement("tr");
+      const identity = document.createElement("td");
+      identity.append(contextListItem(user.display_name, user.email));
+      const role = document.createElement("td");
+      role.append(adminStatus(user.role === "admin" ? "管理员" : "用户", user.role));
+      const campus = document.createElement("td");
+      campus.textContent = [user.school, user.campus].filter(Boolean).join(" · ") || "未配置";
+      const data = document.createElement("td");
+      data.textContent = `${user.timetable_count} 课 / ${user.campus_place_count} 地点`;
+      const credential = document.createElement("td");
+      credential.append(adminStatus(user.api_key_configured ? "已配置" : "未配置", user.api_key_configured ? "ready" : "empty"));
+      const created = document.createElement("td");
+      created.textContent = new Date(user.created_at).toLocaleDateString("zh-CN");
+      row.append(identity, role, campus, data, credential, created);
+      elements.adminUserRows.append(row);
+    });
+  } catch (error) {
+    elements.adminUserRows.innerHTML = '<tr><td colspan="6" class="table-loading">加载失败</td></tr>';
+    showToast(error.message, "error");
+  }
+}
+
+async function saveSettings(event) {
+  event.preventDefault();
+  const button = elements.settingsForm.querySelector("button[type='submit']");
+  const payload = {
+    display_name: elements.settingsDisplayName.value.trim(),
+    school: elements.settingsSchool.value.trim() || null,
+    campus: elements.settingsCampus.value.trim() || null,
+    semester: elements.settingsSemester.value.trim() || null,
+  };
+  const newApiKey = elements.settingsApiKey.value.trim();
+  if (newApiKey) payload.api_key = newApiKey;
+  setButtonBusy(button, true, "正在加密保存…");
+  try {
+    state.user = await api("/api/v1/me/settings", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    fillSettingsProfile();
+    showToast("账户配置已更新");
+  } catch (error) {
+    showToast(error.message, "error");
+  } finally {
+    setButtonBusy(button, false, "");
+  }
+}
+
+async function editLearningData() {
+  await loadSettingsContext(true);
+  state.timetable = state.settingsContext?.timetable?.length
+    ? { entries: structuredClone(state.settingsContext.timetable) }
+    : null;
+  state.campusMap = state.settingsContext?.campus_map?.places?.length
+    ? structuredClone(state.settingsContext.campus_map)
+    : null;
+  if (state.timetable) renderTimetable();
+  if (state.campusMap) renderCampusMap();
+  showOnboarding();
+}
+
 async function checkHealth() {
   try {
     const payload = await api("/health");
@@ -613,6 +785,12 @@ elements.loginForm.addEventListener("submit", (event) => { event.preventDefault(
 elements.registerForm.addEventListener("submit", (event) => { event.preventDefault(); submitAuth(elements.registerForm, "/api/v1/auth/register"); });
 elements.setupLogoutButton.addEventListener("click", logout);
 elements.logoutButton.addEventListener("click", logout);
+elements.userChip.addEventListener("click", openSettings);
+elements.credentialCard.addEventListener("click", openSettings);
+elements.settingsBackButton.addEventListener("click", showApp);
+elements.settingsForm.addEventListener("submit", saveSettings);
+elements.editOnboardingButton.addEventListener("click", editLearningData);
+$$('[data-settings-tab]').forEach((button) => button.addEventListener("click", () => switchSettingsTab(button.dataset.settingsTab)));
 elements.setupBackButton.addEventListener("click", () => { if (state.setupStep > 1) { state.setupStep -= 1; renderSetupStep(); } });
 elements.setupNextButton.addEventListener("click", advanceSetup);
 elements.timetableFile.addEventListener("change", () => handleImageFile(elements.timetableFile.files[0], "timetable"));
@@ -623,11 +801,6 @@ elements.composer.addEventListener("submit", (event) => { event.preventDefault()
 elements.messageInput.addEventListener("input", resizeComposer);
 elements.messageInput.addEventListener("keydown", (event) => {
   if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); elements.composer.requestSubmit(); }
-});
-elements.toggleSecret.addEventListener("click", () => {
-  const reveal = elements.apiKey.type === "password";
-  elements.apiKey.type = reveal ? "text" : "password";
-  elements.toggleSecret.textContent = reveal ? "隐藏" : "显示";
 });
 $$('input[name="model"]').forEach((radio) => radio.addEventListener("change", () => {
   elements.modelBadge.textContent = modelLabel();

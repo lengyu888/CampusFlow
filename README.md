@@ -14,6 +14,8 @@ CampusFlow 是面向高校学生的跨端 AI Agent。客户端计划采用 ArkUI
 - SQLite 账户、登录会话与首次配置状态
 - DeepSeek Flash 课表/校园地图视觉解析与人工确认
 - 将确认后的个人课表和校园地点注入 Agent 工具
+- API Key 注册时加密保存，后续登录免重复配置
+- 用户设置、学习数据视图与管理员用户总览
 
 ## 目录
 
@@ -49,7 +51,7 @@ Copy-Item .env.example .env
 uvicorn campusflow_agent.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-打开 `http://127.0.0.1:8000/` 注册账户并完成三步首次配置：学校/校区、课表图片识别、校园地图识别。图片由 DeepSeek Flash 解析，保存前可人工修改或删除错误记录；原图和 API Key 不写入 CampusFlow 数据库。`http://127.0.0.1:8000/docs` 可使用 Swagger 调试接口。
+打开 `http://127.0.0.1:8000/` 注册账户并填写 DeepSeek API Key，再完成三步首次配置：学校/校区、课表图片识别、校园地图识别。原图不持久化；API Key 使用 Fernet 加密后写入 SQLite，后续登录直接使用。开发环境会在 `data/.campusflow.key` 生成本机主密钥，生产环境必须通过 `APP_SECRET_KEY` 注入独立主密钥。`http://127.0.0.1:8000/docs` 可使用 Swagger 调试接口。
 
 ## 最小调用示例
 
@@ -59,6 +61,7 @@ $register = @{
   email = "student@example.com"
   password = "至少八位密码"
   display_name = "小航"
+  api_key = "你的 DeepSeek API Key"
 } | ConvertTo-Json
 
 Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:8000/api/v1/auth/register" `
@@ -70,7 +73,6 @@ Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:8000/api/v1/auth/register"
 ```powershell
 $body = @{
   session_id = "demo-session"
-  api_key = "你的 DeepSeek API Key"
   model = "deepseek-v4-pro"
   message = "请结合我的课表和校园地图安排两个小时复习"
 } | ConvertTo-Json

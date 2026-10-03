@@ -6,10 +6,6 @@ from pydantic import BaseModel, Field, SecretStr
 
 class ChatRequest(BaseModel):
     session_id: str = Field(min_length=1, max_length=128, examples=["session-001"])
-    api_key: SecretStr = Field(
-        min_length=1,
-        description="仅用于本次 DeepSeek 请求，不写入会话历史或服务端存储。",
-    )
     model: Literal["deepseek-v4-pro", "deepseek-flash"] = "deepseek-v4-pro"
     message: str = Field(min_length=1, max_length=8000)
 
@@ -53,7 +49,7 @@ class ConfirmActionResponse(BaseModel):
 
 class HealthResponse(BaseModel):
     status: Literal["ok"] = "ok"
-    api_key_mode: Literal["request"] = "request"
+    api_key_mode: Literal["encrypted_account"] = "encrypted_account"
     supported_models: list[str]
 
 
@@ -61,6 +57,10 @@ class RegisterRequest(BaseModel):
     email: str = Field(min_length=5, max_length=254)
     password: str = Field(min_length=8, max_length=128)
     display_name: str = Field(min_length=1, max_length=48)
+    api_key: SecretStr = Field(
+        min_length=1,
+        description="DeepSeek API Key；服务端使用 Fernet 加密后保存。",
+    )
 
 
 class LoginRequest(BaseModel):
@@ -76,6 +76,9 @@ class UserProfile(BaseModel):
     campus: str | None = None
     semester: str | None = None
     onboarding_complete: bool = False
+    role: Literal["admin", "user"] = "user"
+    api_key_configured: bool = False
+    api_key_hint: str | None = None
 
 
 class AuthResponse(BaseModel):
@@ -115,10 +118,6 @@ class CampusMapParseResult(BaseModel):
 
 
 class ImageParseRequest(BaseModel):
-    api_key: SecretStr = Field(
-        min_length=1,
-        description="仅用于本次 DeepSeek Flash 图片解析，不写入数据库。",
-    )
     image_data: str = Field(
         min_length=32,
         description="PNG/JPEG/GIF/WebP 的 base64 data URL。",
@@ -135,5 +134,36 @@ class OnboardingRequest(BaseModel):
 
 class OnboardingResponse(BaseModel):
     user: UserProfile
+    timetable_count: int
+    campus_place_count: int
+
+
+class UserSettingsUpdate(BaseModel):
+    display_name: str = Field(min_length=1, max_length=48)
+    school: str | None = Field(default=None, max_length=100)
+    campus: str | None = Field(default=None, max_length=100)
+    semester: str | None = Field(default=None, max_length=80)
+    api_key: SecretStr | None = Field(
+        default=None,
+        min_length=1,
+        description="留空表示保留已有 API Key。",
+    )
+
+
+class UserContextResponse(BaseModel):
+    timetable: list[TimetableEntry] = Field(default_factory=list)
+    campus_map: CampusMapParseResult
+
+
+class AdminUserSummary(BaseModel):
+    user_id: str
+    email: str
+    display_name: str
+    school: str | None = None
+    campus: str | None = None
+    role: Literal["admin", "user"]
+    onboarding_complete: bool
+    api_key_configured: bool
+    created_at: datetime
     timetable_count: int
     campus_place_count: int

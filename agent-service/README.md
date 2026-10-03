@@ -5,6 +5,8 @@
 - 健康检查：`GET /health`
 - 注册/登录：`POST /api/v1/auth/register`、`POST /api/v1/auth/login`
 - 当前用户：`GET /api/v1/me`
+- 用户设置/学习数据：`PUT /api/v1/me/settings`、`GET /api/v1/me/context`
+- 管理员用户总览：`GET /api/v1/admin/users`
 - 视觉导入：`POST /api/v1/onboarding/parse-timetable`、`POST /api/v1/onboarding/parse-map`
 - 完成首次配置：`PUT /api/v1/onboarding`
 - Swagger：`GET /docs`

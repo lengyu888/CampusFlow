@@ -22,7 +22,9 @@ from .accounts import (
 )
 from .agent import AgentConfigurationError, AgentService
 from .config import Settings, get_settings
+from .key_vault import ApiKeyVault
 from .schemas import (
+    AdminUserSummary,
     AuthResponse,
     CampusMapParseResult,
     ChatRequest,
@@ -36,7 +38,9 @@ from .schemas import (
     OnboardingResponse,
     RegisterRequest,
     TimetableParseResult,
+    UserContextResponse,
     UserProfile,
+    UserSettingsUpdate,
 )
 from .store import CampusStore
 from .vision import ImageValidationError, VisionService
@@ -76,6 +80,9 @@ def _user_profile(user: UserRecord) -> UserProfile:
         campus=user.campus,
         semester=user.semester,
         onboarding_complete=user.onboarding_complete,
+        role=user.role,
+        api_key_configured=user.api_key_configured,
+        api_key_hint=user.api_key_hint,
     )
 
 
@@ -118,16 +125,18 @@ def create_app(
     agent_service: AgentService | None = None,
     account_store: AccountStore | None = None,
     vision_service: VisionService | None = None,
+    api_key_vault: ApiKeyVault | None = None,
 ) -> FastAPI:
     settings = settings or get_settings()
     store = store or CampusStore()
     account_store = account_store or AccountStore(settings.database_path)
     agent_service = agent_service or AgentService(settings, store)
     vision_service = vision_service or VisionService(settings)
+    api_key_vault = api_key_vault or ApiKeyVault(settings)
 
     app = FastAPI(
         title="CampusFlow Agent API",
-        version="0.2.0",
+        version="0.3.0",
         description="带账户、首次配置与视觉导入能力的大学规划执行 Agent",
     )
     app.add_middleware(
@@ -142,6 +151,7 @@ def create_app(
     app.state.account_store = account_store
     app.state.agent_service = agent_service
     app.state.vision_service = vision_service
+    app.state.api_key_vault = api_key_vault
 
     web_dir = Path(__file__).parent / "web"
     app.mount("/static", StaticFiles(directory=web_dir), name="static")
@@ -167,6 +177,21 @@ def create_app(
             campus_map=campus_map,
         )
 
+    def load_api_key(user: UserRecord) -> str:
+        encrypted = account_store.get_api_key_encrypted(user.user_id)
+        if not encrypted:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="请先在用户设置中配置 DeepSeek API Key。",
+            )
+        try:
+            return api_key_vault.decrypt(encrypted)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=str(exc),
+            ) from exc
+
     @app.get("/", include_in_schema=False)
     async def frontend() -> FileResponse:
         return FileResponse(web_dir / "index.html")
@@ -180,10 +205,13 @@ def create_app(
     @app.post("/api/v1/auth/register", response_model=AuthResponse, status_code=201)
     async def register(payload: RegisterRequest, response: Response) -> AuthResponse:
         try:
+            raw_api_key = payload.api_key.get_secret_value()
             user = account_store.register(
                 email=payload.email,
                 password=payload.password,
                 display_name=payload.display_name,
+                api_key_encrypted=api_key_vault.encrypt(raw_api_key),
+                api_key_hint=f"•••• {raw_api_key[-4:]}",
             )
         except AccountConflictError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
@@ -212,14 +240,50 @@ def create_app(
     async def me(user: CurrentUser) -> UserProfile:
         return _user_profile(user)
 
+    @app.put("/api/v1/me/settings", response_model=UserProfile)
+    async def update_settings(
+        payload: UserSettingsUpdate,
+        user: CurrentUser,
+    ) -> UserProfile:
+        encrypted: str | None = None
+        hint: str | None = None
+        if payload.api_key is not None:
+            raw_api_key = payload.api_key.get_secret_value()
+            encrypted = api_key_vault.encrypt(raw_api_key)
+            hint = f"•••• {raw_api_key[-4:]}"
+        try:
+            updated = account_store.update_settings(
+                user_id=user.user_id,
+                display_name=payload.display_name,
+                school=payload.school,
+                campus=payload.campus,
+                semester=payload.semester,
+                api_key_encrypted=encrypted,
+                api_key_hint=hint,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return _user_profile(updated)
+
+    @app.get("/api/v1/me/context", response_model=UserContextResponse)
+    async def user_context(user: CurrentUser) -> UserContextResponse:
+        timetable, campus_map = account_store.get_context(user.user_id)
+        return UserContextResponse(timetable=timetable, campus_map=campus_map)
+
+    @app.get("/api/v1/admin/users", response_model=list[AdminUserSummary])
+    async def admin_users(user: CurrentUser) -> list[AdminUserSummary]:
+        if user.role != "admin":
+            raise HTTPException(status_code=403, detail="仅管理员可查看用户列表。")
+        return [AdminUserSummary(**item) for item in account_store.list_users()]
+
     @app.post("/api/v1/onboarding/parse-timetable", response_model=TimetableParseResult)
     async def parse_timetable(
         payload: ImageParseRequest,
-        _user: CurrentUser,
+        user: CurrentUser,
     ) -> TimetableParseResult:
         try:
             return await vision_service.parse_timetable(
-                api_key=payload.api_key.get_secret_value(),
+                api_key=load_api_key(user),
                 image_data=payload.image_data,
             )
         except ImageValidationError as exc:
@@ -234,11 +298,11 @@ def create_app(
     @app.post("/api/v1/onboarding/parse-map", response_model=CampusMapParseResult)
     async def parse_map(
         payload: ImageParseRequest,
-        _user: CurrentUser,
+        user: CurrentUser,
     ) -> CampusMapParseResult:
         try:
             return await vision_service.parse_map(
-                api_key=payload.api_key.get_secret_value(),
+                api_key=load_api_key(user),
                 image_data=payload.image_data,
             )
         except ImageValidationError as exc:
@@ -298,7 +362,7 @@ def create_app(
             reply = await agent_service.chat(
                 user_id=user.user_id,
                 session_id=request.session_id,
-                api_key=request.api_key.get_secret_value(),
+                api_key=load_api_key(user),
                 model_name=request.model,
                 message=request.message,
             )

@@ -45,7 +45,8 @@ HarmonyOS / Android / iOS
 - 课表和地图原图只用于当次视觉解析，不在服务端持久化；确认后的结构化结果写入 SQLite。
 - 写操作通过独立确认 API 完成，模型没有直接提交写操作的工具。
 - 已接入 PBKDF2 密码存储、HttpOnly Web Cookie 与 Bearer Token；所有个人数据和提案均从登录身份确定归属。
-- DeepSeek API Key 由客户端逐次提交，只用于创建该次模型调用，不写入 Store、Checkpointer 或日志；测试页面刷新后密钥丢失。
+- DeepSeek API Key 在注册或用户设置中提交，使用 Fernet 加密后写入 SQLite；主密钥与数据库分离，API/管理员界面只返回配置状态和尾号，不返回明文。
+- 首个注册账户为管理员；管理员可查看全部用户的角色、校园、数据规模和凭据配置状态，普通用户无权访问用户目录。
 
 ## 视觉导入安全边界
 

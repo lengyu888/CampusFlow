@@ -36,6 +36,10 @@ class UserRecord:
     campus: str | None
     semester: str | None
     onboarding_complete: bool
+    role: str
+    api_key_configured: bool
+    api_key_hint: str | None
+    created_at: str
 
 
 class AccountStore:
@@ -65,6 +69,9 @@ class AccountStore:
                     timetable_json TEXT NOT NULL DEFAULT '[]',
                     campus_map_json TEXT NOT NULL DEFAULT '{}',
                     onboarding_complete INTEGER NOT NULL DEFAULT 0,
+                    role TEXT NOT NULL DEFAULT 'user',
+                    api_key_encrypted TEXT,
+                    api_key_hint TEXT,
                     created_at TEXT NOT NULL
                 );
 
@@ -76,6 +83,30 @@ class AccountStore:
                 );
                 """
             )
+            columns = {
+                row["name"]
+                for row in self._connection.execute("PRAGMA table_info(users)").fetchall()
+            }
+            migrations = {
+                "role": "ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'",
+                "api_key_encrypted": "ALTER TABLE users ADD COLUMN api_key_encrypted TEXT",
+                "api_key_hint": "ALTER TABLE users ADD COLUMN api_key_hint TEXT",
+            }
+            for column, statement in migrations.items():
+                if column not in columns:
+                    self._connection.execute(statement)
+            admin = self._connection.execute(
+                "SELECT 1 FROM users WHERE role = 'admin' LIMIT 1"
+            ).fetchone()
+            if admin is None:
+                first_user = self._connection.execute(
+                    "SELECT user_id FROM users ORDER BY created_at, rowid LIMIT 1"
+                ).fetchone()
+                if first_user:
+                    self._connection.execute(
+                        "UPDATE users SET role = 'admin' WHERE user_id = ?",
+                        (first_user["user_id"],),
+                    )
 
     @staticmethod
     def _normalize_email(email: str) -> str:
@@ -131,9 +162,21 @@ class AccountStore:
             campus=row["campus"],
             semester=row["semester"],
             onboarding_complete=bool(row["onboarding_complete"]),
+            role=row["role"],
+            api_key_configured=bool(row["api_key_encrypted"]),
+            api_key_hint=row["api_key_hint"],
+            created_at=row["created_at"],
         )
 
-    def register(self, *, email: str, password: str, display_name: str) -> UserRecord:
+    def register(
+        self,
+        *,
+        email: str,
+        password: str,
+        display_name: str,
+        api_key_encrypted: str,
+        api_key_hint: str,
+    ) -> UserRecord:
         normalized_email = self._normalize_email(email)
         display_name = display_name.strip()
         if not display_name:
@@ -142,17 +185,24 @@ class AccountStore:
         user_id = uuid4().hex
         try:
             with self._lock, self._connection:
+                role = "admin" if self._connection.execute(
+                    "SELECT COUNT(*) AS count FROM users"
+                ).fetchone()["count"] == 0 else "user"
                 self._connection.execute(
                     """
                     INSERT INTO users (
-                        user_id, email, password_hash, display_name, created_at
-                    ) VALUES (?, ?, ?, ?, ?)
+                        user_id, email, password_hash, display_name, role,
+                        api_key_encrypted, api_key_hint, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         user_id,
                         normalized_email,
                         self._hash_password(password),
                         display_name,
+                        role,
+                        api_key_encrypted,
+                        api_key_hint,
                         datetime.now(UTC).isoformat(),
                     ),
                 )
@@ -262,3 +312,83 @@ class AccountStore:
         if row is None:
             raise KeyError("user_not_found")
         return json.loads(row["timetable_json"]), json.loads(row["campus_map_json"])
+
+    def get_api_key_encrypted(self, user_id: str) -> str | None:
+        with self._lock:
+            row = self._connection.execute(
+                "SELECT api_key_encrypted FROM users WHERE user_id = ?",
+                (user_id,),
+            ).fetchone()
+        if row is None:
+            raise KeyError("user_not_found")
+        return row["api_key_encrypted"]
+
+    def update_settings(
+        self,
+        *,
+        user_id: str,
+        display_name: str,
+        school: str | None,
+        campus: str | None,
+        semester: str | None,
+        api_key_encrypted: str | None = None,
+        api_key_hint: str | None = None,
+    ) -> UserRecord:
+        display_name = display_name.strip()
+        if not display_name:
+            raise ValueError("昵称不能为空")
+        fields: list[str] = [
+            "display_name = ?",
+            "school = ?",
+            "campus = ?",
+            "semester = ?",
+        ]
+        values: list[Any] = [
+            display_name,
+            school.strip() if school else None,
+            campus.strip() if campus else None,
+            semester.strip() if semester else None,
+        ]
+        if api_key_encrypted is not None:
+            fields.extend(["api_key_encrypted = ?", "api_key_hint = ?"])
+            values.extend([api_key_encrypted, api_key_hint])
+        values.append(user_id)
+        with self._lock, self._connection:
+            cursor = self._connection.execute(
+                f"UPDATE users SET {', '.join(fields)} WHERE user_id = ?",  # noqa: S608
+                values,
+            )
+        if cursor.rowcount != 1:
+            raise KeyError("user_not_found")
+        return self.get_user(user_id)
+
+    def list_users(self) -> list[dict[str, Any]]:
+        with self._lock:
+            rows = self._connection.execute(
+                """
+                SELECT user_id, email, display_name, school, campus, role,
+                       onboarding_complete, api_key_encrypted, created_at,
+                       timetable_json, campus_map_json
+                FROM users
+                ORDER BY created_at ASC
+                """
+            ).fetchall()
+        users: list[dict[str, Any]] = []
+        for row in rows:
+            campus_map = json.loads(row["campus_map_json"])
+            users.append(
+                {
+                    "user_id": row["user_id"],
+                    "email": row["email"],
+                    "display_name": row["display_name"],
+                    "school": row["school"],
+                    "campus": row["campus"],
+                    "role": row["role"],
+                    "onboarding_complete": bool(row["onboarding_complete"]),
+                    "api_key_configured": bool(row["api_key_encrypted"]),
+                    "created_at": row["created_at"],
+                    "timetable_count": len(json.loads(row["timetable_json"])),
+                    "campus_place_count": len(campus_map.get("places", [])),
+                }
+            )
+        return users
