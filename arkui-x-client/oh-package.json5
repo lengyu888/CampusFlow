@@ -1,5 +1,7 @@
 {
-  "modelVersion": "5.0.0",
+  "modelVersion": "6.1.1",
+  "name": "campusflow",
+  "version": "1.0.0",
   "description": "CampusFlow ArkUI-X cross-platform client",
   "dependencies": {},
   "devDependencies": {

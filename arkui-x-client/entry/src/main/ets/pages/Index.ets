@@ -29,7 +29,7 @@ struct Index {
   }
 
   private selectTab(tab: number): void {
-    animateTo({ duration: 220, curve: Curve.EaseOut }, () => {
+    this.getUIContext().animateTo({ duration: 220, curve: Curve.EaseOut }, () => {
       this.activeTab = tab;
     });
   }

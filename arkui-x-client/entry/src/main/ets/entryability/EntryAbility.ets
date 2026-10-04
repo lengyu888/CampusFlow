@@ -9,6 +9,8 @@ export default class EntryAbility extends UIAbility {
   }
 
   onWindowStageCreate(windowStage: window.WindowStage): void {
-    windowStage.loadContent('pages/Index');
+    windowStage.loadContent('pages/Index').catch((error: Error) => {
+      console.error(`Failed to load CampusFlow content: ${error.message}`);
+    });
   }
 }

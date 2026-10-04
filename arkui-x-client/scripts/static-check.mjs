@@ -25,7 +25,13 @@ for (const relative of required) {
 function walk(directory) {
   return readdirSync(directory).flatMap((name) => {
     const path = join(directory, name);
-    return statSync(path).isDirectory() ? walk(path) : [path];
+    const ignoredDirectories = new Set([
+      '.git', '.gradle', '.hvigor', 'build', 'DerivedData', 'node_modules', 'oh_modules', 'Pods'
+    ]);
+    if (statSync(path).isDirectory()) {
+      return ignoredDirectories.has(name) ? [] : walk(path);
+    }
+    return [path];
   });
 }
 

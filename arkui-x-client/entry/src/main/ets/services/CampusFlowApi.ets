@@ -22,6 +22,20 @@ interface SettingsPayload {
   api_key?: string;
 }
 
+interface RequestHeaders {
+  'Accept': string;
+  'Content-Type': string;
+  'Authorization': string;
+}
+
+interface CampusMapPayload {
+  campus_name: string;
+  places: string[];
+  warnings: string[];
+}
+
+const PATCH_METHOD: http.RequestMethod = 'PATCH' as http.RequestMethod;
+
 export class CampusFlowApi {
   private baseUrl: string;
   private accessToken: string;
@@ -33,20 +47,25 @@ export class CampusFlowApi {
 
   private async request<T>(path: string, method: http.RequestMethod, body: string = ''): Promise<T> {
     const client = http.createHttp();
-    const headers = {
+    const headers: RequestHeaders = {
       'Accept': 'application/json',
       'Content-Type': 'application/json',
       'Authorization': this.accessToken.length > 0 ? `Bearer ${this.accessToken}` : ''
     };
     try {
-      const response = await client.request(`${this.baseUrl}${path}`, {
-        method: method,
-        header: headers,
-        extraData: body,
-        expectDataType: http.HttpDataType.STRING,
-        connectTimeout: 12000,
-        readTimeout: 90000
-      });
+      let response: http.HttpResponse;
+      try {
+        response = await client.request(`${this.baseUrl}${path}`, {
+          method: method,
+          header: headers,
+          extraData: body,
+          expectDataType: http.HttpDataType.STRING,
+          connectTimeout: 12000,
+          readTimeout: 90000
+        });
+      } catch {
+        throw new Error('无法连接 CampusFlow 服务，请检查服务地址和网络连接。');
+      }
       const text = response.result as string;
       if (response.responseCode < 200 || response.responseCode >= 300) {
         throw new Error(`请求失败（${response.responseCode}）：${text}`);
@@ -68,12 +87,17 @@ export class CampusFlowApi {
   }
 
   async completeOnboarding(school: string, campus: string, semester: string): Promise<OnboardingResponse> {
+    const campusMap: CampusMapPayload = {
+      campus_name: `${school}${campus}`,
+      places: [],
+      warnings: ['移动端稍后可继续上传校园地图。']
+    };
     return this.request<OnboardingResponse>('/api/v1/onboarding', http.RequestMethod.PUT, JSON.stringify({
       school: school,
       campus: campus,
       semester: semester,
       timetable: [],
-      campus_map: { campus_name: `${school}${campus}`, places: [], warnings: ['移动端稍后可继续上传校园地图。'] }
+      campus_map: campusMap
     }));
   }
 
@@ -107,7 +131,7 @@ export class CampusFlowApi {
   }
 
   async updateTask(taskId: string, completed: boolean): Promise<PlanningTask> {
-    return this.request<PlanningTask>(`/api/v1/tasks/${encodeURIComponent(taskId)}`, http.RequestMethod.PATCH,
+    return this.request<PlanningTask>(`/api/v1/tasks/${encodeURIComponent(taskId)}`, PATCH_METHOD,
       JSON.stringify({ completed: completed }));
   }
 
@@ -122,7 +146,7 @@ export class CampusFlowApi {
   }
 
   async setSkillEnabled(skillId: string, enabled: boolean): Promise<SkillSummary> {
-    return this.request<SkillSummary>(`/api/v1/skills/${encodeURIComponent(skillId)}`, http.RequestMethod.PATCH,
+    return this.request<SkillSummary>(`/api/v1/skills/${encodeURIComponent(skillId)}`, PATCH_METHOD,
       JSON.stringify({ enabled: enabled }));
   }
 

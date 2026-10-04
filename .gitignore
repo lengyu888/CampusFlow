@@ -20,6 +20,7 @@ data/
 # IDE / OS
 .idea/
 .vscode/
+.deveco-local/
 .DS_Store
 Thumbs.db
 
@@ -31,5 +32,7 @@ Thumbs.db
 **/.arkui-x/android/local.properties
 **/.arkui-x/ios/Pods/
 **/.arkui-x/ios/DerivedData/
+**/xcuserdata/
+*.xcuserstate
 .reference/
 
