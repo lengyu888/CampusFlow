@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from contextvars import ContextVar
-from datetime import datetime
+from datetime import date as date_type
+from datetime import datetime, timedelta
 
 from langchain_core.tools import BaseTool, tool
 from pydantic import BaseModel, Field
@@ -47,9 +48,40 @@ def build_tools(
     allowed_tool_names: set[str] | None = None,
 ) -> list[BaseTool]:
     @tool
-    def get_schedule(date: str) -> list[dict[str, str]]:
-        """查询当前学生某天的课程和已安排事务。date 必须是 YYYY-MM-DD。"""
-        return store.get_schedule(CURRENT_USER_ID.get(), date)
+    def get_schedule(
+        date: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+    ) -> list[dict[str, str]]:
+        """查询当前学生的课程和已确认事务。
+
+        单日查询只传 date（YYYY-MM-DD）；“近期、本周”等范围查询传 start_date 和
+        end_date（均为 YYYY-MM-DD）。不要把“今天、明天、近期”等中文相对时间直接传入。
+        """
+        if date and (start_date or end_date):
+            raise ValueError("date cannot be combined with start_date or end_date")
+        if date:
+            start = end = _parse_schedule_date(date, "date")
+        else:
+            if not start_date or not end_date:
+                raise ValueError("provide date, or both start_date and end_date")
+            start = _parse_schedule_date(start_date, "start_date")
+            end = _parse_schedule_date(end_date, "end_date")
+        if end < start:
+            raise ValueError("end_date must not be earlier than start_date")
+        if (end - start).days > 31:
+            raise ValueError("schedule range cannot exceed 32 days")
+
+        result: list[dict[str, str]] = []
+        current = start
+        while current <= end:
+            date_key = current.isoformat()
+            result.extend(
+                {"date": date_key, **item}
+                for item in store.get_schedule(CURRENT_USER_ID.get(), date_key)
+            )
+            current += timedelta(days=1)
+        return result
 
     @tool
     def get_weather(date: str) -> dict:
@@ -134,3 +166,10 @@ def build_tools(
     if allowed_tool_names is None:
         return available
     return [item for item in available if item.name in allowed_tool_names]
+
+
+def _parse_schedule_date(value: str, field_name: str) -> date_type:
+    try:
+        return date_type.fromisoformat(value)
+    except ValueError as exc:
+        raise ValueError(f"{field_name} must be YYYY-MM-DD") from exc

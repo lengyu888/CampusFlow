@@ -12,6 +12,43 @@ def test_schedule_tool_returns_demo_course() -> None:
     tools = tool_map(CampusStore())
     result = tools["get_schedule"].invoke({"date": "2026-09-29"})
     assert result[0]["title"] == "高等数学"
+    assert result[0]["date"] == "2026-09-29"
+
+
+def test_schedule_tool_supports_date_ranges() -> None:
+    store = CampusStore()
+    store.set_user_context(
+        "student-001",
+        timetable=[
+            {
+                "date": "2026-10-04",
+                "title": "软件工程",
+                "start_time": "10:00",
+                "end_time": "11:35",
+                "location": "第6教研楼北104",
+            },
+            {
+                "date": "2026-10-05",
+                "title": "计算机网络",
+                "start_time": "08:05",
+                "end_time": "09:40",
+                "location": "第3教研楼315",
+            },
+        ],
+        campus_map={"places": []},
+    )
+    token = CURRENT_USER_ID.set("student-001")
+    try:
+        result = tool_map(store)["get_schedule"].invoke(
+            {"start_date": "2026-10-04", "end_date": "2026-10-10"}
+        )
+    finally:
+        CURRENT_USER_ID.reset(token)
+
+    assert [(item["date"], item["title"]) for item in result] == [
+        ("2026-10-04", "软件工程"),
+        ("2026-10-05", "计算机网络"),
+    ]
 
 
 def test_tools_use_confirmed_user_timetable_and_campus_map() -> None:
