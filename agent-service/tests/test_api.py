@@ -59,6 +59,7 @@ async def test_frontend_is_served(client: AsyncClient) -> None:
     assert "用户管理" in page.text
     assert "历史会话" in page.text
     assert "校园 Skills" in page.text
+    assert "PERMISSIONS / 数据权限" in page.text
     assert script.status_code == 200
     assert "fetch(path, options)" in script.text
 
@@ -256,6 +257,50 @@ async def test_settings_context_and_admin_user_console(client: AsyncClient) -> N
     assert admin_users.json()[0]["api_key_configured"] is True
     assert "api_key" not in admin_users.json()[0]
     assert admin_users.json()[0]["timetable_count"] == 1
+
+
+async def test_official_skill_install_control_and_audit(client: AsyncClient) -> None:
+    await register(client)
+
+    library = await client.get("/api/v1/skills")
+    assert library.status_code == 200
+    assert len(library.json()) == 4
+    navigator = next(
+        skill for skill in library.json() if skill["skill_id"] == "campus-navigator"
+    )
+    assert navigator["official"] is True
+    assert navigator["installed"] is False
+    assert navigator["permissions"][0]["code"] == "places.read"
+
+    rejected = await client.post(
+        "/api/v1/skills/campus-navigator/install",
+        json={"accepted_permissions": []},
+    )
+    assert rejected.status_code == 403
+
+    installed = await client.post(
+        "/api/v1/skills/campus-navigator/install",
+        json={"accepted_permissions": ["places.read"]},
+    )
+    assert installed.status_code == 200
+    assert installed.json()["enabled"] is True
+    assert installed.json()["installed_version"] == "1.1.0"
+
+    disabled = await client.patch(
+        "/api/v1/skills/campus-navigator",
+        json={"enabled": False},
+    )
+    assert disabled.status_code == 200
+    assert disabled.json()["enabled"] is False
+
+    detail = await client.get("/api/v1/skills/campus-navigator")
+    assert detail.json()["installed"] is True
+    audit = await client.get("/api/v1/skills/audit")
+    assert [item["action"] for item in audit.json()[:2]] == ["disable", "install"]
+
+    removed = await client.delete("/api/v1/skills/campus-navigator")
+    assert removed.status_code == 204
+    assert (await client.get("/api/v1/skills/campus-navigator")).json()["installed"] is False
 
 
 async def test_non_admin_cannot_list_users(client: AsyncClient) -> None:

@@ -121,6 +121,46 @@ class PlanningOverview(BaseModel):
     progress: int = Field(default=0, ge=0, le=100)
 
 
+class SkillPermission(BaseModel):
+    code: str
+    label: str
+    description: str
+    access: Literal["read", "write"]
+
+
+class SkillSummary(BaseModel):
+    skill_id: str
+    name: str
+    description: str
+    category: str
+    version: str
+    author: str
+    official: bool = True
+    permissions: list[SkillPermission] = Field(default_factory=list)
+    capabilities: list[str] = Field(default_factory=list)
+    installed: bool = False
+    enabled: bool = False
+    installed_version: str | None = None
+    update_available: bool = False
+
+
+class SkillInstallRequest(BaseModel):
+    accepted_permissions: list[str] = Field(default_factory=list)
+
+
+class SkillStateUpdate(BaseModel):
+    enabled: bool
+
+
+class SkillAuditEntry(BaseModel):
+    audit_id: str
+    skill_id: str
+    skill_name: str
+    action: Literal["install", "enable", "disable", "upgrade", "uninstall", "run"]
+    details: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime
+
+
 class HealthResponse(BaseModel):
     status: Literal["ok"] = "ok"
     api_key_mode: Literal["encrypted_account"] = "encrypted_account"

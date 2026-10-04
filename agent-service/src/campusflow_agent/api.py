@@ -41,6 +41,10 @@ from .schemas import (
     RegisterRequest,
     SessionRenameRequest,
     SessionSummary,
+    SkillAuditEntry,
+    SkillInstallRequest,
+    SkillStateUpdate,
+    SkillSummary,
     TaskCreateRequest,
     TaskStatusUpdate,
     TimetableParseResult,
@@ -48,6 +52,7 @@ from .schemas import (
     UserProfile,
     UserSettingsUpdate,
 )
+from .skills import SkillStore
 from .store import CampusStore
 from .vision import ImageValidationError, VisionService
 
@@ -132,18 +137,20 @@ def create_app(
     account_store: AccountStore | None = None,
     vision_service: VisionService | None = None,
     api_key_vault: ApiKeyVault | None = None,
+    skill_store: SkillStore | None = None,
 ) -> FastAPI:
     settings = settings or get_settings()
     store = store or CampusStore(settings.database_path)
     account_store = account_store or AccountStore(settings.database_path)
-    agent_service = agent_service or AgentService(settings, store)
+    skill_store = skill_store or SkillStore(settings.database_path)
+    agent_service = agent_service or AgentService(settings, store, skill_store)
     vision_service = vision_service or VisionService(settings)
     api_key_vault = api_key_vault or ApiKeyVault(settings)
 
     app = FastAPI(
         title="CampusFlow Agent API",
-        version="0.5.0",
-        description="带账户、首次配置与视觉导入能力的大学规划执行 Agent",
+        version="0.6.0",
+        description="带账户、规划执行与官方 Skills 管理能力的大学规划 Agent",
     )
     app.add_middleware(
         CORSMiddleware,
@@ -158,6 +165,7 @@ def create_app(
     app.state.agent_service = agent_service
     app.state.vision_service = vision_service
     app.state.api_key_vault = api_key_vault
+    app.state.skill_store = skill_store
 
     web_dir = Path(__file__).parent / "web"
     app.mount("/static", StaticFiles(directory=web_dir), name="static")
@@ -359,6 +367,70 @@ def create_app(
                 "propose_plan",
             ]
         }
+
+    @app.get("/api/v1/skills", response_model=list[SkillSummary])
+    async def skills(
+        user: CurrentUser,
+        query: str = "",
+        category: str = "",
+    ) -> list[SkillSummary]:
+        return skill_store.list_skills(user.user_id, query=query, category=category)
+
+    @app.get("/api/v1/skills/audit", response_model=list[SkillAuditEntry])
+    async def skill_audit(user: CurrentUser) -> list[SkillAuditEntry]:
+        return skill_store.list_audit(user.user_id)
+
+    @app.get("/api/v1/skills/{skill_id}", response_model=SkillSummary)
+    async def skill_detail(skill_id: str, user: CurrentUser) -> SkillSummary:
+        try:
+            return skill_store.get_skill(user.user_id, skill_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="Skill 不存在。") from exc
+
+    @app.post("/api/v1/skills/{skill_id}/install", response_model=SkillSummary)
+    async def install_skill(
+        skill_id: str,
+        payload: SkillInstallRequest,
+        user: CurrentUser,
+    ) -> SkillSummary:
+        try:
+            return skill_store.install(
+                user.user_id,
+                skill_id,
+                payload.accepted_permissions,
+            )
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="Skill 不存在。") from exc
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    @app.patch("/api/v1/skills/{skill_id}", response_model=SkillSummary)
+    async def update_skill_state(
+        skill_id: str,
+        payload: SkillStateUpdate,
+        user: CurrentUser,
+    ) -> SkillSummary:
+        try:
+            return skill_store.set_enabled(user.user_id, skill_id, payload.enabled)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="Skill 尚未安装。") from exc
+
+    @app.post("/api/v1/skills/{skill_id}/upgrade", response_model=SkillSummary)
+    async def upgrade_skill(skill_id: str, user: CurrentUser) -> SkillSummary:
+        try:
+            return skill_store.upgrade(user.user_id, skill_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="Skill 尚未安装。") from exc
+
+    @app.delete("/api/v1/skills/{skill_id}", status_code=204)
+    async def uninstall_skill(skill_id: str, user: CurrentUser) -> Response:
+        try:
+            skill_store.uninstall(user.user_id, skill_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="Skill 尚未安装。") from exc
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     @app.post("/api/v1/chat", response_model=ChatResponse)
     async def chat(request: ChatRequest, user: CurrentUser) -> ChatResponse:

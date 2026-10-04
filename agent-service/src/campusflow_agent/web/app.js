@@ -77,6 +77,28 @@ const elements = {
   quickTaskTitle: $("#quickTaskTitle"),
   quickTaskTime: $("#quickTaskTime"),
   quickTaskReminder: $("#quickTaskReminder"),
+  skillSearch: $("#skillSearch"),
+  skillCategory: $("#skillCategory"),
+  skillInstalledCount: $("#skillInstalledCount"),
+  skillEnabledCount: $("#skillEnabledCount"),
+  skillGrid: $("#skillGrid"),
+  skillAuditList: $("#skillAuditList"),
+  skillDrawer: $("#skillDrawer"),
+  skillScrim: $("#skillScrim"),
+  skillDrawerClose: $("#skillDrawerClose"),
+  skillDrawerCategory: $("#skillDrawerCategory"),
+  skillDrawerVersion: $("#skillDrawerVersion"),
+  skillDrawerSymbol: $("#skillDrawerSymbol"),
+  skillDrawerName: $("#skillDrawerName"),
+  skillDrawerAuthor: $("#skillDrawerAuthor"),
+  skillDrawerDescription: $("#skillDrawerDescription"),
+  skillDrawerCapabilities: $("#skillDrawerCapabilities"),
+  skillDrawerPermissions: $("#skillDrawerPermissions"),
+  skillInstallNote: $("#skillInstallNote"),
+  skillInstallButton: $("#skillInstallButton"),
+  skillToggleButton: $("#skillToggleButton"),
+  skillUpgradeButton: $("#skillUpgradeButton"),
+  skillUninstallButton: $("#skillUninstallButton"),
   settingsBackButton: $("#settingsBackButton"),
   settingsInitial: $("#settingsInitial"),
   settingsName: $("#settingsName"),
@@ -116,6 +138,8 @@ const state = {
   sessions: [],
   planning: null,
   taskFilter: "all",
+  skills: [],
+  selectedSkill: null,
 };
 
 function createSessionId() {
@@ -476,6 +500,7 @@ function switchAppTab(tab) {
   });
   if (tab === "today") loadTodayDashboard();
   if (tab === "plans") loadPlans();
+  if (tab === "skills") loadSkills();
   if (tab === "agent") elements.messageInput.focus();
 }
 
@@ -689,6 +714,263 @@ async function createQuickTask(event) {
     showToast(error.message, "error");
   } finally {
     button.disabled = false;
+  }
+}
+
+function skillSymbol(skill) {
+  const symbols = {
+    "timetable-planner": "课",
+    "campus-navigator": "图",
+    "ddl-guardian": "时",
+    "study-reviewer": "复",
+  };
+  return symbols[skill.skill_id] ?? "CF";
+}
+
+function filteredSkills() {
+  const query = elements.skillSearch.value.trim().toLowerCase();
+  const category = elements.skillCategory.value;
+  return state.skills.filter((skill) => {
+    const haystack = [skill.name, skill.description, ...skill.capabilities].join(" ").toLowerCase();
+    return (!query || haystack.includes(query)) && (!category || skill.category === category);
+  });
+}
+
+function renderSkillLibrary() {
+  elements.skillInstalledCount.textContent = state.skills.filter((skill) => skill.installed).length;
+  elements.skillEnabledCount.textContent = state.skills.filter((skill) => skill.enabled).length;
+  elements.skillGrid.replaceChildren();
+  const skills = filteredSkills();
+  if (!skills.length) {
+    elements.skillGrid.innerHTML = '<div class="skill-library-empty"><b>没有匹配的 Skill</b><span>换一个关键词或分类试试。</span></div>';
+    return;
+  }
+  skills.forEach((skill, index) => {
+    const card = document.createElement("article");
+    card.className = `skill-card${skill.installed ? " installed" : ""}${skill.enabled ? " enabled" : ""}`;
+    const top = document.createElement("div");
+    top.className = "skill-card-top";
+    const number = document.createElement("span");
+    number.textContent = `${String(index + 1).padStart(2, "0")} · ${skill.category.toUpperCase()}`;
+    const version = document.createElement("small");
+    version.textContent = `v${skill.version}`;
+    top.append(number, version);
+    const identity = document.createElement("div");
+    identity.className = "skill-card-identity";
+    const symbol = document.createElement("i");
+    symbol.textContent = skillSymbol(skill);
+    const title = document.createElement("h2");
+    title.textContent = skill.name;
+    identity.append(symbol, title);
+    const description = document.createElement("p");
+    description.textContent = skill.description;
+    const capabilities = document.createElement("div");
+    capabilities.className = "skill-card-capabilities";
+    skill.capabilities.slice(0, 3).forEach((capability) => {
+      const badge = document.createElement("span");
+      badge.textContent = capability;
+      capabilities.append(badge);
+    });
+    const footer = document.createElement("div");
+    footer.className = "skill-card-footer";
+    const statusLabel = document.createElement("b");
+    statusLabel.textContent = skill.enabled ? "运行中" : skill.installed ? "已停用" : "查看权限";
+    const open = document.createElement("button");
+    open.type = "button";
+    open.textContent = skill.installed ? "管理 →" : "详情 →";
+    open.addEventListener("click", () => openSkillDrawer(skill.skill_id));
+    footer.append(statusLabel, open);
+    card.append(top, identity, description, capabilities, footer);
+    elements.skillGrid.append(card);
+  });
+}
+
+const skillActionLabels = {
+  install: "安装并授权",
+  enable: "启用",
+  disable: "停用",
+  upgrade: "升级版本",
+  uninstall: "卸载",
+  run: "Agent 调用",
+};
+
+async function loadSkillAudit() {
+  try {
+    const entries = await api("/api/v1/skills/audit");
+    elements.skillAuditList.replaceChildren();
+    if (!entries.length) {
+      elements.skillAuditList.innerHTML = '<div class="skill-library-empty">安装或运行 Skill 后，活动会显示在这里。</div>';
+      return;
+    }
+    entries.slice(0, 8).forEach((entry) => {
+      const item = document.createElement("article");
+      const mark = document.createElement("i");
+      mark.textContent = entry.action === "run" ? "↗" : "✓";
+      const content = document.createElement("div");
+      const title = document.createElement("b");
+      title.textContent = `${skillActionLabels[entry.action] ?? entry.action} · ${entry.skill_name}`;
+      const meta = document.createElement("span");
+      meta.textContent = new Date(entry.created_at).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
+      content.append(title, meta);
+      item.append(mark, content);
+      elements.skillAuditList.append(item);
+    });
+  } catch (error) {
+    elements.skillAuditList.innerHTML = '<div class="skill-library-empty">活动记录读取失败</div>';
+    showToast(error.message, "error");
+  }
+}
+
+async function loadSkills() {
+  elements.skillGrid.innerHTML = '<div class="skill-library-empty">正在连接官方 Skills 库…</div>';
+  try {
+    state.skills = await api("/api/v1/skills");
+    renderSkillLibrary();
+    await loadSkillAudit();
+  } catch (error) {
+    elements.skillGrid.innerHTML = '<div class="skill-library-empty"><b>Skills 库暂时不可用</b><span>请稍后重试。</span></div>';
+    showToast(error.message, "error");
+  }
+}
+
+function updateSkillInstallReady() {
+  const checkboxes = [...elements.skillDrawerPermissions.querySelectorAll('input[type="checkbox"]')];
+  const ready = checkboxes.length > 0 && checkboxes.every((checkbox) => checkbox.checked);
+  elements.skillInstallButton.disabled = !ready;
+  elements.skillInstallNote.textContent = ready ? "权限已确认，可以安全安装" : "请确认全部权限后安装";
+  elements.skillInstallNote.classList.toggle("ready", ready);
+}
+
+function renderSkillDrawer(skill) {
+  state.selectedSkill = skill;
+  elements.skillDrawerCategory.textContent = `${skill.category} · OFFICIAL`;
+  elements.skillDrawerVersion.textContent = `VERSION ${skill.version}`;
+  elements.skillDrawerSymbol.textContent = skillSymbol(skill);
+  elements.skillDrawerName.textContent = skill.name;
+  elements.skillDrawerAuthor.textContent = `${skill.author} · 已验证发布者`;
+  elements.skillDrawerDescription.textContent = skill.description;
+  elements.skillDrawerCapabilities.replaceChildren();
+  skill.capabilities.forEach((capability) => {
+    const item = document.createElement("span");
+    item.textContent = capability;
+    elements.skillDrawerCapabilities.append(item);
+  });
+  elements.skillDrawerPermissions.replaceChildren();
+  skill.permissions.forEach((permission) => {
+    const label = document.createElement("label");
+    label.className = `skill-permission ${permission.access}`;
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.value = permission.code;
+    checkbox.checked = skill.installed;
+    checkbox.disabled = skill.installed;
+    checkbox.addEventListener("change", updateSkillInstallReady);
+    const content = document.createElement("span");
+    const heading = document.createElement("b");
+    heading.textContent = permission.label;
+    const detail = document.createElement("small");
+    detail.textContent = permission.description;
+    const access = document.createElement("i");
+    access.textContent = permission.access === "write" ? "提案写入" : "只读";
+    content.append(heading, detail);
+    label.append(checkbox, content, access);
+    elements.skillDrawerPermissions.append(label);
+  });
+  elements.skillInstallButton.hidden = skill.installed;
+  elements.skillToggleButton.hidden = !skill.installed;
+  elements.skillUninstallButton.hidden = !skill.installed;
+  elements.skillUpgradeButton.hidden = !skill.update_available;
+  elements.skillToggleButton.textContent = skill.enabled ? "停用 Skill" : "重新启用";
+  elements.skillInstallNote.hidden = skill.installed;
+  if (!skill.installed) updateSkillInstallReady();
+}
+
+async function openSkillDrawer(skillId) {
+  try {
+    const skill = await api(`/api/v1/skills/${encodeURIComponent(skillId)}`);
+    renderSkillDrawer(skill);
+    elements.skillDrawer.hidden = false;
+    elements.skillScrim.hidden = false;
+    requestAnimationFrame(() => elements.skillDrawer.classList.add("open"));
+  } catch (error) {
+    showToast(error.message, "error");
+  }
+}
+
+function closeSkillDrawer() {
+  elements.skillDrawer.classList.remove("open");
+  elements.skillDrawer.hidden = true;
+  elements.skillScrim.hidden = true;
+  state.selectedSkill = null;
+}
+
+async function refreshSelectedSkill(message) {
+  const skillId = state.selectedSkill.skill_id;
+  state.skills = await api("/api/v1/skills");
+  renderSkillLibrary();
+  renderSkillDrawer(await api(`/api/v1/skills/${encodeURIComponent(skillId)}`));
+  await loadSkillAudit();
+  showToast(message);
+}
+
+async function installSelectedSkill() {
+  const skill = state.selectedSkill;
+  if (!skill) return;
+  const accepted = [...elements.skillDrawerPermissions.querySelectorAll('input[type="checkbox"]:checked')]
+    .map((checkbox) => checkbox.value);
+  elements.skillInstallButton.disabled = true;
+  try {
+    await api(`/api/v1/skills/${encodeURIComponent(skill.skill_id)}/install`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ accepted_permissions: accepted }),
+    });
+    await refreshSelectedSkill(`${skill.name} 已安装并启用`);
+  } catch (error) {
+    updateSkillInstallReady();
+    showToast(error.message, "error");
+  }
+}
+
+async function toggleSelectedSkill() {
+  const skill = state.selectedSkill;
+  if (!skill) return;
+  elements.skillToggleButton.disabled = true;
+  try {
+    await api(`/api/v1/skills/${encodeURIComponent(skill.skill_id)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled: !skill.enabled }),
+    });
+    await refreshSelectedSkill(skill.enabled ? `${skill.name} 已停用` : `${skill.name} 已启用`);
+  } catch (error) {
+    showToast(error.message, "error");
+  } finally {
+    elements.skillToggleButton.disabled = false;
+  }
+}
+
+async function upgradeSelectedSkill() {
+  const skill = state.selectedSkill;
+  if (!skill) return;
+  try {
+    await api(`/api/v1/skills/${encodeURIComponent(skill.skill_id)}/upgrade`, { method: "POST" });
+    await refreshSelectedSkill(`${skill.name} 已升级到最新版本`);
+  } catch (error) {
+    showToast(error.message, "error");
+  }
+}
+
+async function uninstallSelectedSkill() {
+  const skill = state.selectedSkill;
+  if (!skill || !globalThis.confirm(`确定卸载“${skill.name}”吗？历史审计记录会保留。`)) return;
+  try {
+    await api(`/api/v1/skills/${encodeURIComponent(skill.skill_id)}`, { method: "DELETE" });
+    closeSkillDrawer();
+    await loadSkills();
+    showToast(`${skill.name} 已卸载`);
+  } catch (error) {
+    showToast(error.message, "error");
   }
 }
 
@@ -1210,6 +1492,17 @@ elements.historySearch.addEventListener("input", () => {
 });
 elements.settingsForm.addEventListener("submit", saveSettings);
 elements.quickTaskForm.addEventListener("submit", createQuickTask);
+elements.skillSearch.addEventListener("input", () => {
+  clearTimeout(elements.skillSearch.searchTimer);
+  elements.skillSearch.searchTimer = setTimeout(renderSkillLibrary, 120);
+});
+elements.skillCategory.addEventListener("change", renderSkillLibrary);
+elements.skillDrawerClose.addEventListener("click", closeSkillDrawer);
+elements.skillScrim.addEventListener("click", closeSkillDrawer);
+elements.skillInstallButton.addEventListener("click", installSelectedSkill);
+elements.skillToggleButton.addEventListener("click", toggleSelectedSkill);
+elements.skillUpgradeButton.addEventListener("click", upgradeSelectedSkill);
+elements.skillUninstallButton.addEventListener("click", uninstallSelectedSkill);
 $$('[data-task-filter]').forEach((button) => button.addEventListener("click", () => {
   state.taskFilter = button.dataset.taskFilter;
   $$('[data-task-filter]').forEach((item) => item.classList.toggle("active", item === button));

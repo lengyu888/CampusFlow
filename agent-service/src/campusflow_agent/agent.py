@@ -10,6 +10,7 @@ from langchain_openai import ChatOpenAI
 
 from .config import Settings
 from .schemas import PendingAction, ToolTrace
+from .skills import SkillStore
 from .store import CampusStore
 from .tools import CURRENT_USER_ID, build_tools
 
@@ -40,11 +41,17 @@ class AgentReply:
 
 
 class AgentService:
-    def __init__(self, settings: Settings, store: CampusStore) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        store: CampusStore,
+        skill_store: SkillStore | None = None,
+    ) -> None:
         self.settings = settings
         self.store = store
+        self.skill_store = skill_store
 
-    def _build_graph(self, *, api_key: str, model_name: str) -> Any:
+    def _build_graph(self, *, api_key: str, model_name: str, user_id: str) -> Any:
         if not api_key.strip():
             raise AgentConfigurationError("DeepSeek API Key is required")
         if model_name not in {"deepseek-v4-pro", "deepseek-flash"}:
@@ -63,9 +70,12 @@ class AgentService:
             timeout=self.settings.agent_timeout_seconds,
             max_retries=2,
         )
+        allowed_tools = (
+            self.skill_store.allowed_tools(user_id) if self.skill_store is not None else None
+        )
         return create_agent(
             model=model,
-            tools=build_tools(self.store),
+            tools=build_tools(self.store, allowed_tools),
             system_prompt=SYSTEM_PROMPT,
         )
 
@@ -78,7 +88,11 @@ class AgentService:
         model_name: str,
         message: str,
     ) -> AgentReply:
-        graph = self._build_graph(api_key=api_key, model_name=model_name)
+        graph = self._build_graph(
+            api_key=api_key,
+            model_name=model_name,
+            user_id=user_id,
+        )
         history = self.store.get_history(user_id, session_id)
         conversation = [
             HumanMessage(content=item.content)
@@ -98,6 +112,9 @@ class AgentService:
         new_messages = self._messages_for_latest_turn(result.get("messages", []), message)
         answer = self._last_answer(new_messages)
         traces, pending = self._extract_tool_activity(new_messages)
+        if self.skill_store is not None:
+            for trace in traces:
+                self.skill_store.record_tool_run(user_id, trace.tool_name)
 
         self.store.append_history(user_id, session_id, "user", message, model_name)
         self.store.append_history(user_id, session_id, "assistant", answer, model_name)

@@ -12,6 +12,11 @@
 - Swagger：`GET /docs`
 - 对话：`POST /api/v1/chat`
 - 工具清单：`GET /api/v1/tools`
+- Skills 目录/筛选：`GET /api/v1/skills?query=&category=`
+- Skill 详情/审计：`GET /api/v1/skills/{skill_id}`、`GET /api/v1/skills/audit`
+- 安装 Skill：`POST /api/v1/skills/{skill_id}/install`
+- 启用/停用 Skill：`PATCH /api/v1/skills/{skill_id}`
+- 升级/卸载 Skill：`POST /api/v1/skills/{skill_id}/upgrade`、`DELETE /api/v1/skills/{skill_id}`
 - 历史：`GET /api/v1/sessions/{session_id}/history`
 - 会话目录/搜索：`GET /api/v1/sessions?query=`
 - 会话改名：`PUT /api/v1/sessions/{session_id}`

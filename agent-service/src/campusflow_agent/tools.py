@@ -11,7 +11,10 @@ from .store import CampusStore
 CURRENT_USER_ID: ContextVar[str] = ContextVar("campusflow_user_id", default="demo-student")
 
 
-def build_tools(store: CampusStore) -> list[BaseTool]:
+def build_tools(
+    store: CampusStore,
+    allowed_tool_names: set[str] | None = None,
+) -> list[BaseTool]:
     @tool
     def get_schedule(date: str) -> list[dict[str, str]]:
         """查询当前学生某天的课程和已安排事务。date 必须是 YYYY-MM-DD。"""
@@ -88,7 +91,7 @@ def build_tools(store: CampusStore) -> list[BaseTool]:
         )
         return proposal.model_dump(mode="json")
 
-    return [
+    available = [
         get_schedule,
         get_weather,
         search_campus_notices,
@@ -96,3 +99,6 @@ def build_tools(store: CampusStore) -> list[BaseTool]:
         propose_task_change,
         propose_plan,
     ]
+    if allowed_tool_names is None:
+        return available
+    return [item for item in available if item.name in allowed_tool_names]
