@@ -253,6 +253,9 @@ class CampusStore:
     def campus_notices(self, keyword: str = "", active_only: bool = False):
         return self._campus_data.search_notices(keyword, active_only=active_only)
 
+    def plan_campus_route(self, origin: str, destination: str):
+        return self._campus_data.plan_route(origin, destination)
+
     def submit_campus_correction(self, *, user_id: str, **payload: str):
         return self._campus_data.submit_correction(user_id=user_id, **payload)
 

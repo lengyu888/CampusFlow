@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from datetime import UTC, datetime, time, timedelta, timezone
+from heapq import heappop, heappush
 from pathlib import Path
 from threading import RLock
 from uuid import uuid4
@@ -13,6 +14,9 @@ from .schemas import (
     CampusDataPlace,
     CampusDataSnapshot,
     CampusNotice,
+    CampusRoute,
+    CampusRoutePoint,
+    CampusRouteStep,
 )
 
 CAMPUS_TIMEZONE = timezone(timedelta(hours=8), name="Asia/Shanghai")
@@ -23,7 +27,7 @@ PACKAGE = {
     "package_id": DEFAULT_PACKAGE_ID,
     "school": "杭州电子科技大学",
     "campus": "下沙校区",
-    "version": "2026.10.1",
+    "version": "2026.10.2",
     "published_at": "2026-10-04T08:00:00+08:00",
     "description": (
         "基于用户确认地图整理的 CampusFlow 校园数据包，"
@@ -93,6 +97,26 @@ PLACES = [
     ("campus-clinic", "校医院", "医疗服务", "生活区", ["医务室"], "08:00", "21:00", 0),
     ("south-gate", "南大门", "校门", "南侧", ["南门"], "00:00", "23:59", 1),
     ("east-gate", "东门", "校门", "东侧", ["生活区东门"], "00:00", "23:59", 1),
+    (
+        "north-2-gate",
+        "北二门/南二门通道",
+        "校门",
+        "学林街",
+        ["北二门", "南二门", "教学区北门"],
+        "00:00",
+        "23:59",
+        1,
+    ),
+    (
+        "cainiao-station",
+        "菜鸟驿站",
+        "快递服务",
+        "生活区北侧",
+        ["菜鸟", "快递站", "快递点", "拿快递"],
+        "08:00",
+        "21:00",
+        0,
+    ),
 ]
 
 
@@ -112,7 +136,56 @@ WALK_EDGES = [
     ("student-center", "south-gate", 7),
     ("canteen-1", "west-track", 3),
     ("canteen-5", "teaching-6", 5),
+    ("teaching-6", "north-2-gate", 5),
+    ("library", "north-2-gate", 5),
+    ("north-2-gate", "cainiao-station", 5),
 ]
+
+
+# Normalized coordinates follow the uploaded HDU Xiasha campus map. The 100 × 74
+# viewBox covers the main campus map: living area at the top, Xuelin Street in the
+# middle, and the teaching area below it.
+MAP_POINTS: dict[str, tuple[float, float]] = {
+    "cainiao-station": (36.0, 12.0),
+    "north-2-gate": (28.0, 29.0),
+    "library": (52.0, 39.0),
+    "teaching-3": (43.0, 57.0),
+    "teaching-4": (30.0, 55.0),
+    "teaching-6": (42.0, 49.0),
+    "teaching-7": (61.0, 49.0),
+    "teaching-12": (72.0, 55.0),
+    "student-center": (74.0, 35.0),
+    "east-track": (86.0, 42.0),
+    "west-track": (17.0, 18.0),
+    "gym": (16.0, 42.0),
+    "canteen-1": (57.0, 17.0),
+    "canteen-5": (53.0, 23.0),
+    "campus-clinic": (58.0, 27.0),
+    "south-gate": (50.0, 72.0),
+    "east-gate": (94.0, 31.0),
+}
+
+
+ROUTE_GEOMETRIES: dict[frozenset[str], list[tuple[float, float]]] = {
+    frozenset(("teaching-6", "north-2-gate")): [
+        (42.0, 49.0),
+        (34.0, 49.0),
+        (30.0, 43.0),
+        (28.0, 29.0),
+    ],
+    frozenset(("north-2-gate", "cainiao-station")): [
+        (28.0, 29.0),
+        (28.0, 20.0),
+        (36.0, 20.0),
+        (36.0, 12.0),
+    ],
+    frozenset(("library", "north-2-gate")): [
+        (52.0, 39.0),
+        (40.0, 39.0),
+        (32.0, 34.0),
+        (28.0, 29.0),
+    ],
+}
 
 
 NOTICES = [
@@ -366,20 +439,77 @@ class CampusDataStore:
                 return row["place_id"]
         return None
 
-    def _walk_minutes(self, origin_id: str | None, destination_id: str) -> int | None:
-        if not origin_id or origin_id == destination_id:
-            return 0 if origin_id == destination_id else None
+    def _place_row(self, place_id: str) -> sqlite3.Row:
         row = self._connection.execute(
-            """
-            SELECT walk_minutes FROM campus_walk_edges
-            WHERE package_id = ? AND (
-                (origin_id = ? AND destination_id = ?)
-                OR (origin_id = ? AND destination_id = ?)
-            )
-            """,
-            (DEFAULT_PACKAGE_ID, origin_id, destination_id, destination_id, origin_id),
+            "SELECT * FROM campus_data_places WHERE package_id = ? AND place_id = ?",
+            (DEFAULT_PACKAGE_ID, place_id),
         ).fetchone()
-        return int(row["walk_minutes"]) if row else None
+        if row is None:
+            raise KeyError("campus_route_place_not_found")
+        return row
+
+    def _shortest_path(
+        self,
+        origin_id: str | None,
+        destination_id: str,
+    ) -> tuple[list[str], int] | None:
+        if not origin_id or origin_id == destination_id:
+            return ([destination_id], 0) if origin_id == destination_id else None
+        rows = self._connection.execute(
+            """
+            SELECT origin_id, destination_id, walk_minutes
+            FROM campus_walk_edges WHERE package_id = ?
+            """,
+            (DEFAULT_PACKAGE_ID,),
+        ).fetchall()
+        adjacency: dict[str, list[tuple[str, int]]] = {}
+        for row in rows:
+            minutes = int(row["walk_minutes"])
+            adjacency.setdefault(row["origin_id"], []).append((row["destination_id"], minutes))
+            adjacency.setdefault(row["destination_id"], []).append((row["origin_id"], minutes))
+
+        queue: list[tuple[int, str, list[str]]] = [(0, origin_id, [origin_id])]
+        best: dict[str, int] = {}
+        while queue:
+            total, current, path = heappop(queue)
+            if current in best and best[current] <= total:
+                continue
+            best[current] = total
+            if current == destination_id:
+                return path, total
+            for next_id, minutes in adjacency.get(current, []):
+                next_total = total + minutes
+                if next_id not in best or next_total < best[next_id]:
+                    heappush(queue, (next_total, next_id, [*path, next_id]))
+        return None
+
+    def _walk_minutes(self, origin_id: str | None, destination_id: str) -> int | None:
+        route = self._shortest_path(origin_id, destination_id)
+        return route[1] if route else None
+
+    def _place_model(
+        self,
+        row: sqlite3.Row,
+        *,
+        at: datetime,
+        walk_minutes: int | None = None,
+    ) -> CampusDataPlace:
+        aliases = json.loads(row["aliases_json"])
+        return CampusDataPlace(
+            place_id=row["place_id"],
+            name=row["name"],
+            category=row["category"],
+            zone=row["zone"],
+            aliases=aliases,
+            open_now=self._open_now(row, at),
+            open_hours=(
+                "全天开放"
+                if bool(row["always_open"])
+                else f"{row['open_time']}–{row['close_time']}"
+            ),
+            walk_minutes=walk_minutes,
+            source="CampusFlow 校园数据包",
+        )
 
     def find_places(
         self,
@@ -405,23 +535,100 @@ class CampusDataStore:
                 if needle and needle not in haystack:
                     continue
                 result.append(
-                    CampusDataPlace(
-                        place_id=row["place_id"],
-                        name=row["name"],
-                        category=row["category"],
-                        zone=row["zone"],
-                        aliases=aliases,
-                        open_now=self._open_now(row, current),
-                        open_hours=(
-                            "全天开放"
-                            if bool(row["always_open"])
-                            else f"{row['open_time']}–{row['close_time']}"
-                        ),
+                    self._place_model(
+                        row,
+                        at=current,
                         walk_minutes=self._walk_minutes(origin_id, row["place_id"]),
-                        source="CampusFlow 校园数据包",
                     )
                 )
         return result
+
+    @staticmethod
+    def _edge_geometry(origin_id: str, destination_id: str) -> list[tuple[float, float]]:
+        geometry = ROUTE_GEOMETRIES.get(frozenset((origin_id, destination_id)))
+        if geometry is None:
+            origin = MAP_POINTS.get(origin_id)
+            destination = MAP_POINTS.get(destination_id)
+            if origin is None or destination is None:
+                raise KeyError("campus_route_geometry_not_found")
+            return [origin, destination]
+        origin = MAP_POINTS.get(origin_id)
+        return geometry if geometry[0] == origin else list(reversed(geometry))
+
+    def plan_route(
+        self,
+        origin: str,
+        destination: str,
+        *,
+        at: datetime | None = None,
+    ) -> CampusRoute:
+        current = at or datetime.now(UTC)
+        with self._lock:
+            origin_id = self._resolve_place_id(origin)
+            destination_id = self._resolve_place_id(destination)
+            if not origin_id or not destination_id:
+                raise KeyError("campus_route_place_not_found")
+            shortest = self._shortest_path(origin_id, destination_id)
+            if shortest is None:
+                raise KeyError("campus_route_not_found")
+            node_ids, total_minutes = shortest
+            node_rows = {place_id: self._place_row(place_id) for place_id in node_ids}
+            package = self._package_row()
+
+            path: list[CampusRoutePoint] = []
+            steps: list[CampusRouteStep] = []
+            for index, (start_id, end_id) in enumerate(
+                zip(node_ids, node_ids[1:], strict=False),
+                start=1,
+            ):
+                geometry = self._edge_geometry(start_id, end_id)
+                if path:
+                    geometry = geometry[1:]
+                for point_index, (x, y) in enumerate(geometry):
+                    is_first = not path and point_index == 0
+                    is_last = point_index == len(geometry) - 1
+                    place_id = start_id if is_first else end_id if is_last else None
+                    label = node_rows[place_id]["name"] if place_id else ""
+                    path.append(CampusRoutePoint(x=x, y=y, label=label, place_id=place_id))
+                edge = self._shortest_path(start_id, end_id)
+                minutes = edge[1] if edge else 0
+                steps.append(
+                    CampusRouteStep(
+                        index=index,
+                        instruction=(
+                            f"从{node_rows[start_id]['name']}步行至"
+                            f"{node_rows[end_id]['name']}"
+                        ),
+                        minutes=minutes,
+                    )
+                )
+
+            if len(node_ids) == 1:
+                x, y = MAP_POINTS[origin_id]
+                path.append(
+                    CampusRoutePoint(
+                        x=x,
+                        y=y,
+                        label=node_rows[origin_id]["name"],
+                        place_id=origin_id,
+                    )
+                )
+
+            return CampusRoute(
+                package_id=package["package_id"],
+                package_version=package["version"],
+                origin=self._place_model(node_rows[origin_id], at=current, walk_minutes=0),
+                destination=self._place_model(
+                    node_rows[destination_id],
+                    at=current,
+                    walk_minutes=total_minutes,
+                ),
+                total_minutes=total_minutes,
+                estimated_distance_meters=total_minutes * 75,
+                path=path,
+                steps=steps,
+                note="依据用户确认的杭电下沙校区地图生成，路线与步行时间为校园内参考估算。",
+            )
 
     def search_notices(
         self,

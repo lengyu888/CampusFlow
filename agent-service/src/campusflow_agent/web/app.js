@@ -1103,6 +1103,124 @@ function appendMessage(role, content, options = {}) {
   return article;
 }
 
+const SVG_NS = "http://www.w3.org/2000/svg";
+
+function svgNode(tag, attributes = {}, text = "") {
+  const node = document.createElementNS(SVG_NS, tag);
+  Object.entries(attributes).forEach(([key, value]) => node.setAttribute(key, String(value)));
+  if (text) node.textContent = text;
+  return node;
+}
+
+function buildCampusRouteMap(route) {
+  const svg = svgNode("svg", {
+    viewBox: "0 0 100 74",
+    role: "img",
+    "aria-label": `${route.origin.name}到${route.destination.name}校园路线图`,
+    preserveAspectRatio: "xMidYMid meet",
+  });
+
+  svg.append(svgNode("rect", {x: 0, y: 0, width: 100, height: 74, rx: 3, class: "route-map-base"}));
+  svg.append(svgNode("rect", {x: 2, y: 2, width: 96, height: 24, rx: 2, class: "route-zone route-zone-living"}));
+  svg.append(svgNode("rect", {x: 2, y: 32, width: 96, height: 40, rx: 2, class: "route-zone route-zone-teaching"}));
+  svg.append(svgNode("path", {d: "M2 29 H98", class: "route-road-major"}));
+  svg.append(svgNode("text", {x: 4, y: 6, class: "route-zone-label"}, "生活区 / LIVING"));
+  svg.append(svgNode("text", {x: 4, y: 36, class: "route-zone-label"}, "教学区 / ACADEMIC"));
+  svg.append(svgNode("text", {x: 82, y: 28.2, class: "route-road-label"}, "学林街"));
+
+  [
+    ["18楼", 13, 9, 10, 6], ["16楼", 25, 9, 9, 6], ["15楼", 37, 8, 10, 7],
+    ["五餐", 53, 17, 10, 6], ["生活区东门", 82, 14, 13, 7],
+    ["体育馆", 8, 39, 13, 9], ["4教", 24, 52, 11, 9], ["6教", 37, 45, 12, 10],
+    ["图书馆", 47, 35, 14, 8], ["7教", 57, 45, 11, 10], ["12教", 68, 52, 11, 9],
+    ["东操场", 80, 38, 14, 13], ["1教", 55, 61, 11, 8],
+  ].forEach(([label, x, y, width, height]) => {
+    const group = svgNode("g", {class: "route-landmark"});
+    group.append(svgNode("rect", {x, y, width, height, rx: 1.3}));
+    group.append(svgNode("text", {x: x + width / 2, y: y + height / 2 + 1}, label));
+    svg.append(group);
+  });
+
+  svg.append(svgNode("path", {d: "M28 20 V45 H42 M28 39 H74 M52 32 V67 M16 48 H86", class: "route-campus-road"}));
+
+  const pointString = route.path.map((point) => `${point.x},${point.y}`).join(" ");
+  svg.append(svgNode("polyline", {points: pointString, class: "route-line-shadow"}));
+  svg.append(svgNode("polyline", {points: pointString, class: "route-line"}));
+
+  const nodes = route.path.filter((point) => point.place_id);
+  nodes.forEach((point, index) => {
+    const endpoint = index === 0 || index === nodes.length - 1;
+    const group = svgNode("g", {class: endpoint ? "route-node endpoint" : "route-node"});
+    group.append(svgNode("circle", {cx: point.x, cy: point.y, r: endpoint ? 2.1 : 1.35}));
+    if (endpoint) {
+      group.append(svgNode("circle", {cx: point.x, cy: point.y, r: 3.3, class: "route-node-pulse"}));
+    }
+    group.append(svgNode("text", {x: point.x + 2.8, y: point.y - 2}, point.label));
+    svg.append(group);
+  });
+  return svg;
+}
+
+function renderCampusRoute(route) {
+  if (!route?.path?.length || !route.origin || !route.destination) return;
+  clearEmptyState();
+  const card = document.createElement("article");
+  card.className = "campus-route-card";
+
+  const head = document.createElement("div");
+  head.className = "campus-route-head";
+  const titleWrap = document.createElement("div");
+  const eyebrow = document.createElement("span");
+  eyebrow.textContent = `CAMPUS ROUTE / v${route.package_version}`;
+  const title = document.createElement("h3");
+  title.textContent = `${route.origin.name} → ${route.destination.name}`;
+  titleWrap.append(eyebrow, title);
+  const mode = document.createElement("b");
+  mode.textContent = "步行";
+  head.append(titleWrap, mode);
+
+  const metrics = document.createElement("div");
+  metrics.className = "campus-route-metrics";
+  [
+    [`${route.total_minutes}`, "分钟"],
+    [`${route.estimated_distance_meters}`, "米估算"],
+    [route.destination.open_now ? "OPEN" : "CLOSED", route.destination.open_hours],
+  ].forEach(([value, label]) => {
+    const item = document.createElement("div");
+    const strong = document.createElement("strong");
+    strong.textContent = value;
+    const span = document.createElement("span");
+    span.textContent = label;
+    item.append(strong, span);
+    metrics.append(item);
+  });
+
+  const map = document.createElement("div");
+  map.className = "campus-route-map";
+  map.append(buildCampusRouteMap(route));
+
+  const steps = document.createElement("ol");
+  steps.className = "campus-route-steps";
+  (route.steps ?? []).forEach((step) => {
+    const item = document.createElement("li");
+    const number = document.createElement("i");
+    number.textContent = String(step.index).padStart(2, "0");
+    const copy = document.createElement("span");
+    copy.textContent = step.instruction;
+    const minutes = document.createElement("b");
+    minutes.textContent = `${step.minutes} min`;
+    item.append(number, copy, minutes);
+    steps.append(item);
+  });
+
+  const note = document.createElement("p");
+  note.className = "campus-route-note";
+  note.textContent = route.note;
+  card.append(head, metrics, map, steps, note);
+  elements.messages.append(card);
+  scrollMessages();
+}
+
 function ensureTraceArea() {
   if (!state.hasTraces) {
     elements.traceList.replaceChildren();
@@ -1206,7 +1324,10 @@ async function sendMessage(message) {
     });
     loading.remove();
     appendMessage("assistant", payload.message);
-    payload.tool_traces.forEach(renderToolTrace);
+    payload.tool_traces.forEach((trace) => {
+      renderToolTrace(trace);
+      if (trace.tool_name === "plan_campus_route") renderCampusRoute(trace.result);
+    });
     payload.pending_actions.forEach(renderPendingAction);
     try {
       state.sessions = await api("/api/v1/sessions");
@@ -1775,6 +1896,9 @@ $$('[data-prompt]').forEach((button) => button.addEventListener("click", () => {
   elements.messageInput.value = button.dataset.prompt;
   resizeComposer();
   elements.messageInput.focus();
+}));
+$$('[data-route-origin][data-route-destination]').forEach((button) => button.addEventListener("click", () => {
+  sendMessage(`从${button.dataset.routeOrigin}到${button.dataset.routeDestination}怎么走？请生成地图路线图。`);
 }));
 elements.newSessionButton.addEventListener("click", resetSession);
 $$('[data-app-tab]').forEach((button) => button.addEventListener("click", () => switchAppTab(button.dataset.appTab)));

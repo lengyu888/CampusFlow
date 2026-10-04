@@ -10,8 +10,8 @@ def test_package_exposes_versioned_places_and_notices() -> None:
     snapshot = data.snapshot("student-001")
 
     assert snapshot.package.package_id == "hdu-xiasha"
-    assert snapshot.package.version == "2026.10.1"
-    assert snapshot.package.place_count >= 15
+    assert snapshot.package.version == "2026.10.2"
+    assert snapshot.package.place_count >= 17
     assert snapshot.package.notice_count >= 3
     assert any(place.name == "图书馆" for place in snapshot.places)
 
@@ -30,6 +30,37 @@ def test_place_lookup_supports_alias_open_hours_and_walk_time() -> None:
     assert places[0].open_now is True
     assert places[0].open_hours == "07:00–22:00"
     assert places[0].walk_minutes == 5
+
+
+def test_route_from_sixth_teaching_building_to_cainiao_uses_uploaded_map_graph() -> None:
+    data = CampusDataStore()
+
+    route = data.plan_route(
+        "六教",
+        "菜鸟驿站",
+        at=datetime(2026, 10, 4, 10, 0, tzinfo=CAMPUS_TIMEZONE),
+    )
+
+    assert route.origin.place_id == "teaching-6"
+    assert route.destination.place_id == "cainiao-station"
+    assert route.destination.open_now is True
+    assert route.total_minutes == 10
+    assert route.estimated_distance_meters == 750
+    assert [step.minutes for step in route.steps] == [5, 5]
+    assert "北二门" in route.steps[0].instruction
+    assert route.path[0].place_id == "teaching-6"
+    assert route.path[-1].place_id == "cainiao-station"
+
+
+def test_route_reports_unknown_place() -> None:
+    data = CampusDataStore()
+
+    try:
+        data.plan_route("六教", "不存在的地点")
+    except KeyError as exc:
+        assert exc.args[0] == "campus_route_place_not_found"
+    else:
+        raise AssertionError("unknown route destination must be rejected")
 
 
 def test_notice_search_and_active_filter() -> None:

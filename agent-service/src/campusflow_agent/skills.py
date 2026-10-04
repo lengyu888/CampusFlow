@@ -39,9 +39,9 @@ OFFICIAL_SKILLS: tuple[dict[str, Any], ...] = (
         "name": "校园地点助手",
         "description": "根据校园地图查找教学楼、自习空间与生活服务，并提供地点建议。",
         "category": "校园生活",
-        "version": "1.1.0",
+        "version": "1.2.0",
         "author": "CampusFlow Official",
-        "capabilities": ["地点检索", "别名识别", "开放状态"],
+        "capabilities": ["地点检索", "别名识别", "开放状态", "校园步行路线图"],
         "permissions": [
             {
                 "code": "places.read",
@@ -104,6 +104,7 @@ TOOL_SKILLS = {
     "get_schedule": "timetable-planner",
     "propose_plan": "timetable-planner",
     "find_campus_places": "campus-navigator",
+    "plan_campus_route": "campus-navigator",
     "propose_task_change": "ddl-guardian",
 }
 

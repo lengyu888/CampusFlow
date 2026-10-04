@@ -102,6 +102,15 @@ def build_tools(
         return store.find_places(query, CURRENT_USER_ID.get(), origin)
 
     @tool
+    def plan_campus_route(origin: str, destination: str) -> dict:
+        """生成校园步行路线图数据。
+
+        当用户询问“从哪里到哪里怎么走”、导航、拿快递路线或明确要求地图路线时调用。
+        origin 和 destination 使用校园建筑、校门或生活服务地点名称，可使用简称。
+        """
+        return store.plan_campus_route(origin, destination).model_dump(mode="json")
+
+    @tool
     def propose_task_change(
         action: str,
         title: str,
@@ -163,6 +172,7 @@ def build_tools(
         get_weather,
         search_campus_notices,
         find_campus_places,
+        plan_campus_route,
         propose_task_change,
         propose_plan,
     ]

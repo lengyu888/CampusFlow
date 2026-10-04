@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any
+from uuid import uuid4
 
 from langchain.agents import create_agent
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
@@ -30,10 +32,17 @@ SYSTEM_PROMPT = """你是 CampusFlow 大学规划与执行 Agent，服务高校�
 10. 用户只要求查询、推荐或建议时，直接给出完整答案，不调用 propose_task_change 或 propose_plan；
     只有用户明确要求制定、创建、保存计划或待办时，才生成待确认提案。
 11. 最终答复必须自包含，不得使用“内容如上”“结果见工具”等依赖隐藏过程或执行轨迹的表述。
+12. 用户询问从校园地点 A 到地点 B 怎么走、导航或路线图时，调用 plan_campus_route；
+    回复中概括预计时间与途经点，客户端会根据工具结果绘制路线图。
 """
 
 CAMPUS_TIMEZONE = timezone(timedelta(hours=8), name="Asia/Shanghai")
 WEEKDAY_NAMES = ("星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日")
+ROUTE_REQUEST_PATTERN = re.compile(
+    r"从\s*(?P<origin>[^，。,.!?！？]{1,40}?)\s*到\s*"
+    r"(?P<destination>[^，。,.!?！？]{1,40}?)"
+    r"(?=(?:怎么走|如何走|拿|取|去|导航|路线|，|。|,|\.|！|!|？|\?|$))"
+)
 
 
 class AgentConfigurationError(RuntimeError):
@@ -122,6 +131,18 @@ class AgentService:
         model_name: str,
         message: str,
     ) -> AgentReply:
+        direct_route = self._direct_route_reply(user_id=user_id, message=message)
+        if direct_route is not None:
+            self.store.append_history(user_id, session_id, "user", message, model_name)
+            self.store.append_history(
+                user_id,
+                session_id,
+                "assistant",
+                direct_route.message,
+                model_name,
+            )
+            return direct_route
+
         graph = self._build_graph(
             api_key=api_key,
             model_name=model_name,
@@ -153,6 +174,54 @@ class AgentService:
         self.store.append_history(user_id, session_id, "user", message, model_name)
         self.store.append_history(user_id, session_id, "assistant", answer, model_name)
         return AgentReply(message=answer, tool_traces=traces, pending_actions=pending)
+
+    @staticmethod
+    def _extract_route_request(message: str) -> tuple[str, str] | None:
+        match = ROUTE_REQUEST_PATTERN.search(message.strip())
+        if match is None:
+            return None
+        origin = match.group("origin").strip()
+        destination = match.group("destination").strip()
+        return (origin, destination) if origin and destination else None
+
+    def _direct_route_reply(self, *, user_id: str, message: str) -> AgentReply | None:
+        request = self._extract_route_request(message)
+        if request is None:
+            return None
+        if self.skill_store is not None:
+            allowed_tools = self.skill_store.allowed_tools(user_id)
+            if "plan_campus_route" not in allowed_tools:
+                return None
+        origin, destination = request
+        try:
+            route = self.store.plan_campus_route(origin, destination)
+        except KeyError:
+            return None
+
+        route_data = route.model_dump(mode="json")
+        waypoint_names = [
+            point.label
+            for point in route.path
+            if point.place_id
+            and point.place_id
+            not in {route.origin.place_id, route.destination.place_id}
+        ]
+        via = f"，途经{'、'.join(waypoint_names)}" if waypoint_names else ""
+        answer = (
+            f"路线已生成：从{route.origin.name}到{route.destination.name}{via}，"
+            f"步行约 {route.total_minutes} 分钟、{route.estimated_distance_meters} 米。"
+            f"目的地当前{'开放' if route.destination.open_now else '未开放'}，"
+            f"开放时间为 {route.destination.open_hours}。"
+        )
+        trace = ToolTrace(
+            tool_call_id=f"direct-route-{uuid4().hex}",
+            tool_name="plan_campus_route",
+            arguments={"origin": origin, "destination": destination},
+            result=route_data,
+        )
+        if self.skill_store is not None:
+            self.skill_store.record_tool_run(user_id, trace.tool_name)
+        return AgentReply(message=answer, tool_traces=[trace])
 
     @staticmethod
     def _messages_for_latest_turn(messages: list[Any], user_message: str) -> list[Any]:

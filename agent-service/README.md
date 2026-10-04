@@ -14,6 +14,7 @@
 - 同步/断开课表订阅：`POST /api/v1/schedule-subscriptions/sync`、`DELETE /api/v1/schedule-subscriptions`
 - 校园数据包快照：`GET /api/v1/campus-data`
 - 地点/步行查询：`GET /api/v1/campus-data/places?query=&origin=`
+- 校园路线图：`GET /api/v1/campus-data/route?origin=&destination=`
 - 校园通知：`GET /api/v1/campus-data/notices?keyword=&active_only=`
 - 用户纠错：`GET /api/v1/campus-data/corrections`、`POST /api/v1/campus-data/corrections`
 - Swagger：`GET /docs`

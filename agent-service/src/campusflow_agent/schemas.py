@@ -280,6 +280,31 @@ class CampusDataPlace(BaseModel):
     source: str
 
 
+class CampusRoutePoint(BaseModel):
+    x: float = Field(ge=0, le=100)
+    y: float = Field(ge=0, le=74)
+    label: str = ""
+    place_id: str | None = None
+
+
+class CampusRouteStep(BaseModel):
+    index: int = Field(ge=1)
+    instruction: str
+    minutes: int = Field(ge=0)
+
+
+class CampusRoute(BaseModel):
+    package_id: str
+    package_version: str
+    origin: CampusDataPlace
+    destination: CampusDataPlace
+    total_minutes: int = Field(ge=0)
+    estimated_distance_meters: int = Field(ge=0)
+    path: list[CampusRoutePoint] = Field(min_length=1)
+    steps: list[CampusRouteStep] = Field(default_factory=list)
+    note: str
+
+
 class CampusNotice(BaseModel):
     notice_id: str
     title: str

@@ -33,6 +33,7 @@ from .schemas import (
     CampusDataSnapshot,
     CampusMapParseResult,
     CampusNotice,
+    CampusRoute,
     ChatRequest,
     ChatResponse,
     ConfirmActionResponse,
@@ -163,8 +164,8 @@ def create_app(
 
     app = FastAPI(
         title="CampusFlow Agent API",
-        version="0.8.0",
-        description="带版本化校园数据、课表订阅、规划执行与 Skills 的大学规划 Agent",
+        version="0.9.0",
+        description="带校园路线图、版本化数据、课表订阅、规划执行与 Skills 的大学规划 Agent",
     )
     app.add_middleware(
         CORSMiddleware,
@@ -430,6 +431,26 @@ def create_app(
     ) -> list[CampusNotice]:
         del user
         return store.campus_notices(keyword, active_only)
+
+    @app.get("/api/v1/campus-data/route", response_model=CampusRoute)
+    async def campus_data_route(
+        user: CurrentUser,
+        origin: str,
+        destination: str,
+    ) -> CampusRoute:
+        del user
+        try:
+            return store.plan_campus_route(origin, destination)
+        except KeyError as exc:
+            if exc.args and exc.args[0] == "campus_route_place_not_found":
+                raise HTTPException(
+                    status_code=404,
+                    detail="未找到起点或终点，请尝试使用建筑名、简称或地点类别。",
+                ) from exc
+            raise HTTPException(
+                status_code=404,
+                detail="当前校园数据包中还没有这两个地点之间的步行关系。",
+            ) from exc
 
     @app.get(
         "/api/v1/campus-data/corrections",

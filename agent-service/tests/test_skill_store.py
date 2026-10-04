@@ -34,6 +34,7 @@ def test_disabled_skill_does_not_record_tool_runs() -> None:
 
     store.set_enabled("student-1", "campus-navigator", True)
     assert "find_campus_places" in store.allowed_tools("student-1")
+    assert "plan_campus_route" in store.allowed_tools("student-1")
     store.record_tool_run("student-1", "find_campus_places")
     assert [entry.action for entry in store.list_audit("student-1")[:2]] == [
         "run",

@@ -64,8 +64,10 @@ async def test_frontend_is_served(client: AsyncClient) -> None:
     assert "课表订阅" in page.text
     assert "CAMPUS DATA PACKAGE" in page.text
     assert "提交纠错" in page.text
+    assert "六教 → 菜鸟驿站" in page.text
     assert script.status_code == 200
     assert "fetch(path, options)" in script.text
+    assert "renderCampusRoute" in script.text
 
 
 async def test_health(client: AsyncClient) -> None:
@@ -85,8 +87,8 @@ async def test_campus_data_package_places_notices_and_corrections(
 
     snapshot = await client.get("/api/v1/campus-data")
     assert snapshot.status_code == 200
-    assert snapshot.json()["package"]["version"] == "2026.10.1"
-    assert snapshot.json()["package"]["place_count"] >= 15
+    assert snapshot.json()["package"]["version"] == "2026.10.2"
+    assert snapshot.json()["package"]["place_count"] >= 17
 
     places = await client.get(
         "/api/v1/campus-data/places",
@@ -101,6 +103,22 @@ async def test_campus_data_package_places_notices_and_corrections(
     )
     assert notices.status_code == 200
     assert any(item["category"] == "教学安排" for item in notices.json())
+
+    route = await client.get(
+        "/api/v1/campus-data/route",
+        params={"origin": "六教", "destination": "菜鸟驿站"},
+    )
+    assert route.status_code == 200
+    assert route.json()["total_minutes"] == 10
+    assert route.json()["estimated_distance_meters"] == 750
+    assert route.json()["path"][0]["place_id"] == "teaching-6"
+    assert route.json()["path"][-1]["place_id"] == "cainiao-station"
+
+    missing_route = await client.get(
+        "/api/v1/campus-data/route",
+        params={"origin": "六教", "destination": "不存在的地点"},
+    )
+    assert missing_route.status_code == 404
 
     submitted = await client.post(
         "/api/v1/campus-data/corrections",
@@ -332,7 +350,7 @@ async def test_official_skill_install_control_and_audit(client: AsyncClient) -> 
     )
     assert installed.status_code == 200
     assert installed.json()["enabled"] is True
-    assert installed.json()["installed_version"] == "1.1.0"
+    assert installed.json()["installed_version"] == "1.2.0"
 
     disabled = await client.patch(
         "/api/v1/skills/campus-navigator",

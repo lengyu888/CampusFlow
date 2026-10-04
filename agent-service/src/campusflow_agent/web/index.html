@@ -7,7 +7,7 @@
     <title>CampusFlow · Campus Operating System</title>
     <link rel="stylesheet" href="/static/styles.css" />
     <link rel="stylesheet" href="/static/native.css?v=6" />
-    <link rel="stylesheet" href="/static/redesign.css?v=1" />
+    <link rel="stylesheet" href="/static/redesign.css?v=3" />
   </head>
   <body>
     <div class="grain" aria-hidden="true"></div>
@@ -197,6 +197,7 @@
             <div class="field-label">快速场景</div>
             <button type="button" data-prompt="请根据我2026-10-01的课表和校园地图，帮我安排当天的复习地点与时间。">基于已导入课表规划</button>
             <button type="button" data-prompt="查询校园地图中有哪些教学楼和图书馆，并推荐一个适合自习的地点。">查询校园地图</button>
+            <button class="route-preset" type="button" data-route-origin="六教" data-route-destination="菜鸟驿站"><span>路线图</span> 六教 → 菜鸟驿站</button>
             <button type="button" data-prompt="为我创建一个两小时的复习事务，先生成待确认提案。">生成事务提案</button>
           </div>
         </aside>
@@ -386,7 +387,7 @@
 
     <div class="toast" id="toast" role="status"></div>
     <script src="/static/gsap.min.js" defer></script>
-    <script src="/static/app.js?v=8" defer></script>
+    <script src="/static/app.js?v=10" defer></script>
     <script src="/static/motion.js?v=1" defer></script>
   </body>
 </html>

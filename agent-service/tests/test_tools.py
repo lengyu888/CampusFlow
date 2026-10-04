@@ -89,6 +89,18 @@ def test_tools_use_confirmed_user_timetable_and_campus_map() -> None:
     assert places[0]["name"] == "第7教学楼"
 
 
+def test_route_tool_returns_map_geometry_and_steps() -> None:
+    route = tool_map(CampusStore())["plan_campus_route"].invoke(
+        {"origin": "六教", "destination": "菜鸟驿站"}
+    )
+
+    assert route["origin"]["place_id"] == "teaching-6"
+    assert route["destination"]["place_id"] == "cainiao-station"
+    assert route["total_minutes"] == 10
+    assert len(route["path"]) >= 7
+    assert [step["minutes"] for step in route["steps"]] == [5, 5]
+
+
 def test_proposal_requires_confirmation_before_write() -> None:
     store = CampusStore()
     tools = tool_map(store)
