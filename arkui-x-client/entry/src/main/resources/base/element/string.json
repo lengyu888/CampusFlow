@@ -1,0 +1,7 @@
+{
+  "string": [
+    { "name": "module_desc", "value": "CampusFlow 跨端 AI Agent" },
+    { "name": "EntryAbility_desc", "value": "CampusFlow 主入口" },
+    { "name": "EntryAbility_label", "value": "CampusFlow" }
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "name": "entry",
+  "version": "1.0.0",
+  "description": "CampusFlow mobile client entry module",
+  "main": "",
+  "author": "CampusFlow",
+  "license": "Apache-2.0",
+  "dependencies": {}
+}

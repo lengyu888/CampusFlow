@@ -89,7 +89,11 @@
 
 ## 阶段 6：ArkUI-X 跨端客户端
 
-- ArkUI-X 页面与状态管理
+状态：进行中。已完成 6.1 共享客户端骨架与核心流程迁移，等待安装 ArkUI-X SDK 后执行 HarmonyOS/Android 构建和真机验收。
+
+- ArkUI-X 页面与状态管理（6.1 已完成）
+- 登录、注册、首次配置、五入口与 FastAPI 类型化请求层（6.1 已完成）
+- DeepSeek 对话、操作确认、课表同步、Skills、规划和原生路线图（6.1 已完成）
 - HarmonyOS 和 Android 构建
 - Agent API、账号、通知和系统能力联调
 - 跨端功能与布局一致性测试

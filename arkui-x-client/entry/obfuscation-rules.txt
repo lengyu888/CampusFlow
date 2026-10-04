@@ -1,0 +1,2 @@
+# CampusFlow release obfuscation rules.
+-keep-global-name

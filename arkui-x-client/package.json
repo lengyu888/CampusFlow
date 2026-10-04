@@ -1,0 +1,7 @@
+{
+  "name": "campusflow-arkui-x-static-check",
+  "private": true,
+  "scripts": {
+    "check": "node scripts/static-check.mjs"
+  }
+}

@@ -31,4 +31,5 @@ Thumbs.db
 **/.arkui-x/android/local.properties
 **/.arkui-x/ios/Pods/
 **/.arkui-x/ios/DerivedData/
+.reference/
 
