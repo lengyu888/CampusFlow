@@ -168,6 +168,52 @@ async def test_unknown_proposal_returns_404(client: AsyncClient) -> None:
     assert response.status_code == 404
 
 
+async def test_planning_task_lifecycle_and_course_conflict(client: AsyncClient) -> None:
+    await register(client)
+    await complete_onboarding(client)
+
+    conflict = await client.post(
+        "/api/v1/tasks",
+        json={
+            "title": "冲突的操作系统复习",
+            "start_at": "2026-10-01T08:30:00+08:00",
+            "end_at": "2026-10-01T09:00:00+08:00",
+            "reminder_minutes": 10,
+        },
+    )
+    assert conflict.status_code == 409
+    assert "操作系统" in conflict.json()["detail"]["conflicts"][0]
+
+    created = await client.post(
+        "/api/v1/tasks",
+        json={
+            "title": "晚间复习",
+            "start_at": "2026-10-01T19:00:00+08:00",
+            "end_at": "2026-10-01T20:30:00+08:00",
+            "reminder_minutes": 30,
+        },
+    )
+    assert created.status_code == 201
+    task_id = created.json()["task_id"]
+
+    overview = await client.get("/api/v1/planning")
+    assert overview.status_code == 200
+    assert overview.json()["total_tasks"] == 1
+    assert overview.json()["progress"] == 0
+
+    completed = await client.patch(
+        f"/api/v1/tasks/{task_id}",
+        json={"completed": True},
+    )
+    assert completed.status_code == 200
+    assert completed.json()["status"] == "completed"
+    assert (await client.get("/api/v1/planning")).json()["progress"] == 100
+
+    deleted = await client.delete(f"/api/v1/tasks/{task_id}")
+    assert deleted.status_code == 204
+    assert (await client.get("/api/v1/planning")).json()["total_tasks"] == 0
+
+
 async def test_unsupported_model_is_rejected(client: AsyncClient) -> None:
     await register(client)
     await complete_onboarding(client)

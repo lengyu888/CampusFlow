@@ -110,3 +110,59 @@ def test_proposal_cannot_be_confirmed_by_another_user() -> None:
         assert str(exc) == "'proposal_not_found'"
     else:
         raise AssertionError("a proposal must only be confirmed by its owner")
+
+
+def test_plan_proposal_creates_milestones_tasks_and_reports_conflict() -> None:
+    store = CampusStore()
+    store.set_user_context(
+        "student-001",
+        timetable=[
+            {
+                "date": "2026-10-01",
+                "title": "操作系统",
+                "start_time": "08:05",
+                "end_time": "09:40",
+                "location": "第7教研楼北406",
+            }
+        ],
+        campus_map={"places": []},
+    )
+    tools = tool_map(store)
+    token = CURRENT_USER_ID.set("student-001")
+    try:
+        proposal = tools["propose_plan"].invoke(
+            {
+                "title": "操作系统复习周",
+                "summary": "完成两轮复习并整理错题。",
+                "target_date": "2026-10-07",
+                "milestones": [
+                    {
+                        "title": "完成第一轮复习",
+                        "due_at": "2026-10-03T21:00:00+08:00",
+                        "tasks": [
+                            {
+                                "title": "梳理进程调度",
+                                "start_at": "2026-10-01T08:30:00+08:00",
+                                "end_at": "2026-10-01T09:30:00+08:00",
+                                "reminder_minutes": 20,
+                            },
+                            {
+                                "title": "整理错题",
+                                "start_at": "2026-10-01T19:00:00+08:00",
+                                "end_at": "2026-10-01T20:00:00+08:00",
+                            },
+                        ],
+                    }
+                ],
+            }
+        )
+    finally:
+        CURRENT_USER_ID.reset(token)
+
+    assert proposal["kind"] == "plan"
+    assert "操作系统" in proposal["conflicts"][0]
+    store.confirm_proposal(proposal["proposal_id"], "student-001")
+    overview = store.planning_overview("student-001")
+    assert overview.plans[0].title == "操作系统复习周"
+    assert overview.plans[0].milestones[0].task_count == 2
+    assert overview.total_tasks == 2

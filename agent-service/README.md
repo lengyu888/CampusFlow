@@ -16,5 +16,9 @@
 - 会话目录/搜索：`GET /api/v1/sessions?query=`
 - 会话改名：`PUT /api/v1/sessions/{session_id}`
 - 已确认事务：`GET /api/v1/tasks`
+- 规划总览：`GET /api/v1/planning`
+- 快速待办：`POST /api/v1/tasks`
+- 完成/恢复待办：`PATCH /api/v1/tasks/{task_id}`
+- 删除待办：`DELETE /api/v1/tasks/{task_id}`
 - 确认事务：`POST /api/v1/actions/{proposal_id}/confirm`
 

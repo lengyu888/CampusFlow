@@ -20,11 +20,14 @@ class ToolTrace(BaseModel):
 class PendingAction(BaseModel):
     proposal_id: str
     action: Literal["create", "update", "delete"]
+    kind: Literal["task", "plan"] = "task"
     title: str
     start_at: datetime | None = None
     end_at: datetime | None = None
     reminder_minutes: int | None = None
     reason: str | None = None
+    payload: dict[str, Any] = Field(default_factory=dict)
+    conflicts: list[str] = Field(default_factory=list)
     status: Literal["pending", "confirmed", "cancelled"] = "pending"
 
 
@@ -59,6 +62,63 @@ class ConfirmActionResponse(BaseModel):
     action: PendingAction
     applied: bool
     message: str
+
+
+class TaskCreateRequest(BaseModel):
+    title: str = Field(min_length=1, max_length=120)
+    start_at: datetime | None = None
+    end_at: datetime | None = None
+    reminder_minutes: int | None = Field(default=None, ge=0, le=10080)
+    location: str | None = Field(default=None, max_length=120)
+
+
+class TaskStatusUpdate(BaseModel):
+    completed: bool
+
+
+class PlanningTask(BaseModel):
+    task_id: str
+    plan_id: str | None = None
+    milestone_id: str | None = None
+    title: str
+    start_at: datetime | None = None
+    end_at: datetime | None = None
+    reminder_minutes: int | None = None
+    location: str | None = None
+    status: Literal["pending", "completed"] = "pending"
+    source: Literal["agent", "manual"] = "agent"
+    created_at: datetime
+    completed_at: datetime | None = None
+
+
+class PlanMilestone(BaseModel):
+    milestone_id: str
+    title: str
+    due_at: datetime | None = None
+    task_count: int = 0
+    completed_count: int = 0
+
+
+class PlanSummary(BaseModel):
+    plan_id: str
+    title: str
+    summary: str = ""
+    target_date: date | None = None
+    status: Literal["active", "completed"] = "active"
+    progress: int = Field(default=0, ge=0, le=100)
+    task_count: int = 0
+    completed_count: int = 0
+    milestones: list[PlanMilestone] = Field(default_factory=list)
+    created_at: datetime
+
+
+class PlanningOverview(BaseModel):
+    plans: list[PlanSummary] = Field(default_factory=list)
+    tasks: list[PlanningTask] = Field(default_factory=list)
+    total_tasks: int = 0
+    completed_tasks: int = 0
+    due_today: int = 0
+    progress: int = Field(default=0, ge=0, le=100)
 
 
 class HealthResponse(BaseModel):

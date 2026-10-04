@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from contextvars import ContextVar
 from datetime import datetime
+from typing import Any
 
 from langchain_core.tools import BaseTool, tool
 
@@ -38,6 +39,7 @@ def build_tools(store: CampusStore) -> list[BaseTool]:
         start_at: datetime | None = None,
         end_at: datetime | None = None,
         reminder_minutes: int | None = None,
+        location: str | None = None,
         reason: str | None = None,
     ) -> dict:
         """生成事务变更提案，但不执行写入。action 只能为 create、update 或 delete。"""
@@ -56,6 +58,33 @@ def build_tools(store: CampusStore) -> list[BaseTool]:
             end_at=end_at,
             reminder_minutes=reminder_minutes,
             reason=reason,
+            payload={"location": location} if location else {},
+        )
+        return proposal.model_dump(mode="json")
+
+    @tool
+    def propose_plan(
+        title: str,
+        summary: str,
+        milestones: list[dict[str, Any]],
+        target_date: str | None = None,
+        reason: str | None = None,
+    ) -> dict:
+        """生成目标计划提案但不写入。
+
+        milestones 每项含 title、due_at 和 tasks；tasks 可含时间、提醒与地点。
+        """
+        if not title.strip():
+            raise ValueError("title is required")
+        if not milestones:
+            raise ValueError("at least one milestone is required")
+        proposal = store.create_plan_proposal(
+            user_id=CURRENT_USER_ID.get(),
+            title=title,
+            summary=summary,
+            target_date=target_date,
+            milestones=milestones,
+            reason=reason,
         )
         return proposal.model_dump(mode="json")
 
@@ -65,4 +94,5 @@ def build_tools(store: CampusStore) -> list[BaseTool]:
         search_campus_notices,
         find_campus_places,
         propose_task_change,
+        propose_plan,
     ]

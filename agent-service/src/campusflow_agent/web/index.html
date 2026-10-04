@@ -212,8 +212,30 @@
           </section>
 
           <section class="app-surface plans-surface" data-app-surface="plans" hidden>
-            <div class="surface-heading"><div><span>PLANS / EXECUTION</span><h1>规划与行动</h1></div><p>所有由 Agent 生成并经你确认的事务都会汇聚在这里。</p></div>
-            <div class="plan-board"><section><span>ACTIVE TASKS</span><h2>已确认事务</h2><div class="plan-list" id="planList"></div></section><aside><div class="phase-stamp">PHASE 03</div><h2>从目标到提醒</h2><p>下一阶段将加入里程碑拆解、冲突检测、待办和系统闹钟。当前版本先展示 Agent 已确认的事务。</p><button class="primary-action" type="button" data-open-agent data-prompt="帮我把本周学习目标拆成可执行计划，并先生成待确认事务。"><span>用 Agent 创建规划</span><i>↗</i></button></aside></div>
+            <div class="surface-heading"><div><span>PLANS / EXECUTION</span><h1>规划与行动</h1></div><p>把长期目标拆成里程碑和今天可完成的时间块，每一步都可追踪。</p></div>
+            <div class="planning-stats">
+              <article><span>整体进度</span><strong id="planProgress">0%</strong><i><b id="planProgressBar"></b></i></article>
+              <article><span>全部待办</span><strong id="planTaskCount">0</strong><small>个执行项</small></article>
+              <article><span>今日到期</span><strong id="planDueToday">0</strong><small>需要关注</small></article>
+              <article><span>已完成</span><strong id="planCompleted">0</strong><small>持续积累</small></article>
+            </div>
+            <div class="plan-board">
+              <section class="task-center">
+                <div class="plan-section-head"><div><span>ACTIVE TASKS</span><h2>执行清单</h2></div><div class="task-filters"><button class="active" type="button" data-task-filter="all">全部</button><button type="button" data-task-filter="pending">进行中</button><button type="button" data-task-filter="completed">已完成</button></div></div>
+                <form class="quick-task-form" id="quickTaskForm">
+                  <input id="quickTaskTitle" maxlength="120" placeholder="快速添加一个待办…" required />
+                  <input id="quickTaskTime" type="datetime-local" aria-label="开始时间" />
+                  <select id="quickTaskReminder" aria-label="提醒时间"><option value="">不提醒</option><option value="10">提前 10 分钟</option><option value="30">提前 30 分钟</option><option value="60">提前 1 小时</option></select>
+                  <button type="submit">添加</button>
+                </form>
+                <div class="plan-list" id="planList"></div>
+              </section>
+              <aside class="goal-stack-panel">
+                <div class="phase-stamp">GOALS</div><h2>目标与里程碑</h2><p>让 Agent 结合课表检查冲突，并生成需要你确认的完整计划。</p>
+                <div class="goal-list" id="planGoals"></div>
+                <button class="primary-action" type="button" data-open-agent data-prompt="请结合我的课表，把本周学习目标拆成包含里程碑、时间块和提醒的完整计划，并先生成待确认提案。"><span>用 Agent 制定计划</span><i>↗</i></button>
+              </aside>
+            </div>
           </section>
 
           <section class="app-surface skills-surface" data-app-surface="skills" hidden>

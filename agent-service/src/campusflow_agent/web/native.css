@@ -284,6 +284,21 @@ button { -webkit-tap-highlight-color: transparent; }
 /* Plans, skills and settings */
 .surface-heading { padding-bottom: 23px; border-bottom: 1px solid var(--ink); }
 .surface-heading > div > span, .settings-heading span { color: var(--blue); }
+.planning-stats {
+  margin-top: 24px;
+  display: grid;
+  grid-template-columns: 1.4fr repeat(3, 1fr);
+  border: 1px solid var(--line);
+  background: #fff;
+}
+.planning-stats article { min-height: 104px; padding: 19px 21px; border-right: 1px solid var(--line); }
+.planning-stats article:last-child { border-right: 0; }
+.planning-stats span, .planning-stats small { display: block; color: var(--muted); font-size: 8px; letter-spacing: .08em; }
+.planning-stats strong { display: block; margin-top: 11px; font-size: 28px; line-height: 1; }
+.planning-stats article:first-child { display: grid; grid-template-columns: 1fr auto; align-items: start; }
+.planning-stats article:first-child strong { grid-column: 2; grid-row: 1; margin: 0; color: var(--blue); }
+.planning-stats article > i { grid-column: 1 / -1; height: 4px; margin-top: 18px; overflow: hidden; background: #edf0f5; }
+.planning-stats article > i b { display: block; width: 0; height: 100%; background: var(--blue); transition: width .35s ease; }
 .plan-board { gap: 1px; background: var(--line); }
 .plan-board > section, .plan-board > aside, .skill-grid article {
   border: 0;
@@ -292,7 +307,41 @@ button { -webkit-tap-highlight-color: transparent; }
   box-shadow: none;
 }
 .plan-board > aside { background: var(--blue); color: #fff; }
-.plan-list article { border-radius: 0; }
+.plan-section-head { display: flex; justify-content: space-between; align-items: end; gap: 16px; }
+.plan-section-head h2 { margin-bottom: 0; }
+.task-filters { display: flex; gap: 3px; padding: 3px; background: #f0f2f6; }
+.task-filters button { padding: 7px 9px; border: 0; background: transparent; color: var(--muted); cursor: pointer; font-size: 8px; }
+.task-filters button.active { background: #fff; color: var(--blue); }
+.quick-task-form { margin: 20px 0 14px; display: grid; grid-template-columns: minmax(150px,1fr) 165px 120px auto; border: 1px solid var(--line); }
+.quick-task-form input, .quick-task-form select { min-width: 0; padding: 11px; border: 0; border-right: 1px solid var(--line); outline: 0; background: #fff; color: var(--ink); font-size: 9px; }
+.quick-task-form input:focus, .quick-task-form select:focus { background: var(--blue-soft); }
+.quick-task-form button { padding: 10px 15px; border: 0; background: var(--blue); color: #fff; cursor: pointer; font-size: 9px; font-weight: 700; }
+.quick-task-form button:disabled { opacity: .45; }
+.plan-list { gap: 0; border-top: 1px solid var(--line); }
+.plan-list article.task-item { min-height: 62px; padding: 12px 0; display: grid; grid-template-columns: 32px 1fr auto; gap: 10px; align-items: center; border: 0; border-bottom: 1px solid var(--line); background: transparent; }
+.task-check { width: 24px; height: 24px; border: 1px solid #cbd0da; border-radius: 50%; background: #fff; color: #fff; cursor: pointer; }
+.task-item.completed .task-check { border-color: var(--blue); background: var(--blue); }
+.task-item b, .task-item span { display: block; }
+.task-item b { font-size: 11px; font-weight: 650; }
+.task-item span { margin-top: 4px; color: var(--muted); font-size: 8px; }
+.task-item.completed b { color: #9298a3; text-decoration: line-through; }
+.task-remove { padding: 7px; border: 0; background: transparent; color: #a1a6b0; cursor: pointer; font-size: 8px; opacity: 0; transition: opacity .18s ease, color .18s ease; }
+.task-item:hover .task-remove, .task-remove:focus { opacity: 1; }
+.task-remove:hover { color: #d94f35; }
+.plan-empty { background: transparent; }
+.goal-stack-panel > p { color: rgba(255,255,255,.67); }
+.goal-list { margin: 18px 0 8px; display: grid; gap: 9px; }
+.goal-empty { padding: 18px 0; border-top: 1px solid rgba(255,255,255,.22); color: rgba(255,255,255,.72); font-size: 9px; line-height: 1.7; }
+.goal-empty b, .goal-empty span { display: block; }
+.goal-card { padding: 14px; background: rgba(255,255,255,.12); }
+.goal-card > div { display: flex; justify-content: space-between; gap: 12px; }
+.goal-card b { font-size: 11px; }
+.goal-card strong { font-size: 11px; }
+.goal-card p { margin: 7px 0 10px; color: rgba(255,255,255,.65); font-size: 8px; line-height: 1.5; }
+.goal-card > i { display: block; height: 3px; background: rgba(255,255,255,.2); }
+.goal-card > i span { display: block; height: 100%; background: #fff; }
+.goal-card ul { margin: 10px 0 0; padding: 0; list-style: none; color: rgba(255,255,255,.78); font-size: 8px; line-height: 1.8; }
+.goal-stack-panel .primary-action { margin-top: 18px; background: #fff; color: var(--blue); }
 .skill-grid { gap: 1px; background: var(--line); }
 .skill-grid article { transition: background .18s ease; }
 .skill-grid article:nth-child(2) { background: var(--blue-soft); }
@@ -432,6 +481,16 @@ button { -webkit-tap-highlight-color: transparent; }
   .composer { margin: 0 10px 10px; }
   .trace-list { grid-template-columns: 1fr; }
   .surface-heading { grid-template-columns: 1fr; gap: 12px; }
+  .planning-stats { grid-template-columns: 1fr 1fr; }
+  .planning-stats article { min-height: 90px; border-bottom: 1px solid var(--line); }
+  .planning-stats article:nth-child(2) { border-right: 0; }
+  .quick-task-form { grid-template-columns: 1fr auto; }
+  .quick-task-form input:first-child { grid-column: 1 / -1; border-right: 0; border-bottom: 1px solid var(--line); }
+  .quick-task-form select { display: none; }
+  .plan-section-head { display: block; }
+  .task-filters { margin-top: 14px; }
+  .task-filters button { flex: 1; }
+  .task-remove { opacity: 1; }
   .plan-board, .skill-grid { grid-template-columns: 1fr; gap: 1px; }
   .history-drawer { top: auto; right: 0; bottom: 0; left: 0; width: 100%; max-height: 88dvh; padding: 24px 18px 82px; border: 0; border-top: 1px solid var(--line); border-radius: 18px 18px 0 0; animation-name: native-sheet-up; }
   .settings-topbar { position: sticky; top: 0; z-index: 10; height: 58px; grid-template-columns: 1fr auto; }

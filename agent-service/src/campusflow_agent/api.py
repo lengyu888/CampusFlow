@@ -36,9 +36,13 @@ from .schemas import (
     LoginRequest,
     OnboardingRequest,
     OnboardingResponse,
+    PlanningOverview,
+    PlanningTask,
     RegisterRequest,
     SessionRenameRequest,
     SessionSummary,
+    TaskCreateRequest,
+    TaskStatusUpdate,
     TimetableParseResult,
     UserContextResponse,
     UserProfile,
@@ -138,14 +142,14 @@ def create_app(
 
     app = FastAPI(
         title="CampusFlow Agent API",
-        version="0.4.0",
+        version="0.5.0",
         description="带账户、首次配置与视觉导入能力的大学规划执行 Agent",
     )
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
         allow_credentials=False,
-        allow_methods=["GET", "POST", "PUT"],
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
         allow_headers=["*"],
     )
     app.state.settings = settings
@@ -352,6 +356,7 @@ def create_app(
                 "search_campus_notices",
                 "find_campus_places",
                 "propose_task_change",
+                "propose_plan",
             ]
         }
 
@@ -418,6 +423,57 @@ def create_app(
     async def tasks(user: CurrentUser) -> dict[str, list[dict]]:
         return {"tasks": store.get_tasks(user.user_id)}
 
+    @app.get("/api/v1/planning", response_model=PlanningOverview)
+    async def planning(user: CurrentUser) -> PlanningOverview:
+        load_user_context(user)
+        return store.planning_overview(user.user_id)
+
+    @app.post("/api/v1/tasks", response_model=PlanningTask, status_code=201)
+    async def create_task(payload: TaskCreateRequest, user: CurrentUser) -> PlanningTask:
+        load_user_context(user)
+        conflicts = store.find_conflicts(
+            user.user_id,
+            start_at=payload.start_at,
+            end_at=payload.end_at,
+            location=payload.location,
+        )
+        if conflicts:
+            raise HTTPException(
+                status_code=409,
+                detail={"message": "待办与现有安排冲突。", "conflicts": conflicts},
+            )
+        try:
+            return store.create_task(
+                user.user_id,
+                title=payload.title,
+                start_at=payload.start_at,
+                end_at=payload.end_at,
+                reminder_minutes=payload.reminder_minutes,
+                location=payload.location,
+                source="manual",
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    @app.patch("/api/v1/tasks/{task_id}", response_model=PlanningTask)
+    async def update_task(
+        task_id: str,
+        payload: TaskStatusUpdate,
+        user: CurrentUser,
+    ) -> PlanningTask:
+        try:
+            return store.update_task_status(user.user_id, task_id, payload.completed)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="待办不存在。") from exc
+
+    @app.delete("/api/v1/tasks/{task_id}", status_code=204)
+    async def delete_task(task_id: str, user: CurrentUser) -> Response:
+        try:
+            store.delete_task(user.user_id, task_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="待办不存在。") from exc
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+
     @app.post(
         "/api/v1/actions/{proposal_id}/confirm",
         response_model=ConfirmActionResponse,
@@ -432,7 +488,11 @@ def create_app(
         return ConfirmActionResponse(
             action=action,
             applied=True,
-            message="事务变更已确认并写入演示存储。",
+            message=(
+                "计划已确认并写入执行中心。"
+                if action.kind == "plan"
+                else "待办已确认并写入执行中心。"
+            ),
         )
 
     return app

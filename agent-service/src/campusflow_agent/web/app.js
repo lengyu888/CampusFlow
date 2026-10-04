@@ -67,6 +67,16 @@ const elements = {
   todayHistoryCount: $("#todayHistoryCount"),
   todaySuggestion: $("#todaySuggestion"),
   planList: $("#planList"),
+  planGoals: $("#planGoals"),
+  planProgress: $("#planProgress"),
+  planProgressBar: $("#planProgressBar"),
+  planTaskCount: $("#planTaskCount"),
+  planDueToday: $("#planDueToday"),
+  planCompleted: $("#planCompleted"),
+  quickTaskForm: $("#quickTaskForm"),
+  quickTaskTitle: $("#quickTaskTitle"),
+  quickTaskTime: $("#quickTaskTime"),
+  quickTaskReminder: $("#quickTaskReminder"),
   settingsBackButton: $("#settingsBackButton"),
   settingsInitial: $("#settingsInitial"),
   settingsName: $("#settingsName"),
@@ -104,6 +114,8 @@ const state = {
   settingsContext: null,
   appTab: "today",
   sessions: [],
+  planning: null,
+  taskFilter: "all",
 };
 
 function createSessionId() {
@@ -116,6 +128,10 @@ async function responseError(response) {
     const payload = await response.json();
     if (Array.isArray(payload.detail)) {
       return payload.detail.map((item) => item.msg).join("；");
+    }
+    if (payload.detail && typeof payload.detail === "object") {
+      const conflicts = payload.detail.conflicts?.join("；");
+      return conflicts || payload.detail.message || `请求失败（${response.status}）`;
     }
     return payload.detail || `请求失败（${response.status}）`;
   } catch {
@@ -527,20 +543,152 @@ async function loadTodayDashboard() {
 }
 
 async function loadPlans() {
-  elements.planList.innerHTML = '<div class="plan-empty">正在读取已确认事务…</div>';
+  elements.planList.innerHTML = '<div class="plan-empty">正在读取执行计划…</div>';
+  elements.planGoals.innerHTML = '<div class="goal-empty">正在载入目标…</div>';
   try {
-    const payload = await api("/api/v1/tasks");
-    elements.planList.replaceChildren();
-    if (!payload.tasks.length) {
-      elements.planList.innerHTML = '<div class="plan-empty"><b>还没有已确认事务</b><span>让 Agent 创建提案，并在执行轨迹中确认后会出现在这里。</span></div>';
-      return;
-    }
-    payload.tasks.forEach((task) => {
-      const item = contextListItem(task.title, task.start_at ? new Date(task.start_at).toLocaleString("zh-CN") : "未指定时间");
-      elements.planList.append(item);
+    const payload = await api("/api/v1/planning");
+    state.planning = payload;
+    elements.planProgress.textContent = `${payload.progress}%`;
+    elements.planProgressBar.style.width = `${payload.progress}%`;
+    elements.planTaskCount.textContent = payload.total_tasks;
+    elements.planDueToday.textContent = payload.due_today;
+    elements.planCompleted.textContent = payload.completed_tasks;
+    renderPlanningTasks();
+    renderPlanGoals(payload.plans);
+  } catch (error) {
+    elements.planList.innerHTML = '<div class="plan-empty">读取失败，请稍后重试。</div>';
+    elements.planGoals.innerHTML = '<div class="goal-empty">目标载入失败</div>';
+    showToast(error.message, "error");
+  }
+}
+
+function taskTimeLabel(task) {
+  if (!task.start_at) return "暂未安排时间";
+  const start = new Date(task.start_at);
+  const day = start.toLocaleDateString("zh-CN", { month: "numeric", day: "numeric", weekday: "short" });
+  const time = start.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
+  const reminder = task.reminder_minutes != null ? ` · 提前 ${task.reminder_minutes} 分钟提醒` : "";
+  return `${day} ${time}${reminder}`;
+}
+
+function renderPlanningTasks() {
+  const tasks = state.planning?.tasks ?? [];
+  const filtered = tasks.filter((task) => state.taskFilter === "all" || task.status === state.taskFilter);
+  elements.planList.replaceChildren();
+  if (!filtered.length) {
+    elements.planList.innerHTML = '<div class="plan-empty"><b>当前筛选下没有待办</b><span>可以快速添加，或让 Agent 根据目标生成完整计划。</span></div>';
+    return;
+  }
+  filtered.forEach((task) => {
+    const item = document.createElement("article");
+    item.className = `task-item ${task.status}`;
+    const check = document.createElement("button");
+    check.type = "button";
+    check.className = "task-check";
+    check.setAttribute("aria-label", task.status === "completed" ? "恢复待办" : "完成待办");
+    check.textContent = task.status === "completed" ? "✓" : "";
+    check.addEventListener("click", () => setTaskCompleted(task, task.status !== "completed", check));
+    const content = document.createElement("div");
+    const title = document.createElement("b");
+    title.textContent = task.title;
+    const meta = document.createElement("span");
+    meta.textContent = `${taskTimeLabel(task)}${task.location ? ` · ${task.location}` : ""}`;
+    content.append(title, meta);
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "task-remove";
+    remove.textContent = "删除";
+    remove.addEventListener("click", () => removeTask(task, remove));
+    item.append(check, content, remove);
+    elements.planList.append(item);
+  });
+}
+
+function renderPlanGoals(plans) {
+  elements.planGoals.replaceChildren();
+  if (!plans.length) {
+    elements.planGoals.innerHTML = '<div class="goal-empty"><b>还没有长期目标</b><span>让 Agent 创建包含里程碑和时间块的计划。</span></div>';
+    return;
+  }
+  plans.forEach((plan) => {
+    const card = document.createElement("article");
+    card.className = "goal-card";
+    const heading = document.createElement("div");
+    const title = document.createElement("b");
+    title.textContent = plan.title;
+    const progress = document.createElement("strong");
+    progress.textContent = `${plan.progress}%`;
+    heading.append(title, progress);
+    const summary = document.createElement("p");
+    summary.textContent = plan.summary || `${plan.completed_count}/${plan.task_count} 个执行项已完成`;
+    const bar = document.createElement("i");
+    const fill = document.createElement("span");
+    fill.style.width = `${plan.progress}%`;
+    bar.append(fill);
+    const milestones = document.createElement("ul");
+    plan.milestones.forEach((milestone) => {
+      const row = document.createElement("li");
+      row.textContent = `${milestone.completed_count === milestone.task_count && milestone.task_count ? "✓" : "○"} ${milestone.title}`;
+      milestones.append(row);
     });
+    card.append(heading, summary, bar, milestones);
+    elements.planGoals.append(card);
+  });
+}
+
+async function setTaskCompleted(task, completed, button) {
+  button.disabled = true;
+  try {
+    await api(`/api/v1/tasks/${encodeURIComponent(task.task_id)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ completed }),
+    });
+    await loadPlans();
+    showToast(completed ? "待办已完成" : "待办已恢复");
+  } catch (error) {
+    button.disabled = false;
+    showToast(error.message, "error");
+  }
+}
+
+async function removeTask(task, button) {
+  button.disabled = true;
+  try {
+    await api(`/api/v1/tasks/${encodeURIComponent(task.task_id)}`, { method: "DELETE" });
+    await loadPlans();
+    showToast("待办已删除");
+  } catch (error) {
+    button.disabled = false;
+    showToast(error.message, "error");
+  }
+}
+
+async function createQuickTask(event) {
+  event.preventDefault();
+  const title = elements.quickTaskTitle.value.trim();
+  if (!title) return;
+  const button = elements.quickTaskForm.querySelector('button[type="submit"]');
+  button.disabled = true;
+  try {
+    const time = elements.quickTaskTime.value;
+    await api("/api/v1/tasks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title,
+        start_at: time || null,
+        end_at: null,
+        reminder_minutes: elements.quickTaskReminder.value ? Number(elements.quickTaskReminder.value) : null,
+      }),
+    });
+    elements.quickTaskForm.reset();
+    await loadPlans();
+    showToast("待办已添加");
   } catch (error) {
     showToast(error.message, "error");
+  } finally {
+    button.disabled = false;
   }
 }
 
@@ -628,10 +776,17 @@ function renderToolTrace(trace) {
 
 function actionDescription(action) {
   const lines = [];
+  if (action.kind === "plan") {
+    const milestones = action.payload?.milestones ?? [];
+    const taskCount = milestones.reduce((total, milestone) => total + (milestone.tasks?.length ?? 0), 0);
+    lines.push(`${milestones.length} 个里程碑 · ${taskCount} 个执行项`);
+    if (action.payload?.target_date) lines.push(`目标日期：${action.payload.target_date}`);
+  }
   if (action.start_at) lines.push(`开始：${new Date(action.start_at).toLocaleString("zh-CN")}`);
   if (action.end_at) lines.push(`结束：${new Date(action.end_at).toLocaleString("zh-CN")}`);
   if (action.reminder_minutes != null) lines.push(`提醒：提前 ${action.reminder_minutes} 分钟`);
   if (action.reason) lines.push(`原因：${action.reason}`);
+  if (action.conflicts?.length) lines.push(`⚠ ${action.conflicts.join("；")}`);
   return lines.join("\n") || "确认后写入演示事务存储。";
 }
 
@@ -641,7 +796,7 @@ function renderPendingAction(action) {
   card.className = "action-card";
   const label = document.createElement("div");
   label.className = "action-label";
-  label.textContent = `PENDING / ${action.action.toUpperCase()}`;
+  label.textContent = `PENDING / ${action.kind === "plan" ? "PLAN" : action.action.toUpperCase()}`;
   const title = document.createElement("h3");
   title.textContent = action.title;
   const description = document.createElement("p");
@@ -663,6 +818,7 @@ async function confirmAction(proposalId, card, button, label) {
     label.textContent = "CONFIRMED / 已写入";
     button.textContent = "已确认";
     showToast(payload.message || "操作已确认");
+    await loadPlans();
   } catch (error) {
     button.disabled = false;
     button.textContent = "重新确认";
@@ -1053,6 +1209,12 @@ elements.historySearch.addEventListener("input", () => {
   elements.historySearch.searchTimer = setTimeout(() => loadHistory(elements.historySearch.value.trim()), 180);
 });
 elements.settingsForm.addEventListener("submit", saveSettings);
+elements.quickTaskForm.addEventListener("submit", createQuickTask);
+$$('[data-task-filter]').forEach((button) => button.addEventListener("click", () => {
+  state.taskFilter = button.dataset.taskFilter;
+  $$('[data-task-filter]').forEach((item) => item.classList.toggle("active", item === button));
+  renderPlanningTasks();
+}));
 elements.editOnboardingButton.addEventListener("click", editLearningData);
 $$('[data-settings-tab]').forEach((button) => button.addEventListener("click", () => switchSettingsTab(button.dataset.settingsTab)));
 elements.setupBackButton.addEventListener("click", () => { if (state.setupStep > 1) { state.setupStep -= 1; renderSetupStep(); } });
