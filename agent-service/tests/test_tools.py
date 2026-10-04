@@ -166,3 +166,19 @@ def test_plan_proposal_creates_milestones_tasks_and_reports_conflict() -> None:
     assert overview.plans[0].title == "操作系统复习周"
     assert overview.plans[0].milestones[0].task_count == 2
     assert overview.total_tasks == 2
+
+
+def test_plan_tool_exposes_typed_nested_task_schema() -> None:
+    schema = tool_map(CampusStore())["propose_plan"].args_schema.model_json_schema()
+    milestone_ref = schema["properties"]["milestones"]["items"]["$ref"]
+    milestone_schema = schema["$defs"][milestone_ref.rsplit("/", 1)[-1]]
+    task_ref = milestone_schema["properties"]["tasks"]["items"]["$ref"]
+    task_schema = schema["$defs"][task_ref.rsplit("/", 1)[-1]]
+
+    assert set(task_schema["properties"]) >= {
+        "title",
+        "start_at",
+        "end_at",
+        "reminder_minutes",
+        "location",
+    }

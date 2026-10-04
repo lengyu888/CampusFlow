@@ -165,7 +165,9 @@ class AgentService:
                     )
                     calls[item.tool_call_id] = trace
                 trace.result = result
-                if trace.tool_name == "propose_task_change" and isinstance(result, dict):
+                if trace.tool_name in {"propose_task_change", "propose_plan"} and isinstance(
+                    result, dict
+                ):
                     try:
                         pending.append(PendingAction.model_validate(result))
                     except ValueError:

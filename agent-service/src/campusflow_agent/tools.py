@@ -2,13 +2,44 @@ from __future__ import annotations
 
 from contextvars import ContextVar
 from datetime import datetime
-from typing import Any
 
 from langchain_core.tools import BaseTool, tool
+from pydantic import BaseModel, Field
 
 from .store import CampusStore
 
 CURRENT_USER_ID: ContextVar[str] = ContextVar("campusflow_user_id", default="demo-student")
+
+
+class PlanTaskInput(BaseModel):
+    title: str = Field(description="待办标题")
+    start_at: datetime | None = Field(
+        default=None,
+        description="开始时间，ISO 8601 格式，例如 2026-10-05T10:00:00+08:00",
+    )
+    end_at: datetime | None = Field(
+        default=None,
+        description="结束时间，ISO 8601 格式，例如 2026-10-05T11:30:00+08:00",
+    )
+    reminder_minutes: int | None = Field(
+        default=None,
+        ge=0,
+        le=10080,
+        description="提前提醒的分钟数，例如提前 10 分钟填写 10",
+    )
+    location: str | None = Field(default=None, description="执行地点")
+
+
+class PlanMilestoneInput(BaseModel):
+    title: str = Field(description="里程碑标题")
+    due_at: datetime | None = Field(
+        default=None,
+        description="里程碑截止时间，ISO 8601 格式",
+    )
+    tasks: list[PlanTaskInput] = Field(
+        default_factory=list,
+        description="该里程碑下的待办列表",
+    )
 
 
 def build_tools(
@@ -69,13 +100,14 @@ def build_tools(
     def propose_plan(
         title: str,
         summary: str,
-        milestones: list[dict[str, Any]],
+        milestones: list[PlanMilestoneInput],
         target_date: str | None = None,
         reason: str | None = None,
     ) -> dict:
         """生成目标计划提案但不写入。
 
-        milestones 每项含 title、due_at 和 tasks；tasks 可含时间、提醒与地点。
+        每个任务必须使用 start_at、end_at、reminder_minutes 和 location 字段；
+        reminder_minutes 是提前提醒分钟数，不是提醒时间。
         """
         if not title.strip():
             raise ValueError("title is required")
@@ -86,7 +118,7 @@ def build_tools(
             title=title,
             summary=summary,
             target_date=target_date,
-            milestones=milestones,
+            milestones=[item.model_dump(mode="json") for item in milestones],
             reason=reason,
         )
         return proposal.model_dump(mode="json")
