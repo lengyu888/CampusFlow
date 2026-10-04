@@ -22,6 +22,10 @@ const elements = {
   timetableReview: $("#timetableReview"),
   timetableSummary: $("#timetableSummary"),
   timetableTable: $("#timetableTable"),
+  setupSubscriptionForm: $("#setupSubscriptionForm"),
+  setupSubscriptionUrl: $("#setupSubscriptionUrl"),
+  setupSubscriptionButton: $("#setupSubscriptionButton"),
+  setupSubscriptionStatus: $("#setupSubscriptionStatus"),
   mapFile: $("#mapFile"),
   mapPreview: $("#mapPreview"),
   parseMapButton: $("#parseMapButton"),
@@ -117,6 +121,11 @@ const elements = {
   settingsSemesterCard: $("#settingsSemesterCard"),
   settingsCourseList: $("#settingsCourseList"),
   settingsPlaceList: $("#settingsPlaceList"),
+  scheduleSubscriptionForm: $("#scheduleSubscriptionForm"),
+  scheduleSubscriptionUrl: $("#scheduleSubscriptionUrl"),
+  scheduleSubscriptionState: $("#scheduleSubscriptionState"),
+  syncSubscriptionButton: $("#syncSubscriptionButton"),
+  disconnectSubscriptionButton: $("#disconnectSubscriptionButton"),
   editOnboardingButton: $("#editOnboardingButton"),
   adminUserCount: $("#adminUserCount"),
   adminUserRows: $("#adminUserRows"),
@@ -140,6 +149,8 @@ const state = {
   taskFilter: "all",
   skills: [],
   selectedSkill: null,
+  scheduleSubscriptionUrl: "",
+  scheduleSubscription: null,
 };
 
 function createSessionId() {
@@ -239,6 +250,10 @@ async function logout() {
   state.campusMap = null;
   state.timetableImage = "";
   state.mapImage = "";
+  state.scheduleSubscriptionUrl = "";
+  state.scheduleSubscription = null;
+  elements.setupSubscriptionForm.reset();
+  elements.scheduleSubscriptionForm.reset();
   elements.settingsApiKey.value = "";
   resetSession(false);
   state.appTab = "today";
@@ -389,6 +404,38 @@ async function parseImage(kind) {
   }
 }
 
+async function previewScheduleSubscription(event) {
+  event.preventDefault();
+  const url = elements.setupSubscriptionUrl.value.trim();
+  if (!url) return;
+  setButtonBusy(elements.setupSubscriptionButton, true, "正在读取…");
+  elements.setupSubscriptionStatus.textContent = "正在安全读取 HDUHelp iCalendar…";
+  elements.setupSubscriptionStatus.className = "working";
+  try {
+    const payload = await api("/api/v1/schedule-subscriptions/preview", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url }),
+    });
+    state.scheduleSubscriptionUrl = url;
+    state.timetable = {
+      entries: payload.entries,
+      warnings: payload.warnings,
+    };
+    elements.setupSubscriptionUrl.value = "";
+    renderTimetable();
+    elements.setupSubscriptionStatus.textContent = `已读取 ${payload.event_count} 条课程，完成首次配置后将加密保存订阅。`;
+    elements.setupSubscriptionStatus.className = "success";
+    showToast(`已读取 ${payload.calendar_name}`);
+  } catch (error) {
+    elements.setupSubscriptionStatus.textContent = error.message;
+    elements.setupSubscriptionStatus.className = "error";
+    showToast(error.message, "error");
+  } finally {
+    setButtonBusy(elements.setupSubscriptionButton, false, "");
+  }
+}
+
 function courseInput(entry, field, type = "text") {
   const input = document.createElement("input");
   input.type = type;
@@ -471,7 +518,24 @@ async function completeOnboarding() {
     });
     state.user = payload.user;
     state.settingsContext = { timetable: state.timetable.entries, campus_map: state.campusMap };
-    showToast(`已连接 ${payload.timetable_count} 条课程和 ${payload.campus_place_count} 个地点`);
+    if (state.scheduleSubscriptionUrl) {
+      try {
+        const synced = await api("/api/v1/schedule-subscriptions", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: state.scheduleSubscriptionUrl }),
+        });
+        state.settingsContext = await api("/api/v1/me/context");
+        state.scheduleSubscription = synced.status;
+        showToast(`订阅已连接，共同步 ${synced.imported_count} 条课程`);
+      } catch (error) {
+        showToast(`基础资料已保存，但订阅连接失败：${error.message}`, "error");
+      } finally {
+        state.scheduleSubscriptionUrl = "";
+      }
+    } else {
+      showToast(`已连接 ${payload.timetable_count} 条课程和 ${payload.campus_place_count} 个地点`);
+    }
     showApp();
   } finally {
     setButtonBusy(elements.setupNextButton, false, "");
@@ -1345,7 +1409,85 @@ function contextListItem(primary, secondary) {
   return item;
 }
 
-async function loadSettingsContext(force = false) {
+function renderScheduleSubscriptionStatus(status) {
+  state.scheduleSubscription = status;
+  elements.syncSubscriptionButton.hidden = !status.configured;
+  elements.disconnectSubscriptionButton.hidden = !status.configured;
+  if (!status.configured) {
+    elements.scheduleSubscriptionState.textContent = "连接订阅后，可随时从 HDUHelp 拉取最新课程。完整链接只会加密保存。";
+    return;
+  }
+  const syncedAt = status.last_synced_at
+    ? new Date(status.last_synced_at).toLocaleString("zh-CN", {
+        month: "numeric",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : "尚未同步";
+  elements.scheduleSubscriptionState.textContent = `已安全连接 ${status.source_host} · ${status.event_count} 条课程 · 最近同步 ${syncedAt}`;
+}
+
+async function loadScheduleSubscriptionStatus() {
+  try {
+    renderScheduleSubscriptionStatus(await api("/api/v1/schedule-subscriptions"));
+  } catch (error) {
+    showToast(error.message, "error");
+  }
+}
+
+async function saveScheduleSubscription(event) {
+  event.preventDefault();
+  const url = elements.scheduleSubscriptionUrl.value.trim();
+  if (!url) return;
+  const button = elements.scheduleSubscriptionForm.querySelector('button[type="submit"]');
+  setButtonBusy(button, true, "正在连接…");
+  try {
+    const payload = await api("/api/v1/schedule-subscriptions", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url }),
+    });
+    elements.scheduleSubscriptionForm.reset();
+    renderScheduleSubscriptionStatus(payload.status);
+    await loadSettingsContext(true, false);
+    showToast(`课表订阅已连接，共同步 ${payload.imported_count} 条课程`);
+  } catch (error) {
+    showToast(error.message, "error");
+  } finally {
+    setButtonBusy(button, false, "");
+  }
+}
+
+async function syncScheduleSubscription() {
+  elements.syncSubscriptionButton.disabled = true;
+  try {
+    const payload = await api("/api/v1/schedule-subscriptions/sync", { method: "POST" });
+    renderScheduleSubscriptionStatus(payload.status);
+    await loadSettingsContext(true, false);
+    showToast(`同步完成，已更新 ${payload.imported_count} 条课程`);
+  } catch (error) {
+    showToast(error.message, "error");
+  } finally {
+    elements.syncSubscriptionButton.disabled = false;
+  }
+}
+
+async function disconnectScheduleSubscription() {
+  if (!globalThis.confirm("确定断开课表订阅吗？已导入的课程会保留。")) return;
+  elements.disconnectSubscriptionButton.disabled = true;
+  try {
+    await api("/api/v1/schedule-subscriptions", { method: "DELETE" });
+    renderScheduleSubscriptionStatus({ configured: false });
+    showToast("课表订阅已断开，当前课程数据已保留");
+  } catch (error) {
+    showToast(error.message, "error");
+  } finally {
+    elements.disconnectSubscriptionButton.disabled = false;
+  }
+}
+
+async function loadSettingsContext(force = false, loadSubscription = true) {
   if (!state.settingsContext || force) {
     try {
       state.settingsContext = await api("/api/v1/me/context");
@@ -1375,6 +1517,7 @@ async function loadSettingsContext(force = false) {
   });
   if (!courses.length) elements.settingsCourseList.append(contextListItem("暂无课表", "请重新配置学习数据"));
   if (!places.length) elements.settingsPlaceList.append(contextListItem("暂无地点", "请重新配置校园地图"));
+  if (loadSubscription) await loadScheduleSubscriptionStatus();
 }
 
 function adminStatus(text, kind) {
@@ -1491,6 +1634,10 @@ elements.historySearch.addEventListener("input", () => {
   elements.historySearch.searchTimer = setTimeout(() => loadHistory(elements.historySearch.value.trim()), 180);
 });
 elements.settingsForm.addEventListener("submit", saveSettings);
+elements.setupSubscriptionForm.addEventListener("submit", previewScheduleSubscription);
+elements.scheduleSubscriptionForm.addEventListener("submit", saveScheduleSubscription);
+elements.syncSubscriptionButton.addEventListener("click", syncScheduleSubscription);
+elements.disconnectSubscriptionButton.addEventListener("click", disconnectScheduleSubscription);
 elements.quickTaskForm.addEventListener("submit", createQuickTask);
 elements.skillSearch.addEventListener("input", () => {
   clearTimeout(elements.skillSearch.searchTimer);

@@ -10,6 +10,7 @@ from campusflow_agent.config import Settings
 from campusflow_agent.schemas import (
     CampusMapParseResult,
     CampusPlace,
+    ScheduleSubscriptionPreview,
     TimetableEntry,
     TimetableParseResult,
 )
@@ -69,6 +70,32 @@ class FakeVisionService:
         )
 
 
+class FakeScheduleSubscriptionService:
+    async def fetch(self, url: str) -> ScheduleSubscriptionPreview:
+        assert url.startswith("https://neo.hduhelp.com/")
+        return ScheduleSubscriptionPreview(
+            calendar_name="测试订阅课表",
+            event_count=2,
+            entries=[
+                TimetableEntry(
+                    date="2026-10-05",
+                    title="订阅课程 A",
+                    start_time="08:05",
+                    end_time="09:40",
+                    location="第3教研楼315",
+                    teacher="肖老师",
+                ),
+                TimetableEntry(
+                    date="2026-10-06",
+                    title="订阅课程 B",
+                    start_time="13:30",
+                    end_time="15:05",
+                    location="第6教研楼208",
+                ),
+            ],
+        )
+
+
 @pytest_asyncio.fixture
 async def client() -> AsyncIterator[AsyncClient]:
     store = CampusStore()
@@ -79,6 +106,7 @@ async def client() -> AsyncIterator[AsyncClient]:
         agent_service=FakeAgentService(store),  # type: ignore[arg-type]
         account_store=AccountStore(":memory:"),
         vision_service=FakeVisionService(),  # type: ignore[arg-type]
+        schedule_subscription_service=FakeScheduleSubscriptionService(),  # type: ignore[arg-type]
     )
     async with AsyncClient(
         transport=ASGITransport(app=app),

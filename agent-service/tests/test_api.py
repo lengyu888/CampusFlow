@@ -60,6 +60,8 @@ async def test_frontend_is_served(client: AsyncClient) -> None:
     assert "历史会话" in page.text
     assert "校园 Skills" in page.text
     assert "PERMISSIONS / 数据权限" in page.text
+    assert "HDUHELP / ICALENDAR" in page.text
+    assert "课表订阅" in page.text
     assert script.status_code == 200
     assert "fetch(path, options)" in script.text
 
@@ -301,6 +303,52 @@ async def test_official_skill_install_control_and_audit(client: AsyncClient) -> 
     removed = await client.delete("/api/v1/skills/campus-navigator")
     assert removed.status_code == 204
     assert (await client.get("/api/v1/skills/campus-navigator")).json()["installed"] is False
+
+
+async def test_schedule_subscription_preview_save_sync_and_disconnect(
+    client: AsyncClient,
+) -> None:
+    await register(client)
+    subscription = {
+        "url": "https://neo.hduhelp.com/hduhelp-neo/feed/schedule?token=test-token-123456"
+    }
+
+    initial = await client.get("/api/v1/schedule-subscriptions")
+    assert initial.json() == {
+        "configured": False,
+        "provider": None,
+        "source_host": None,
+        "event_count": 0,
+        "last_synced_at": None,
+    }
+
+    preview = await client.post(
+        "/api/v1/schedule-subscriptions/preview",
+        json=subscription,
+    )
+    assert preview.status_code == 200
+    assert preview.json()["event_count"] == 2
+    assert preview.json()["entries"][0]["title"] == "订阅课程 A"
+
+    saved = await client.put("/api/v1/schedule-subscriptions", json=subscription)
+    assert saved.status_code == 200
+    assert saved.json()["status"]["configured"] is True
+    assert saved.json()["status"]["source_host"] == "neo.hduhelp.com"
+    assert "url" not in saved.json()["status"]
+
+    context = await client.get("/api/v1/me/context")
+    assert [item["title"] for item in context.json()["timetable"]] == [
+        "订阅课程 A",
+        "订阅课程 B",
+    ]
+    synced = await client.post("/api/v1/schedule-subscriptions/sync")
+    assert synced.status_code == 200
+    assert synced.json()["imported_count"] == 2
+
+    disconnected = await client.delete("/api/v1/schedule-subscriptions")
+    assert disconnected.status_code == 204
+    assert (await client.get("/api/v1/schedule-subscriptions")).json()["configured"] is False
+    assert len((await client.get("/api/v1/me/context")).json()["timetable"]) == 2
 
 
 async def test_non_admin_cannot_list_users(client: AsyncClient) -> None:

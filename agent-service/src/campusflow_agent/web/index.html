@@ -6,7 +6,7 @@
     <meta name="description" content="CampusFlow 大学规划与执行 Agent" />
     <title>CampusFlow · Campus Operating System</title>
     <link rel="stylesheet" href="/static/styles.css" />
-    <link rel="stylesheet" href="/static/native.css?v=5" />
+    <link rel="stylesheet" href="/static/native.css?v=6" />
   </head>
   <body>
     <div class="grain" aria-hidden="true"></div>
@@ -96,9 +96,16 @@
           </div>
 
           <div class="setup-step" data-setup-step="2" hidden>
-            <div class="step-number">02 / TIMETABLE VISION</div>
-            <h2>上传一张清晰的周课表</h2>
-            <p class="step-lead">Flash 会把课程、教师、教室和时间转为结构化数据；保存前请逐项确认。</p>
+            <div class="step-number">02 / TIMETABLE</div>
+            <h2>连接你的课表</h2>
+            <p class="step-lead">推荐粘贴 HDUHelp 订阅链接自动同步，也可以继续使用图片识别。</p>
+            <form class="setup-subscription-card" id="setupSubscriptionForm">
+              <div><span>HDUHELP / ICALENDAR</span><b>订阅课表</b><small>token 将加密保存，页面和日志不会回显完整链接</small></div>
+              <label>订阅链接<input id="setupSubscriptionUrl" type="password" autocomplete="off" placeholder="https://neo.hduhelp.com/…?token=…" required /></label>
+              <button class="primary-action" id="setupSubscriptionButton" type="submit"><span class="action-label">读取订阅</span><i>↗</i></button>
+              <p id="setupSubscriptionStatus">尚未连接</p>
+            </form>
+            <div class="import-divider"><span>或者使用图片识别</span></div>
             <div class="upload-grid">
               <label class="drop-zone" for="timetableFile">
                 <input id="timetableFile" type="file" accept="image/png,image/jpeg,image/webp,image/gif" />
@@ -320,6 +327,17 @@
 
           <div class="settings-panel" data-settings-panel="data" hidden>
             <div class="settings-heading"><div><span>02 / PERSONAL DATA</span><h1>学习数据</h1></div><p>查看 Agent 当前连接的课表与校园地图数据。</p></div>
+            <section class="subscription-control">
+              <div class="subscription-control-copy"><span>LIVE CALENDAR / HDUHELP</span><h2>课表订阅</h2><p id="scheduleSubscriptionState">连接订阅后，可随时从 HDUHelp 拉取最新课程。完整链接只会加密保存。</p></div>
+              <form id="scheduleSubscriptionForm">
+                <input id="scheduleSubscriptionUrl" type="password" autocomplete="off" placeholder="粘贴 HDUHelp 订阅链接" required />
+                <button class="primary-action" type="submit"><span class="action-label">连接并同步</span><i>↗</i></button>
+              </form>
+              <div class="subscription-actions">
+                <button class="line-button" id="syncSubscriptionButton" type="button" hidden>立即同步</button>
+                <button class="line-button danger" id="disconnectSubscriptionButton" type="button" hidden>断开订阅</button>
+              </div>
+            </section>
             <div class="data-stats"><article><strong id="settingsCourseCount">—</strong><span>课程记录</span></article><article><strong id="settingsPlaceCount">—</strong><span>校园地点</span></article><article><strong id="settingsSemesterCard">—</strong><span>当前学期</span></article></div>
             <div class="data-columns"><section><div class="data-title"><span>COURSES</span><h2>已连接课表</h2></div><div class="context-list" id="settingsCourseList"></div></section><section><div class="data-title"><span>PLACES</span><h2>校园地点样本</h2></div><div class="context-list" id="settingsPlaceList"></div></section></div>
             <button class="line-button data-edit-button" id="editOnboardingButton" type="button">重新配置课表与地图 ↗</button>
@@ -335,6 +353,6 @@
     </section>
 
     <div class="toast" id="toast" role="status"></div>
-    <script src="/static/app.js?v=5" defer></script>
+    <script src="/static/app.js?v=6" defer></script>
   </body>
 </html>

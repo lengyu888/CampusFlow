@@ -210,6 +210,32 @@ class TimetableEntry(BaseModel):
     teacher: str = Field(default="", max_length=80)
 
 
+class ScheduleSubscriptionRequest(BaseModel):
+    url: SecretStr = Field(min_length=1, max_length=2048)
+
+
+class ScheduleSubscriptionPreview(BaseModel):
+    provider: Literal["hduhelp"] = "hduhelp"
+    calendar_name: str
+    event_count: int = Field(ge=0, le=500)
+    entries: list[TimetableEntry] = Field(default_factory=list, max_length=500)
+    warnings: list[str] = Field(default_factory=list, max_length=20)
+
+
+class ScheduleSubscriptionStatus(BaseModel):
+    configured: bool = False
+    provider: Literal["hduhelp"] | None = None
+    source_host: str | None = None
+    event_count: int = 0
+    last_synced_at: datetime | None = None
+
+
+class ScheduleSubscriptionSyncResponse(BaseModel):
+    status: ScheduleSubscriptionStatus
+    imported_count: int
+    warnings: list[str] = Field(default_factory=list)
+
+
 class TimetableParseResult(BaseModel):
     academic_year: str = ""
     semester: str = ""
@@ -242,7 +268,7 @@ class OnboardingRequest(BaseModel):
     school: str = Field(min_length=1, max_length=100)
     campus: str = Field(min_length=1, max_length=100)
     semester: str = Field(min_length=1, max_length=80)
-    timetable: list[TimetableEntry] = Field(default_factory=list, max_length=100)
+    timetable: list[TimetableEntry] = Field(default_factory=list, max_length=500)
     campus_map: CampusMapParseResult
 
 

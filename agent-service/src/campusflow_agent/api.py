@@ -23,6 +23,7 @@ from .accounts import (
 from .agent import AgentConfigurationError, AgentService
 from .config import Settings, get_settings
 from .key_vault import ApiKeyVault
+from .schedule_subscription import ScheduleSubscriptionError, ScheduleSubscriptionService
 from .schemas import (
     AdminUserSummary,
     AuthResponse,
@@ -39,6 +40,10 @@ from .schemas import (
     PlanningOverview,
     PlanningTask,
     RegisterRequest,
+    ScheduleSubscriptionPreview,
+    ScheduleSubscriptionRequest,
+    ScheduleSubscriptionStatus,
+    ScheduleSubscriptionSyncResponse,
     SessionRenameRequest,
     SessionSummary,
     SkillAuditEntry,
@@ -138,6 +143,7 @@ def create_app(
     vision_service: VisionService | None = None,
     api_key_vault: ApiKeyVault | None = None,
     skill_store: SkillStore | None = None,
+    schedule_subscription_service: ScheduleSubscriptionService | None = None,
 ) -> FastAPI:
     settings = settings or get_settings()
     store = store or CampusStore(settings.database_path)
@@ -146,11 +152,14 @@ def create_app(
     agent_service = agent_service or AgentService(settings, store, skill_store)
     vision_service = vision_service or VisionService(settings)
     api_key_vault = api_key_vault or ApiKeyVault(settings)
+    schedule_subscription_service = (
+        schedule_subscription_service or ScheduleSubscriptionService()
+    )
 
     app = FastAPI(
         title="CampusFlow Agent API",
-        version="0.6.0",
-        description="带账户、规划执行与官方 Skills 管理能力的大学规划 Agent",
+        version="0.7.0",
+        description="带课表订阅、规划执行与官方 Skills 管理能力的大学规划 Agent",
     )
     app.add_middleware(
         CORSMiddleware,
@@ -166,6 +175,7 @@ def create_app(
     app.state.vision_service = vision_service
     app.state.api_key_vault = api_key_vault
     app.state.skill_store = skill_store
+    app.state.schedule_subscription_service = schedule_subscription_service
 
     web_dir = Path(__file__).parent / "web"
     app.mount("/static", StaticFiles(directory=web_dir), name="static")
@@ -205,6 +215,22 @@ def create_app(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail=str(exc),
             ) from exc
+
+    def subscription_status(user_id: str) -> ScheduleSubscriptionStatus:
+        saved = account_store.get_schedule_subscription(user_id)
+        if not saved:
+            return ScheduleSubscriptionStatus()
+        return ScheduleSubscriptionStatus(configured=True, **saved)
+
+    def apply_subscribed_timetable(
+        user_id: str,
+        preview: ScheduleSubscriptionPreview,
+    ) -> list[dict]:
+        timetable = [item.model_dump(mode="json") for item in preview.entries]
+        account_store.replace_timetable(user_id, timetable)
+        _, campus_map = account_store.get_context(user_id)
+        store.set_user_context(user_id, timetable=timetable, campus_map=campus_map)
+        return timetable
 
     @app.get("/", include_in_schema=False)
     async def frontend() -> FileResponse:
@@ -283,6 +309,94 @@ def create_app(
     async def user_context(user: CurrentUser) -> UserContextResponse:
         timetable, campus_map = account_store.get_context(user.user_id)
         return UserContextResponse(timetable=timetable, campus_map=campus_map)
+
+    @app.get(
+        "/api/v1/schedule-subscriptions",
+        response_model=ScheduleSubscriptionStatus,
+    )
+    async def get_schedule_subscription(user: CurrentUser) -> ScheduleSubscriptionStatus:
+        return subscription_status(user.user_id)
+
+    @app.post(
+        "/api/v1/schedule-subscriptions/preview",
+        response_model=ScheduleSubscriptionPreview,
+    )
+    async def preview_schedule_subscription(
+        payload: ScheduleSubscriptionRequest,
+        user: CurrentUser,
+    ) -> ScheduleSubscriptionPreview:
+        del user
+        try:
+            return await schedule_subscription_service.fetch(
+                payload.url.get_secret_value()
+            )
+        except ScheduleSubscriptionError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    @app.put(
+        "/api/v1/schedule-subscriptions",
+        response_model=ScheduleSubscriptionSyncResponse,
+    )
+    async def save_schedule_subscription(
+        payload: ScheduleSubscriptionRequest,
+        user: CurrentUser,
+    ) -> ScheduleSubscriptionSyncResponse:
+        raw_url = payload.url.get_secret_value()
+        try:
+            preview = await schedule_subscription_service.fetch(raw_url)
+            timetable = apply_subscribed_timetable(user.user_id, preview)
+            account_store.save_schedule_subscription(
+                user_id=user.user_id,
+                encrypted_url=api_key_vault.encrypt(raw_url),
+                event_count=len(timetable),
+            )
+        except ScheduleSubscriptionError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return ScheduleSubscriptionSyncResponse(
+            status=subscription_status(user.user_id),
+            imported_count=len(timetable),
+            warnings=preview.warnings,
+        )
+
+    @app.post(
+        "/api/v1/schedule-subscriptions/sync",
+        response_model=ScheduleSubscriptionSyncResponse,
+    )
+    async def sync_schedule_subscription(
+        user: CurrentUser,
+    ) -> ScheduleSubscriptionSyncResponse:
+        encrypted = account_store.get_schedule_subscription_secret(user.user_id)
+        if not encrypted:
+            raise HTTPException(status_code=404, detail="尚未配置课表订阅。")
+        try:
+            raw_url = api_key_vault.decrypt(encrypted)
+            preview = await schedule_subscription_service.fetch(raw_url)
+            timetable = apply_subscribed_timetable(user.user_id, preview)
+            account_store.save_schedule_subscription(
+                user_id=user.user_id,
+                encrypted_url=encrypted,
+                event_count=len(timetable),
+            )
+        except ScheduleSubscriptionError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=503,
+                detail="已保存的课表订阅凭据无法解密，请重新连接。",
+            ) from exc
+        return ScheduleSubscriptionSyncResponse(
+            status=subscription_status(user.user_id),
+            imported_count=len(timetable),
+            warnings=preview.warnings,
+        )
+
+    @app.delete("/api/v1/schedule-subscriptions", status_code=204)
+    async def disconnect_schedule_subscription(user: CurrentUser) -> Response:
+        try:
+            account_store.delete_schedule_subscription(user.user_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="尚未配置课表订阅。") from exc
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     @app.get("/api/v1/admin/users", response_model=list[AdminUserSummary])
     async def admin_users(user: CurrentUser) -> list[AdminUserSummary]:

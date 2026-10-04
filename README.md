@@ -13,6 +13,7 @@ CampusFlow 是面向高校学生的跨端 AI Agent。客户端计划采用 ArkUI
 - 不调用真实模型即可运行的单元测试
 - SQLite 账户、登录会话与首次配置状态
 - DeepSeek Flash 课表/校园地图视觉解析与人工确认
+- HDUHelp iCalendar 课表订阅、预览导入与一键同步
 - 将确认后的个人课表和校园地点注入 Agent 工具
 - API Key 注册时加密保存，后续登录免重复配置
 - 用户设置、学习数据视图与管理员用户总览
@@ -60,6 +61,8 @@ uvicorn campusflow_agent.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 打开 `http://127.0.0.1:8000/` 注册账户并填写 DeepSeek API Key，再完成三步首次配置：学校/校区、课表图片识别、校园地图识别。原图不持久化；API Key 使用 Fernet 加密后写入 SQLite，后续登录直接使用。开发环境会在 `data/.campusflow.key` 生成本机主密钥，生产环境必须通过 `APP_SECRET_KEY` 注入独立主密钥。`http://127.0.0.1:8000/docs` 可使用 Swagger 调试接口。
+
+课表支持图片识别或 HDUHelp 订阅链接。订阅链接中的 token 会使用同一凭据保险库加密保存，API 与页面只返回服务域名、同步时间和事件数量，不回显完整链接。
 
 ## 最小调用示例
 

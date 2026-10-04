@@ -9,6 +9,9 @@
 - 管理员用户总览：`GET /api/v1/admin/users`
 - 视觉导入：`POST /api/v1/onboarding/parse-timetable`、`POST /api/v1/onboarding/parse-map`
 - 完成首次配置：`PUT /api/v1/onboarding`
+- 预览课表订阅：`POST /api/v1/schedule-subscriptions/preview`
+- 连接/查看课表订阅：`PUT /api/v1/schedule-subscriptions`、`GET /api/v1/schedule-subscriptions`
+- 同步/断开课表订阅：`POST /api/v1/schedule-subscriptions/sync`、`DELETE /api/v1/schedule-subscriptions`
 - Swagger：`GET /docs`
 - 对话：`POST /api/v1/chat`
 - 工具清单：`GET /api/v1/tools`

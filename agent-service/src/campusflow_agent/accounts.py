@@ -81,6 +81,17 @@ class AccountStore:
                     expires_at TEXT NOT NULL,
                     created_at TEXT NOT NULL
                 );
+
+                CREATE TABLE IF NOT EXISTS schedule_subscriptions (
+                    user_id TEXT PRIMARY KEY REFERENCES users(user_id) ON DELETE CASCADE,
+                    provider TEXT NOT NULL,
+                    source_host TEXT NOT NULL,
+                    encrypted_url TEXT NOT NULL,
+                    event_count INTEGER NOT NULL DEFAULT 0,
+                    last_synced_at TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
                 """
             )
             columns = {
@@ -312,6 +323,68 @@ class AccountStore:
         if row is None:
             raise KeyError("user_not_found")
         return json.loads(row["timetable_json"]), json.loads(row["campus_map_json"])
+
+    def replace_timetable(self, user_id: str, timetable: list[dict[str, Any]]) -> None:
+        with self._lock, self._connection:
+            cursor = self._connection.execute(
+                "UPDATE users SET timetable_json = ? WHERE user_id = ?",
+                (json.dumps(timetable, ensure_ascii=False), user_id),
+            )
+        if cursor.rowcount != 1:
+            raise KeyError("user_not_found")
+
+    def save_schedule_subscription(
+        self,
+        *,
+        user_id: str,
+        encrypted_url: str,
+        event_count: int,
+    ) -> dict[str, Any]:
+        now = datetime.now(UTC).isoformat()
+        with self._lock, self._connection:
+            self._connection.execute(
+                """
+                INSERT INTO schedule_subscriptions (
+                    user_id, provider, source_host, encrypted_url, event_count,
+                    last_synced_at, created_at, updated_at
+                ) VALUES (?, 'hduhelp', 'neo.hduhelp.com', ?, ?, ?, ?, ?)
+                ON CONFLICT(user_id) DO UPDATE SET
+                    encrypted_url = excluded.encrypted_url,
+                    event_count = excluded.event_count,
+                    last_synced_at = excluded.last_synced_at,
+                    updated_at = excluded.updated_at
+                """,
+                (user_id, encrypted_url, event_count, now, now, now),
+            )
+        return self.get_schedule_subscription(user_id) or {}
+
+    def get_schedule_subscription(self, user_id: str) -> dict[str, Any] | None:
+        with self._lock:
+            row = self._connection.execute(
+                """
+                SELECT provider, source_host, event_count, last_synced_at
+                FROM schedule_subscriptions WHERE user_id = ?
+                """,
+                (user_id,),
+            ).fetchone()
+        return dict(row) if row else None
+
+    def get_schedule_subscription_secret(self, user_id: str) -> str | None:
+        with self._lock:
+            row = self._connection.execute(
+                "SELECT encrypted_url FROM schedule_subscriptions WHERE user_id = ?",
+                (user_id,),
+            ).fetchone()
+        return row["encrypted_url"] if row else None
+
+    def delete_schedule_subscription(self, user_id: str) -> None:
+        with self._lock, self._connection:
+            cursor = self._connection.execute(
+                "DELETE FROM schedule_subscriptions WHERE user_id = ?",
+                (user_id,),
+            )
+        if cursor.rowcount != 1:
+            raise KeyError("subscription_not_found")
 
     def get_api_key_encrypted(self, user_id: str) -> str | None:
         with self._lock:
