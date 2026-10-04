@@ -9,6 +9,7 @@ from threading import RLock
 from typing import Any
 from uuid import uuid4
 
+from .campus_data import CampusDataStore
 from .schemas import (
     HistoryMessage,
     PendingAction,
@@ -35,9 +36,11 @@ class CampusStore:
     _milestones: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
     _user_schedules: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
     _user_places: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
+    _campus_data: CampusDataStore = field(init=False, repr=False)
     _connection: sqlite3.Connection | None = field(default=None, init=False, repr=False)
 
     def __post_init__(self) -> None:
+        self._campus_data = CampusDataStore(self.database_path)
         if not self.database_path:
             return
         if self.database_path != ":memory:":
@@ -207,40 +210,23 @@ class CampusStore:
             "notice": "演示数据：出行建议预留 10 分钟并携带雨具",
         }
 
-    def search_notices(self, keyword: str) -> list[dict[str, str]]:
-        notices = [
-            {
-                "title": "图书馆部分区域维护通知",
-                "content": "9月29日 18:00 后三楼东区暂停开放。",
-                "published_at": "2026-09-28T09:00:00+08:00",
-            },
-            {
-                "title": "国庆假期教学安排",
-                "content": "具体调课安排请以教务系统个人课表为准。",
-                "published_at": "2026-09-27T10:30:00+08:00",
-            },
-        ]
-        normalized = keyword.strip().lower()
-        if not normalized:
-            return notices
-        return [n for n in notices if normalized in (n["title"] + n["content"]).lower()]
+    def search_notices(self, keyword: str) -> list[dict[str, Any]]:
+        return [item.model_dump(mode="json") for item in self._campus_data.search_notices(keyword)]
 
-    def find_places(self, query: str, user_id: str | None = None) -> list[dict[str, Any]]:
+    def find_places(
+        self,
+        query: str,
+        user_id: str | None = None,
+        origin: str = "",
+    ) -> list[dict[str, Any]]:
         with self._lock:
             places = list(self._user_places.get(user_id or "", []))
-        if not places:
-            places = [
-                {"name": "图书馆一楼自习区", "open": True, "walk_minutes": 8},
-                {"name": "图书馆三楼东区", "open": False, "walk_minutes": 8},
-                {"name": "教学楼 B 区共享教室", "open": True, "walk_minutes": 12},
-            ]
         normalized = query.strip().lower()
-        if not normalized:
-            return places
-        return [
+        user_matches = [
             place
             for place in places
-            if normalized
+            if not normalized
+            or normalized
             in (
                 place.get("name", "")
                 + " "
@@ -249,6 +235,29 @@ class CampusStore:
                 + place.get("category", "")
             ).lower()
         ]
+        official = [
+            item.model_dump(mode="json") | {"open": item.open_now}
+            for item in self._campus_data.find_places(query, origin=origin)
+        ]
+        seen = {item.get("name", "").strip().lower() for item in user_matches}
+        return user_matches + [
+            item for item in official if item.get("name", "").strip().lower() not in seen
+        ]
+
+    def campus_data_snapshot(self, user_id: str):
+        return self._campus_data.snapshot(user_id)
+
+    def campus_data_places(self, query: str = "", origin: str = ""):
+        return self._campus_data.find_places(query, origin=origin)
+
+    def campus_notices(self, keyword: str = "", active_only: bool = False):
+        return self._campus_data.search_notices(keyword, active_only=active_only)
+
+    def submit_campus_correction(self, *, user_id: str, **payload: str):
+        return self._campus_data.submit_correction(user_id=user_id, **payload)
+
+    def list_campus_corrections(self, user_id: str):
+        return self._campus_data.list_corrections(user_id)
 
     def create_proposal(
         self,

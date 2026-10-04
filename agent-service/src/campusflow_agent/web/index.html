@@ -339,6 +339,37 @@
                 <button class="line-button danger" id="disconnectSubscriptionButton" type="button" hidden>断开订阅</button>
               </div>
             </section>
+            <section class="campus-data-hub">
+              <div class="campus-package-card">
+                <div class="campus-package-heading">
+                  <div><span>CAMPUS DATA PACKAGE</span><h2 id="campusPackageName">正在连接校区数据包</h2></div>
+                  <b id="campusPackageVersion">—</b>
+                </div>
+                <p id="campusPackageDescription">加载建筑别名、开放时间、步行关系与校园通知。</p>
+                <div class="campus-package-metrics">
+                  <div><strong id="campusPackagePlaceCount">—</strong><span>数据包地点</span></div>
+                  <div><strong id="campusPackageNoticeCount">—</strong><span>校园通知</span></div>
+                  <div><strong id="campusPackageCorrectionCount">—</strong><span>我的纠错</span></div>
+                </div>
+                <div class="campus-notice-preview" id="campusNoticeList"></div>
+              </div>
+              <div class="campus-correction-card">
+                <span>COMMUNITY CORRECTION</span>
+                <h2>发现数据有变化？</h2>
+                <p>提交后进入待审核队列，不会直接覆盖其他用户的数据。</p>
+                <form id="campusCorrectionForm">
+                  <div class="correction-row">
+                    <label>类型<select id="correctionTargetType"><option value="place">地点</option><option value="notice">通知</option><option value="route">步行关系</option></select></label>
+                    <label>对象<input id="correctionTargetId" maxlength="120" required placeholder="例如：library 或 图书馆" /></label>
+                  </div>
+                  <label>需要修改的字段<input id="correctionField" maxlength="80" required placeholder="例如：open_hours" /></label>
+                  <label>建议内容<textarea id="correctionValue" rows="2" maxlength="500" required placeholder="填写你观察到的最新数据"></textarea></label>
+                  <label>说明<textarea id="correctionReason" rows="2" maxlength="500" placeholder="信息来源或补充说明（可选）"></textarea></label>
+                  <button class="primary-action" type="submit"><span class="action-label">提交纠错</span><i>↗</i></button>
+                </form>
+                <div class="correction-history" id="campusCorrectionList"></div>
+              </div>
+            </section>
             <div class="data-stats"><article><strong id="settingsCourseCount">—</strong><span>课程记录</span></article><article><strong id="settingsPlaceCount">—</strong><span>校园地点</span></article><article><strong id="settingsSemesterCard">—</strong><span>当前学期</span></article></div>
             <div class="data-columns"><section><div class="data-title"><span>COURSES</span><h2>已连接课表</h2></div><div class="context-list" id="settingsCourseList"></div></section><section><div class="data-title"><span>PLACES</span><h2>校园地点样本</h2></div><div class="context-list" id="settingsPlaceList"></div></section></div>
             <button class="line-button data-edit-button" id="editOnboardingButton" type="button">重新配置课表与地图 ↗</button>
@@ -355,7 +386,7 @@
 
     <div class="toast" id="toast" role="status"></div>
     <script src="/static/gsap.min.js" defer></script>
-    <script src="/static/app.js?v=7" defer></script>
+    <script src="/static/app.js?v=8" defer></script>
     <script src="/static/motion.js?v=1" defer></script>
   </body>
 </html>

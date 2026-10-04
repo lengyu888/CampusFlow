@@ -62,6 +62,8 @@ async def test_frontend_is_served(client: AsyncClient) -> None:
     assert "PERMISSIONS / 数据权限" in page.text
     assert "HDUHELP / ICALENDAR" in page.text
     assert "课表订阅" in page.text
+    assert "CAMPUS DATA PACKAGE" in page.text
+    assert "提交纠错" in page.text
     assert script.status_code == 200
     assert "fetch(path, options)" in script.text
 
@@ -74,6 +76,50 @@ async def test_health(client: AsyncClient) -> None:
         "api_key_mode": "encrypted_account",
         "supported_models": ["deepseek-v4-pro", "deepseek-flash"],
     }
+
+
+async def test_campus_data_package_places_notices_and_corrections(
+    client: AsyncClient,
+) -> None:
+    await register(client)
+
+    snapshot = await client.get("/api/v1/campus-data")
+    assert snapshot.status_code == 200
+    assert snapshot.json()["package"]["version"] == "2026.10.1"
+    assert snapshot.json()["package"]["place_count"] >= 15
+
+    places = await client.get(
+        "/api/v1/campus-data/places",
+        params={"query": "图书馆", "origin": "3教"},
+    )
+    assert places.status_code == 200
+    assert places.json()[0]["walk_minutes"] == 5
+
+    notices = await client.get(
+        "/api/v1/campus-data/notices",
+        params={"keyword": "教学"},
+    )
+    assert notices.status_code == 200
+    assert any(item["category"] == "教学安排" for item in notices.json())
+
+    submitted = await client.post(
+        "/api/v1/campus-data/corrections",
+        json={
+            "target_type": "place",
+            "target_id": "library",
+            "field": "open_hours",
+            "suggested_value": "07:30–22:30",
+            "reason": "现场公告已更新",
+        },
+    )
+    assert submitted.status_code == 201
+    assert submitted.json()["status"] == "pending"
+
+    corrections = await client.get("/api/v1/campus-data/corrections")
+    assert corrections.status_code == 200
+    assert [item["correction_id"] for item in corrections.json()] == [
+        submitted.json()["correction_id"]
+    ]
 
 
 async def test_register_me_logout_and_login(client: AsyncClient) -> None:

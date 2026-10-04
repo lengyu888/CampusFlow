@@ -257,6 +257,67 @@ class CampusMapParseResult(BaseModel):
     warnings: list[str] = Field(default_factory=list, max_length=20)
 
 
+class CampusDataPackage(BaseModel):
+    package_id: str
+    school: str
+    campus: str
+    version: str
+    published_at: datetime
+    description: str = ""
+    place_count: int = Field(ge=0)
+    notice_count: int = Field(ge=0)
+
+
+class CampusDataPlace(BaseModel):
+    place_id: str
+    name: str
+    category: str
+    zone: str = ""
+    aliases: list[str] = Field(default_factory=list)
+    open_now: bool
+    open_hours: str
+    walk_minutes: int | None = Field(default=None, ge=0)
+    source: str
+
+
+class CampusNotice(BaseModel):
+    notice_id: str
+    title: str
+    content: str
+    category: str
+    published_at: datetime
+    effective_from: datetime | None = None
+    effective_to: datetime | None = None
+    source: str
+
+
+class CampusCorrectionCreate(BaseModel):
+    target_type: Literal["place", "notice", "route"]
+    target_id: str = Field(min_length=1, max_length=120)
+    field: str = Field(min_length=1, max_length=80)
+    suggested_value: str = Field(min_length=1, max_length=500)
+    reason: str = Field(default="", max_length=500)
+
+
+class CampusCorrection(BaseModel):
+    correction_id: str
+    package_id: str
+    target_type: Literal["place", "notice", "route"]
+    target_id: str
+    field: str
+    suggested_value: str
+    reason: str = ""
+    status: Literal["pending", "accepted", "rejected"] = "pending"
+    created_at: datetime
+
+
+class CampusDataSnapshot(BaseModel):
+    package: CampusDataPackage
+    places: list[CampusDataPlace] = Field(default_factory=list)
+    notices: list[CampusNotice] = Field(default_factory=list)
+    corrections: list[CampusCorrection] = Field(default_factory=list)
+
+
 class ImageParseRequest(BaseModel):
     image_data: str = Field(
         min_length=32,

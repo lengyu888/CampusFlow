@@ -27,7 +27,12 @@ from .schedule_subscription import ScheduleSubscriptionError, ScheduleSubscripti
 from .schemas import (
     AdminUserSummary,
     AuthResponse,
+    CampusCorrection,
+    CampusCorrectionCreate,
+    CampusDataPlace,
+    CampusDataSnapshot,
     CampusMapParseResult,
+    CampusNotice,
     ChatRequest,
     ChatResponse,
     ConfirmActionResponse,
@@ -158,8 +163,8 @@ def create_app(
 
     app = FastAPI(
         title="CampusFlow Agent API",
-        version="0.7.0",
-        description="带课表订阅、规划执行与官方 Skills 管理能力的大学规划 Agent",
+        version="0.8.0",
+        description="带版本化校园数据、课表订阅、规划执行与 Skills 的大学规划 Agent",
     )
     app.add_middleware(
         CORSMiddleware,
@@ -403,6 +408,49 @@ def create_app(
         if user.role != "admin":
             raise HTTPException(status_code=403, detail="仅管理员可查看用户列表。")
         return [AdminUserSummary(**item) for item in account_store.list_users()]
+
+    @app.get("/api/v1/campus-data", response_model=CampusDataSnapshot)
+    async def campus_data(user: CurrentUser) -> CampusDataSnapshot:
+        return store.campus_data_snapshot(user.user_id)
+
+    @app.get("/api/v1/campus-data/places", response_model=list[CampusDataPlace])
+    async def campus_data_places(
+        user: CurrentUser,
+        query: str = "",
+        origin: str = "",
+    ) -> list[CampusDataPlace]:
+        del user
+        return store.campus_data_places(query, origin)
+
+    @app.get("/api/v1/campus-data/notices", response_model=list[CampusNotice])
+    async def campus_data_notices(
+        user: CurrentUser,
+        keyword: str = "",
+        active_only: bool = False,
+    ) -> list[CampusNotice]:
+        del user
+        return store.campus_notices(keyword, active_only)
+
+    @app.get(
+        "/api/v1/campus-data/corrections",
+        response_model=list[CampusCorrection],
+    )
+    async def campus_data_corrections(user: CurrentUser) -> list[CampusCorrection]:
+        return store.list_campus_corrections(user.user_id)
+
+    @app.post(
+        "/api/v1/campus-data/corrections",
+        response_model=CampusCorrection,
+        status_code=201,
+    )
+    async def submit_campus_data_correction(
+        payload: CampusCorrectionCreate,
+        user: CurrentUser,
+    ) -> CampusCorrection:
+        return store.submit_campus_correction(
+            user_id=user.user_id,
+            **payload.model_dump(),
+        )
 
     @app.post("/api/v1/onboarding/parse-timetable", response_model=TimetableParseResult)
     async def parse_timetable(

@@ -94,9 +94,12 @@ def build_tools(
         return store.search_notices(keyword)
 
     @tool
-    def find_campus_places(query: str) -> list[dict]:
-        """查询校园地点、开放状态和步行时间，例如图书馆、自习室、快递站。"""
-        return store.find_places(query, CURRENT_USER_ID.get())
+    def find_campus_places(query: str, origin: str = "") -> list[dict]:
+        """查询校园地点、开放状态和步行时间，例如图书馆、自习室、快递站。
+
+        origin 可填写出发地点名称或别名；填写后会返回已知地点间的步行分钟数。
+        """
+        return store.find_places(query, CURRENT_USER_ID.get(), origin)
 
     @tool
     def propose_task_change(

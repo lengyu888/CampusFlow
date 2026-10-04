@@ -126,6 +126,20 @@ const elements = {
   scheduleSubscriptionState: $("#scheduleSubscriptionState"),
   syncSubscriptionButton: $("#syncSubscriptionButton"),
   disconnectSubscriptionButton: $("#disconnectSubscriptionButton"),
+  campusPackageName: $("#campusPackageName"),
+  campusPackageVersion: $("#campusPackageVersion"),
+  campusPackageDescription: $("#campusPackageDescription"),
+  campusPackagePlaceCount: $("#campusPackagePlaceCount"),
+  campusPackageNoticeCount: $("#campusPackageNoticeCount"),
+  campusPackageCorrectionCount: $("#campusPackageCorrectionCount"),
+  campusNoticeList: $("#campusNoticeList"),
+  campusCorrectionForm: $("#campusCorrectionForm"),
+  correctionTargetType: $("#correctionTargetType"),
+  correctionTargetId: $("#correctionTargetId"),
+  correctionField: $("#correctionField"),
+  correctionValue: $("#correctionValue"),
+  correctionReason: $("#correctionReason"),
+  campusCorrectionList: $("#campusCorrectionList"),
   editOnboardingButton: $("#editOnboardingButton"),
   adminUserCount: $("#adminUserCount"),
   adminUserRows: $("#adminUserRows"),
@@ -151,6 +165,7 @@ const state = {
   selectedSkill: null,
   scheduleSubscriptionUrl: "",
   scheduleSubscription: null,
+  campusData: null,
 };
 
 function createSessionId() {
@@ -1487,6 +1502,87 @@ async function disconnectScheduleSubscription() {
   }
 }
 
+function correctionStatusLabel(status) {
+  return { pending: "待审核", accepted: "已采纳", rejected: "未采纳" }[status] ?? status;
+}
+
+function renderCampusData(payload) {
+  state.campusData = payload;
+  const dataPackage = payload.package;
+  elements.campusPackageName.textContent = `${dataPackage.school} · ${dataPackage.campus}`;
+  elements.campusPackageVersion.textContent = `v${dataPackage.version}`;
+  elements.campusPackageDescription.textContent = dataPackage.description;
+  elements.campusPackagePlaceCount.textContent = dataPackage.place_count;
+  elements.campusPackageNoticeCount.textContent = dataPackage.notice_count;
+  elements.campusPackageCorrectionCount.textContent = payload.corrections.length;
+
+  elements.campusNoticeList.replaceChildren();
+  payload.notices.slice(0, 3).forEach((notice) => {
+    const item = document.createElement("article");
+    const meta = document.createElement("span");
+    const title = document.createElement("b");
+    const detail = document.createElement("p");
+    meta.textContent = notice.category;
+    title.textContent = notice.title;
+    detail.textContent = notice.content;
+    item.append(meta, title, detail);
+    elements.campusNoticeList.append(item);
+  });
+  if (!payload.notices.length) {
+    elements.campusNoticeList.append(contextListItem("暂无校园通知", "数据包当前没有有效通知"));
+  }
+
+  elements.campusCorrectionList.replaceChildren();
+  payload.corrections.slice(0, 4).forEach((correction) => {
+    const item = document.createElement("article");
+    const copy = document.createElement("div");
+    const title = document.createElement("b");
+    const detail = document.createElement("span");
+    const badge = document.createElement("i");
+    title.textContent = `${correction.target_id} · ${correction.field}`;
+    detail.textContent = correction.suggested_value;
+    badge.textContent = correctionStatusLabel(correction.status);
+    copy.append(title, detail);
+    item.append(copy, badge);
+    elements.campusCorrectionList.append(item);
+  });
+}
+
+async function loadCampusData() {
+  try {
+    renderCampusData(await api("/api/v1/campus-data"));
+  } catch (error) {
+    elements.campusPackageName.textContent = "校园数据包加载失败";
+    showToast(error.message, "error");
+  }
+}
+
+async function submitCampusCorrection(event) {
+  event.preventDefault();
+  const button = elements.campusCorrectionForm.querySelector('button[type="submit"]');
+  setButtonBusy(button, true, "正在提交…");
+  try {
+    await api("/api/v1/campus-data/corrections", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        target_type: elements.correctionTargetType.value,
+        target_id: elements.correctionTargetId.value.trim(),
+        field: elements.correctionField.value.trim(),
+        suggested_value: elements.correctionValue.value.trim(),
+        reason: elements.correctionReason.value.trim(),
+      }),
+    });
+    elements.campusCorrectionForm.reset();
+    await loadCampusData();
+    showToast("纠错建议已提交，审核前不会影响其他用户");
+  } catch (error) {
+    showToast(error.message, "error");
+  } finally {
+    setButtonBusy(button, false, "");
+  }
+}
+
 async function loadSettingsContext(force = false, loadSubscription = true) {
   if (!state.settingsContext || force) {
     try {
@@ -1517,7 +1613,9 @@ async function loadSettingsContext(force = false, loadSubscription = true) {
   });
   if (!courses.length) elements.settingsCourseList.append(contextListItem("暂无课表", "请重新配置学习数据"));
   if (!places.length) elements.settingsPlaceList.append(contextListItem("暂无地点", "请重新配置校园地图"));
-  if (loadSubscription) await loadScheduleSubscriptionStatus();
+  const requests = [loadCampusData()];
+  if (loadSubscription) requests.push(loadScheduleSubscriptionStatus());
+  await Promise.all(requests);
 }
 
 function adminStatus(text, kind) {
@@ -1638,6 +1736,7 @@ elements.setupSubscriptionForm.addEventListener("submit", previewScheduleSubscri
 elements.scheduleSubscriptionForm.addEventListener("submit", saveScheduleSubscription);
 elements.syncSubscriptionButton.addEventListener("click", syncScheduleSubscription);
 elements.disconnectSubscriptionButton.addEventListener("click", disconnectScheduleSubscription);
+elements.campusCorrectionForm.addEventListener("submit", submitCampusCorrection);
 elements.quickTaskForm.addEventListener("submit", createQuickTask);
 elements.skillSearch.addEventListener("input", () => {
   clearTimeout(elements.skillSearch.searchTimer);
