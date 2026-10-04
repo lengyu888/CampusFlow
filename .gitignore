@@ -29,7 +29,7 @@ Thumbs.db
 **/.hvigor/
 **/oh_modules/
 **/.arkui-x/android/.gradle/
-**/.arkui-x/android/local.properties
+**/local.properties
 **/.arkui-x/ios/Pods/
 **/.arkui-x/ios/DerivedData/
 **/xcuserdata/
