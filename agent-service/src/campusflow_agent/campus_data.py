@@ -27,7 +27,7 @@ PACKAGE = {
     "package_id": DEFAULT_PACKAGE_ID,
     "school": "杭州电子科技大学",
     "campus": "下沙校区",
-    "version": "2026.10.3",
+    "version": "2026.10.4",
     "published_at": "2026-10-04T08:00:00+08:00",
     "description": (
         "基于用户确认地图整理的 CampusFlow 校园数据包，"
@@ -146,12 +146,14 @@ WALK_EDGES = [
 # The 100 × 74 viewBox covers the main campus panel (without the title and the two
 # lower inset maps), allowing clients to overlay routes on the untouched bitmap.
 MAP_POINTS: dict[str, tuple[float, float]] = {
-    "cainiao-station": (28.7, 1.7),
-    "north-2-gate": (24.3, 23.8),
+    "cainiao-station": (32.0, 2.2),
+    "north-2-gate": (25.2, 22.8),
     "library": (45.1, 28.8),
     "teaching-3": (54.7, 47.8),
     "teaching-4": (34.2, 42.7),
-    "teaching-6": (34.1, 34.6),
+    # Route anchors use the building entrance / gate access point rather than
+    # the visual centre of the building label.
+    "teaching-6": (35.2, 31.5),
     "teaching-7": (54.8, 33.4),
     "teaching-12": (68.0, 41.4),
     "student-center": (68.4, 27.3),
@@ -168,22 +170,25 @@ MAP_POINTS: dict[str, tuple[float, float]] = {
 
 ROUTE_GEOMETRIES: dict[frozenset[str], list[tuple[float, float]]] = {
     frozenset(("teaching-6", "north-2-gate")): [
-        (34.1, 34.6),
-        (32.5, 31.0),
-        (27.0, 28.0),
-        (24.3, 23.8),
+        (35.2, 31.5),
+        (35.2, 29.3),
+        (30.0, 29.3),
+        (26.2, 27.7),
+        (25.2, 23.6),
+        (25.2, 22.8),
     ],
     frozenset(("north-2-gate", "cainiao-station")): [
-        (24.3, 23.8),
-        (24.3, 18.5),
-        (28.7, 18.5),
-        (28.7, 1.7),
+        (25.2, 22.8),
+        (25.2, 14.0),
+        (25.2, 5.0),
+        (25.2, 2.2),
+        (32.0, 2.2),
     ],
     frozenset(("library", "north-2-gate")): [
         (45.1, 28.8),
         (38.0, 28.8),
         (30.0, 26.0),
-        (24.3, 23.8),
+        (25.2, 22.8),
     ],
 }
 

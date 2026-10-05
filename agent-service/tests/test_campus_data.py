@@ -15,7 +15,7 @@ def test_package_exposes_versioned_places_and_notices() -> None:
     snapshot = data.snapshot("student-001")
 
     assert snapshot.package.package_id == "hdu-xiasha"
-    assert snapshot.package.version == "2026.10.3"
+    assert snapshot.package.version == "2026.10.4"
     assert snapshot.package.place_count >= 17
     assert snapshot.package.notice_count >= 3
     assert any(place.name == "图书馆" for place in snapshot.places)
@@ -55,6 +55,18 @@ def test_route_from_sixth_teaching_building_to_cainiao_uses_uploaded_map_graph()
     assert "北二门" in route.steps[0].instruction
     assert route.path[0].place_id == "teaching-6"
     assert route.path[-1].place_id == "cainiao-station"
+    assert [(point.x, point.y) for point in route.path] == [
+        (35.2, 31.5),  # 六教北侧入口
+        (35.2, 29.3),
+        (30.0, 29.3),
+        (26.2, 27.7),
+        (25.2, 23.6),
+        (25.2, 22.8),  # 南二门/北二门通道
+        (25.2, 14.0),
+        (25.2, 5.0),
+        (25.2, 2.2),
+        (32.0, 2.2),  # 菜鸟驿站入口
+    ]
 
 
 def test_explicit_route_geometry_endpoints_match_calibrated_map_points() -> None:

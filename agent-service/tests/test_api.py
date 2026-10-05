@@ -87,7 +87,7 @@ async def test_campus_data_package_places_notices_and_corrections(
 
     snapshot = await client.get("/api/v1/campus-data")
     assert snapshot.status_code == 200
-    assert snapshot.json()["package"]["version"] == "2026.10.3"
+    assert snapshot.json()["package"]["version"] == "2026.10.4"
     assert snapshot.json()["package"]["place_count"] >= 17
 
     places = await client.get(
