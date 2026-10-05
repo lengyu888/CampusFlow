@@ -61,6 +61,7 @@ async def test_frontend_is_served(client: AsyncClient) -> None:
     assert "校园 Skills" in page.text
     assert "PERMISSIONS / 数据权限" in page.text
     assert "HDUHELP / ICALENDAR" in page.text
+    assert "HDUHELP CONNECT" in page.text
     assert "课表订阅" in page.text
     assert "CAMPUS DATA PACKAGE" in page.text
     assert "提交纠错" in page.text
@@ -330,7 +331,7 @@ async def test_official_skill_install_control_and_audit(client: AsyncClient) -> 
 
     library = await client.get("/api/v1/skills")
     assert library.status_code == 200
-    assert len(library.json()) == 4
+    assert len(library.json()) == 5
     navigator = next(
         skill for skill in library.json() if skill["skill_id"] == "campus-navigator"
     )
@@ -424,3 +425,68 @@ async def test_non_admin_cannot_list_users(client: AsyncClient) -> None:
     assert response.status_code == 201
     assert response.json()["user"]["role"] == "user"
     assert (await client.get("/api/v1/admin/users")).status_code == 403
+
+
+async def test_hduhelp_oauth_sync_data_and_disconnect(client: AsyncClient) -> None:
+    await register(client)
+
+    initial = await client.get("/api/v1/hduhelp/status")
+    assert initial.status_code == 200
+    assert initial.json()["configured"] is False
+
+    connect = await client.post("/api/v1/hduhelp/connect")
+    assert connect.status_code == 200
+    assert "state=test-oauth-state" in connect.json()["authorize_url"]
+    assert "academic:grade:read" in connect.json()["scopes"]
+
+    callback = await client.get(
+        "/api/v1/hduhelp/callback",
+        params={"code": "approved-code", "state": "test-oauth-state"},
+        follow_redirects=False,
+    )
+    assert callback.status_code == 303
+    assert callback.headers["location"] == "/?hduhelp=connected"
+
+    status = await client.get("/api/v1/hduhelp/status")
+    assert status.json()["configured"] is True
+    assert status.json()["external_name"] == "小航"
+    assert status.json()["resources"] == []
+
+    synced = await client.post("/api/v1/hduhelp/sync")
+    assert synced.status_code == 200
+    assert synced.json()["synced_resources"] == [
+        "card_balance",
+        "exams",
+        "grades",
+        "identity",
+        "library_bookings",
+        "person",
+    ]
+    assert synced.json()["status"]["last_synced_at"] is not None
+
+    data = await client.get("/api/v1/hduhelp/data")
+    assert data.status_code == 200
+    resources = {item["resource"]: item["data"] for item in data.json()["resources"]}
+    assert resources["grades"]["gpa"] == 3.72
+    assert resources["card_balance"]["balance"] == 86.5
+    assert "access_token" not in data.text
+    assert "refresh_token" not in data.text
+
+    disconnected = await client.delete("/api/v1/hduhelp/connection")
+    assert disconnected.status_code == 204
+    assert (await client.get("/api/v1/hduhelp/status")).json()["configured"] is False
+    assert (await client.get("/api/v1/hduhelp/data")).json()["resources"] == []
+
+
+async def test_hduhelp_callback_state_is_one_time(client: AsyncClient) -> None:
+    await register(client)
+    await client.post("/api/v1/hduhelp/connect")
+    params = {"code": "approved-code", "state": "test-oauth-state"}
+    assert (await client.get("/api/v1/hduhelp/callback", params=params)).status_code == 303
+    repeated = await client.get(
+        "/api/v1/hduhelp/callback",
+        params=params,
+        follow_redirects=False,
+    )
+    assert repeated.status_code == 303
+    assert repeated.headers["location"] == "/?hduhelp=error"

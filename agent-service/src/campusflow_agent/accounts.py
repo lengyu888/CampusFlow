@@ -92,6 +92,41 @@ class AccountStore:
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
                 );
+
+                CREATE TABLE IF NOT EXISTS hduhelp_oauth_states (
+                    state_hash TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+                    verifier_encrypted TEXT NOT NULL,
+                    expires_at TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS hduhelp_connections (
+                    user_id TEXT PRIMARY KEY REFERENCES users(user_id) ON DELETE CASCADE,
+                    access_token_encrypted TEXT NOT NULL,
+                    refresh_token_encrypted TEXT,
+                    token_type TEXT NOT NULL DEFAULT 'Bearer',
+                    scopes_json TEXT NOT NULL DEFAULT '[]',
+                    expires_at TEXT NOT NULL,
+                    external_user_id TEXT,
+                    external_name TEXT,
+                    identity_type TEXT,
+                    connected_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    last_synced_at TEXT,
+                    last_error TEXT
+                );
+
+                CREATE TABLE IF NOT EXISTS hduhelp_resource_cache (
+                    user_id TEXT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+                    resource TEXT NOT NULL,
+                    payload_json TEXT NOT NULL,
+                    synced_at TEXT NOT NULL,
+                    PRIMARY KEY (user_id, resource)
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_hduhelp_oauth_states_expiry
+                ON hduhelp_oauth_states(expires_at);
                 """
             )
             columns = {
@@ -465,3 +500,263 @@ class AccountStore:
                 }
             )
         return users
+
+    def save_hduhelp_oauth_state(
+        self,
+        *,
+        user_id: str,
+        state: str,
+        verifier_encrypted: str,
+        expires_at: datetime,
+    ) -> None:
+        now = datetime.now(UTC).isoformat()
+        with self._lock, self._connection:
+            self._connection.execute(
+                "DELETE FROM hduhelp_oauth_states WHERE expires_at <= ? OR user_id = ?",
+                (now, user_id),
+            )
+            self._connection.execute(
+                """
+                INSERT INTO hduhelp_oauth_states (
+                    state_hash, user_id, verifier_encrypted, expires_at, created_at
+                ) VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    self._token_hash(state),
+                    user_id,
+                    verifier_encrypted,
+                    expires_at.isoformat(),
+                    now,
+                ),
+            )
+
+    def consume_hduhelp_oauth_state(self, state: str) -> dict[str, str]:
+        state_hash = self._token_hash(state)
+        now = datetime.now(UTC).isoformat()
+        with self._lock, self._connection:
+            row = self._connection.execute(
+                """
+                SELECT user_id, verifier_encrypted, expires_at
+                FROM hduhelp_oauth_states WHERE state_hash = ?
+                """,
+                (state_hash,),
+            ).fetchone()
+            self._connection.execute(
+                "DELETE FROM hduhelp_oauth_states WHERE state_hash = ? OR expires_at <= ?",
+                (state_hash, now),
+            )
+        if row is None or row["expires_at"] <= now:
+            raise KeyError("oauth_state_invalid")
+        return dict(row)
+
+    def save_hduhelp_connection(
+        self,
+        *,
+        user_id: str,
+        access_token_encrypted: str,
+        refresh_token_encrypted: str | None,
+        token_type: str,
+        scopes: list[str],
+        expires_at: datetime,
+        identity: dict[str, Any] | None = None,
+    ) -> None:
+        now = datetime.now(UTC).isoformat()
+        identity = identity or {}
+        with self._lock, self._connection:
+            self._connection.execute(
+                """
+                INSERT INTO hduhelp_connections (
+                    user_id, access_token_encrypted, refresh_token_encrypted,
+                    token_type, scopes_json, expires_at, external_user_id,
+                    external_name, identity_type, connected_at, updated_at,
+                    last_synced_at, last_error
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL)
+                ON CONFLICT(user_id) DO UPDATE SET
+                    access_token_encrypted = excluded.access_token_encrypted,
+                    refresh_token_encrypted = excluded.refresh_token_encrypted,
+                    token_type = excluded.token_type,
+                    scopes_json = excluded.scopes_json,
+                    expires_at = excluded.expires_at,
+                    external_user_id = excluded.external_user_id,
+                    external_name = excluded.external_name,
+                    identity_type = excluded.identity_type,
+                    updated_at = excluded.updated_at,
+                    last_error = NULL
+                """,
+                (
+                    user_id,
+                    access_token_encrypted,
+                    refresh_token_encrypted,
+                    token_type,
+                    json.dumps(sorted(set(scopes)), ensure_ascii=False),
+                    expires_at.isoformat(),
+                    None,
+                    identity.get("name"),
+                    identity.get("identityType") or identity.get("identity_type"),
+                    now,
+                    now,
+                ),
+            )
+
+    def get_hduhelp_connection_secret(self, user_id: str) -> dict[str, Any] | None:
+        with self._lock:
+            row = self._connection.execute(
+                "SELECT * FROM hduhelp_connections WHERE user_id = ?",
+                (user_id,),
+            ).fetchone()
+        return dict(row) if row else None
+
+    def update_hduhelp_tokens(
+        self,
+        *,
+        user_id: str,
+        access_token_encrypted: str,
+        refresh_token_encrypted: str | None,
+        token_type: str,
+        scopes: list[str],
+        expires_at: datetime,
+    ) -> None:
+        with self._lock, self._connection:
+            cursor = self._connection.execute(
+                """
+                UPDATE hduhelp_connections
+                SET access_token_encrypted = ?, refresh_token_encrypted = ?,
+                    token_type = ?, scopes_json = ?, expires_at = ?,
+                    updated_at = ?, last_error = NULL
+                WHERE user_id = ?
+                """,
+                (
+                    access_token_encrypted,
+                    refresh_token_encrypted,
+                    token_type,
+                    json.dumps(sorted(set(scopes)), ensure_ascii=False),
+                    expires_at.isoformat(),
+                    datetime.now(UTC).isoformat(),
+                    user_id,
+                ),
+            )
+        if cursor.rowcount != 1:
+            raise KeyError("hduhelp_connection_not_found")
+
+    def save_hduhelp_resources(
+        self,
+        *,
+        user_id: str,
+        resources: dict[str, str],
+        errors: dict[str, str] | None = None,
+    ) -> str:
+        now = datetime.now(UTC).isoformat()
+        error_text = "; ".join(f"{key}: {value}" for key, value in (errors or {}).items())
+        with self._lock, self._connection:
+            for resource, encrypted_payload in resources.items():
+                self._connection.execute(
+                    """
+                    INSERT INTO hduhelp_resource_cache (
+                        user_id, resource, payload_json, synced_at
+                    ) VALUES (?, ?, ?, ?)
+                    ON CONFLICT(user_id, resource) DO UPDATE SET
+                        payload_json = excluded.payload_json,
+                        synced_at = excluded.synced_at
+                    """,
+                    (user_id, resource, encrypted_payload, now),
+                )
+            self._connection.execute(
+                """
+                UPDATE hduhelp_connections
+                SET last_synced_at = ?, last_error = ?, updated_at = ?
+                WHERE user_id = ?
+                """,
+                (now, error_text or None, now, user_id),
+            )
+        return now
+
+    def set_hduhelp_error(self, user_id: str, message: str) -> None:
+        with self._lock, self._connection:
+            self._connection.execute(
+                """
+                UPDATE hduhelp_connections SET last_error = ?, updated_at = ?
+                WHERE user_id = ?
+                """,
+                (message[:1000], datetime.now(UTC).isoformat(), user_id),
+            )
+
+    def list_hduhelp_resources(self, user_id: str) -> list[dict[str, Any]]:
+        with self._lock:
+            rows = self._connection.execute(
+                """
+                SELECT resource, payload_json, synced_at
+                FROM hduhelp_resource_cache
+                WHERE user_id = ? ORDER BY resource
+                """,
+                (user_id,),
+            ).fetchall()
+        return [
+            {
+                "resource": row["resource"],
+                "encrypted_data": row["payload_json"],
+                "synced_at": row["synced_at"],
+            }
+            for row in rows
+        ]
+
+    def get_hduhelp_resource(self, user_id: str, resource: str) -> dict[str, Any] | None:
+        with self._lock:
+            row = self._connection.execute(
+                """
+                SELECT payload_json, synced_at FROM hduhelp_resource_cache
+                WHERE user_id = ? AND resource = ?
+                """,
+                (user_id, resource),
+            ).fetchone()
+        if row is None:
+            return None
+        return {
+            "resource": resource,
+            "encrypted_data": row["payload_json"],
+            "synced_at": row["synced_at"],
+        }
+
+    def get_hduhelp_status(self, user_id: str) -> dict[str, Any]:
+        with self._lock:
+            row = self._connection.execute(
+                """
+                SELECT scopes_json, expires_at, external_name, identity_type,
+                       connected_at, last_synced_at, last_error
+                FROM hduhelp_connections WHERE user_id = ?
+                """,
+                (user_id,),
+            ).fetchone()
+            resource_rows = self._connection.execute(
+                """
+                SELECT resource FROM hduhelp_resource_cache
+                WHERE user_id = ? ORDER BY resource
+                """,
+                (user_id,),
+            ).fetchall()
+        if row is None:
+            return {"configured": False, "resources": []}
+        return {
+            "configured": True,
+            "provider": "hduhelp",
+            "scopes": json.loads(row["scopes_json"]),
+            "external_name": row["external_name"],
+            "identity_type": row["identity_type"],
+            "expires_at": row["expires_at"],
+            "connected_at": row["connected_at"],
+            "last_synced_at": row["last_synced_at"],
+            "last_error": row["last_error"],
+            "resources": [item["resource"] for item in resource_rows],
+        }
+
+    def delete_hduhelp_connection(self, user_id: str) -> None:
+        with self._lock, self._connection:
+            self._connection.execute(
+                "DELETE FROM hduhelp_resource_cache WHERE user_id = ?",
+                (user_id,),
+            )
+            cursor = self._connection.execute(
+                "DELETE FROM hduhelp_connections WHERE user_id = ?",
+                (user_id,),
+            )
+        if cursor.rowcount != 1:
+            raise KeyError("hduhelp_connection_not_found")

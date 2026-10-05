@@ -7,7 +7,7 @@
     <title>CampusFlow · Campus Operating System</title>
     <link rel="stylesheet" href="/static/styles.css" />
     <link rel="stylesheet" href="/static/native.css?v=6" />
-    <link rel="stylesheet" href="/static/redesign.css?v=3" />
+    <link rel="stylesheet" href="/static/redesign.css?v=4" />
   </head>
   <body>
     <div class="grain" aria-hidden="true"></div>
@@ -329,6 +329,21 @@
 
           <div class="settings-panel" data-settings-panel="data" hidden>
             <div class="settings-heading"><div><span>02 / PERSONAL DATA</span><h1>学习数据</h1></div><p>查看 Agent 当前连接的课表与校园地图数据。</p></div>
+            <section class="hduhelp-connect-card">
+              <div class="hduhelp-connect-copy">
+                <span>HDUHELP CONNECT / OAUTH 2.0</span>
+                <h2>连接你的杭电校园档案</h2>
+                <p id="hduHelpConnectionState">通过 HDUHelp 官方授权页连接，不会向 CampusFlow 提交杭电密码。</p>
+              </div>
+              <div class="hduhelp-resource-grid" id="hduHelpResourceList">
+                <span>学籍</span><span>成绩 / GPA</span><span>考试</span><span>校园卡</span><span>图书馆预约</span>
+              </div>
+              <div class="hduhelp-connect-actions">
+                <button class="primary-action" id="connectHduHelpButton" type="button"><span class="action-label">连接 HDUHelp</span><i>↗</i></button>
+                <button class="line-button" id="syncHduHelpButton" type="button" hidden>同步数据</button>
+                <button class="line-button danger" id="disconnectHduHelpButton" type="button" hidden>断开并删除</button>
+              </div>
+            </section>
             <section class="subscription-control">
               <div class="subscription-control-copy"><span>LIVE CALENDAR / HDUHELP</span><h2>课表订阅</h2><p id="scheduleSubscriptionState">连接订阅后，可随时从 HDUHelp 拉取最新课程。完整链接只会加密保存。</p></div>
               <form id="scheduleSubscriptionForm">
@@ -387,7 +402,7 @@
 
     <div class="toast" id="toast" role="status"></div>
     <script src="/static/gsap.min.js" defer></script>
-    <script src="/static/app.js?v=10" defer></script>
+    <script src="/static/app.js?v=11" defer></script>
     <script src="/static/motion.js?v=1" defer></script>
   </body>
 </html>

@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import asyncio
+import json
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from openai import APIConnectionError, APIStatusError, BadRequestError
 from openai import AuthenticationError as OpenAIAuthenticationError
@@ -22,6 +24,7 @@ from .accounts import (
 )
 from .agent import AgentConfigurationError, AgentService
 from .config import Settings, get_settings
+from .hduhelp import HDUHelpError, HDUHelpService, TokenSet
 from .key_vault import ApiKeyVault
 from .schedule_subscription import ScheduleSubscriptionError, ScheduleSubscriptionService
 from .schemas import (
@@ -37,6 +40,11 @@ from .schemas import (
     ChatRequest,
     ChatResponse,
     ConfirmActionResponse,
+    HDUHelpConnectionStatus,
+    HDUHelpConnectResponse,
+    HDUHelpDataResponse,
+    HDUHelpResourceSnapshot,
+    HDUHelpSyncResponse,
     HealthResponse,
     HistoryMessage,
     ImageParseRequest,
@@ -150,17 +158,25 @@ def create_app(
     api_key_vault: ApiKeyVault | None = None,
     skill_store: SkillStore | None = None,
     schedule_subscription_service: ScheduleSubscriptionService | None = None,
+    hduhelp_service: HDUHelpService | None = None,
 ) -> FastAPI:
     settings = settings or get_settings()
     store = store or CampusStore(settings.database_path)
     account_store = account_store or AccountStore(settings.database_path)
     skill_store = skill_store or SkillStore(settings.database_path)
-    agent_service = agent_service or AgentService(settings, store, skill_store)
-    vision_service = vision_service or VisionService(settings)
     api_key_vault = api_key_vault or ApiKeyVault(settings)
+    agent_service = agent_service or AgentService(
+        settings,
+        store,
+        skill_store,
+        account_store,
+        api_key_vault,
+    )
+    vision_service = vision_service or VisionService(settings)
     schedule_subscription_service = (
         schedule_subscription_service or ScheduleSubscriptionService()
     )
+    hduhelp_service = hduhelp_service or HDUHelpService(settings)
 
     app = FastAPI(
         title="CampusFlow Agent API",
@@ -182,6 +198,7 @@ def create_app(
     app.state.api_key_vault = api_key_vault
     app.state.skill_store = skill_store
     app.state.schedule_subscription_service = schedule_subscription_service
+    app.state.hduhelp_service = hduhelp_service
 
     web_dir = Path(__file__).parent / "web"
     app.mount("/static", StaticFiles(directory=web_dir), name="static")
@@ -227,6 +244,73 @@ def create_app(
         if not saved:
             return ScheduleSubscriptionStatus()
         return ScheduleSubscriptionStatus(configured=True, **saved)
+
+    def hduhelp_status(user_id: str) -> HDUHelpConnectionStatus:
+        return HDUHelpConnectionStatus(**account_store.get_hduhelp_status(user_id))
+
+    def save_hduhelp_tokens(
+        user_id: str,
+        tokens: TokenSet,
+        *,
+        identity: dict | None = None,
+        update: bool = False,
+    ) -> None:
+        access_encrypted = api_key_vault.encrypt(tokens.access_token)
+        refresh_encrypted = (
+            api_key_vault.encrypt(tokens.refresh_token) if tokens.refresh_token else None
+        )
+        if update:
+            account_store.update_hduhelp_tokens(
+                user_id=user_id,
+                access_token_encrypted=access_encrypted,
+                refresh_token_encrypted=refresh_encrypted,
+                token_type=tokens.token_type,
+                scopes=tokens.scopes,
+                expires_at=tokens.expires_at,
+            )
+            return
+        account_store.save_hduhelp_connection(
+            user_id=user_id,
+            access_token_encrypted=access_encrypted,
+            refresh_token_encrypted=refresh_encrypted,
+            token_type=tokens.token_type,
+            scopes=tokens.scopes,
+            expires_at=tokens.expires_at,
+            identity=identity,
+        )
+
+    async def active_hduhelp_token(user_id: str) -> str:
+        connection = account_store.get_hduhelp_connection_secret(user_id)
+        if connection is None:
+            raise HTTPException(status_code=404, detail="尚未连接 HDUHelp。")
+        try:
+            access_token = api_key_vault.decrypt(connection["access_token_encrypted"])
+            expires_at = datetime.fromisoformat(connection["expires_at"])
+        except (ValueError, TypeError) as exc:
+            raise HTTPException(
+                status_code=503,
+                detail="HDUHelp 凭据无法解密，请重新连接。",
+            ) from exc
+        if expires_at > datetime.now(UTC) + timedelta(minutes=1):
+            return access_token
+        encrypted_refresh = connection.get("refresh_token_encrypted")
+        if not encrypted_refresh:
+            raise HTTPException(status_code=401, detail="HDUHelp 授权已过期，请重新连接。")
+        try:
+            refresh_token = api_key_vault.decrypt(encrypted_refresh)
+            tokens = await hduhelp_service.refresh(refresh_token)
+            tokens = TokenSet(
+                access_token=tokens.access_token,
+                refresh_token=tokens.refresh_token or refresh_token,
+                token_type=tokens.token_type,
+                scopes=tokens.scopes or json.loads(connection["scopes_json"]),
+                expires_at=tokens.expires_at,
+            )
+            save_hduhelp_tokens(user_id, tokens, update=True)
+            return tokens.access_token
+        except (HDUHelpError, ValueError) as exc:
+            account_store.set_hduhelp_error(user_id, str(exc))
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     def apply_subscribed_timetable(
         user_id: str,
@@ -315,6 +399,104 @@ def create_app(
     async def user_context(user: CurrentUser) -> UserContextResponse:
         timetable, campus_map = account_store.get_context(user.user_id)
         return UserContextResponse(timetable=timetable, campus_map=campus_map)
+
+    @app.get("/api/v1/hduhelp/status", response_model=HDUHelpConnectionStatus)
+    async def get_hduhelp_status(user: CurrentUser) -> HDUHelpConnectionStatus:
+        return hduhelp_status(user.user_id)
+
+    @app.post("/api/v1/hduhelp/connect", response_model=HDUHelpConnectResponse)
+    async def connect_hduhelp(user: CurrentUser) -> HDUHelpConnectResponse:
+        try:
+            start = hduhelp_service.start_authorization()
+        except HDUHelpError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        account_store.save_hduhelp_oauth_state(
+            user_id=user.user_id,
+            state=start.state,
+            verifier_encrypted=api_key_vault.encrypt(start.code_verifier),
+            expires_at=start.expires_at,
+        )
+        return HDUHelpConnectResponse(
+            authorize_url=start.authorize_url,
+            expires_at=start.expires_at,
+            scopes=hduhelp_service.scopes,
+        )
+
+    @app.get("/api/v1/hduhelp/callback", include_in_schema=False)
+    async def hduhelp_callback(code: str = "", state: str = "") -> RedirectResponse:
+        if not code or not state:
+            return RedirectResponse(url="/?hduhelp=error", status_code=303)
+        try:
+            pending = account_store.consume_hduhelp_oauth_state(state)
+            verifier = api_key_vault.decrypt(pending["verifier_encrypted"])
+            tokens = await hduhelp_service.exchange_code(code, verifier)
+            try:
+                identity = await hduhelp_service.user_info(tokens.access_token)
+            except HDUHelpError:
+                identity = {}
+            save_hduhelp_tokens(pending["user_id"], tokens, identity=identity)
+        except (KeyError, ValueError, HDUHelpError):
+            return RedirectResponse(url="/?hduhelp=error", status_code=303)
+        return RedirectResponse(url="/?hduhelp=connected", status_code=303)
+
+    @app.post("/api/v1/hduhelp/sync", response_model=HDUHelpSyncResponse)
+    async def sync_hduhelp(user: CurrentUser) -> HDUHelpSyncResponse:
+        access_token = await active_hduhelp_token(user.user_id)
+        result = await hduhelp_service.sync_resources(access_token)
+        if not result.resources:
+            detail = next(iter(result.errors.values()), "HDUHelp 没有返回可同步数据。")
+            account_store.set_hduhelp_error(user.user_id, detail)
+            raise HTTPException(status_code=502, detail=detail)
+        encrypted_resources = {
+            name: api_key_vault.encrypt(json.dumps(payload, ensure_ascii=False))
+            for name, payload in result.resources.items()
+        }
+        account_store.save_hduhelp_resources(
+            user_id=user.user_id,
+            resources=encrypted_resources,
+            errors=result.errors,
+        )
+        return HDUHelpSyncResponse(
+            status=hduhelp_status(user.user_id),
+            synced_resources=sorted(result.resources),
+            errors=result.errors,
+        )
+
+    @app.get("/api/v1/hduhelp/data", response_model=HDUHelpDataResponse)
+    async def get_hduhelp_data(user: CurrentUser) -> HDUHelpDataResponse:
+        resources: list[HDUHelpResourceSnapshot] = []
+        for item in account_store.list_hduhelp_resources(user.user_id):
+            try:
+                data = json.loads(api_key_vault.decrypt(item["encrypted_data"]))
+            except (ValueError, json.JSONDecodeError):
+                continue
+            resources.append(
+                HDUHelpResourceSnapshot(
+                    resource=item["resource"],
+                    data=data,
+                    synced_at=item["synced_at"],
+                )
+            )
+        return HDUHelpDataResponse(status=hduhelp_status(user.user_id), resources=resources)
+
+    @app.delete("/api/v1/hduhelp/connection", status_code=204)
+    async def disconnect_hduhelp(user: CurrentUser) -> Response:
+        connection = account_store.get_hduhelp_connection_secret(user.user_id)
+        if connection is None:
+            raise HTTPException(status_code=404, detail="尚未连接 HDUHelp。")
+        encrypted_refresh = connection.get("refresh_token_encrypted")
+        if hduhelp_service.configured:
+            try:
+                if encrypted_refresh:
+                    token = api_key_vault.decrypt(encrypted_refresh)
+                    await hduhelp_service.revoke(token, "refresh_token")
+                else:
+                    token = api_key_vault.decrypt(connection["access_token_encrypted"])
+                    await hduhelp_service.revoke(token, "access_token")
+            except (HDUHelpError, ValueError):
+                pass
+        account_store.delete_hduhelp_connection(user.user_id)
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     @app.get(
         "/api/v1/schedule-subscriptions",

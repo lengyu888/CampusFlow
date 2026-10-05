@@ -518,6 +518,16 @@ kbd { border: 1px solid var(--cf-line); border-radius: 5px; background: var(--cf
 .key-setting h3 { margin: 7px 0; }
 .key-setting p { margin: 0; color: var(--cf-muted); font-size: 11px; }
 .settings-save { justify-self: start; }
+.hduhelp-connect-card { display: grid; grid-template-columns: minmax(260px, 1fr) minmax(260px, .9fr); gap: 20px 28px; margin-bottom: 16px; padding: 26px; border: 1px solid #bfd0ff; border-radius: 22px; background: linear-gradient(135deg, #f5f8ff 0%, #eef3ff 55%, #fff 100%); box-shadow: 0 12px 36px rgb(37 82 255 / 7%); }
+.hduhelp-connect-copy > span { color: var(--cf-blue); font-size: 10px; font-weight: 850; letter-spacing: .13em; }
+.hduhelp-connect-copy h2 { margin: 7px 0 6px; font-size: 23px; }
+.hduhelp-connect-copy p { max-width: 600px; margin: 0; color: var(--cf-muted); font-size: 13px; line-height: 1.65; }
+.hduhelp-resource-grid { display: flex; flex-wrap: wrap; align-content: center; gap: 8px; }
+.hduhelp-resource-grid span { padding: 8px 11px; border: 1px solid rgb(30 39 60 / 9%); border-radius: 999px; background: rgb(255 255 255 / 75%); color: var(--cf-muted); font-size: 11px; }
+.hduhelp-resource-grid span.ready { border-color: rgb(22 162 118 / 20%); background: rgb(22 162 118 / 8%); color: #087d5b; }
+.hduhelp-resource-grid span.warning { border-color: rgb(221 139 31 / 25%); background: rgb(221 139 31 / 9%); color: #a55f00; }
+.hduhelp-connect-actions { display: flex; grid-column: 1 / -1; flex-wrap: wrap; gap: 9px; }
+.hduhelp-connect-actions .primary-action { min-width: 170px; }
 .subscription-control { padding: 24px; border: 1px solid var(--cf-line); border-radius: 20px; background: var(--cf-surface-soft); }
 .subscription-control { display: grid; grid-template-columns: minmax(240px, .8fr) minmax(280px, 1fr); gap: 18px 28px; }
 .subscription-control h2 { margin: 6px 0; }
@@ -631,7 +641,8 @@ kbd { border: 1px solid var(--cf-line); border-radius: 5px; background: var(--cf
   .settings-nav { display: flex; overflow: auto; }
   .settings-nav button { flex: 1 0 auto; }
   .settings-identity { margin-bottom: 16px; padding-bottom: 16px; }
-  .subscription-control { grid-template-columns: 1fr; }
+  .hduhelp-connect-card, .subscription-control { grid-template-columns: 1fr; }
+  .hduhelp-connect-actions { grid-column: auto; }
   .subscription-actions { grid-column: 1; }
   .campus-data-hub { grid-template-columns: 1fr; }
 }
@@ -738,6 +749,9 @@ kbd { border: 1px solid var(--cf-line); border-radius: 5px; background: var(--cf
   .settings-form .wide { grid-column: auto; }
   .key-setting { grid-template-columns: 1fr; padding: 18px; }
   .settings-save { width: 100%; }
+  .hduhelp-connect-card { padding: 20px 18px; }
+  .hduhelp-connect-actions { display: grid; }
+  .hduhelp-connect-actions > * { width: 100%; }
   .subscription-control { padding: 18px; }
   .subscription-control form { display: grid; }
   .campus-package-card, .campus-correction-card { padding: 20px 18px; }

@@ -97,6 +97,35 @@ OFFICIAL_SKILLS: tuple[dict[str, Any], ...] = (
             },
         ],
     },
+    {
+        "skill_id": "hduhelp-campus-context",
+        "name": "HDUHelp 校园档案",
+        "description": "读取你明确授权并同步的本人学籍、成绩、考试、校园卡余额与图书馆预约。",
+        "category": "校园数据",
+        "version": "1.0.0",
+        "author": "CampusFlow Official",
+        "capabilities": ["学籍档案", "成绩与 GPA", "考试安排", "校园卡余额", "图书馆预约"],
+        "permissions": [
+            {
+                "code": "hduhelp.profile.read",
+                "label": "读取本人学籍",
+                "description": "读取你通过 HDUHelp 授权并同步的本人身份与学籍数据。",
+                "access": "read",
+            },
+            {
+                "code": "hduhelp.academic.read",
+                "label": "读取学业数据",
+                "description": "读取本人成绩、GPA 与考试安排。",
+                "access": "read",
+            },
+            {
+                "code": "hduhelp.campuslife.read",
+                "label": "读取校园生活数据",
+                "description": "读取校园卡余额与图书馆座位预约。",
+                "access": "read",
+            },
+        ],
+    },
 )
 
 
@@ -106,6 +135,9 @@ TOOL_SKILLS = {
     "find_campus_places": "campus-navigator",
     "plan_campus_route": "campus-navigator",
     "propose_task_change": "ddl-guardian",
+    "get_hduhelp_profile": "hduhelp-campus-context",
+    "get_hduhelp_academics": "hduhelp-campus-context",
+    "get_hduhelp_campus_life": "hduhelp-campus-context",
 }
 
 

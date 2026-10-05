@@ -11,7 +11,9 @@ from langchain.agents import create_agent
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langchain_openai import ChatOpenAI
 
+from .accounts import AccountStore
 from .config import Settings
+from .key_vault import ApiKeyVault
 from .schemas import PendingAction, ToolTrace
 from .skills import SkillStore
 from .store import CampusStore
@@ -34,6 +36,8 @@ SYSTEM_PROMPT = """你是 CampusFlow 大学规划与执行 Agent，服务高校�
 11. 最终答复必须自包含，不得使用“内容如上”“结果见工具”等依赖隐藏过程或执行轨迹的表述。
 12. 用户询问从校园地点 A 到地点 B 怎么走、导航或路线图时，调用 plan_campus_route；
     回复中概括预计时间与途经点，客户端会根据工具结果绘制路线图。
+13. 用户询问本人学籍、成绩、GPA、考试、校园卡余额或图书馆预约时，调用对应的
+    HDUHelp 工具；只使用当前账户已授权、已同步的数据，不推断缺失字段。
 """
 
 CAMPUS_TIMEZONE = timezone(timedelta(hours=8), name="Asia/Shanghai")
@@ -62,10 +66,14 @@ class AgentService:
         settings: Settings,
         store: CampusStore,
         skill_store: SkillStore | None = None,
+        account_store: AccountStore | None = None,
+        credential_vault: ApiKeyVault | None = None,
     ) -> None:
         self.settings = settings
         self.store = store
         self.skill_store = skill_store
+        self.account_store = account_store
+        self.credential_vault = credential_vault
 
     @staticmethod
     def _build_system_prompt(now: datetime | None = None) -> str:
@@ -118,7 +126,12 @@ class AgentService:
         )
         return create_agent(
             model=model,
-            tools=build_tools(self.store, allowed_tools),
+            tools=build_tools(
+                self.store,
+                allowed_tools,
+                self.account_store,
+                self.credential_vault,
+            ),
             system_prompt=self._build_system_prompt(),
         )
 

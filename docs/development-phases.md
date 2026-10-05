@@ -87,14 +87,26 @@
 
 验收条件：Agent 能基于所选校区稳定查询地点和校园信息。
 
+### 阶段 5.1：HDUHelp Connect 用户档案
+
+状态：代码与模拟 OAuth 全流程已完成；等待 HDUHelp 开放平台分配 App ID/Secret 后执行真实账号授权验收。
+
+- OAuth 2.0 Authorization Code + PKCE、一次性 state 和自动刷新
+- 身份摘要、学生档案、成绩、考试、校园卡余额和图书馆预约同步
+- Token 与资源缓存加密、按用户隔离、断开即清除
+- Agent 只读工具、官方 Skill、权限声明和运行审计
+- Web 与 ArkUI-X 连接、同步、状态和断开入口
+
+验收条件：用户只在 HDUHelp 官方页面授权，CampusFlow 不接触校园密码；授权后 Agent 可按权限读取同步数据。
+
 ## 阶段 6：ArkUI-X 跨端客户端
 
-状态：进行中。已完成 6.1 共享客户端骨架与核心流程迁移，等待安装 ArkUI-X SDK 后执行 HarmonyOS/Android 构建和真机验收。
+状态：进行中。已完成共享客户端骨架、核心流程迁移、Phone 模拟器回归和 HarmonyOS HAP 构建；Android APK 与真机签名发布仍待完成。
 
 - ArkUI-X 页面与状态管理（6.1 已完成）
 - 登录、注册、首次配置、五入口与 FastAPI 类型化请求层（6.1 已完成）
 - DeepSeek 对话、操作确认、课表同步、Skills、规划和原生路线图（6.1 已完成）
-- HarmonyOS 和 Android 构建
+- HarmonyOS HAP 构建（已完成）；Android APK 构建（待 Android SDK）
 - Agent API、账号、通知和系统能力联调
 - 跨端功能与布局一致性测试
 

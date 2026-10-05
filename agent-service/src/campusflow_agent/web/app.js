@@ -115,6 +115,11 @@ const elements = {
   settingsSemester: $("#settingsSemester"),
   settingsApiKey: $("#settingsApiKey"),
   settingsKeyState: $("#settingsKeyState"),
+  hduHelpConnectionState: $("#hduHelpConnectionState"),
+  hduHelpResourceList: $("#hduHelpResourceList"),
+  connectHduHelpButton: $("#connectHduHelpButton"),
+  syncHduHelpButton: $("#syncHduHelpButton"),
+  disconnectHduHelpButton: $("#disconnectHduHelpButton"),
   adminTabButton: $("#adminTabButton"),
   settingsCourseCount: $("#settingsCourseCount"),
   settingsPlaceCount: $("#settingsPlaceCount"),
@@ -166,6 +171,7 @@ const state = {
   scheduleSubscriptionUrl: "",
   scheduleSubscription: null,
   campusData: null,
+  hduHelp: null,
 };
 
 function createSessionId() {
@@ -1564,6 +1570,100 @@ function renderScheduleSubscriptionStatus(status) {
   elements.scheduleSubscriptionState.textContent = `已安全连接 ${status.source_host} · ${status.event_count} 条课程 · 最近同步 ${syncedAt}`;
 }
 
+const hduHelpResourceLabels = {
+  identity: "账户身份",
+  person: "本人学籍",
+  grades: "成绩 / GPA",
+  exams: "考试安排",
+  card_balance: "校园卡余额",
+  library_bookings: "图书馆预约",
+};
+
+function renderHduHelpStatus(status) {
+  state.hduHelp = status;
+  const connected = Boolean(status.configured);
+  elements.connectHduHelpButton.hidden = connected;
+  elements.syncHduHelpButton.hidden = !connected;
+  elements.disconnectHduHelpButton.hidden = !connected;
+  elements.hduHelpResourceList.replaceChildren();
+  if (!connected) {
+    elements.hduHelpConnectionState.textContent = "通过 HDUHelp 官方授权页连接，不会向 CampusFlow 提交杭电密码。";
+    ["学籍", "成绩 / GPA", "考试", "校园卡", "图书馆预约"].forEach((label) => {
+      const chip = document.createElement("span");
+      chip.textContent = label;
+      elements.hduHelpResourceList.append(chip);
+    });
+    return;
+  }
+  const syncedAt = status.last_synced_at
+    ? new Date(status.last_synced_at).toLocaleString("zh-CN", {
+        month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit",
+      })
+    : "尚未同步";
+  const identity = status.external_name ? ` · ${status.external_name}` : "";
+  elements.hduHelpConnectionState.textContent = `已安全连接${identity} · 最近同步 ${syncedAt}`;
+  const resources = status.resources?.length ? status.resources : Object.keys(hduHelpResourceLabels);
+  resources.forEach((resource) => {
+    const chip = document.createElement("span");
+    chip.textContent = hduHelpResourceLabels[resource] ?? resource;
+    chip.classList.toggle("ready", status.resources?.includes(resource));
+    elements.hduHelpResourceList.append(chip);
+  });
+  if (status.last_error) {
+    const chip = document.createElement("span");
+    chip.className = "warning";
+    chip.textContent = "部分数据待重试";
+    elements.hduHelpResourceList.append(chip);
+  }
+}
+
+async function loadHduHelpStatus() {
+  try {
+    renderHduHelpStatus(await api("/api/v1/hduhelp/status"));
+  } catch (error) {
+    showToast(error.message, "error");
+  }
+}
+
+async function connectHduHelp() {
+  setButtonBusy(elements.connectHduHelpButton, true, "正在创建授权…");
+  try {
+    const payload = await api("/api/v1/hduhelp/connect", { method: "POST" });
+    globalThis.location.assign(payload.authorize_url);
+  } catch (error) {
+    showToast(error.message, "error");
+    setButtonBusy(elements.connectHduHelpButton, false, "");
+  }
+}
+
+async function syncHduHelp() {
+  elements.syncHduHelpButton.disabled = true;
+  try {
+    const payload = await api("/api/v1/hduhelp/sync", { method: "POST" });
+    renderHduHelpStatus(payload.status);
+    const failed = Object.keys(payload.errors ?? {}).length;
+    showToast(failed ? `已同步 ${payload.synced_resources.length} 类数据，${failed} 类待重试` : `已同步 ${payload.synced_resources.length} 类校园数据`);
+  } catch (error) {
+    showToast(error.message, "error");
+  } finally {
+    elements.syncHduHelpButton.disabled = false;
+  }
+}
+
+async function disconnectHduHelp() {
+  if (!globalThis.confirm("确定断开 HDUHelp 吗？已同步的学籍、成绩和校园生活缓存也会删除。")) return;
+  elements.disconnectHduHelpButton.disabled = true;
+  try {
+    await api("/api/v1/hduhelp/connection", { method: "DELETE" });
+    renderHduHelpStatus({ configured: false, resources: [] });
+    showToast("HDUHelp 已断开，本地同步数据已删除");
+  } catch (error) {
+    showToast(error.message, "error");
+  } finally {
+    elements.disconnectHduHelpButton.disabled = false;
+  }
+}
+
 async function loadScheduleSubscriptionStatus() {
   try {
     renderScheduleSubscriptionStatus(await api("/api/v1/schedule-subscriptions"));
@@ -1734,7 +1834,7 @@ async function loadSettingsContext(force = false, loadSubscription = true) {
   });
   if (!courses.length) elements.settingsCourseList.append(contextListItem("暂无课表", "请重新配置学习数据"));
   if (!places.length) elements.settingsPlaceList.append(contextListItem("暂无地点", "请重新配置校园地图"));
-  const requests = [loadCampusData()];
+  const requests = [loadCampusData(), loadHduHelpStatus()];
   if (loadSubscription) requests.push(loadScheduleSubscriptionStatus());
   await Promise.all(requests);
 }
@@ -1826,6 +1926,14 @@ async function checkHealth() {
 
 async function initialize() {
   checkHealth();
+  const hduHelpResult = new URLSearchParams(globalThis.location.search).get("hduhelp");
+  if (hduHelpResult) {
+    globalThis.history.replaceState({}, "", globalThis.location.pathname);
+    setTimeout(() => showToast(
+      hduHelpResult === "connected" ? "HDUHelp 授权成功，可在学习数据中开始同步" : "HDUHelp 授权未完成，请重试",
+      hduHelpResult === "connected" ? "info" : "error",
+    ), 100);
+  }
   try {
     state.user = await api("/api/v1/me");
     if (state.user.onboarding_complete) showApp();
@@ -1853,6 +1961,9 @@ elements.historySearch.addEventListener("input", () => {
   elements.historySearch.searchTimer = setTimeout(() => loadHistory(elements.historySearch.value.trim()), 180);
 });
 elements.settingsForm.addEventListener("submit", saveSettings);
+elements.connectHduHelpButton.addEventListener("click", connectHduHelp);
+elements.syncHduHelpButton.addEventListener("click", syncHduHelp);
+elements.disconnectHduHelpButton.addEventListener("click", disconnectHduHelp);
 elements.setupSubscriptionForm.addEventListener("submit", previewScheduleSubscription);
 elements.scheduleSubscriptionForm.addEventListener("submit", saveScheduleSubscription);
 elements.syncSubscriptionButton.addEventListener("click", syncScheduleSubscription);

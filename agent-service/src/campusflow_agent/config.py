@@ -22,6 +22,16 @@ class Settings(BaseSettings):
     deepseek_thinking_enabled: bool = True
     agent_timeout_seconds: float = 90.0
 
+    hduhelp_base_url: str = "https://api.hduhelp.com"
+    hduhelp_app_id: str | None = None
+    hduhelp_app_secret: str | None = None
+    hduhelp_redirect_uri: str | None = None
+    hduhelp_scopes: str = (
+        "contact:user.id:read,academic:student:read,academic:grade:read,"
+        "academic:exam:read,campuslife:campuscard:read,librarybooking:seat:read"
+    )
+    hduhelp_timeout_seconds: float = 20.0
+
 
 @lru_cache
 def get_settings() -> Settings:

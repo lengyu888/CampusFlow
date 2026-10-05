@@ -12,6 +12,10 @@
 - 预览课表订阅：`POST /api/v1/schedule-subscriptions/preview`
 - 连接/查看课表订阅：`PUT /api/v1/schedule-subscriptions`、`GET /api/v1/schedule-subscriptions`
 - 同步/断开课表订阅：`POST /api/v1/schedule-subscriptions/sync`、`DELETE /api/v1/schedule-subscriptions`
+- HDUHelp OAuth 连接状态：`GET /api/v1/hduhelp/status`
+- 发起/完成 HDUHelp OAuth：`POST /api/v1/hduhelp/connect`、`GET /api/v1/hduhelp/callback`
+- 同步/读取 HDUHelp 数据：`POST /api/v1/hduhelp/sync`、`GET /api/v1/hduhelp/data`
+- 断开并删除 HDUHelp 数据：`DELETE /api/v1/hduhelp/connection`
 - 校园数据包快照：`GET /api/v1/campus-data`
 - 地点/步行查询：`GET /api/v1/campus-data/places?query=&origin=`
 - 校园路线图：`GET /api/v1/campus-data/route?origin=&destination=`
@@ -34,4 +38,14 @@
 - 完成/恢复待办：`PATCH /api/v1/tasks/{task_id}`
 - 删除待办：`DELETE /api/v1/tasks/{task_id}`
 - 确认事务：`POST /api/v1/actions/{proposal_id}/confirm`
+
+## HDUHelp Connect
+
+正式接入使用 OAuth2 Authorization Code + PKCE，不接收或保存杭电密码。向 HDUHelp
+申请应用后，在 `.env` 设置 `HDUHELP_APP_ID`、`HDUHELP_APP_SECRET` 和已登记的
+`HDUHELP_REDIRECT_URI`。默认只申请本人学籍、成绩、考试、校园卡和图书馆预约的只读
+scope；令牌与同步缓存均使用 `APP_SECRET_KEY` 对应的 Fernet 密钥加密后写入 SQLite。
+
+未配置应用凭据时，页面仍可查看连接入口，但发起连接会返回明确的 503 配置提示；离线
+测试通过 Fake HDUHelp 服务覆盖授权、同步、一次性 state 和断开删除流程。
 

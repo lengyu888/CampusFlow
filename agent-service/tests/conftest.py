@@ -1,4 +1,5 @@
 from collections.abc import AsyncIterator
+from datetime import UTC, datetime, timedelta
 
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
@@ -7,6 +8,7 @@ from campusflow_agent.accounts import AccountStore
 from campusflow_agent.agent import AgentReply
 from campusflow_agent.api import create_app
 from campusflow_agent.config import Settings
+from campusflow_agent.hduhelp import OAuthStart, SyncResult, TokenSet
 from campusflow_agent.schemas import (
     CampusMapParseResult,
     CampusPlace,
@@ -96,6 +98,70 @@ class FakeScheduleSubscriptionService:
         )
 
 
+class FakeHDUHelpService:
+    configured = True
+    scopes = [
+        "academic:student:read",
+        "academic:grade:read",
+        "academic:exam:read",
+        "campuslife:campuscard:read",
+        "librarybooking:seat:read",
+    ]
+
+    def __init__(self) -> None:
+        self.revoked = False
+
+    def start_authorization(self) -> OAuthStart:
+        return OAuthStart(
+            authorize_url="https://api.hduhelp.com/authorize?state=test-oauth-state",
+            state="test-oauth-state",
+            code_verifier="test-code-verifier",
+            expires_at=datetime.now(UTC) + timedelta(minutes=10),
+        )
+
+    async def exchange_code(self, code: str, code_verifier: str) -> TokenSet:
+        assert code == "approved-code"
+        assert code_verifier == "test-code-verifier"
+        return TokenSet(
+            access_token="hduhelp-access-token",
+            refresh_token="hduhelp-refresh-token",
+            token_type="Bearer",
+            scopes=self.scopes,
+            expires_at=datetime.now(UTC) + timedelta(hours=2),
+        )
+
+    async def refresh(self, refresh_token: str) -> TokenSet:
+        assert refresh_token == "hduhelp-refresh-token"
+        return await self.exchange_code("approved-code", "test-code-verifier")
+
+    async def revoke(self, token: str, token_type_hint: str) -> None:
+        assert token
+        assert token_type_hint in {"refresh_token", "access_token"}
+        self.revoked = True
+
+    async def user_info(self, access_token: str) -> dict:
+        assert access_token == "hduhelp-access-token"
+        return {
+            "userId": "hdu-user-001",
+            "name": "小航",
+            "identityType": "undergraduate",
+        }
+
+    async def sync_resources(self, access_token: str) -> SyncResult:
+        assert access_token == "hduhelp-access-token"
+        return SyncResult(
+            resources={
+                "identity": {"userId": "hdu-user-001", "name": "小航"},
+                "person": {"college": "计算机学院", "major": "软件工程"},
+                "grades": {"gpa": 3.72, "courses": [{"name": "操作系统", "score": 91}]},
+                "exams": [{"course": "操作系统", "room": "7教406"}],
+                "card_balance": {"balance": 86.5},
+                "library_bookings": {"items": [{"seat": "A-108"}]},
+            },
+            errors={},
+        )
+
+
 @pytest_asyncio.fixture
 async def client() -> AsyncIterator[AsyncClient]:
     store = CampusStore()
@@ -107,6 +173,7 @@ async def client() -> AsyncIterator[AsyncClient]:
         account_store=AccountStore(":memory:"),
         vision_service=FakeVisionService(),  # type: ignore[arg-type]
         schedule_subscription_service=FakeScheduleSubscriptionService(),  # type: ignore[arg-type]
+        hduhelp_service=FakeHDUHelpService(),  # type: ignore[arg-type]
     )
     async with AsyncClient(
         transport=ASGITransport(app=app),

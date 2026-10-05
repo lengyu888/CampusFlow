@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from contextvars import ContextVar
 from datetime import date as date_type
 from datetime import datetime, timedelta
@@ -7,6 +8,8 @@ from datetime import datetime, timedelta
 from langchain_core.tools import BaseTool, tool
 from pydantic import BaseModel, Field
 
+from .accounts import AccountStore
+from .key_vault import ApiKeyVault
 from .store import CampusStore
 
 CURRENT_USER_ID: ContextVar[str] = ContextVar("campusflow_user_id", default="demo-student")
@@ -46,7 +49,24 @@ class PlanMilestoneInput(BaseModel):
 def build_tools(
     store: CampusStore,
     allowed_tool_names: set[str] | None = None,
+    hduhelp_store: AccountStore | None = None,
+    credential_vault: ApiKeyVault | None = None,
 ) -> list[BaseTool]:
+    def hduhelp_resource(name: str) -> dict | None:
+        if hduhelp_store is None or credential_vault is None:
+            return None
+        snapshot = hduhelp_store.get_hduhelp_resource(CURRENT_USER_ID.get(), name)
+        if snapshot is None:
+            return None
+        try:
+            return {
+                "resource": snapshot["resource"],
+                "data": json.loads(credential_vault.decrypt(snapshot["encrypted_data"])),
+                "synced_at": snapshot["synced_at"],
+            }
+        except (ValueError, json.JSONDecodeError):
+            return None
+
     @tool
     def get_schedule(
         date: str | None = None,
@@ -111,6 +131,42 @@ def build_tools(
         return store.plan_campus_route(origin, destination).model_dump(mode="json")
 
     @tool
+    def get_hduhelp_profile() -> dict:
+        """读取当前用户已授权并同步的 HDUHelp 本人身份与学籍信息。"""
+        if hduhelp_store is None:
+            return {"connected": False, "message": "HDUHelp 数据源未启用。"}
+        user_id = CURRENT_USER_ID.get()
+        return {
+            "connected": hduhelp_store.get_hduhelp_status(user_id)["configured"],
+            "identity": hduhelp_resource("identity"),
+            "person": hduhelp_resource("person"),
+        }
+
+    @tool
+    def get_hduhelp_academics() -> dict:
+        """读取当前用户已同步的 HDUHelp 本人成绩、GPA 和考试安排。"""
+        if hduhelp_store is None:
+            return {"connected": False, "message": "HDUHelp 数据源未启用。"}
+        user_id = CURRENT_USER_ID.get()
+        return {
+            "connected": hduhelp_store.get_hduhelp_status(user_id)["configured"],
+            "grades": hduhelp_resource("grades"),
+            "exams": hduhelp_resource("exams"),
+        }
+
+    @tool
+    def get_hduhelp_campus_life() -> dict:
+        """读取当前用户已同步的校园卡余额和图书馆座位预约。"""
+        if hduhelp_store is None:
+            return {"connected": False, "message": "HDUHelp 数据源未启用。"}
+        user_id = CURRENT_USER_ID.get()
+        return {
+            "connected": hduhelp_store.get_hduhelp_status(user_id)["configured"],
+            "card_balance": hduhelp_resource("card_balance"),
+            "library_bookings": hduhelp_resource("library_bookings"),
+        }
+
+    @tool
     def propose_task_change(
         action: str,
         title: str,
@@ -173,6 +229,9 @@ def build_tools(
         search_campus_notices,
         find_campus_places,
         plan_campus_route,
+        get_hduhelp_profile,
+        get_hduhelp_academics,
+        get_hduhelp_campus_life,
         propose_task_change,
         propose_plan,
     ]

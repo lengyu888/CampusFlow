@@ -8,6 +8,9 @@ import {
   ChatResponse,
   ConfirmActionResponse,
   HistoryMessage,
+  HDUHelpConnectResponse,
+  HDUHelpConnectionStatus,
+  HDUHelpSyncResponse,
   OnboardingResponse,
   PlanningOverview,
   PlanningTask,
@@ -202,5 +205,21 @@ export class CampusFlowApi {
 
   async syncSubscription(): Promise<SyncResponse> {
     return this.request<SyncResponse>('/api/v1/schedule-subscriptions/sync', http.RequestMethod.POST, '{}');
+  }
+
+  async hduHelpStatus(): Promise<HDUHelpConnectionStatus> {
+    return this.request<HDUHelpConnectionStatus>('/api/v1/hduhelp/status', http.RequestMethod.GET);
+  }
+
+  async connectHduHelp(): Promise<HDUHelpConnectResponse> {
+    return this.request<HDUHelpConnectResponse>('/api/v1/hduhelp/connect', http.RequestMethod.POST, '{}');
+  }
+
+  async syncHduHelp(): Promise<HDUHelpSyncResponse> {
+    return this.request<HDUHelpSyncResponse>('/api/v1/hduhelp/sync', http.RequestMethod.POST, '{}');
+  }
+
+  async disconnectHduHelp(): Promise<void> {
+    await this.request<void>('/api/v1/hduhelp/connection', http.RequestMethod.DELETE, '{}');
   }
 }

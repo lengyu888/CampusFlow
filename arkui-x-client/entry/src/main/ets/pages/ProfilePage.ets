@@ -1,4 +1,9 @@
-import { AdminUserSummary, ScheduleSubscriptionStatus, UserProfile } from '../model/ApiModels';
+import {
+  AdminUserSummary,
+  HDUHelpConnectionStatus,
+  ScheduleSubscriptionStatus,
+  UserProfile
+} from '../model/ApiModels';
 import { CampusFlowApi } from '../services/CampusFlowApi';
 
 @Component
@@ -19,6 +24,19 @@ export struct ProfilePage {
   };
   @State private message: string = '';
   @State private adminUsers: AdminUserSummary[] = [];
+  @State private hduHelp: HDUHelpConnectionStatus = {
+    configured: false,
+    provider: null,
+    scopes: [],
+    external_name: null,
+    identity_type: null,
+    expires_at: null,
+    connected_at: null,
+    last_synced_at: null,
+    last_error: null,
+    resources: []
+  };
+  @State private hduHelpAuthorizeUrl: string = '';
 
   aboutToAppear(): void {
     this.displayName = this.user.display_name;
@@ -26,6 +44,7 @@ export struct ProfilePage {
     this.campus = this.user.campus ?? '';
     this.semester = this.user.semester ?? '';
     this.loadSubscription();
+    this.loadHduHelp();
     if (this.user.role === 'admin') {
       this.loadAdminUsers();
     }
@@ -44,6 +63,46 @@ export struct ProfilePage {
       this.subscription = await new CampusFlowApi(this.baseUrl, this.token).subscriptionStatus();
     } catch (error) {
       this.message = `订阅状态加载失败：${error}`;
+    }
+  }
+
+  private async loadHduHelp(): Promise<void> {
+    try {
+      this.hduHelp = await new CampusFlowApi(this.baseUrl, this.token).hduHelpStatus();
+    } catch (error) {
+      this.message = `HDUHelp 状态加载失败：${error}`;
+    }
+  }
+
+  private async connectHduHelp(): Promise<void> {
+    try {
+      const result = await new CampusFlowApi(this.baseUrl, this.token).connectHduHelp();
+      this.hduHelpAuthorizeUrl = result.authorize_url;
+      this.message = '授权链接已生成，请在 HDUHelp 官方页面确认后返回并检查连接。';
+    } catch (error) {
+      this.message = `无法发起 HDUHelp 授权：${error}`;
+    }
+  }
+
+  private async syncHduHelp(): Promise<void> {
+    try {
+      const result = await new CampusFlowApi(this.baseUrl, this.token).syncHduHelp();
+      this.hduHelp = result.status;
+      this.message = `已同步 ${result.synced_resources.length} 类 HDUHelp 数据。`;
+    } catch (error) {
+      this.message = `HDUHelp 同步失败：${error}`;
+    }
+  }
+
+  private async disconnectHduHelp(): Promise<void> {
+    try {
+      await new CampusFlowApi(this.baseUrl, this.token).disconnectHduHelp();
+      this.hduHelp.configured = false;
+      this.hduHelp.resources = [];
+      this.hduHelpAuthorizeUrl = '';
+      this.message = 'HDUHelp 已断开，本地同步数据已删除。';
+    } catch (error) {
+      this.message = `HDUHelp 断开失败：${error}`;
     }
   }
 
@@ -120,6 +179,38 @@ export struct ProfilePage {
             (value) => this.newApiKey = value, true)
           Button('保存配置').width('100%').height(43).fontColor('#FFFFFF').backgroundColor('#171A22')
             .borderRadius(13).onClick(() => this.saveProfile())
+        }.width('100%').padding(18).backgroundColor('#FFFFFF').borderRadius(22)
+
+        Column({ space: 12 }) {
+          Row() {
+            Column({ space: 4 }) {
+              Text('HDUHelp 校园档案').fontSize(17).fontWeight(FontWeight.Bold).fontColor('#171A22')
+              Text('官方 OAuth 授权，不提交杭电密码').fontSize(10).fontColor('#7B8292')
+            }.alignItems(HorizontalAlign.Start)
+            Blank()
+            Text(this.hduHelp.configured ? '已连接' : '未连接').fontSize(11)
+              .fontColor(this.hduHelp.configured ? '#19966B' : '#8B91A0')
+          }.width('100%')
+          if (this.hduHelp.configured) {
+            Text(`${this.hduHelp.external_name ?? '当前用户'} · ${this.hduHelp.resources.length} 类数据`)
+              .fontSize(12).fontColor('#315BFF').width('100%').padding(12)
+              .backgroundColor('#E9EEFF').borderRadius(13)
+            Row({ space: 9 }) {
+              Button('同步数据').layoutWeight(1).height(42).fontColor('#FFFFFF').backgroundColor('#315BFF')
+                .borderRadius(13).onClick(() => this.syncHduHelp())
+              Button('断开并删除').layoutWeight(1).height(42).fontColor('#D33D3D').backgroundColor('#FFF0F0')
+                .borderRadius(13).onClick(() => this.disconnectHduHelp())
+            }.width('100%')
+          } else {
+            Button('生成官方授权链接').width('100%').height(42).fontColor('#FFFFFF')
+              .backgroundColor('#315BFF').borderRadius(13).onClick(() => this.connectHduHelp())
+            if (this.hduHelpAuthorizeUrl.length > 0) {
+              Hyperlink(this.hduHelpAuthorizeUrl, '打开 HDUHelp 官方授权页 ↗')
+                .color('#315BFF').width('100%')
+              Button('我已授权，检查连接').width('100%').height(40).fontColor('#315BFF')
+                .backgroundColor('#E9EEFF').borderRadius(13).onClick(() => this.loadHduHelp())
+            }
+          }
         }.width('100%').padding(18).backgroundColor('#FFFFFF').borderRadius(22)
 
         Column({ space: 12 }) {

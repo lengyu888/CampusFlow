@@ -236,6 +236,49 @@ class ScheduleSubscriptionSyncResponse(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
+class HDUHelpConnectionStatus(BaseModel):
+    configured: bool = False
+    provider: Literal["hduhelp"] | None = None
+    scopes: list[str] = Field(default_factory=list)
+    external_name: str | None = None
+    identity_type: str | None = None
+    expires_at: datetime | None = None
+    connected_at: datetime | None = None
+    last_synced_at: datetime | None = None
+    last_error: str | None = None
+    resources: list[str] = Field(default_factory=list)
+
+
+class HDUHelpConnectResponse(BaseModel):
+    authorize_url: str
+    expires_at: datetime
+    scopes: list[str] = Field(default_factory=list)
+
+
+class HDUHelpResourceSnapshot(BaseModel):
+    resource: Literal[
+        "identity",
+        "person",
+        "grades",
+        "exams",
+        "card_balance",
+        "library_bookings",
+    ]
+    data: Any
+    synced_at: datetime
+
+
+class HDUHelpDataResponse(BaseModel):
+    status: HDUHelpConnectionStatus
+    resources: list[HDUHelpResourceSnapshot] = Field(default_factory=list)
+
+
+class HDUHelpSyncResponse(BaseModel):
+    status: HDUHelpConnectionStatus
+    synced_resources: list[str] = Field(default_factory=list)
+    errors: dict[str, str] = Field(default_factory=dict)
+
+
 class TimetableParseResult(BaseModel):
     academic_year: str = ""
     semester: str = ""

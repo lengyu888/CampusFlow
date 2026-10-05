@@ -188,6 +188,31 @@ export interface SyncResponse {
   warnings: string[];
 }
 
+export interface HDUHelpConnectionStatus {
+  configured: boolean;
+  provider: string | null;
+  scopes: string[];
+  external_name: string | null;
+  identity_type: string | null;
+  expires_at: string | null;
+  connected_at: string | null;
+  last_synced_at: string | null;
+  last_error: string | null;
+  resources: string[];
+}
+
+export interface HDUHelpConnectResponse {
+  authorize_url: string;
+  expires_at: string;
+  scopes: string[];
+}
+
+export interface HDUHelpSyncResponse {
+  status: HDUHelpConnectionStatus;
+  synced_resources: string[];
+  errors: Record<string, string>;
+}
+
 export interface AdminUserSummary {
   user_id: string;
   email: string;
