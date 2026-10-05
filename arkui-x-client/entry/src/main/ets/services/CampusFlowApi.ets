@@ -1,15 +1,21 @@
 import http from '@ohos.net.http';
 import {
+  AdminUserSummary,
   AuthResponse,
+  CampusDataSnapshot,
+  CampusMapSummary,
   CampusRoute,
   ChatResponse,
   ConfirmActionResponse,
+  HistoryMessage,
   OnboardingResponse,
   PlanningOverview,
   PlanningTask,
   ScheduleSubscriptionStatus,
   SkillSummary,
+  SessionSummary,
   SyncResponse,
+  TimetableEntry,
   UserContextResponse,
   UserProfile
 } from '../model/ApiModels';
@@ -26,12 +32,6 @@ interface RequestHeaders {
   'Accept': string;
   'Content-Type': string;
   'Authorization': string;
-}
-
-interface CampusMapPayload {
-  campus_name: string;
-  places: string[];
-  warnings: string[];
 }
 
 const PATCH_METHOD: http.RequestMethod = 'PATCH' as http.RequestMethod;
@@ -70,6 +70,9 @@ export class CampusFlowApi {
       if (response.responseCode < 200 || response.responseCode >= 300) {
         throw new Error(`请求失败（${response.responseCode}）：${text}`);
       }
+      if (response.responseCode === 204 || text.length === 0) {
+        return undefined as T;
+      }
       return JSON.parse(text) as T;
     } finally {
       client.destroy();
@@ -81,22 +84,25 @@ export class CampusFlowApi {
       JSON.stringify({ email: email, password: password }));
   }
 
+  async logout(): Promise<void> {
+    // HarmonyOS NetStack may reject an empty-string payload before sending a POST.
+    // Use an empty JSON object for body-less API actions so the request reliably
+    // reaches the service (most importantly, so logout revokes the server token).
+    await this.request<void>('/api/v1/auth/logout', http.RequestMethod.POST, '{}');
+  }
+
   async register(email: string, password: string, displayName: string, apiKey: string): Promise<AuthResponse> {
     return this.request<AuthResponse>('/api/v1/auth/register', http.RequestMethod.POST,
       JSON.stringify({ email: email, password: password, display_name: displayName, api_key: apiKey }));
   }
 
-  async completeOnboarding(school: string, campus: string, semester: string): Promise<OnboardingResponse> {
-    const campusMap: CampusMapPayload = {
-      campus_name: `${school}${campus}`,
-      places: [],
-      warnings: ['移动端稍后可继续上传校园地图。']
-    };
+  async completeOnboarding(school: string, campus: string, semester: string,
+    timetable: TimetableEntry[], campusMap: CampusMapSummary): Promise<OnboardingResponse> {
     return this.request<OnboardingResponse>('/api/v1/onboarding', http.RequestMethod.PUT, JSON.stringify({
       school: school,
       campus: campus,
       semester: semester,
-      timetable: [],
+      timetable: timetable,
       campus_map: campusMap
     }));
   }
@@ -112,7 +118,7 @@ export class CampusFlowApi {
 
   async confirmAction(proposalId: string): Promise<ConfirmActionResponse> {
     return this.request<ConfirmActionResponse>(`/api/v1/actions/${encodeURIComponent(proposalId)}/confirm`,
-      http.RequestMethod.POST);
+      http.RequestMethod.POST, '{}');
   }
 
   async campusRoute(origin: string, destination: string): Promise<CampusRoute> {
@@ -120,6 +126,23 @@ export class CampusFlowApi {
       `/api/v1/campus-data/route?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}`,
       http.RequestMethod.GET
     );
+  }
+
+  async campusData(): Promise<CampusDataSnapshot> {
+    return this.request<CampusDataSnapshot>('/api/v1/campus-data', http.RequestMethod.GET);
+  }
+
+  async sessions(): Promise<SessionSummary[]> {
+    return this.request<SessionSummary[]>('/api/v1/sessions', http.RequestMethod.GET);
+  }
+
+  async history(sessionId: string): Promise<HistoryMessage[]> {
+    return this.request<HistoryMessage[]>(`/api/v1/sessions/${encodeURIComponent(sessionId)}/history`,
+      http.RequestMethod.GET);
+  }
+
+  async adminUsers(): Promise<AdminUserSummary[]> {
+    return this.request<AdminUserSummary[]>('/api/v1/admin/users', http.RequestMethod.GET);
   }
 
   async planning(): Promise<PlanningOverview> {
@@ -178,6 +201,6 @@ export class CampusFlowApi {
   }
 
   async syncSubscription(): Promise<SyncResponse> {
-    return this.request<SyncResponse>('/api/v1/schedule-subscriptions/sync', http.RequestMethod.POST);
+    return this.request<SyncResponse>('/api/v1/schedule-subscriptions/sync', http.RequestMethod.POST, '{}');
   }
 }

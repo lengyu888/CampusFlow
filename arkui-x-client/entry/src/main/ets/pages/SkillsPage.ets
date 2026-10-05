@@ -83,7 +83,8 @@ export struct SkillsPage {
               }.width('100%')
             }
           }.width('100%').padding(18).backgroundColor('#FFFFFF').borderRadius(22)
-        }, (skill: SkillSummary) => skill.skill_id)
+        }, (skill: SkillSummary) =>
+          `${skill.skill_id}-${skill.installed}-${skill.enabled}-${skill.installed_version ?? 'none'}`)
       }.width('100%').padding({ left: 18, right: 18, top: 18, bottom: 110 })
     }.width('100%').height('100%').backgroundColor('#F5F7FB')
   }

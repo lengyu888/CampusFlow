@@ -1,6 +1,8 @@
 import { AuthResponse, UserProfile } from '../model/ApiModels';
+import { CampusFlowApi } from '../services/CampusFlowApi';
 import { AgentPage } from './AgentPage';
 import { HomePage } from './HomePage';
+import { HistoryPage } from './HistoryPage';
 import { LoginPage } from './LoginPage';
 import { OnboardingPage } from './OnboardingPage';
 import { PlanPage } from './PlanPage';
@@ -23,9 +25,15 @@ struct Index {
     this.user = auth.user;
   }
 
-  private logout(): void {
-    this.token = '';
-    this.activeTab = 0;
+  private async logout(): Promise<void> {
+    try {
+      await new CampusFlowApi(this.baseUrl, this.token).logout();
+    } catch {
+      // Local sign-out must remain available when the service is temporarily unreachable.
+    } finally {
+      this.token = '';
+      this.activeTab = 0;
+    }
   }
 
   private selectTab(tab: number): void {
@@ -40,14 +48,16 @@ struct Index {
       HomePage({ baseUrl: this.baseUrl, token: this.token, user: this.user,
         onOpenAgent: () => this.selectTab(1) })
     } else if (this.activeTab === 1) {
-      AgentPage({ baseUrl: this.baseUrl, token: this.token })
+      AgentPage({ baseUrl: this.baseUrl, token: this.token, onOpenHistory: () => this.selectTab(5) })
     } else if (this.activeTab === 2) {
       PlanPage({ baseUrl: this.baseUrl, token: this.token })
     } else if (this.activeTab === 3) {
       SkillsPage({ baseUrl: this.baseUrl, token: this.token })
-    } else {
+    } else if (this.activeTab === 4) {
       ProfilePage({ baseUrl: this.baseUrl, token: this.token, user: this.user,
         onUserChanged: (updated) => this.user = updated, onLogout: () => this.logout() })
+    } else {
+      HistoryPage({ baseUrl: this.baseUrl, token: this.token, onBack: () => this.selectTab(1) })
     }
   }
 
@@ -74,8 +84,10 @@ struct Index {
       OnboardingPage({ baseUrl: this.baseUrl, token: this.token,
         onCompleted: (updated) => this.user = updated })
     } else {
-      Stack({ alignContent: Alignment.Bottom }) {
-        this.pageContent()
+      Column() {
+        Column() {
+          this.pageContent()
+        }.layoutWeight(1).width('100%').clip(true)
         Row() {
           this.navItem(0, '⌂', '今日')
           this.navItem(1, '✦', 'Agent')

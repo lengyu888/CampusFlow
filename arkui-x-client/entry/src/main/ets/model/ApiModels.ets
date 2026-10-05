@@ -28,6 +28,15 @@ export interface TimetableEntry {
 
 export interface CampusMapSummary {
   campus_name: string;
+  places: CampusPlaceImport[];
+  warnings: string[];
+}
+
+export interface CampusPlaceImport {
+  name: string;
+  category: string;
+  zone: string;
+  aliases: string[];
 }
 
 export interface UserContextResponse {
@@ -62,13 +71,34 @@ export interface ChatMessage {
   content: string;
 }
 
+export interface HistoryMessage {
+  role: string;
+  content: string;
+  created_at: string;
+}
+
+export interface SessionSummary {
+  session_id: string;
+  title: string;
+  model_name: string;
+  last_message: string;
+  message_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface CampusDataPlace {
   place_id: string;
   name: string;
   category: string;
   zone: string;
+  aliases: string[];
   open_now: boolean;
   open_hours: string;
+}
+
+export interface CampusDataSnapshot {
+  places: CampusDataPlace[];
 }
 
 export interface CampusRoutePoint {
@@ -156,4 +186,18 @@ export interface SyncResponse {
   imported_count: number;
   status: ScheduleSubscriptionStatus;
   warnings: string[];
+}
+
+export interface AdminUserSummary {
+  user_id: string;
+  email: string;
+  display_name: string;
+  school: string | null;
+  campus: string | null;
+  role: string;
+  onboarding_complete: boolean;
+  api_key_configured: boolean;
+  created_at: string;
+  timetable_count: number;
+  campus_place_count: number;
 }

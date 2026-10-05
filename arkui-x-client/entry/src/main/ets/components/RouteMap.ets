@@ -10,23 +10,54 @@ export struct RouteMap {
     const width = 330;
     const height = 244;
     this.context.clearRect(0, 0, width, height);
-    this.context.fillStyle = '#F0F4E9';
+    this.context.fillStyle = '#EAF5E5';
     this.context.fillRect(0, 0, width, height);
 
-    this.context.strokeStyle = '#D8DECF';
-    this.context.lineWidth = 10;
-    for (let y = 42; y < height; y += 58) {
+    // The vector base follows the uploaded HDU Xiasha campus map: the living
+    // area is north of Xuelin Street and the teaching area is in the south.
+    this.context.fillStyle = '#F1E5D4';
+    this.context.fillRect(0, 0, width, 62);
+    this.context.fillStyle = '#D7DCCF';
+    this.context.fillRect(0, 62, width, 12);
+    this.context.fillStyle = '#CBE9F2';
+    this.context.fillRect(0, 222, width, 8);
+
+    this.context.strokeStyle = '#D6DFC9';
+    this.context.lineWidth = 7;
+    for (let y = 104; y < 220; y += 48) {
       this.context.beginPath();
       this.context.moveTo(0, y);
       this.context.lineTo(width, y);
       this.context.stroke();
     }
-    for (let x = 48; x < width; x += 72) {
+    for (let x = 70; x < width; x += 64) {
       this.context.beginPath();
-      this.context.moveTo(x, 0);
-      this.context.lineTo(x, height);
+      this.context.moveTo(x, 74);
+      this.context.lineTo(x, 222);
       this.context.stroke();
     }
+
+    this.context.fillStyle = '#F1BDBD';
+    this.context.fillRect(112, 114, 42, 28);
+    this.context.fillRect(178, 91, 44, 27);
+    this.context.fillRect(244, 124, 42, 28);
+    this.context.fillStyle = '#F4D3A5';
+    this.context.fillRect(135, 23, 46, 22);
+    this.context.fillRect(259, 19, 48, 24);
+    this.context.fillStyle = '#B9D9A8';
+    this.context.fillRect(24, 122, 55, 62);
+    this.context.fillStyle = '#FFF7EA';
+    this.context.fillRect(150, 157, 58, 30);
+
+    this.context.font = '10px sans-serif';
+    this.context.fillStyle = '#526052';
+    this.context.fillText('生活区', 9, 18);
+    this.context.fillText('学林街', 8, 71);
+    this.context.fillText('体育场', 31, 154);
+    this.context.fillText('六教', 121, 132);
+    this.context.fillText('图书馆', 183, 108);
+    this.context.fillText('东门', 296, 151);
+    this.context.fillText('南大门', 144, 240);
 
     if (this.route.path.length === 0) {
       return;
@@ -67,6 +98,9 @@ export struct RouteMap {
       .height(244)
       .clip(true)
       .borderRadius(22)
+
+      Text('杭电下沙校区 · 基于已确认校园地图数据绘制')
+        .fontSize(10).fontColor('#8A90A0').width('100%')
 
       Row() {
         Column({ space: 4 }) {

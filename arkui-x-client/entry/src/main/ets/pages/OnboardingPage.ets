@@ -1,4 +1,4 @@
-import { UserProfile } from '../model/ApiModels';
+import { CampusMapSummary, CampusPlaceImport, UserProfile } from '../model/ApiModels';
 import { CampusFlowApi } from '../services/CampusFlowApi';
 
 @Component
@@ -14,14 +14,37 @@ export struct OnboardingPage {
   @State private message: string = '';
 
   private async finish(): Promise<void> {
+    if (this.scheduleUrl.trim().length === 0) {
+      this.message = '请先填写 HDUHelp 课表订阅链接，完成后仍可在“我的”中更换或同步。';
+      return;
+    }
     this.loading = true;
     this.message = '';
     try {
       const api = new CampusFlowApi(this.baseUrl, this.token);
-      const result = await api.completeOnboarding(this.school, this.campus, this.semester);
-      if (this.scheduleUrl.length > 0) {
-        await api.saveSubscription(this.scheduleUrl);
+      const sync = await api.saveSubscription(this.scheduleUrl.trim());
+      if (sync.imported_count === 0) {
+        throw new Error('订阅中没有可导入的课程。');
       }
+      const context = await api.context();
+      const campusData = await api.campusData();
+      const places: CampusPlaceImport[] = campusData.places.map((item): CampusPlaceImport => {
+        const place: CampusPlaceImport = {
+          name: item.name,
+          category: item.category,
+          zone: item.zone,
+          aliases: item.aliases
+        };
+        return place;
+      });
+      const campusMap: CampusMapSummary = {
+        campus_name: `${this.school}${this.campus}`,
+        places: places,
+        warnings: ['使用 CampusFlow 官方杭电下沙校区数据包。']
+      };
+      const result = await api.completeOnboarding(
+        this.school, this.campus, this.semester, context.timetable, campusMap
+      );
       this.onCompleted(result.user);
     } catch (error) {
       this.message = `配置失败：${error}`;
@@ -51,8 +74,8 @@ export struct OnboardingPage {
           this.field('学校', this.school, (value) => this.school = value)
           this.field('校区', this.campus, (value) => this.campus = value)
           this.field('学期', this.semester, (value) => this.semester = value)
-          this.field('课表订阅链接（可选）', this.scheduleUrl, (value) => this.scheduleUrl = value)
-          Text('图片课表与地图上传将在后续原生媒体选择器阶段接入；现在可先用订阅链接导入课表。')
+          this.field('HDUHelp 课表订阅链接', this.scheduleUrl, (value) => this.scheduleUrl = value)
+          Text('课表将从 HDUHelp 安全导入；校园地点使用 CampusFlow 官方杭电数据包。订阅凭据由服务端加密保存。')
             .fontSize(12).fontColor('#858C9C').width('100%')
           if (this.message.length > 0) {
             Text(this.message).fontSize(12).fontColor('#D33D3D').width('100%')

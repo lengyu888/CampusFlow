@@ -1,4 +1,4 @@
-import { ScheduleSubscriptionStatus, UserProfile } from '../model/ApiModels';
+import { AdminUserSummary, ScheduleSubscriptionStatus, UserProfile } from '../model/ApiModels';
 import { CampusFlowApi } from '../services/CampusFlowApi';
 
 @Component
@@ -18,6 +18,7 @@ export struct ProfilePage {
     configured: false, provider: null, source_host: null, event_count: 0, last_synced_at: null
   };
   @State private message: string = '';
+  @State private adminUsers: AdminUserSummary[] = [];
 
   aboutToAppear(): void {
     this.displayName = this.user.display_name;
@@ -25,6 +26,17 @@ export struct ProfilePage {
     this.campus = this.user.campus ?? '';
     this.semester = this.user.semester ?? '';
     this.loadSubscription();
+    if (this.user.role === 'admin') {
+      this.loadAdminUsers();
+    }
+  }
+
+  private async loadAdminUsers(): Promise<void> {
+    try {
+      this.adminUsers = await new CampusFlowApi(this.baseUrl, this.token).adminUsers();
+    } catch (error) {
+      this.message = `管理员用户列表加载失败：${error}`;
+    }
   }
 
   private async loadSubscription(): Promise<void> {
@@ -128,6 +140,36 @@ export struct ProfilePage {
             }
           }.width('100%')
         }.width('100%').padding(18).backgroundColor('#FFFFFF').borderRadius(22)
+
+        if (this.user.role === 'admin') {
+          Column({ space: 12 }) {
+            Row() {
+              Text('用户管理').fontSize(17).fontWeight(FontWeight.Bold).fontColor('#171A22')
+              Blank()
+              Text(`${this.adminUsers.length} 人`).fontSize(11).fontColor('#315BFF')
+            }.width('100%')
+            ForEach(this.adminUsers, (account: AdminUserSummary) => {
+              Row({ space: 11 }) {
+                Text(account.display_name.slice(0, 1)).fontSize(14).fontWeight(FontWeight.Bold)
+                  .fontColor('#315BFF').width(36).height(36).textAlign(TextAlign.Center)
+                  .backgroundColor('#E9EEFF').borderRadius(12)
+                Column({ space: 3 }) {
+                  Row({ space: 6 }) {
+                    Text(account.display_name).fontSize(14).fontWeight(FontWeight.Medium).fontColor('#171A22')
+                    if (account.role === 'admin') {
+                      Text('管理员').fontSize(9).fontColor('#FFFFFF').backgroundColor('#315BFF')
+                        .padding({ left: 5, right: 5, top: 2, bottom: 2 }).borderRadius(7)
+                    }
+                  }
+                  Text(account.email).fontSize(10).fontColor('#7B8292').maxLines(1)
+                    .textOverflow({ overflow: TextOverflow.Ellipsis })
+                  Text(`${account.timetable_count} 节课 · ${account.campus_place_count} 个地点 · ${account.api_key_configured ? '凭据已配置' : '凭据未配置'}`)
+                    .fontSize(10).fontColor('#8B91A0')
+                }.alignItems(HorizontalAlign.Start).layoutWeight(1)
+              }.width('100%')
+            }, (account: AdminUserSummary) => account.user_id)
+          }.width('100%').padding(18).backgroundColor('#FFFFFF').borderRadius(22)
+        }
 
         Column({ space: 5 }) {
           Text('API 服务').fontSize(11).fontColor('#7E8595').width('100%')

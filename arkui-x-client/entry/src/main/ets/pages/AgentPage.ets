@@ -6,6 +6,7 @@ import { RouteMap } from '../components/RouteMap';
 export struct AgentPage {
   @Prop baseUrl: string;
   @Prop token: string;
+  onOpenHistory: () => void = () => {};
   @State private prompt: string = '';
   @State private model: string = 'deepseek-v4-pro';
   @State private messages: ChatMessage[] = [
@@ -91,6 +92,9 @@ export struct AgentPage {
               Text('Agent 会先规划，再调用工具').fontSize(12).fontColor('#7B8292')
             }.alignItems(HorizontalAlign.Start)
             Blank()
+            Button('历史').height(34).fontSize(11).fontColor('#5F6675')
+              .backgroundColor('#FFFFFF').borderRadius(18).margin({ right: 8 })
+              .onClick(() => this.onOpenHistory())
             Button(this.model === 'deepseek-v4-pro' ? 'V4 PRO' : 'FLASH')
               .height(34).fontSize(11).fontColor('#315BFF').backgroundColor('#E9EEFF').borderRadius(18)
               .onClick(() => this.model = this.model === 'deepseek-v4-pro' ? 'deepseek-flash' : 'deepseek-v4-pro')
@@ -136,7 +140,7 @@ export struct AgentPage {
             Text('Agent 正在规划与调用工具…').fontSize(12).fontColor('#7B8292').width('100%')
           }
         }.width('100%').padding({ left: 16, right: 16, top: 16, bottom: 20 })
-      }.layoutWeight(1).width('100%')
+      }.layoutWeight(1).width('100%').clip(true)
 
       Row({ space: 10 }) {
         TextArea({ text: this.prompt, placeholder: '例如：从六教去菜鸟驿站，顺便安排复习…' })
@@ -145,6 +149,7 @@ export struct AgentPage {
         Button('发送').width(68).height(48).fontColor('#FFFFFF').backgroundColor('#315BFF').borderRadius(16)
           .enabled(!this.loading).onClick(() => this.send())
       }.width('100%').padding({ left: 14, right: 14, top: 10, bottom: 10 }).backgroundColor('#FFFFFF')
+        .border({ width: { top: 1 }, color: '#E8EBF2' })
     }.width('100%').height('100%').backgroundColor('#F5F7FB')
   }
 }
