@@ -89,15 +89,16 @@
 
 ### 阶段 5.1：HDUHelp Connect 用户档案
 
-状态：代码与模拟 OAuth 全流程已完成；等待 HDUHelp 开放平台分配 App ID/Secret 后执行真实账号授权验收。
+状态：PAT 真实账号 Phone 模拟器验收已完成；OAuth 流程保留为可选接入方式。
 
+- 用户配置 PAT、Bearer 调用、加密保存和末四位脱敏展示
 - OAuth 2.0 Authorization Code + PKCE、一次性 state 和自动刷新
 - 身份摘要、学生档案、成绩、考试、校园卡余额和图书馆预约同步
 - Token 与资源缓存加密、按用户隔离、断开即清除
 - Agent 只读工具、官方 Skill、权限声明和运行审计
 - Web 与 ArkUI-X 连接、同步、状态和断开入口
 
-验收条件：用户只在 HDUHelp 官方页面授权，CampusFlow 不接触校园密码；授权后 Agent 可按权限读取同步数据。
+验收条件：用户使用 PAT 或官方 OAuth 授权，CampusFlow 不接触校园密码；授权后 Agent 可按实际权限读取同步数据。
 
 ## 阶段 6：ArkUI-X 跨端客户端
 

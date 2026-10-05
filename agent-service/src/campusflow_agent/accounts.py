@@ -106,6 +106,8 @@ class AccountStore:
                     access_token_encrypted TEXT NOT NULL,
                     refresh_token_encrypted TEXT,
                     token_type TEXT NOT NULL DEFAULT 'Bearer',
+                    auth_mode TEXT NOT NULL DEFAULT 'oauth',
+                    token_hint TEXT,
                     scopes_json TEXT NOT NULL DEFAULT '[]',
                     expires_at TEXT NOT NULL,
                     external_user_id TEXT,
@@ -140,6 +142,22 @@ class AccountStore:
             }
             for column, statement in migrations.items():
                 if column not in columns:
+                    self._connection.execute(statement)
+            hduhelp_columns = {
+                row["name"]
+                for row in self._connection.execute(
+                    "PRAGMA table_info(hduhelp_connections)"
+                ).fetchall()
+            }
+            hduhelp_migrations = {
+                "auth_mode": (
+                    "ALTER TABLE hduhelp_connections "
+                    "ADD COLUMN auth_mode TEXT NOT NULL DEFAULT 'oauth'"
+                ),
+                "token_hint": "ALTER TABLE hduhelp_connections ADD COLUMN token_hint TEXT",
+            }
+            for column, statement in hduhelp_migrations.items():
+                if column not in hduhelp_columns:
                     self._connection.execute(statement)
             admin = self._connection.execute(
                 "SELECT 1 FROM users WHERE role = 'admin' LIMIT 1"
@@ -559,6 +577,8 @@ class AccountStore:
         scopes: list[str],
         expires_at: datetime,
         identity: dict[str, Any] | None = None,
+        auth_mode: str = "oauth",
+        token_hint: str | None = None,
     ) -> None:
         now = datetime.now(UTC).isoformat()
         identity = identity or {}
@@ -567,14 +587,16 @@ class AccountStore:
                 """
                 INSERT INTO hduhelp_connections (
                     user_id, access_token_encrypted, refresh_token_encrypted,
-                    token_type, scopes_json, expires_at, external_user_id,
+                    token_type, auth_mode, token_hint, scopes_json, expires_at, external_user_id,
                     external_name, identity_type, connected_at, updated_at,
                     last_synced_at, last_error
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL)
                 ON CONFLICT(user_id) DO UPDATE SET
                     access_token_encrypted = excluded.access_token_encrypted,
                     refresh_token_encrypted = excluded.refresh_token_encrypted,
                     token_type = excluded.token_type,
+                    auth_mode = excluded.auth_mode,
+                    token_hint = excluded.token_hint,
                     scopes_json = excluded.scopes_json,
                     expires_at = excluded.expires_at,
                     external_user_id = excluded.external_user_id,
@@ -588,10 +610,14 @@ class AccountStore:
                     access_token_encrypted,
                     refresh_token_encrypted,
                     token_type,
+                    auth_mode,
+                    token_hint,
                     json.dumps(sorted(set(scopes)), ensure_ascii=False),
                     expires_at.isoformat(),
-                    None,
-                    identity.get("name"),
+                    identity.get("userId") or identity.get("user_id") or identity.get("id"),
+                    identity.get("name")
+                    or identity.get("nickname")
+                    or identity.get("nickName"),
                     identity.get("identityType") or identity.get("identity_type"),
                     now,
                     now,
@@ -699,6 +725,13 @@ class AccountStore:
             for row in rows
         ]
 
+    def clear_hduhelp_resources(self, user_id: str) -> None:
+        with self._lock, self._connection:
+            self._connection.execute(
+                "DELETE FROM hduhelp_resource_cache WHERE user_id = ?",
+                (user_id,),
+            )
+
     def get_hduhelp_resource(self, user_id: str, resource: str) -> dict[str, Any] | None:
         with self._lock:
             row = self._connection.execute(
@@ -720,7 +753,8 @@ class AccountStore:
         with self._lock:
             row = self._connection.execute(
                 """
-                SELECT scopes_json, expires_at, external_name, identity_type,
+                SELECT auth_mode, token_hint, scopes_json, expires_at,
+                       external_name, identity_type,
                        connected_at, last_synced_at, last_error
                 FROM hduhelp_connections WHERE user_id = ?
                 """,
@@ -738,10 +772,12 @@ class AccountStore:
         return {
             "configured": True,
             "provider": "hduhelp",
+            "auth_mode": row["auth_mode"],
+            "token_hint": row["token_hint"],
             "scopes": json.loads(row["scopes_json"]),
             "external_name": row["external_name"],
             "identity_type": row["identity_type"],
-            "expires_at": row["expires_at"],
+            "expires_at": row["expires_at"] if row["auth_mode"] == "oauth" else None,
             "connected_at": row["connected_at"],
             "last_synced_at": row["last_synced_at"],
             "last_error": row["last_error"],

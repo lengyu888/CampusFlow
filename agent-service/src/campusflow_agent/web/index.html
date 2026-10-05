@@ -331,15 +331,23 @@
             <div class="settings-heading"><div><span>02 / PERSONAL DATA</span><h1>学习数据</h1></div><p>查看 Agent 当前连接的课表与校园地图数据。</p></div>
             <section class="hduhelp-connect-card">
               <div class="hduhelp-connect-copy">
-                <span>HDUHELP CONNECT / OAUTH 2.0</span>
+                <span>HDUHELP CONNECT / PERSONAL ACCESS TOKEN</span>
                 <h2>连接你的杭电校园档案</h2>
-                <p id="hduHelpConnectionState">通过 HDUHelp 官方授权页连接，不会向 CampusFlow 提交杭电密码。</p>
+                <p id="hduHelpConnectionState">填写个人访问令牌即可同步；令牌仅加密保存，不会提交杭电密码。</p>
               </div>
               <div class="hduhelp-resource-grid" id="hduHelpResourceList">
                 <span>学籍</span><span>成绩 / GPA</span><span>考试</span><span>校园卡</span><span>图书馆预约</span>
               </div>
+              <form class="hduhelp-pat-form" id="hduHelpPatForm">
+                <label for="hduHelpPatInput">个人访问令牌</label>
+                <div>
+                  <input id="hduHelpPatInput" type="password" autocomplete="off" spellcheck="false" placeholder="hduhelp_pat_…" required />
+                  <button class="primary-action" type="submit"><span class="action-label">连接并同步</span><i>↗</i></button>
+                </div>
+                <small>令牌只发送到本机 CampusFlow 后端，并以密文保存。</small>
+              </form>
               <div class="hduhelp-connect-actions">
-                <button class="primary-action" id="connectHduHelpButton" type="button"><span class="action-label">连接 HDUHelp</span><i>↗</i></button>
+                <button class="line-button" id="connectHduHelpButton" type="button">或使用官方 OAuth</button>
                 <button class="line-button" id="syncHduHelpButton" type="button" hidden>同步数据</button>
                 <button class="line-button danger" id="disconnectHduHelpButton" type="button" hidden>断开并删除</button>
               </div>
@@ -402,7 +410,7 @@
 
     <div class="toast" id="toast" role="status"></div>
     <script src="/static/gsap.min.js" defer></script>
-    <script src="/static/app.js?v=11" defer></script>
+    <script src="/static/app.js?v=12" defer></script>
     <script src="/static/motion.js?v=1" defer></script>
   </body>
 </html>

@@ -478,6 +478,49 @@ async def test_hduhelp_oauth_sync_data_and_disconnect(client: AsyncClient) -> No
     assert (await client.get("/api/v1/hduhelp/data")).json()["resources"] == []
 
 
+async def test_hduhelp_pat_connect_sync_and_mask(client: AsyncClient) -> None:
+    await register(client)
+    fake_pat = "hduhelp_pat_test_only_1234567890"
+
+    connected = await client.put("/api/v1/hduhelp/pat", json={"pat": fake_pat})
+
+    assert connected.status_code == 200
+    payload = connected.json()
+    assert payload["status"]["configured"] is True
+    assert payload["status"]["auth_mode"] == "pat"
+    assert payload["status"]["token_hint"] == "•••• 7890"
+    assert payload["status"]["expires_at"] is None
+    assert payload["synced_resources"] == [
+        "card_balance",
+        "exams",
+        "grades",
+        "identity",
+        "library_bookings",
+        "person",
+    ]
+    assert fake_pat not in connected.text
+
+    status_response = await client.get("/api/v1/hduhelp/status")
+    assert fake_pat not in status_response.text
+    data_response = await client.get("/api/v1/hduhelp/data")
+    assert data_response.status_code == 200
+    assert fake_pat not in data_response.text
+
+    disconnected = await client.delete("/api/v1/hduhelp/connection")
+    assert disconnected.status_code == 204
+    assert (await client.get("/api/v1/hduhelp/data")).json()["resources"] == []
+
+
+async def test_hduhelp_pat_prefix_is_validated(client: AsyncClient) -> None:
+    await register(client)
+    response = await client.put(
+        "/api/v1/hduhelp/pat",
+        json={"pat": "not-a-valid-hduhelp-token"},
+    )
+    assert response.status_code == 422
+    assert "hduhelp_pat_" in response.json()["detail"]
+
+
 async def test_hduhelp_callback_state_is_one_time(client: AsyncClient) -> None:
     await register(client)
     await client.post("/api/v1/hduhelp/connect")

@@ -14,7 +14,7 @@ CampusFlow 是面向高校学生的跨端 AI Agent。客户端计划采用 ArkUI
 - SQLite 账户、登录会话与首次配置状态
 - DeepSeek Flash 课表/校园地图视觉解析与人工确认
 - HDUHelp iCalendar 课表订阅、预览导入与一键同步
-- HDUHelp OAuth2 + PKCE 校园档案连接（学籍、成绩、考试、校园卡、图书馆预约）
+- HDUHelp PAT / OAuth2 + PKCE 校园档案连接（学籍、成绩、考试、校园卡、图书馆预约）
 - 杭电下沙校区版本化数据包、建筑别名、开放时间与步行关系
 - 基于已确认杭电地图的最短步行路径、矢量路线图与分步导航
 - 带有效期的校园通知查询，以及用户级纠错待审核流程
@@ -71,10 +71,11 @@ uvicorn campusflow_agent.main:app --reload --host 0.0.0.0 --port 8000
 
 课表支持图片识别或 HDUHelp 订阅链接。订阅链接中的 token 会使用同一凭据保险库加密保存，API 与页面只返回服务域名、同步时间和事件数量，不回显完整链接。
 
-如需连接更多 HDUHelp 本人数据，先向 HDUHelp 申请应用并在 `agent-service/.env` 配置
-`HDUHELP_APP_ID`、`HDUHELP_APP_SECRET`、`HDUHELP_REDIRECT_URI`。CampusFlow 使用
-OAuth2 + PKCE 跳转到官方授权页，不收集杭电密码；访问令牌、刷新令牌和成绩等同步缓存
-都会使用 Fernet 加密落库。CLI 的设备授权仅供官方 CLI 使用，系统不会冒充 CLI 客户端。
+如需连接更多 HDUHelp 本人数据，可直接在“我的 → HDUHelp 校园档案”填写用户自己的
+`hduhelp_pat_…` 个人访问令牌；令牌仅提交给 CampusFlow 后端，以 Fernet 密文保存，页面只
+显示末四位。系统会按令牌实际权限同步可访问资源，单项未授权不会阻断其他数据。也可向
+HDUHelp 申请应用并在 `agent-service/.env` 配置 App ID、Secret 与 Redirect URI，启用可选的
+OAuth2 + PKCE 流程。两种方式都不收集杭电密码。
 
 ## 最小调用示例
 

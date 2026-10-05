@@ -239,6 +239,8 @@ class ScheduleSubscriptionSyncResponse(BaseModel):
 class HDUHelpConnectionStatus(BaseModel):
     configured: bool = False
     provider: Literal["hduhelp"] | None = None
+    auth_mode: Literal["oauth", "pat"] | None = None
+    token_hint: str | None = None
     scopes: list[str] = Field(default_factory=list)
     external_name: str | None = None
     identity_type: str | None = None
@@ -253,6 +255,10 @@ class HDUHelpConnectResponse(BaseModel):
     authorize_url: str
     expires_at: datetime
     scopes: list[str] = Field(default_factory=list)
+
+
+class HDUHelpPatConnectRequest(BaseModel):
+    pat: SecretStr = Field(min_length=20, max_length=512)
 
 
 class HDUHelpResourceSnapshot(BaseModel):

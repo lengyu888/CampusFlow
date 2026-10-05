@@ -148,10 +148,13 @@ class FakeHDUHelpService:
         }
 
     async def sync_resources(self, access_token: str) -> SyncResult:
-        assert access_token == "hduhelp-access-token"
+        assert access_token in {
+            "hduhelp-access-token",
+            "hduhelp_pat_test_only_1234567890",
+        }
         return SyncResult(
             resources={
-                "identity": {"userId": "hdu-user-001", "name": "小航"},
+                "identity": {"id": "hdu-user-001", "nickName": "小航"},
                 "person": {"college": "计算机学院", "major": "软件工程"},
                 "grades": {"gpa": 3.72, "courses": [{"name": "操作系统", "score": 91}]},
                 "exams": [{"course": "操作系统", "room": "7教406"}],

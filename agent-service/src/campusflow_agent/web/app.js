@@ -117,6 +117,8 @@ const elements = {
   settingsKeyState: $("#settingsKeyState"),
   hduHelpConnectionState: $("#hduHelpConnectionState"),
   hduHelpResourceList: $("#hduHelpResourceList"),
+  hduHelpPatForm: $("#hduHelpPatForm"),
+  hduHelpPatInput: $("#hduHelpPatInput"),
   connectHduHelpButton: $("#connectHduHelpButton"),
   syncHduHelpButton: $("#syncHduHelpButton"),
   disconnectHduHelpButton: $("#disconnectHduHelpButton"),
@@ -1583,11 +1585,12 @@ function renderHduHelpStatus(status) {
   state.hduHelp = status;
   const connected = Boolean(status.configured);
   elements.connectHduHelpButton.hidden = connected;
+  elements.hduHelpPatForm.hidden = connected;
   elements.syncHduHelpButton.hidden = !connected;
   elements.disconnectHduHelpButton.hidden = !connected;
   elements.hduHelpResourceList.replaceChildren();
   if (!connected) {
-    elements.hduHelpConnectionState.textContent = "通过 HDUHelp 官方授权页连接，不会向 CampusFlow 提交杭电密码。";
+    elements.hduHelpConnectionState.textContent = "填写个人访问令牌即可同步；令牌仅加密保存，不会提交杭电密码。";
     ["学籍", "成绩 / GPA", "考试", "校园卡", "图书馆预约"].forEach((label) => {
       const chip = document.createElement("span");
       chip.textContent = label;
@@ -1601,7 +1604,10 @@ function renderHduHelpStatus(status) {
       })
     : "尚未同步";
   const identity = status.external_name ? ` · ${status.external_name}` : "";
-  elements.hduHelpConnectionState.textContent = `已安全连接${identity} · 最近同步 ${syncedAt}`;
+  const credential = status.auth_mode === "pat"
+    ? `个人令牌 ${status.token_hint ?? "已配置"}`
+    : "官方 OAuth";
+  elements.hduHelpConnectionState.textContent = `${credential}${identity} · 最近同步 ${syncedAt}`;
   const resources = status.resources?.length ? status.resources : Object.keys(hduHelpResourceLabels);
   resources.forEach((resource) => {
     const chip = document.createElement("span");
@@ -1633,6 +1639,32 @@ async function connectHduHelp() {
   } catch (error) {
     showToast(error.message, "error");
     setButtonBusy(elements.connectHduHelpButton, false, "");
+  }
+}
+
+async function connectHduHelpPat(event) {
+  event.preventDefault();
+  const pat = elements.hduHelpPatInput.value.trim();
+  if (!pat) return;
+  const button = elements.hduHelpPatForm.querySelector('button[type="submit"]');
+  setButtonBusy(button, true, "正在验证…");
+  try {
+    const payload = await api("/api/v1/hduhelp/pat", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pat }),
+    });
+    elements.hduHelpPatInput.value = "";
+    renderHduHelpStatus(payload.status);
+    const failed = Object.keys(payload.errors ?? {}).length;
+    showToast(failed
+      ? `令牌已连接，${payload.synced_resources.length} 类数据成功，${failed} 类权限不足`
+      : `令牌已连接并同步 ${payload.synced_resources.length} 类数据`);
+  } catch (error) {
+    showToast(error.message, "error");
+  } finally {
+    elements.hduHelpPatInput.value = "";
+    setButtonBusy(button, false, "");
   }
 }
 
@@ -1961,6 +1993,7 @@ elements.historySearch.addEventListener("input", () => {
   elements.historySearch.searchTimer = setTimeout(() => loadHistory(elements.historySearch.value.trim()), 180);
 });
 elements.settingsForm.addEventListener("submit", saveSettings);
+elements.hduHelpPatForm.addEventListener("submit", connectHduHelpPat);
 elements.connectHduHelpButton.addEventListener("click", connectHduHelp);
 elements.syncHduHelpButton.addEventListener("click", syncHduHelp);
 elements.disconnectHduHelpButton.addEventListener("click", disconnectHduHelp);

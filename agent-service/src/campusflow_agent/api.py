@@ -43,6 +43,7 @@ from .schemas import (
     HDUHelpConnectionStatus,
     HDUHelpConnectResponse,
     HDUHelpDataResponse,
+    HDUHelpPatConnectRequest,
     HDUHelpResourceSnapshot,
     HDUHelpSyncResponse,
     HealthResponse,
@@ -277,6 +278,7 @@ def create_app(
             scopes=tokens.scopes,
             expires_at=tokens.expires_at,
             identity=identity,
+            auth_mode="oauth",
         )
 
     async def active_hduhelp_token(user_id: str) -> str:
@@ -285,11 +287,19 @@ def create_app(
             raise HTTPException(status_code=404, detail="尚未连接 HDUHelp。")
         try:
             access_token = api_key_vault.decrypt(connection["access_token_encrypted"])
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=503,
+                detail="HDUHelp 凭据无法解密，请重新连接。",
+            ) from exc
+        if connection.get("auth_mode") == "pat":
+            return access_token
+        try:
             expires_at = datetime.fromisoformat(connection["expires_at"])
         except (ValueError, TypeError) as exc:
             raise HTTPException(
                 status_code=503,
-                detail="HDUHelp 凭据无法解密，请重新连接。",
+                detail="HDUHelp 凭据状态异常，请重新连接。",
             ) from exc
         if expires_at > datetime.now(UTC) + timedelta(minutes=1):
             return access_token
@@ -422,6 +432,51 @@ def create_app(
             scopes=hduhelp_service.scopes,
         )
 
+    @app.put("/api/v1/hduhelp/pat", response_model=HDUHelpSyncResponse)
+    async def connect_hduhelp_pat(
+        payload: HDUHelpPatConnectRequest,
+        user: CurrentUser,
+    ) -> HDUHelpSyncResponse:
+        pat = payload.pat.get_secret_value().strip()
+        if not pat.startswith("hduhelp_pat_"):
+            raise HTTPException(
+                status_code=422,
+                detail="请输入以 hduhelp_pat_ 开头的 HDUHelp 个人访问令牌。",
+            )
+        result = await hduhelp_service.sync_resources(pat)
+        if not result.resources:
+            detail = next(iter(result.errors.values()), "HDUHelp 未返回可访问的数据。")
+            raise HTTPException(status_code=401, detail=f"令牌验证失败：{detail}")
+        identity = result.resources.get("identity")
+        if not isinstance(identity, dict):
+            identity = {}
+        account_store.clear_hduhelp_resources(user.user_id)
+        account_store.save_hduhelp_connection(
+            user_id=user.user_id,
+            access_token_encrypted=api_key_vault.encrypt(pat),
+            refresh_token_encrypted=None,
+            token_type="Bearer",
+            scopes=[],
+            expires_at=datetime.max.replace(tzinfo=UTC),
+            identity=identity,
+            auth_mode="pat",
+            token_hint=f"•••• {pat[-4:]}",
+        )
+        encrypted_resources = {
+            name: api_key_vault.encrypt(json.dumps(resource, ensure_ascii=False))
+            for name, resource in result.resources.items()
+        }
+        account_store.save_hduhelp_resources(
+            user_id=user.user_id,
+            resources=encrypted_resources,
+            errors=result.errors,
+        )
+        return HDUHelpSyncResponse(
+            status=hduhelp_status(user.user_id),
+            synced_resources=sorted(result.resources),
+            errors=result.errors,
+        )
+
     @app.get("/api/v1/hduhelp/callback", include_in_schema=False)
     async def hduhelp_callback(code: str = "", state: str = "") -> RedirectResponse:
         if not code or not state:
@@ -485,7 +540,7 @@ def create_app(
         if connection is None:
             raise HTTPException(status_code=404, detail="尚未连接 HDUHelp。")
         encrypted_refresh = connection.get("refresh_token_encrypted")
-        if hduhelp_service.configured:
+        if connection.get("auth_mode") != "pat" and hduhelp_service.configured:
             try:
                 if encrypted_refresh:
                     token = api_key_vault.decrypt(encrypted_refresh)

@@ -2,6 +2,9 @@
 
 ## 2026-10-05：HDUHelp Connect 用户档案
 
+- 增加用户自助配置 HDUHelp PAT：验证成功后才加密落库，状态只展示末四位，断开即清除本地凭据与缓存。
+- PAT 使用官方 Bearer 认证调用，OAuth 继续作为可选方案；身份接口升级为 `/hduhelp-neo/identity/me`。
+- Pura 90 Phone 模拟器完成真实 PAT 联调：身份、本人学籍、成绩、考试与校园卡 5 类数据同步成功；未授权的图书馆预约单项给出可读提示。
 - 接入 HDUHelp OAuth 2.0 Authorization Code + PKCE，用户在官方授权页登录，CampusFlow 不收集或保存统一身份认证密码。
 - 首批同步身份摘要、学生档案、成绩、考试、校园卡余额和图书馆预约；单项失败不会阻断其他资源更新。
 - Access Token、Refresh Token 与同步资源均使用 Fernet 加密落库，OAuth state 一次性消费并设置十分钟有效期。

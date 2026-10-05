@@ -236,6 +236,11 @@ export class CampusFlowApi {
     return this.request<HDUHelpConnectResponse>('/api/v1/hduhelp/connect', http.RequestMethod.POST, '{}');
   }
 
+  async connectHduHelpPat(pat: string): Promise<HDUHelpSyncResponse> {
+    return this.request<HDUHelpSyncResponse>('/api/v1/hduhelp/pat', http.RequestMethod.PUT,
+      JSON.stringify({ pat: pat }));
+  }
+
   async syncHduHelp(): Promise<HDUHelpSyncResponse> {
     return this.request<HDUHelpSyncResponse>('/api/v1/hduhelp/sync', http.RequestMethod.POST, '{}');
   }

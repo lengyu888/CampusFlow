@@ -53,9 +53,16 @@ async def test_exchange_and_partial_resource_sync() -> None:
                 },
             )
         if request.url.path.endswith("/academic/grade"):
+            assert request.headers["Authorization"] == "Bearer access"
             return httpx.Response(200, json={"code": 0, "data": {"gpa": 3.8}})
         if request.url.path.endswith("/academic/exam"):
             return httpx.Response(403, json={"code": 40301, "msg": "scope denied"})
+        if request.url.path.endswith("/identity/me"):
+            assert request.headers["Authorization"] == "Bearer access"
+            return httpx.Response(
+                200,
+                json={"code": 0, "data": {"id": "user-1", "nickName": "测试用户"}},
+            )
         return httpx.Response(200, json={"code": 0, "data": {}})
 
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
@@ -77,5 +84,6 @@ async def test_exchange_and_partial_resource_sync() -> None:
     assert tokens.access_token == "access"
     assert tokens.refresh_token == "refresh"
     assert tokens.scopes == ["academic:grade:read", "academic:exam:read"]
+    assert result.resources["identity"]["nickName"] == "测试用户"
     assert result.resources["grades"]["gpa"] == 3.8
     assert result.errors["exams"] == "HDUHelp API 返回 HTTP 403。"

@@ -27,6 +27,8 @@ export struct ProfilePage {
   @State private hduHelp: HDUHelpConnectionStatus = {
     configured: false,
     provider: null,
+    auth_mode: null,
+    token_hint: null,
     scopes: [],
     external_name: null,
     identity_type: null,
@@ -37,6 +39,7 @@ export struct ProfilePage {
     resources: []
   };
   @State private hduHelpAuthorizeUrl: string = '';
+  @State private hduHelpPat: string = '';
   @State private hduHelpMessage: string = '';
   @State private hduHelpMessageIsError: boolean = false;
 
@@ -85,6 +88,26 @@ export struct ProfilePage {
       this.hduHelpMessageIsError = false;
     } catch (error) {
       this.hduHelpMessage = `无法发起 HDUHelp 授权：${error}`;
+      this.hduHelpMessageIsError = true;
+    }
+  }
+
+  private async connectHduHelpPat(): Promise<void> {
+    if (this.hduHelpPat.trim().length === 0) {
+      this.hduHelpMessage = '请先填写 HDUHelp 个人访问令牌。';
+      this.hduHelpMessageIsError = true;
+      return;
+    }
+    try {
+      const result = await new CampusFlowApi(this.baseUrl, this.token)
+        .connectHduHelpPat(this.hduHelpPat.trim());
+      this.hduHelpPat = '';
+      this.hduHelp = result.status;
+      this.hduHelpMessage = `令牌已连接，已同步 ${result.synced_resources.length} 类 HDUHelp 数据。`;
+      this.hduHelpMessageIsError = false;
+    } catch (error) {
+      this.hduHelpPat = '';
+      this.hduHelpMessage = `HDUHelp 令牌连接失败：${error}`;
       this.hduHelpMessageIsError = true;
     }
   }
@@ -194,7 +217,7 @@ export struct ProfilePage {
           Row() {
             Column({ space: 4 }) {
               Text('HDUHelp 校园档案').fontSize(17).fontWeight(FontWeight.Bold).fontColor('#171A22')
-              Text('官方 OAuth 授权，不提交杭电密码').fontSize(10).fontColor('#7B8292')
+              Text('PAT 加密保存，也支持官方 OAuth；不提交杭电密码').fontSize(10).fontColor('#7B8292')
             }.alignItems(HorizontalAlign.Start)
             Blank()
             Text(this.hduHelp.configured ? '已连接' : '未连接').fontSize(11)
@@ -208,9 +231,13 @@ export struct ProfilePage {
               .borderRadius(12)
           }
           if (this.hduHelp.configured) {
-            Text(`${this.hduHelp.external_name ?? '当前用户'} · ${this.hduHelp.resources.length} 类数据`)
-              .fontSize(12).fontColor('#315BFF').width('100%').padding(12)
-              .backgroundColor('#E9EEFF').borderRadius(13)
+            Column({ space: 3 }) {
+              Text(`${this.hduHelp.auth_mode === 'pat' ? `个人令牌 ${this.hduHelp.token_hint ?? ''}` : '官方 OAuth'} · ${this.hduHelp.external_name ?? '当前用户'}`)
+                .fontSize(12).fontColor('#315BFF').width('100%').maxLines(1)
+                .textOverflow({ overflow: TextOverflow.Ellipsis })
+              Text(`${this.hduHelp.resources.length} 类校园数据可供 Agent 使用`)
+                .fontSize(10).fontColor('#6B7CC8').width('100%')
+            }.width('100%').padding(12).backgroundColor('#E9EEFF').borderRadius(13)
             Row({ space: 9 }) {
               Button('同步数据').layoutWeight(1).height(42).fontColor('#FFFFFF').backgroundColor('#315BFF')
                 .borderRadius(13).onClick(() => this.syncHduHelp())
@@ -218,8 +245,15 @@ export struct ProfilePage {
                 .borderRadius(13).onClick(() => this.disconnectHduHelp())
             }.width('100%')
           } else {
-            Button('生成官方授权链接').width('100%').height(42).fontColor('#FFFFFF')
-              .backgroundColor('#315BFF').borderRadius(13).onClick(() => this.connectHduHelp())
+            TextInput({ text: this.hduHelpPat, placeholder: 'hduhelp_pat_…' }).type(InputType.Password)
+              .height(46).backgroundColor('#F5F7FB').borderRadius(13)
+              .onChange((value) => this.hduHelpPat = value)
+            Text('令牌仅发送到本机 CampusFlow 后端并以密文保存。').fontSize(10)
+              .fontColor('#7B8292').width('100%')
+            Button('使用令牌连接并同步').width('100%').height(42).fontColor('#FFFFFF')
+              .backgroundColor('#315BFF').borderRadius(13).onClick(() => this.connectHduHelpPat())
+            Button('或使用官方 OAuth').width('100%').height(40).fontColor('#315BFF')
+              .backgroundColor('#E9EEFF').borderRadius(13).onClick(() => this.connectHduHelp())
             if (this.hduHelpAuthorizeUrl.length > 0) {
               Hyperlink(this.hduHelpAuthorizeUrl, '打开 HDUHelp 官方授权页 ↗')
                 .color('#315BFF').width('100%')

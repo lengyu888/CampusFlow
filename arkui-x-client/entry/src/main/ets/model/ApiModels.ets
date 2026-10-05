@@ -191,6 +191,8 @@ export interface SyncResponse {
 export interface HDUHelpConnectionStatus {
   configured: boolean;
   provider: string | null;
+  auth_mode: string | null;
+  token_hint: string | null;
   scopes: string[];
   external_name: string | null;
   identity_type: string | null;

@@ -42,7 +42,7 @@ class SyncResult:
 
 
 RESOURCE_ENDPOINTS: dict[str, str] = {
-    "identity": "/hduhelp-neo/open-apis/authen/user-info",
+    "identity": "/hduhelp-neo/identity/me",
     "person": "/hduhelp-neo/academic/person/info",
     "grades": "/hduhelp-neo/academic/grade",
     "exams": "/hduhelp-neo/academic/exam",
