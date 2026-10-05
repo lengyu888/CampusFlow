@@ -27,7 +27,7 @@ PACKAGE = {
     "package_id": DEFAULT_PACKAGE_ID,
     "school": "杭州电子科技大学",
     "campus": "下沙校区",
-    "version": "2026.10.2",
+    "version": "2026.10.3",
     "published_at": "2026-10-04T08:00:00+08:00",
     "description": (
         "基于用户确认地图整理的 CampusFlow 校园数据包，"
@@ -142,48 +142,48 @@ WALK_EDGES = [
 ]
 
 
-# Normalized coordinates follow the uploaded HDU Xiasha campus map. The 100 × 74
-# viewBox covers the main campus map: living area at the top, Xuelin Street in the
-# middle, and the teaching area below it.
+# Normalized coordinates are calibrated against the original HDUHELP map image.
+# The 100 × 74 viewBox covers the main campus panel (without the title and the two
+# lower inset maps), allowing clients to overlay routes on the untouched bitmap.
 MAP_POINTS: dict[str, tuple[float, float]] = {
-    "cainiao-station": (36.0, 12.0),
-    "north-2-gate": (28.0, 29.0),
-    "library": (52.0, 39.0),
-    "teaching-3": (43.0, 57.0),
-    "teaching-4": (30.0, 55.0),
-    "teaching-6": (42.0, 49.0),
-    "teaching-7": (61.0, 49.0),
-    "teaching-12": (72.0, 55.0),
-    "student-center": (74.0, 35.0),
-    "east-track": (86.0, 42.0),
-    "west-track": (17.0, 18.0),
-    "gym": (16.0, 42.0),
-    "canteen-1": (57.0, 17.0),
-    "canteen-5": (53.0, 23.0),
-    "campus-clinic": (58.0, 27.0),
-    "south-gate": (50.0, 72.0),
-    "east-gate": (94.0, 31.0),
+    "cainiao-station": (28.7, 1.7),
+    "north-2-gate": (24.3, 23.8),
+    "library": (45.1, 28.8),
+    "teaching-3": (54.7, 47.8),
+    "teaching-4": (34.2, 42.7),
+    "teaching-6": (34.1, 34.6),
+    "teaching-7": (54.8, 33.4),
+    "teaching-12": (68.0, 41.4),
+    "student-center": (68.4, 27.3),
+    "east-track": (83.1, 29.6),
+    "west-track": (16.5, 12.3),
+    "gym": (14.8, 30.4),
+    "canteen-1": (53.7, 15.5),
+    "canteen-5": (54.1, 10.9),
+    "campus-clinic": (29.8, 3.9),
+    "south-gate": (44.7, 68.4),
+    "east-gate": (88.2, 43.3),
 }
 
 
 ROUTE_GEOMETRIES: dict[frozenset[str], list[tuple[float, float]]] = {
     frozenset(("teaching-6", "north-2-gate")): [
-        (42.0, 49.0),
-        (34.0, 49.0),
-        (30.0, 43.0),
-        (28.0, 29.0),
+        (34.1, 34.6),
+        (32.5, 31.0),
+        (27.0, 28.0),
+        (24.3, 23.8),
     ],
     frozenset(("north-2-gate", "cainiao-station")): [
-        (28.0, 29.0),
-        (28.0, 20.0),
-        (36.0, 20.0),
-        (36.0, 12.0),
+        (24.3, 23.8),
+        (24.3, 18.5),
+        (28.7, 18.5),
+        (28.7, 1.7),
     ],
     frozenset(("library", "north-2-gate")): [
-        (52.0, 39.0),
-        (40.0, 39.0),
-        (32.0, 34.0),
-        (28.0, 29.0),
+        (45.1, 28.8),
+        (38.0, 28.8),
+        (30.0, 26.0),
+        (24.3, 23.8),
     ],
 }
 

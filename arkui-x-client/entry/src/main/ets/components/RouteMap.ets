@@ -8,77 +8,41 @@ export struct RouteMap {
 
   private drawRoute(): void {
     const width = 330;
-    const height = 244;
+    const height = 372;
+    const mapLeft = 12;
+    const mapTop = 56;
+    const mapWidth = 306;
+    const mapHeight = 316;
     this.context.clearRect(0, 0, width, height);
-    this.context.fillStyle = '#EAF5E5';
-    this.context.fillRect(0, 0, width, height);
-
-    // The vector base follows the uploaded HDU Xiasha campus map: the living
-    // area is north of Xuelin Street and the teaching area is in the south.
-    this.context.fillStyle = '#F1E5D4';
-    this.context.fillRect(0, 0, width, 62);
-    this.context.fillStyle = '#D7DCCF';
-    this.context.fillRect(0, 62, width, 12);
-    this.context.fillStyle = '#CBE9F2';
-    this.context.fillRect(0, 222, width, 8);
-
-    this.context.strokeStyle = '#D6DFC9';
-    this.context.lineWidth = 7;
-    for (let y = 104; y < 220; y += 48) {
-      this.context.beginPath();
-      this.context.moveTo(0, y);
-      this.context.lineTo(width, y);
-      this.context.stroke();
-    }
-    for (let x = 70; x < width; x += 64) {
-      this.context.beginPath();
-      this.context.moveTo(x, 74);
-      this.context.lineTo(x, 222);
-      this.context.stroke();
-    }
-
-    this.context.fillStyle = '#F1BDBD';
-    this.context.fillRect(112, 114, 42, 28);
-    this.context.fillRect(178, 91, 44, 27);
-    this.context.fillRect(244, 124, 42, 28);
-    this.context.fillStyle = '#F4D3A5';
-    this.context.fillRect(135, 23, 46, 22);
-    this.context.fillRect(259, 19, 48, 24);
-    this.context.fillStyle = '#B9D9A8';
-    this.context.fillRect(24, 122, 55, 62);
-    this.context.fillStyle = '#FFF7EA';
-    this.context.fillRect(150, 157, 58, 30);
-
-    this.context.font = '10px sans-serif';
-    this.context.fillStyle = '#526052';
-    this.context.fillText('生活区', 9, 18);
-    this.context.fillText('学林街', 8, 71);
-    this.context.fillText('体育场', 31, 154);
-    this.context.fillText('六教', 121, 132);
-    this.context.fillText('图书馆', 183, 108);
-    this.context.fillText('东门', 296, 151);
-    this.context.fillText('南大门', 144, 240);
 
     if (this.route.path.length === 0) {
       return;
     }
+    const first = this.route.path[0];
+    const firstX = mapLeft + first.x / 100 * mapWidth;
+    const firstY = mapTop + first.y / 74 * mapHeight;
     this.context.strokeStyle = '#315BFF';
-    this.context.lineWidth = 5;
+    this.context.lineWidth = 4;
     this.context.lineJoin = 'round';
     this.context.lineCap = 'round';
+    this.context.shadowColor = '#FFFFFF';
+    this.context.shadowBlur = 5;
     this.context.beginPath();
-    this.context.moveTo(this.route.path[0].x * 3.3, this.route.path[0].y * 3.2);
+    this.context.moveTo(firstX, firstY);
     for (let index = 1; index < this.route.path.length; index++) {
-      this.context.lineTo(this.route.path[index].x * 3.3, this.route.path[index].y * 3.2);
+      const point = this.route.path[index];
+      this.context.lineTo(mapLeft + point.x / 100 * mapWidth, mapTop + point.y / 74 * mapHeight);
     }
     this.context.stroke();
+    this.context.shadowBlur = 0;
 
     for (let index = 0; index < this.route.path.length; index++) {
       const point = this.route.path[index];
+      const x = mapLeft + point.x / 100 * mapWidth;
+      const y = mapTop + point.y / 74 * mapHeight;
       this.context.beginPath();
       this.context.fillStyle = index === 0 ? '#171A22' : (index === this.route.path.length - 1 ? '#FF6B4A' : '#FFFFFF');
-      this.context.arc(point.x * 3.3, point.y * 3.2, index === 0 || index === this.route.path.length - 1 ? 7 : 4,
-        0, Math.PI * 2);
+      this.context.arc(x, y, index === 0 || index === this.route.path.length - 1 ? 7 : 3.5, 0, Math.PI * 2);
       this.context.fill();
       this.context.strokeStyle = '#315BFF';
       this.context.lineWidth = 2;
@@ -88,18 +52,22 @@ export struct RouteMap {
 
   build() {
     Column({ space: 12 }) {
-      Stack() {
+      Stack({ alignContent: Alignment.TopStart }) {
+        Image($r('app.media.hdu_campus_map_original'))
+          .width(330)
+          .height(556)
+          .objectFit(ImageFit.Fill)
         Canvas(this.context)
           .width(330)
-          .height(244)
+          .height(372)
           .onReady(() => this.drawRoute())
       }
       .width('100%')
-      .height(244)
+      .height(372)
       .clip(true)
       .borderRadius(22)
 
-      Text('杭电下沙校区 · 基于已确认校园地图数据绘制')
+      Text('原图：HDUHELP 杭电地图 · 蓝色路线为 CampusFlow 叠加层')
         .fontSize(10).fontColor('#8A90A0').width('100%')
 
       Row() {
