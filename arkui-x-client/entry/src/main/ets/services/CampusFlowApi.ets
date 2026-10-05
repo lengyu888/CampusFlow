@@ -37,6 +37,11 @@ interface RequestHeaders {
   'Authorization': string;
 }
 
+interface ApiErrorPayload {
+  detail?: string;
+  message?: string;
+}
+
 const PATCH_METHOD: http.RequestMethod = 'PATCH' as http.RequestMethod;
 
 export class CampusFlowApi {
@@ -46,6 +51,22 @@ export class CampusFlowApi {
   constructor(baseUrl: string, accessToken: string = '') {
     this.baseUrl = baseUrl.replace(/\/$/, '');
     this.accessToken = accessToken;
+  }
+
+  private formatError(responseCode: number, text: string): string {
+    let detail = text.trim();
+    if (detail.length > 0) {
+      try {
+        const payload = JSON.parse(detail) as ApiErrorPayload;
+        detail = payload.detail ?? payload.message ?? detail;
+      } catch {
+        // Keep a non-JSON response as the diagnostic message.
+      }
+    }
+    if (detail.length === 0) {
+      detail = '服务暂时不可用，请稍后重试。';
+    }
+    return `请求失败（${responseCode}）：${detail}`;
   }
 
   private async request<T>(path: string, method: http.RequestMethod, body: string = ''): Promise<T> {
@@ -71,7 +92,7 @@ export class CampusFlowApi {
       }
       const text = response.result as string;
       if (response.responseCode < 200 || response.responseCode >= 300) {
-        throw new Error(`请求失败（${response.responseCode}）：${text}`);
+        throw new Error(this.formatError(response.responseCode, text));
       }
       if (response.responseCode === 204 || text.length === 0) {
         return undefined as T;

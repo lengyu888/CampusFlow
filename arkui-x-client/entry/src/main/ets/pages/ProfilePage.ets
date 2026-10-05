@@ -37,6 +37,8 @@ export struct ProfilePage {
     resources: []
   };
   @State private hduHelpAuthorizeUrl: string = '';
+  @State private hduHelpMessage: string = '';
+  @State private hduHelpMessageIsError: boolean = false;
 
   aboutToAppear(): void {
     this.displayName = this.user.display_name;
@@ -70,7 +72,8 @@ export struct ProfilePage {
     try {
       this.hduHelp = await new CampusFlowApi(this.baseUrl, this.token).hduHelpStatus();
     } catch (error) {
-      this.message = `HDUHelp 状态加载失败：${error}`;
+      this.hduHelpMessage = `HDUHelp 状态加载失败：${error}`;
+      this.hduHelpMessageIsError = true;
     }
   }
 
@@ -78,9 +81,11 @@ export struct ProfilePage {
     try {
       const result = await new CampusFlowApi(this.baseUrl, this.token).connectHduHelp();
       this.hduHelpAuthorizeUrl = result.authorize_url;
-      this.message = '授权链接已生成，请在 HDUHelp 官方页面确认后返回并检查连接。';
+      this.hduHelpMessage = '授权链接已生成，请在 HDUHelp 官方页面确认后返回并检查连接。';
+      this.hduHelpMessageIsError = false;
     } catch (error) {
-      this.message = `无法发起 HDUHelp 授权：${error}`;
+      this.hduHelpMessage = `无法发起 HDUHelp 授权：${error}`;
+      this.hduHelpMessageIsError = true;
     }
   }
 
@@ -88,9 +93,11 @@ export struct ProfilePage {
     try {
       const result = await new CampusFlowApi(this.baseUrl, this.token).syncHduHelp();
       this.hduHelp = result.status;
-      this.message = `已同步 ${result.synced_resources.length} 类 HDUHelp 数据。`;
+      this.hduHelpMessage = `已同步 ${result.synced_resources.length} 类 HDUHelp 数据。`;
+      this.hduHelpMessageIsError = false;
     } catch (error) {
-      this.message = `HDUHelp 同步失败：${error}`;
+      this.hduHelpMessage = `HDUHelp 同步失败：${error}`;
+      this.hduHelpMessageIsError = true;
     }
   }
 
@@ -100,9 +107,11 @@ export struct ProfilePage {
       this.hduHelp.configured = false;
       this.hduHelp.resources = [];
       this.hduHelpAuthorizeUrl = '';
-      this.message = 'HDUHelp 已断开，本地同步数据已删除。';
+      this.hduHelpMessage = 'HDUHelp 已断开，本地同步数据已删除。';
+      this.hduHelpMessageIsError = false;
     } catch (error) {
-      this.message = `HDUHelp 断开失败：${error}`;
+      this.hduHelpMessage = `HDUHelp 断开失败：${error}`;
+      this.hduHelpMessageIsError = true;
     }
   }
 
@@ -191,6 +200,13 @@ export struct ProfilePage {
             Text(this.hduHelp.configured ? '已连接' : '未连接').fontSize(11)
               .fontColor(this.hduHelp.configured ? '#19966B' : '#8B91A0')
           }.width('100%')
+          if (this.hduHelpMessage.length > 0) {
+            Text(this.hduHelpMessage).fontSize(11)
+              .fontColor(this.hduHelpMessageIsError ? '#B42318' : '#315BFF')
+              .width('100%').padding(11)
+              .backgroundColor(this.hduHelpMessageIsError ? '#FFF0F0' : '#E9EEFF')
+              .borderRadius(12)
+          }
           if (this.hduHelp.configured) {
             Text(`${this.hduHelp.external_name ?? '当前用户'} · ${this.hduHelp.resources.length} 类数据`)
               .fontSize(12).fontColor('#315BFF').width('100%').padding(12)
