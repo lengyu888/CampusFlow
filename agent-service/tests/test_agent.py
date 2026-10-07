@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 import pytest
 from langchain_core.messages import AIMessage, ToolMessage
 
+from campusflow_agent.accounts import AccountStore
 from campusflow_agent.agent import AgentService
 from campusflow_agent.config import Settings
 from campusflow_agent.skills import SkillStore
@@ -67,6 +68,53 @@ def test_extract_route_request_from_natural_language() -> None:
         "我想从六教到菜鸟驿站拿快递，请给我生成地图路线图。"
     ) == ("六教", "菜鸟驿站")
     assert AgentService._extract_route_request("今天有哪些课？") is None
+
+
+def test_authorized_context_exposes_read_tools_without_installing_skills() -> None:
+    accounts = AccountStore(":memory:")
+    user = accounts.register(
+        email="student@example.com",
+        password="password123",
+        display_name="测试学生",
+        api_key_encrypted="encrypted",
+        api_key_hint="•••• test",
+    )
+    accounts.update_onboarding(
+        user_id=user.user_id,
+        school="杭州电子科技大学",
+        campus="下沙校区",
+        semester="2026-2027 第一学期",
+        timetable=[{"date": "2026-10-08", "title": "操作系统"}],
+        campus_map={"places": [{"name": "六教"}]},
+    )
+    accounts.save_hduhelp_resources(
+        user_id=user.user_id,
+        resources={
+            "identity": "encrypted-identity",
+            "grades": "encrypted-grades",
+            "card_balance": "encrypted-card",
+        },
+        errors={},
+    )
+    service = AgentService(
+        Settings(app_env="test"),
+        CampusStore(),
+        SkillStore(),
+        accounts,
+    )
+
+    allowed = service.allowed_tools_for_user(user.user_id)
+
+    assert allowed is not None
+    assert {
+        "get_schedule",
+        "find_campus_places",
+        "plan_campus_route",
+        "get_hduhelp_profile",
+        "get_hduhelp_academics",
+        "get_hduhelp_campus_life",
+    } <= allowed
+    assert "propose_plan" not in allowed
 
 
 @pytest.mark.asyncio

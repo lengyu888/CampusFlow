@@ -1,6 +1,7 @@
 import { CampusRoute, ChatMessage, PendingAction } from '../model/ApiModels';
 import { CampusFlowApi } from '../services/CampusFlowApi';
 import { RouteMap } from '../components/RouteMap';
+import { plainMessage } from '../utils/MessageText';
 
 @Component
 export struct AgentPage {
@@ -117,7 +118,7 @@ export struct AgentPage {
               if (message.role === 'user') {
                 Blank()
               }
-              Text(message.content)
+              Text(plainMessage(message.content))
                 .fontSize(14).fontColor(message.role === 'user' ? '#FFFFFF' : '#272B34')
                 .lineHeight(22)
                 .padding(15)

@@ -785,17 +785,9 @@ def create_app(
         )
 
     @app.get("/api/v1/tools")
-    async def list_tools() -> dict[str, list[str]]:
-        return {
-            "tools": [
-                "get_schedule",
-                "get_weather",
-                "search_campus_notices",
-                "find_campus_places",
-                "propose_task_change",
-                "propose_plan",
-            ]
-        }
+    async def list_tools(user: CurrentUser) -> dict[str, list[str]]:
+        allowed = agent_service.allowed_tools_for_user(user.user_id)
+        return {"tools": sorted(allowed or [])}
 
     @app.get("/api/v1/skills", response_model=list[SkillSummary])
     async def skills(

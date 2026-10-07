@@ -121,9 +121,7 @@ class AgentService:
             timeout=self.settings.agent_timeout_seconds,
             max_retries=2,
         )
-        allowed_tools = (
-            self.skill_store.allowed_tools(user_id) if self.skill_store is not None else None
-        )
+        allowed_tools = self.allowed_tools_for_user(user_id)
         return create_agent(
             model=model,
             tools=build_tools(
@@ -134,6 +132,35 @@ class AgentService:
             ),
             system_prompt=self._build_system_prompt(),
         )
+
+    def allowed_tools_for_user(self, user_id: str) -> set[str] | None:
+        """Return Skill tools plus read-only tools backed by authorized user data."""
+        if self.skill_store is None:
+            return None
+
+        allowed = set(self.skill_store.allowed_tools(user_id))
+        if self.account_store is None:
+            return allowed
+
+        try:
+            timetable, campus_map = self.account_store.get_context(user_id)
+        except KeyError:
+            timetable, campus_map = [], {}
+        if timetable:
+            allowed.add("get_schedule")
+        if isinstance(campus_map, dict) and campus_map.get("places"):
+            allowed.update({"find_campus_places", "plan_campus_route"})
+
+        resources = {
+            item["resource"] for item in self.account_store.list_hduhelp_resources(user_id)
+        }
+        if resources.intersection({"identity", "person"}):
+            allowed.add("get_hduhelp_profile")
+        if resources.intersection({"grades", "exams"}):
+            allowed.add("get_hduhelp_academics")
+        if resources.intersection({"card_balance", "library_bookings"}):
+            allowed.add("get_hduhelp_campus_life")
+        return allowed
 
     async def chat(
         self,
@@ -201,10 +228,9 @@ class AgentService:
         request = self._extract_route_request(message)
         if request is None:
             return None
-        if self.skill_store is not None:
-            allowed_tools = self.skill_store.allowed_tools(user_id)
-            if "plan_campus_route" not in allowed_tools:
-                return None
+        allowed_tools = self.allowed_tools_for_user(user_id)
+        if allowed_tools is not None and "plan_campus_route" not in allowed_tools:
+            return None
         origin, destination = request
         try:
             route = self.store.plan_campus_route(origin, destination)
