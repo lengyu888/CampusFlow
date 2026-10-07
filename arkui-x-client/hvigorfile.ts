@@ -3,11 +3,28 @@
 // variables. Supply portable Windows defaults before loading the ArkUI-X
 // plugin so IDE sync also works when those variables were not inherited.
 if (process.platform === 'win32') {
+  const devEcoHome = process.env.ProgramFiles
+    ? `${process.env.ProgramFiles}\\Huawei\\DevEco Studio`
+    : '';
+
   if (!process.env.ARKUIX_SDK_HOME && process.env.LOCALAPPDATA) {
     process.env.ARKUIX_SDK_HOME = `${process.env.LOCALAPPDATA}\\ArkUI-X\\Sdk`;
   }
-  if (!process.env.DEVECO_SDK_HOME && process.env.ProgramFiles) {
-    process.env.DEVECO_SDK_HOME = `${process.env.ProgramFiles}\\Huawei\\DevEco Studio\\sdk`;
+  if (!process.env.DEVECO_SDK_HOME && devEcoHome) {
+    process.env.DEVECO_SDK_HOME = `${devEcoHome}\\sdk`;
+  }
+  if (!process.env.JAVA_HOME && devEcoHome) {
+    process.env.JAVA_HOME = `${devEcoHome}\\jbr`;
+  }
+  if (process.env.JAVA_HOME) {
+    const javaBin = `${process.env.JAVA_HOME}\\bin`;
+    const currentPath = process.env.Path || process.env.PATH || '';
+    if (!currentPath.toLowerCase().split(';').includes(javaBin.toLowerCase())) {
+      // Windows environment keys are case-insensitive; setting both spellings
+      // keeps Node child-process lookup stable across shells and IDE launchers.
+      process.env.Path = `${javaBin};${currentPath}`;
+      process.env.PATH = process.env.Path;
+    }
   }
 }
 
