@@ -274,9 +274,38 @@ class HDUHelpResourceSnapshot(BaseModel):
     synced_at: datetime
 
 
+class HDUHelpDisplayItem(BaseModel):
+    label: str
+    value: str
+    emphasis: bool = False
+
+
+class HDUHelpDisplaySection(BaseModel):
+    resource: Literal[
+        "identity",
+        "person",
+        "grades",
+        "exams",
+        "card_balance",
+        "library_bookings",
+    ]
+    title: str
+    summary: str
+    items: list[HDUHelpDisplayItem] = Field(default_factory=list)
+
+
+class HDUHelpSuggestedPrompt(BaseModel):
+    prompt_id: str
+    title: str
+    prompt: str
+    resource: str | None = None
+
+
 class HDUHelpDataResponse(BaseModel):
     status: HDUHelpConnectionStatus
     resources: list[HDUHelpResourceSnapshot] = Field(default_factory=list)
+    sections: list[HDUHelpDisplaySection] = Field(default_factory=list)
+    suggested_prompts: list[HDUHelpSuggestedPrompt] = Field(default_factory=list)
 
 
 class HDUHelpSyncResponse(BaseModel):

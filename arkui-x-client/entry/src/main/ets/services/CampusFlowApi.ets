@@ -10,6 +10,7 @@ import {
   HistoryMessage,
   HDUHelpConnectResponse,
   HDUHelpConnectionStatus,
+  HDUHelpDataResponse,
   HDUHelpSyncResponse,
   OnboardingResponse,
   PlanningOverview,
@@ -230,6 +231,10 @@ export class CampusFlowApi {
 
   async hduHelpStatus(): Promise<HDUHelpConnectionStatus> {
     return this.request<HDUHelpConnectionStatus>('/api/v1/hduhelp/status', http.RequestMethod.GET);
+  }
+
+  async hduHelpData(): Promise<HDUHelpDataResponse> {
+    return this.request<HDUHelpDataResponse>('/api/v1/hduhelp/data', http.RequestMethod.GET);
   }
 
   async connectHduHelp(): Promise<HDUHelpConnectResponse> {

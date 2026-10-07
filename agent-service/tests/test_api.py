@@ -469,6 +469,16 @@ async def test_hduhelp_oauth_sync_data_and_disconnect(client: AsyncClient) -> No
     resources = {item["resource"]: item["data"] for item in data.json()["resources"]}
     assert resources["grades"]["gpa"] == 3.72
     assert resources["card_balance"]["balance"] == 86.5
+    sections = {item["resource"]: item for item in data.json()["sections"]}
+    assert sections["person"]["summary"] == "计算机学院 · 软件工程"
+    assert sections["grades"]["summary"] == "GPA 3.72 · 已同步 1 门课程"
+    assert sections["card_balance"]["items"][0] == {
+        "label": "可用余额",
+        "value": "¥86.50",
+        "emphasis": True,
+    }
+    prompt_ids = {item["prompt_id"] for item in data.json()["suggested_prompts"]}
+    assert prompt_ids == {"weekly-brief", "grade-plan", "exam-countdown", "campus-budget"}
     assert "access_token" not in data.text
     assert "refresh_token" not in data.text
 

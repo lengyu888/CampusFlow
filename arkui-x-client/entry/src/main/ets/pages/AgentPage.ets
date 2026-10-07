@@ -6,6 +6,7 @@ import { RouteMap } from '../components/RouteMap';
 export struct AgentPage {
   @Prop baseUrl: string;
   @Prop token: string;
+  @Prop initialPrompt: string = '';
   onOpenHistory: () => void = () => {};
   @State private prompt: string = '';
   @State private model: string = 'deepseek-v4-pro';
@@ -19,6 +20,12 @@ export struct AgentPage {
   @State private route: CampusRoute | null = null;
   @State private routeError: string = '';
   private sessionId: string = `arkuix-${Date.now()}`;
+
+  aboutToAppear(): void {
+    if (this.initialPrompt.length > 0) {
+      this.prompt = this.initialPrompt;
+    }
+  }
 
   private async send(): Promise<void> {
     const text = this.prompt.trim();

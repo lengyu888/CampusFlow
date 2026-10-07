@@ -15,6 +15,7 @@ struct Index {
   @StorageLink('apiBaseUrl') private baseUrl: string = 'http://127.0.0.1:8000';
   @State private token: string = '';
   @State private activeTab: number = 0;
+  @State private agentPrompt: string = '';
   @State private user: UserProfile = {
     user_id: '', email: '', display_name: '', school: null, campus: null, semester: null,
     onboarding_complete: false, role: 'user', api_key_configured: false, api_key_hint: null
@@ -42,20 +43,27 @@ struct Index {
     });
   }
 
+  private openAgentWithPrompt(prompt: string): void {
+    this.agentPrompt = prompt;
+    this.selectTab(1);
+  }
+
   @Builder
   private pageContent() {
     if (this.activeTab === 0) {
       HomePage({ baseUrl: this.baseUrl, token: this.token, user: this.user,
         onOpenAgent: () => this.selectTab(1) })
     } else if (this.activeTab === 1) {
-      AgentPage({ baseUrl: this.baseUrl, token: this.token, onOpenHistory: () => this.selectTab(5) })
+      AgentPage({ baseUrl: this.baseUrl, token: this.token, initialPrompt: this.agentPrompt,
+        onOpenHistory: () => this.selectTab(5) })
     } else if (this.activeTab === 2) {
       PlanPage({ baseUrl: this.baseUrl, token: this.token })
     } else if (this.activeTab === 3) {
       SkillsPage({ baseUrl: this.baseUrl, token: this.token })
     } else if (this.activeTab === 4) {
       ProfilePage({ baseUrl: this.baseUrl, token: this.token, user: this.user,
-        onUserChanged: (updated) => this.user = updated, onLogout: () => this.logout() })
+        onUserChanged: (updated) => this.user = updated, onLogout: () => this.logout(),
+        onOpenAgent: (prompt) => this.openAgentWithPrompt(prompt) })
     } else {
       HistoryPage({ baseUrl: this.baseUrl, token: this.token, onBack: () => this.selectTab(1) })
     }

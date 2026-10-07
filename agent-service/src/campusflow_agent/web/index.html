@@ -348,8 +348,20 @@
               </form>
               <div class="hduhelp-connect-actions">
                 <button class="line-button" id="connectHduHelpButton" type="button">或使用官方 OAuth</button>
+                <button class="line-button hduhelp-data-button" id="viewHduHelpDataButton" type="button" hidden>查看校园档案</button>
                 <button class="line-button" id="syncHduHelpButton" type="button" hidden>同步数据</button>
                 <button class="line-button danger" id="disconnectHduHelpButton" type="button" hidden>断开并删除</button>
+              </div>
+              <div class="hduhelp-data-panel" id="hduHelpDataPanel" hidden>
+                <div class="hduhelp-data-heading">
+                  <div><span>CONNECTED CAMPUS PROFILE</span><h3>我的校园档案</h3></div>
+                  <p id="hduHelpDataSummary">正在整理已同步的数据…</p>
+                </div>
+                <div class="hduhelp-section-grid" id="hduHelpDataSections"></div>
+                <div class="hduhelp-prompt-area">
+                  <div><strong>问问 Agent</strong><span>点击后带入会话，可继续修改</span></div>
+                  <div class="hduhelp-prompt-list" id="hduHelpPromptList"></div>
+                </div>
               </div>
             </section>
             <section class="subscription-control">
@@ -410,7 +422,7 @@
 
     <div class="toast" id="toast" role="status"></div>
     <script src="/static/gsap.min.js" defer></script>
-    <script src="/static/app.js?v=12" defer></script>
+    <script src="/static/app.js?v=13" defer></script>
     <script src="/static/motion.js?v=1" defer></script>
   </body>
 </html>

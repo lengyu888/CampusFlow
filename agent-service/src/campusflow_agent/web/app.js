@@ -120,8 +120,13 @@ const elements = {
   hduHelpPatForm: $("#hduHelpPatForm"),
   hduHelpPatInput: $("#hduHelpPatInput"),
   connectHduHelpButton: $("#connectHduHelpButton"),
+  viewHduHelpDataButton: $("#viewHduHelpDataButton"),
   syncHduHelpButton: $("#syncHduHelpButton"),
   disconnectHduHelpButton: $("#disconnectHduHelpButton"),
+  hduHelpDataPanel: $("#hduHelpDataPanel"),
+  hduHelpDataSummary: $("#hduHelpDataSummary"),
+  hduHelpDataSections: $("#hduHelpDataSections"),
+  hduHelpPromptList: $("#hduHelpPromptList"),
   adminTabButton: $("#adminTabButton"),
   settingsCourseCount: $("#settingsCourseCount"),
   settingsPlaceCount: $("#settingsPlaceCount"),
@@ -592,6 +597,9 @@ function switchAppTab(tab) {
 }
 
 function openAgentWithPrompt(prompt = "") {
+  if (!elements.settingsView.hidden) {
+    showApp();
+  }
   switchAppTab("agent");
   if (prompt) {
     elements.messageInput.value = prompt;
@@ -1586,10 +1594,12 @@ function renderHduHelpStatus(status) {
   const connected = Boolean(status.configured);
   elements.connectHduHelpButton.hidden = connected;
   elements.hduHelpPatForm.hidden = connected;
+  elements.viewHduHelpDataButton.hidden = !connected;
   elements.syncHduHelpButton.hidden = !connected;
   elements.disconnectHduHelpButton.hidden = !connected;
   elements.hduHelpResourceList.replaceChildren();
   if (!connected) {
+    elements.hduHelpDataPanel.hidden = true;
     elements.hduHelpConnectionState.textContent = "填写个人访问令牌即可同步；令牌仅加密保存，不会提交杭电密码。";
     ["学籍", "成绩 / GPA", "考试", "校园卡", "图书馆预约"].forEach((label) => {
       const chip = document.createElement("span");
@@ -1620,6 +1630,66 @@ function renderHduHelpStatus(status) {
     chip.className = "warning";
     chip.textContent = "部分数据待重试";
     elements.hduHelpResourceList.append(chip);
+  }
+}
+
+function renderHduHelpData(payload) {
+  const sections = payload.sections ?? [];
+  const prompts = payload.suggested_prompts ?? [];
+  elements.hduHelpDataSummary.textContent = sections.length
+    ? `已整理 ${sections.length} 个信息分区，可直接交给 Agent 继续规划。`
+    : "还没有可展示的数据，请先同步校园档案。";
+  elements.hduHelpDataSections.replaceChildren();
+  sections.forEach((section) => {
+    const card = document.createElement("article");
+    card.className = "hduhelp-data-section";
+    const header = document.createElement("div");
+    const copy = document.createElement("div");
+    const title = document.createElement("h4");
+    const summary = document.createElement("p");
+    const ready = document.createElement("span");
+    title.textContent = section.title;
+    summary.textContent = section.summary;
+    ready.textContent = "已同步";
+    copy.append(title, summary);
+    header.append(copy, ready);
+    const itemList = document.createElement("dl");
+    (section.items ?? []).forEach((item) => {
+      const label = document.createElement("dt");
+      const value = document.createElement("dd");
+      label.textContent = item.label;
+      value.textContent = item.value;
+      value.classList.toggle("emphasis", Boolean(item.emphasis));
+      itemList.append(label, value);
+    });
+    card.append(header, itemList);
+    elements.hduHelpDataSections.append(card);
+  });
+  elements.hduHelpPromptList.replaceChildren();
+  prompts.forEach((suggestion) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = `${suggestion.title}  ↗`;
+    button.addEventListener("click", () => openAgentWithPrompt(suggestion.prompt));
+    elements.hduHelpPromptList.append(button);
+  });
+}
+
+async function loadHduHelpData() {
+  const opening = elements.hduHelpDataPanel.hidden;
+  if (!opening) {
+    elements.hduHelpDataPanel.hidden = true;
+    elements.viewHduHelpDataButton.textContent = "查看校园档案";
+    return;
+  }
+  elements.hduHelpDataPanel.hidden = false;
+  elements.viewHduHelpDataButton.textContent = "收起校园档案";
+  elements.hduHelpDataSummary.textContent = "正在整理已同步的数据…";
+  try {
+    renderHduHelpData(await api("/api/v1/hduhelp/data"));
+  } catch (error) {
+    elements.hduHelpDataSummary.textContent = error.message;
+    showToast(error.message, "error");
   }
 }
 
@@ -1656,6 +1726,10 @@ async function connectHduHelpPat(event) {
     });
     elements.hduHelpPatInput.value = "";
     renderHduHelpStatus(payload.status);
+    if (!elements.hduHelpDataPanel.hidden) {
+      const data = await api("/api/v1/hduhelp/data");
+      renderHduHelpData(data);
+    }
     const failed = Object.keys(payload.errors ?? {}).length;
     showToast(failed
       ? `令牌已连接，${payload.synced_resources.length} 类数据成功，${failed} 类权限不足`
@@ -1673,6 +1747,9 @@ async function syncHduHelp() {
   try {
     const payload = await api("/api/v1/hduhelp/sync", { method: "POST" });
     renderHduHelpStatus(payload.status);
+    if (!elements.hduHelpDataPanel.hidden) {
+      renderHduHelpData(await api("/api/v1/hduhelp/data"));
+    }
     const failed = Object.keys(payload.errors ?? {}).length;
     showToast(failed ? `已同步 ${payload.synced_resources.length} 类数据，${failed} 类待重试` : `已同步 ${payload.synced_resources.length} 类校园数据`);
   } catch (error) {
@@ -1688,6 +1765,9 @@ async function disconnectHduHelp() {
   try {
     await api("/api/v1/hduhelp/connection", { method: "DELETE" });
     renderHduHelpStatus({ configured: false, resources: [] });
+    elements.viewHduHelpDataButton.textContent = "查看校园档案";
+    elements.hduHelpDataSections.replaceChildren();
+    elements.hduHelpPromptList.replaceChildren();
     showToast("HDUHelp 已断开，本地同步数据已删除");
   } catch (error) {
     showToast(error.message, "error");
@@ -1995,6 +2075,7 @@ elements.historySearch.addEventListener("input", () => {
 elements.settingsForm.addEventListener("submit", saveSettings);
 elements.hduHelpPatForm.addEventListener("submit", connectHduHelpPat);
 elements.connectHduHelpButton.addEventListener("click", connectHduHelp);
+elements.viewHduHelpDataButton.addEventListener("click", loadHduHelpData);
 elements.syncHduHelpButton.addEventListener("click", syncHduHelp);
 elements.disconnectHduHelpButton.addEventListener("click", disconnectHduHelp);
 elements.setupSubscriptionForm.addEventListener("submit", previewScheduleSubscription);

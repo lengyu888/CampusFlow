@@ -25,6 +25,7 @@ from .accounts import (
 from .agent import AgentConfigurationError, AgentService
 from .config import Settings, get_settings
 from .hduhelp import HDUHelpError, HDUHelpService, TokenSet
+from .hduhelp_presenter import build_hduhelp_presentation
 from .key_vault import ApiKeyVault
 from .schedule_subscription import ScheduleSubscriptionError, ScheduleSubscriptionService
 from .schemas import (
@@ -520,6 +521,7 @@ def create_app(
     @app.get("/api/v1/hduhelp/data", response_model=HDUHelpDataResponse)
     async def get_hduhelp_data(user: CurrentUser) -> HDUHelpDataResponse:
         resources: list[HDUHelpResourceSnapshot] = []
+        presentation_resources: dict[str, object] = {}
         for item in account_store.list_hduhelp_resources(user.user_id):
             try:
                 data = json.loads(api_key_vault.decrypt(item["encrypted_data"]))
@@ -532,7 +534,14 @@ def create_app(
                     synced_at=item["synced_at"],
                 )
             )
-        return HDUHelpDataResponse(status=hduhelp_status(user.user_id), resources=resources)
+            presentation_resources[item["resource"]] = data
+        sections, prompts = build_hduhelp_presentation(presentation_resources)
+        return HDUHelpDataResponse(
+            status=hduhelp_status(user.user_id),
+            resources=resources,
+            sections=sections,
+            suggested_prompts=prompts,
+        )
 
     @app.delete("/api/v1/hduhelp/connection", status_code=204)
     async def disconnect_hduhelp(user: CurrentUser) -> Response:

@@ -215,6 +215,32 @@ export interface HDUHelpSyncResponse {
   errors: Record<string, string>;
 }
 
+export interface HDUHelpDisplayItem {
+  label: string;
+  value: string;
+  emphasis: boolean;
+}
+
+export interface HDUHelpDisplaySection {
+  resource: string;
+  title: string;
+  summary: string;
+  items: HDUHelpDisplayItem[];
+}
+
+export interface HDUHelpSuggestedPrompt {
+  prompt_id: string;
+  title: string;
+  prompt: string;
+  resource: string | null;
+}
+
+export interface HDUHelpDataResponse {
+  status: HDUHelpConnectionStatus;
+  sections: HDUHelpDisplaySection[];
+  suggested_prompts: HDUHelpSuggestedPrompt[];
+}
+
 export interface AdminUserSummary {
   user_id: string;
   email: string;

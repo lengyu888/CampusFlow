@@ -1,6 +1,10 @@
 import {
   AdminUserSummary,
   HDUHelpConnectionStatus,
+  HDUHelpDataResponse,
+  HDUHelpDisplayItem,
+  HDUHelpDisplaySection,
+  HDUHelpSuggestedPrompt,
   ScheduleSubscriptionStatus,
   UserProfile
 } from '../model/ApiModels';
@@ -13,6 +17,7 @@ export struct ProfilePage {
   @Prop user: UserProfile;
   onUserChanged: (user: UserProfile) => void = () => {};
   onLogout: () => void = () => {};
+  onOpenAgent: (prompt: string) => void = () => {};
   @State private displayName: string = '';
   @State private school: string = '';
   @State private campus: string = '';
@@ -42,6 +47,11 @@ export struct ProfilePage {
   @State private hduHelpPat: string = '';
   @State private hduHelpMessage: string = '';
   @State private hduHelpMessageIsError: boolean = false;
+  @State private showHduHelpData: boolean = false;
+  @State private hduHelpDataLoading: boolean = false;
+  @State private hduHelpSections: HDUHelpDisplaySection[] = [];
+  @State private hduHelpPrompts: HDUHelpSuggestedPrompt[] = [];
+  @State private hduHelpDataError: string = '';
 
   aboutToAppear(): void {
     this.displayName = this.user.display_name;
@@ -77,6 +87,22 @@ export struct ProfilePage {
     } catch (error) {
       this.hduHelpMessage = `HDUHelp 状态加载失败：${error}`;
       this.hduHelpMessageIsError = true;
+    }
+  }
+
+  private async openHduHelpData(): Promise<void> {
+    this.showHduHelpData = true;
+    this.hduHelpDataLoading = true;
+    this.hduHelpDataError = '';
+    try {
+      const result: HDUHelpDataResponse = await new CampusFlowApi(this.baseUrl, this.token).hduHelpData();
+      this.hduHelp = result.status;
+      this.hduHelpSections = result.sections;
+      this.hduHelpPrompts = result.suggested_prompts;
+    } catch (error) {
+      this.hduHelpDataError = `校园档案加载失败：${error}`;
+    } finally {
+      this.hduHelpDataLoading = false;
     }
   }
 
@@ -184,8 +210,88 @@ export struct ProfilePage {
     }.width('100%').alignItems(HorizontalAlign.Start)
   }
 
+  @Builder
+  private dataItem(item: HDUHelpDisplayItem) {
+    Row() {
+      Text(item.label).fontSize(11).fontColor('#7B8292')
+      Blank()
+      Text(item.value).fontSize(item.emphasis ? 17 : 12)
+        .fontWeight(item.emphasis ? FontWeight.Bold : FontWeight.Medium)
+        .fontColor(item.emphasis ? '#315BFF' : '#272B34')
+        .constraintSize({ maxWidth: '68%' }).maxLines(2)
+        .textOverflow({ overflow: TextOverflow.Ellipsis })
+    }.width('100%')
+  }
+
+  @Builder
+  private hduHelpDataView() {
+    Column() {
+      Row({ space: 12 }) {
+        Button('‹').width(42).height(42).fontSize(24).fontColor('#171A22')
+          .backgroundColor('#FFFFFF').borderRadius(14)
+          .onClick(() => this.showHduHelpData = false)
+        Column({ space: 3 }) {
+          Text('我的校园档案').fontSize(23).fontWeight(FontWeight.Bold).fontColor('#171A22')
+          Text('由 HDUHelp 同步，Agent 可按需调用').fontSize(11).fontColor('#7B8292')
+        }.alignItems(HorizontalAlign.Start).layoutWeight(1)
+        Button('刷新').height(38).fontSize(11).fontColor('#315BFF').backgroundColor('#E9EEFF')
+          .borderRadius(14).onClick(() => this.openHduHelpData())
+      }.width('100%').padding({ left: 18, right: 18, top: 18, bottom: 12 })
+
+      Scroll() {
+        Column({ space: 14 }) {
+          if (this.hduHelpDataLoading) {
+            Text('正在整理校园数据…').fontSize(13).fontColor('#7B8292').width('100%')
+              .padding(18).backgroundColor('#FFFFFF').borderRadius(20)
+          } else if (this.hduHelpDataError.length > 0) {
+            Text(this.hduHelpDataError).fontSize(12).fontColor('#B42318').width('100%')
+              .padding(16).backgroundColor('#FFF0F0').borderRadius(18)
+          } else {
+            Column({ space: 7 }) {
+              Text('已连接的数据').fontSize(11).fontWeight(FontWeight.Bold).fontColor('#315BFF').width('100%')
+              Text(`${this.hduHelpSections.length} 个信息分区`).fontSize(20).fontWeight(FontWeight.Bold)
+                .fontColor('#171A22').width('100%')
+            }.width('100%').padding(18).backgroundColor('#E9EEFF').borderRadius(22)
+
+            ForEach(this.hduHelpSections, (section: HDUHelpDisplaySection) => {
+              Column({ space: 10 }) {
+                Row() {
+                  Column({ space: 3 }) {
+                    Text(section.title).fontSize(17).fontWeight(FontWeight.Bold).fontColor('#171A22')
+                    Text(section.summary).fontSize(11).fontColor('#7B8292')
+                  }.alignItems(HorizontalAlign.Start)
+                  Blank()
+                  Text('✓').fontSize(13).fontColor('#19966B').width(28).height(28)
+                    .textAlign(TextAlign.Center).backgroundColor('#E8F7F1').borderRadius(10)
+                }.width('100%')
+                ForEach(section.items, (item: HDUHelpDisplayItem) => {
+                  this.dataItem(item)
+                }, (item: HDUHelpDisplayItem) => `${section.resource}-${item.label}`)
+              }.width('100%').padding(17).backgroundColor('#FFFFFF').borderRadius(22)
+            }, (section: HDUHelpDisplaySection) => section.resource)
+
+            if (this.hduHelpPrompts.length > 0) {
+              Column({ space: 11 }) {
+                Text('问问 Agent').fontSize(18).fontWeight(FontWeight.Bold).fontColor('#171A22').width('100%')
+                Text('基于已连接的数据继续完成任务').fontSize(11).fontColor('#7B8292').width('100%')
+                ForEach(this.hduHelpPrompts, (suggestion: HDUHelpSuggestedPrompt) => {
+                  Button(suggestion.title + '  ↗').width('100%').height(44).fontSize(12)
+                    .fontColor('#315BFF').backgroundColor('#F2F5FF').borderRadius(14)
+                    .onClick(() => this.onOpenAgent(suggestion.prompt))
+                }, (suggestion: HDUHelpSuggestedPrompt) => suggestion.prompt_id)
+              }.width('100%').padding(18).backgroundColor('#FFFFFF').borderRadius(22)
+            }
+          }
+        }.width('100%').padding({ left: 18, right: 18, bottom: 28 })
+      }.layoutWeight(1).width('100%')
+    }.width('100%').height('100%').backgroundColor('#F5F7FB')
+  }
+
   build() {
-    Scroll() {
+    if (this.showHduHelpData) {
+      this.hduHelpDataView()
+    } else {
+      Scroll() {
       Column({ space: 18 }) {
         Row({ space: 14 }) {
           Text(this.user.display_name.slice(0, 1)).fontSize(25).fontWeight(FontWeight.Bold).fontColor('#FFFFFF')
@@ -244,6 +350,8 @@ export struct ProfilePage {
               Button('断开并删除').layoutWeight(1).height(42).fontColor('#D33D3D').backgroundColor('#FFF0F0')
                 .borderRadius(13).onClick(() => this.disconnectHduHelp())
             }.width('100%')
+            Button('查看校园档案与推荐问题').width('100%').height(42).fontColor('#315BFF')
+              .backgroundColor('#E9EEFF').borderRadius(13).onClick(() => this.openHduHelpData())
           } else {
             TextInput({ text: this.hduHelpPat, placeholder: 'hduhelp_pat_…' }).type(InputType.Password)
               .height(46).backgroundColor('#F5F7FB').borderRadius(13)
@@ -320,6 +428,7 @@ export struct ProfilePage {
         Button('退出登录').width('100%').height(46).fontColor('#D33D3D').backgroundColor('#FFF0F0')
           .borderRadius(14).onClick(() => this.onLogout())
       }.width('100%').padding({ left: 18, right: 18, top: 20, bottom: 110 })
-    }.width('100%').height('100%').backgroundColor('#F5F7FB')
+      }.width('100%').height('100%').backgroundColor('#F5F7FB')
+    }
   }
 }
