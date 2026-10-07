@@ -541,6 +541,7 @@ def create_app(
             resources=resources,
             sections=sections,
             suggested_prompts=prompts,
+            sync_errors=account_store.get_hduhelp_sync_errors(user.user_id),
         )
 
     @app.delete("/api/v1/hduhelp/connection", status_code=204)
@@ -911,6 +912,14 @@ def create_app(
             raise HTTPException(status_code=404, detail="会话不存在。") from exc
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    @app.delete("/api/v1/sessions/{session_id}", status_code=204)
+    async def delete_session(session_id: str, user: CurrentUser) -> Response:
+        try:
+            store.delete_session(user.user_id, session_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="会话不存在。") from exc
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     @app.get("/api/v1/tasks")
     async def tasks(user: CurrentUser) -> dict[str, list[dict]]:

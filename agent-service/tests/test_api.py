@@ -88,7 +88,7 @@ async def test_campus_data_package_places_notices_and_corrections(
 
     snapshot = await client.get("/api/v1/campus-data")
     assert snapshot.status_code == 200
-    assert snapshot.json()["package"]["version"] == "2026.10.4"
+    assert snapshot.json()["package"]["version"] == "2026.10.7"
     assert snapshot.json()["package"]["place_count"] >= 17
 
     places = await client.get(
@@ -215,6 +215,11 @@ async def test_visual_import_onboarding_chat_and_history(client: AsyncClient) ->
 
     search = await client.get("/api/v1/sessions", params={"query": "周四"})
     assert [item["session_id"] for item in search.json()] == ["session-001"]
+
+    deleted = await client.delete("/api/v1/sessions/session-001")
+    assert deleted.status_code == 204
+    assert (await client.get("/api/v1/sessions/session-001/history")).json() == []
+    assert (await client.get("/api/v1/sessions")).json() == []
 
 
 async def test_chat_requires_login_and_onboarding(client: AsyncClient) -> None:
@@ -459,8 +464,11 @@ async def test_hduhelp_oauth_sync_data_and_disconnect(client: AsyncClient) -> No
         "exams",
         "grades",
         "identity",
+        "library_attendance",
         "library_bookings",
+        "library_reading",
         "person",
+        "sunrun_overview",
     ]
     assert synced.json()["status"]["last_synced_at"] is not None
 
@@ -469,6 +477,8 @@ async def test_hduhelp_oauth_sync_data_and_disconnect(client: AsyncClient) -> No
     resources = {item["resource"]: item["data"] for item in data.json()["resources"]}
     assert resources["grades"]["gpa"] == 3.72
     assert resources["card_balance"]["balance"] == 86.5
+    assert resources["library_attendance"]["visits"] == 12
+    assert resources["sunrun_overview"]["validCount"] == 8
     sections = {item["resource"]: item for item in data.json()["sections"]}
     assert sections["person"]["summary"] == "计算机学院 · 软件工程"
     assert sections["grades"]["summary"] == "GPA 3.72 · 已同步 1 门课程"
@@ -478,7 +488,17 @@ async def test_hduhelp_oauth_sync_data_and_disconnect(client: AsyncClient) -> No
         "emphasis": True,
     }
     prompt_ids = {item["prompt_id"] for item in data.json()["suggested_prompts"]}
-    assert prompt_ids == {"weekly-brief", "grade-plan", "exam-countdown", "campus-budget"}
+    assert prompt_ids == {
+        "weekly-brief",
+        "grade-plan",
+        "exam-countdown",
+        "campus-budget",
+        "library-focus",
+        "sunrun-plan",
+    }
+    assert data.json()["sync_errors"] == {
+        "subscriptions": "HDUHelp API 返回 HTTP 403。"
+    }
     assert "access_token" not in data.text
     assert "refresh_token" not in data.text
 
@@ -505,8 +525,11 @@ async def test_hduhelp_pat_connect_sync_and_mask(client: AsyncClient) -> None:
         "exams",
         "grades",
         "identity",
+        "library_attendance",
         "library_bookings",
+        "library_reading",
         "person",
+        "sunrun_overview",
     ]
     assert fake_pat not in connected.text
 

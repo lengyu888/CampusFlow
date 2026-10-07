@@ -160,8 +160,11 @@ class FakeHDUHelpService:
                 "exams": [{"course": "操作系统", "room": "7教406"}],
                 "card_balance": {"balance": 86.5},
                 "library_bookings": {"items": [{"seat": "A-108"}]},
+                "library_attendance": {"visits": 12, "totalTime": 720},
+                "library_reading": {"borrowCount": 6, "unreturnedCount": 1},
+                "sunrun_overview": {"validCount": 8, "totalDistance": 16.4},
             },
-            errors={},
+            errors={"subscriptions": "HDUHelp API 返回 HTTP 403。"},
         )
 
 

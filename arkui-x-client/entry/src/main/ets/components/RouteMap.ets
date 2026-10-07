@@ -2,17 +2,19 @@ import { CampusRoute } from '../model/ApiModels';
 
 @Component
 export struct RouteMap {
-  @Prop route: CampusRoute;
+  @Watch('routeChanged') @Prop route: CampusRoute;
   private settings: RenderingContextSettings = new RenderingContextSettings(true);
   private context: CanvasRenderingContext2D = new CanvasRenderingContext2D(this.settings);
 
   private drawRoute(): void {
     const width = 330;
     const height = 372;
-    const mapLeft = 12;
-    const mapTop = 56;
-    const mapWidth = 306;
-    const mapHeight = 316;
+    // Calibrated from the untouched 1279 × 2155 HDUHELP bitmap. The main
+    // campus panel spans x=43..1185 and y=209..1368 in the source image.
+    const mapLeft = 11.1;
+    const mapTop = 53.9;
+    const mapWidth = 294.6;
+    const mapHeight = 299.2;
     this.context.clearRect(0, 0, width, height);
 
     if (this.route.path.length === 0) {
@@ -48,6 +50,10 @@ export struct RouteMap {
       this.context.lineWidth = 2;
       this.context.stroke();
     }
+  }
+
+  private routeChanged(): void {
+    this.drawRoute();
   }
 
   build() {

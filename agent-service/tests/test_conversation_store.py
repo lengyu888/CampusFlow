@@ -12,9 +12,13 @@ def test_conversation_history_persists_across_store_instances(tmp_path) -> None:
     sessions = second.list_sessions("user-1")
 
     assert [item.role for item in history] == ["user", "assistant"]
-    assert sessions[0].title == "帮我安排今天复习"
+    assert sessions[0].title == "安排今天复习"
     assert sessions[0].model_name == "deepseek-flash"
     assert sessions[0].message_count == 2
 
     renamed = second.rename_session("user-1", "thread-1", "今日复习")
     assert renamed.title == "今日复习"
+
+    second.delete_session("user-1", "thread-1")
+    assert second.list_sessions("user-1") == []
+    assert second.get_history("user-1", "thread-1") == []

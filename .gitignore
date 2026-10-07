@@ -16,6 +16,7 @@ htmlcov/
 *.sqlite3
 logs/
 data/
+.uvicorn.*.log
 
 # IDE / OS
 .idea/

@@ -12,6 +12,7 @@ export struct HistoryPage {
   @State private messages: HistoryMessage[] = [];
   @State private loading: boolean = false;
   @State private errorText: string = '';
+  @State private pendingDeleteId: string = '';
 
   aboutToAppear(): void {
     this.reload();
@@ -39,6 +40,20 @@ export struct HistoryPage {
       this.errorText = `会话内容加载失败：${error}`;
     } finally {
       this.loading = false;
+    }
+  }
+
+  private async deleteSession(session: SessionSummary): Promise<void> {
+    try {
+      await new CampusFlowApi(this.baseUrl, this.token).deleteSession(session.session_id);
+      this.sessions = this.sessions.filter((item) => item.session_id !== session.session_id);
+      if (this.selected?.session_id === session.session_id) {
+        this.selected = null;
+        this.messages = [];
+      }
+      this.pendingDeleteId = '';
+    } catch (error) {
+      this.errorText = `删除失败：${error}`;
     }
   }
 
@@ -81,18 +96,34 @@ export struct HistoryPage {
             }
             ForEach(this.sessions, (session: SessionSummary) => {
               Column({ space: 8 }) {
-                Row() {
+                Row({ space: 8 }) {
                   Text(session.title).fontSize(16).fontWeight(FontWeight.Bold).fontColor('#171A22')
                     .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).layoutWeight(1)
                   Text(`${session.message_count} 条`).fontSize(11).fontColor('#315BFF')
+                  Button('打开').height(28).fontSize(10).fontColor('#315BFF')
+                    .backgroundColor('#E9EEFF').borderRadius(10)
+                    .onClick(() => this.openSession(session))
+                  Button('删除').height(28).fontSize(10).fontColor('#C53D3D')
+                    .backgroundColor('#FFF0F0').borderRadius(10)
+                    .onClick(() => this.pendingDeleteId = session.session_id)
                 }.width('100%')
                 Text(plainMessage(session.last_message)).fontSize(13).fontColor('#697083').maxLines(2)
                   .textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
                 Text(session.model_name === 'deepseek-flash' ? 'FLASH' : 'V4 PRO')
                   .fontSize(10).fontColor('#8A90A0').width('100%')
+                if (this.pendingDeleteId === session.session_id) {
+                  Row({ space: 8 }) {
+                    Text('删除后无法恢复').fontSize(11).fontColor('#C53D3D').layoutWeight(1)
+                    Button('取消').height(30).fontSize(10).fontColor('#697083')
+                      .backgroundColor('#F1F3F7').borderRadius(10)
+                      .onClick(() => this.pendingDeleteId = '')
+                    Button('确认删除').height(30).fontSize(10).fontColor('#FFFFFF')
+                      .backgroundColor('#C53D3D').borderRadius(10)
+                      .onClick(() => this.deleteSession(session))
+                  }.width('100%')
+                }
               }
               .width('100%').padding(17).backgroundColor('#FFFFFF').borderRadius(20)
-              .onClick(() => this.openSession(session))
             }, (session: SessionSummary) => session.session_id)
           }.width('100%').padding({ left: 18, right: 18, top: 8, bottom: 24 })
         }.layoutWeight(1).width('100%')

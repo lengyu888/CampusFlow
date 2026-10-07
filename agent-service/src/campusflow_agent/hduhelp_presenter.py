@@ -37,6 +37,96 @@ def _compact(values: Iterable[HDUHelpDisplayItem | None]) -> list[HDUHelpDisplay
     return [value for value in values if value is not None]
 
 
+FIELD_LABELS = {
+    "name": "姓名",
+    "nickName": "昵称",
+    "identityType": "身份类型",
+    "staffId": "学号",
+    "total": "总计",
+    "count": "次数",
+    "validCount": "有效次数",
+    "distance": "里程",
+    "totalDistance": "总里程",
+    "pace": "配速",
+    "speed": "速度",
+    "duration": "时长",
+    "totalTime": "累计时长",
+    "floor": "楼层",
+    "visits": "到馆次数",
+    "borrowCount": "借阅数量",
+    "unreturnedCount": "未归还",
+    "title": "名称",
+    "status": "状态",
+    "date": "日期",
+    "time": "时间",
+}
+
+RESOURCE_TITLES = {
+    "identity": "HDUHelp 身份",
+    "library_attendance": "图书馆到馆",
+    "library_reading": "图书馆阅读",
+    "library_seat_reservations": "图书馆座位记录",
+    "sunrun_overview": "阳光长跑",
+    "sunrun_group": "长跑达标要求",
+    "sunrun_detail": "最近跑步记录",
+    "subscriptions": "校园提醒订阅",
+}
+
+
+def _human_label(path: str) -> str:
+    leaf = path.rsplit(".", 1)[-1]
+    return FIELD_LABELS.get(leaf, leaf.replace("_", " "))
+
+
+def _flatten_items(value: Any, *, limit: int = 12) -> list[HDUHelpDisplayItem]:
+    result: list[HDUHelpDisplayItem] = []
+
+    def visit(current: Any, path: str = "") -> None:
+        if len(result) >= limit:
+            return
+        if isinstance(current, Mapping):
+            for key, child in current.items():
+                visit(child, f"{path}.{key}" if path else str(key))
+            return
+        if isinstance(current, list):
+            if not current:
+                return
+            scalar_values = [str(item) for item in current if not isinstance(item, (Mapping, list))]
+            if scalar_values:
+                result.append(
+                    HDUHelpDisplayItem(
+                        label=_human_label(path),
+                        value="、".join(scalar_values[:5]),
+                    )
+                )
+            else:
+                for index, child in enumerate(current[:3], start=1):
+                    visit(child, f"{path}.{index}" if path else str(index))
+            return
+        if current is None or not str(current).strip():
+            return
+        result.append(
+            HDUHelpDisplayItem(
+                label=_human_label(path),
+                value=str(current).strip(),
+                emphasis=len(result) == 0,
+            )
+        )
+
+    visit(value)
+    return result
+
+
+def _generic_section(resource: str, value: Any) -> HDUHelpDisplaySection:
+    items = _flatten_items(value)
+    return HDUHelpDisplaySection(
+        resource=resource,
+        title=RESOURCE_TITLES.get(resource, resource.replace("_", " ")),
+        summary=f"已同步 {len(items)} 项信息" if items else "数据已同步",
+        items=items,
+    )
+
+
 def _person_section(value: Any) -> HDUHelpDisplaySection:
     data = _mapping(value)
     college = _first(data, "unitName", "college", "department")
@@ -149,16 +239,28 @@ def build_hduhelp_presentation(
     if not resources:
         return [], []
     sections: list[HDUHelpDisplaySection] = []
+    handled: set[str] = set()
+    if "identity" in resources:
+        sections.append(_generic_section("identity", resources["identity"]))
+        handled.add("identity")
     if "person" in resources:
         sections.append(_person_section(resources["person"]))
+        handled.add("person")
     if "grades" in resources:
         sections.append(_grade_section(resources["grades"]))
+        handled.add("grades")
     if "exams" in resources:
         sections.append(_exam_section(resources["exams"]))
+        handled.add("exams")
     if "card_balance" in resources:
         sections.append(_card_section(resources["card_balance"]))
+        handled.add("card_balance")
     if "library_bookings" in resources:
         sections.append(_library_section(resources["library_bookings"]))
+        handled.add("library_bookings")
+    for resource, value in resources.items():
+        if resource not in handled:
+            sections.append(_generic_section(resource, value))
 
     prompts = [
         HDUHelpSuggestedPrompt(
@@ -194,7 +296,7 @@ def build_hduhelp_presentation(
                 resource="card_balance",
             )
         )
-    if "library_bookings" in resources:
+    if any(resource.startswith("library_") for resource in resources):
         prompts.append(
             HDUHelpSuggestedPrompt(
                 prompt_id="library-focus",
@@ -203,4 +305,13 @@ def build_hduhelp_presentation(
                 resource="library_bookings",
             )
         )
-    return sections, prompts[:4]
+    if any(resource.startswith("sunrun_") for resource in resources):
+        prompts.append(
+            HDUHelpSuggestedPrompt(
+                prompt_id="sunrun-plan",
+                title="完成长跑目标",
+                prompt="查看我的阳光长跑成绩、达标要求和最近记录，计算还差多少，并安排接下来一周的跑步计划。",
+                resource="sunrun_overview",
+            )
+        )
+    return sections, prompts[:6]

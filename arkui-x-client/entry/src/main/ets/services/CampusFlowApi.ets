@@ -166,6 +166,11 @@ export class CampusFlowApi {
       http.RequestMethod.GET);
   }
 
+  async deleteSession(sessionId: string): Promise<void> {
+    await this.request<void>(`/api/v1/sessions/${encodeURIComponent(sessionId)}`,
+      http.RequestMethod.DELETE, '{}');
+  }
+
   async adminUsers(): Promise<AdminUserSummary[]> {
     return this.request<AdminUserSummary[]>('/api/v1/admin/users', http.RequestMethod.GET);
   }

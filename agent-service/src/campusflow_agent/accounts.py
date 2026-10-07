@@ -116,7 +116,8 @@ class AccountStore:
                     connected_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL,
                     last_synced_at TEXT,
-                    last_error TEXT
+                    last_error TEXT,
+                    sync_errors_json TEXT NOT NULL DEFAULT '{}'
                 );
 
                 CREATE TABLE IF NOT EXISTS hduhelp_resource_cache (
@@ -155,6 +156,10 @@ class AccountStore:
                     "ADD COLUMN auth_mode TEXT NOT NULL DEFAULT 'oauth'"
                 ),
                 "token_hint": "ALTER TABLE hduhelp_connections ADD COLUMN token_hint TEXT",
+                "sync_errors_json": (
+                    "ALTER TABLE hduhelp_connections "
+                    "ADD COLUMN sync_errors_json TEXT NOT NULL DEFAULT '{}'"
+                ),
             }
             for column, statement in hduhelp_migrations.items():
                 if column not in hduhelp_columns:
@@ -689,10 +694,16 @@ class AccountStore:
             self._connection.execute(
                 """
                 UPDATE hduhelp_connections
-                SET last_synced_at = ?, last_error = ?, updated_at = ?
+                SET last_synced_at = ?, last_error = ?, sync_errors_json = ?, updated_at = ?
                 WHERE user_id = ?
                 """,
-                (now, error_text or None, now, user_id),
+                (
+                    now,
+                    error_text or None,
+                    json.dumps(errors or {}, ensure_ascii=False),
+                    now,
+                    user_id,
+                ),
             )
         return now
 
@@ -724,6 +735,24 @@ class AccountStore:
             }
             for row in rows
         ]
+
+    def get_hduhelp_sync_errors(self, user_id: str) -> dict[str, str]:
+        with self._lock:
+            row = self._connection.execute(
+                "SELECT sync_errors_json FROM hduhelp_connections WHERE user_id = ?",
+                (user_id,),
+            ).fetchone()
+        if row is None:
+            return {}
+        try:
+            payload = json.loads(row["sync_errors_json"] or "{}")
+        except json.JSONDecodeError:
+            return {}
+        return {
+            str(key): str(value)
+            for key, value in payload.items()
+            if isinstance(key, str) and value is not None
+        }
 
     def clear_hduhelp_resources(self, user_id: str) -> None:
         with self._lock, self._connection:

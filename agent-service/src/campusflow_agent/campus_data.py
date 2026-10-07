@@ -27,8 +27,8 @@ PACKAGE = {
     "package_id": DEFAULT_PACKAGE_ID,
     "school": "杭州电子科技大学",
     "campus": "下沙校区",
-    "version": "2026.10.4",
-    "published_at": "2026-10-04T08:00:00+08:00",
+    "version": "2026.10.7",
+    "published_at": "2026-10-07T13:00:00+08:00",
     "description": (
         "基于用户确认地图整理的 CampusFlow 校园数据包，"
         "提供建筑别名、开放时间与步行关系。"
@@ -135,7 +135,10 @@ WALK_EDGES = [
     ("student-center", "east-track", 3),
     ("student-center", "south-gate", 7),
     ("canteen-1", "west-track", 3),
+    ("canteen-1", "north-2-gate", 5),
+    ("campus-clinic", "canteen-1", 4),
     ("canteen-5", "teaching-6", 5),
+    ("gym", "teaching-4", 5),
     ("teaching-6", "north-2-gate", 5),
     ("library", "north-2-gate", 5),
     ("north-2-gate", "cainiao-station", 5),
@@ -158,8 +161,8 @@ MAP_POINTS: dict[str, tuple[float, float]] = {
     "teaching-12": (68.0, 41.4),
     "student-center": (68.4, 27.3),
     "east-track": (83.1, 29.6),
-    "west-track": (16.5, 12.3),
-    "gym": (14.8, 30.4),
+    "west-track": (23.5, 12.3),
+    "gym": (25.2, 30.4),
     "canteen-1": (53.7, 15.5),
     "canteen-5": (54.1, 10.9),
     "campus-clinic": (29.8, 3.9),
@@ -169,6 +172,60 @@ MAP_POINTS: dict[str, tuple[float, float]] = {
 
 
 ROUTE_GEOMETRIES: dict[frozenset[str], list[tuple[float, float]]] = {
+    frozenset(("library", "teaching-3")): [
+        (45.1, 28.8), (45.1, 47.8), (54.7, 47.8),
+    ],
+    frozenset(("library", "teaching-4")): [
+        (45.1, 28.8), (45.1, 38.0), (40.0, 42.7), (34.2, 42.7),
+    ],
+    frozenset(("library", "teaching-6")): [
+        (45.1, 28.8), (40.0, 28.8), (35.2, 31.5),
+    ],
+    frozenset(("library", "teaching-7")): [
+        (45.1, 28.8), (54.8, 28.8), (54.8, 33.4),
+    ],
+    frozenset(("library", "teaching-12")): [
+        (45.1, 28.8), (60.0, 28.8), (60.0, 41.4), (68.0, 41.4),
+    ],
+    frozenset(("library", "student-center")): [
+        (45.1, 28.8), (60.0, 28.8), (68.4, 27.3),
+    ],
+    frozenset(("library", "south-gate")): [
+        (45.1, 28.8), (45.1, 54.0), (50.0, 60.0), (44.7, 68.4),
+    ],
+    frozenset(("library", "east-gate")): [
+        (45.1, 28.8), (60.0, 28.8), (60.0, 41.4), (80.0, 41.4), (88.2, 43.3),
+    ],
+    frozenset(("teaching-3", "teaching-6")): [
+        (54.7, 47.8), (45.1, 47.8), (45.1, 31.5), (35.2, 31.5),
+    ],
+    frozenset(("teaching-6", "teaching-7")): [
+        (35.2, 31.5), (45.1, 31.5), (54.8, 33.4),
+    ],
+    frozenset(("teaching-7", "teaching-12")): [
+        (54.8, 33.4), (60.0, 33.4), (60.0, 41.4), (68.0, 41.4),
+    ],
+    frozenset(("student-center", "east-track")): [
+        (68.4, 27.3), (77.0, 27.3), (83.1, 29.6),
+    ],
+    frozenset(("student-center", "south-gate")): [
+        (68.4, 27.3), (60.0, 28.8), (60.0, 53.0), (50.0, 62.0), (44.7, 68.4),
+    ],
+    frozenset(("canteen-1", "west-track")): [
+        (53.7, 15.5), (45.0, 15.5), (30.0, 15.5), (23.5, 12.3),
+    ],
+    frozenset(("canteen-1", "north-2-gate")): [
+        (53.7, 15.5), (45.0, 15.5), (25.2, 15.5), (25.2, 22.8),
+    ],
+    frozenset(("campus-clinic", "canteen-1")): [
+        (29.8, 3.9), (35.0, 3.9), (35.0, 15.5), (53.7, 15.5),
+    ],
+    frozenset(("canteen-5", "teaching-6")): [
+        (54.1, 10.9), (45.0, 10.9), (35.2, 10.9), (35.2, 31.5),
+    ],
+    frozenset(("gym", "teaching-4")): [
+        (25.2, 30.4), (25.2, 42.7), (34.2, 42.7),
+    ],
     frozenset(("teaching-6", "north-2-gate")): [
         (35.2, 31.5),
         (35.2, 29.3),

@@ -37,6 +37,8 @@ def test_unconfigured_authorization_is_rejected() -> None:
 
 
 async def test_exchange_and_partial_resource_sync() -> None:
+    requested: dict[str, dict[str, str]] = {}
+
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path.endswith("/access-token"):
             return httpx.Response(
@@ -63,6 +65,9 @@ async def test_exchange_and_partial_resource_sync() -> None:
                 200,
                 json={"code": 0, "data": {"id": "user-1", "nickName": "测试用户"}},
             )
+        if "/academic/library/" in request.url.path or "/subscription/sunrun/" in request.url.path:
+            requested[request.url.path] = dict(request.url.params)
+            return httpx.Response(200, json={"code": 0, "data": {"available": True}})
         return httpx.Response(200, json={"code": 0, "data": {}})
 
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
@@ -87,3 +92,7 @@ async def test_exchange_and_partial_resource_sync() -> None:
     assert result.resources["identity"]["nickName"] == "测试用户"
     assert result.resources["grades"]["gpa"] == 3.8
     assert result.errors["exams"] == "HDUHelp API 返回 HTTP 403。"
+    assert requested["/hduhelp-neo/academic/library/attendance"] == {"dimension": "stats"}
+    assert requested["/hduhelp-neo/academic/library/reading"] == {"metric": "summary"}
+    assert requested["/hduhelp-neo/academic/library/seat/reservations"] == {"limit": "20"}
+    assert requested["/hduhelp-neo/subscription/sunrun/detail"] == {"start": "1", "end": "20"}

@@ -4,6 +4,7 @@ from campusflow_agent.campus_data import (
     CAMPUS_TIMEZONE,
     MAP_POINTS,
     ROUTE_GEOMETRIES,
+    WALK_EDGES,
     CampusDataStore,
 )
 from campusflow_agent.store import CampusStore
@@ -15,7 +16,7 @@ def test_package_exposes_versioned_places_and_notices() -> None:
     snapshot = data.snapshot("student-001")
 
     assert snapshot.package.package_id == "hdu-xiasha"
-    assert snapshot.package.version == "2026.10.4"
+    assert snapshot.package.version == "2026.10.7"
     assert snapshot.package.place_count >= 17
     assert snapshot.package.notice_count >= 3
     assert any(place.name == "图书馆" for place in snapshot.places)
@@ -70,6 +71,9 @@ def test_route_from_sixth_teaching_building_to_cainiao_uses_uploaded_map_graph()
 
 
 def test_explicit_route_geometry_endpoints_match_calibrated_map_points() -> None:
+    assert set(ROUTE_GEOMETRIES) == {
+        frozenset((origin, destination)) for origin, destination, _ in WALK_EDGES
+    }
     for place_ids, geometry in ROUTE_GEOMETRIES.items():
         endpoints = {geometry[0], geometry[-1]}
         assert endpoints == {MAP_POINTS[place_id] for place_id in place_ids}

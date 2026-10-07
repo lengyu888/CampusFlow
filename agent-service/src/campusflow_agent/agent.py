@@ -158,7 +158,19 @@ class AgentService:
             allowed.add("get_hduhelp_profile")
         if resources.intersection({"grades", "exams"}):
             allowed.add("get_hduhelp_academics")
-        if resources.intersection({"card_balance", "library_bookings"}):
+        if resources.intersection(
+            {
+                "card_balance",
+                "library_bookings",
+                "library_attendance",
+                "library_reading",
+                "library_seat_reservations",
+                "sunrun_overview",
+                "sunrun_group",
+                "sunrun_detail",
+                "subscriptions",
+            }
+        ):
             allowed.add("get_hduhelp_campus_life")
         return allowed
 

@@ -262,14 +262,7 @@ class HDUHelpPatConnectRequest(BaseModel):
 
 
 class HDUHelpResourceSnapshot(BaseModel):
-    resource: Literal[
-        "identity",
-        "person",
-        "grades",
-        "exams",
-        "card_balance",
-        "library_bookings",
-    ]
+    resource: str
     data: Any
     synced_at: datetime
 
@@ -281,14 +274,7 @@ class HDUHelpDisplayItem(BaseModel):
 
 
 class HDUHelpDisplaySection(BaseModel):
-    resource: Literal[
-        "identity",
-        "person",
-        "grades",
-        "exams",
-        "card_balance",
-        "library_bookings",
-    ]
+    resource: str
     title: str
     summary: str
     items: list[HDUHelpDisplayItem] = Field(default_factory=list)
@@ -306,6 +292,7 @@ class HDUHelpDataResponse(BaseModel):
     resources: list[HDUHelpResourceSnapshot] = Field(default_factory=list)
     sections: list[HDUHelpDisplaySection] = Field(default_factory=list)
     suggested_prompts: list[HDUHelpSuggestedPrompt] = Field(default_factory=list)
+    sync_errors: dict[str, str] = Field(default_factory=dict)
 
 
 class HDUHelpSyncResponse(BaseModel):

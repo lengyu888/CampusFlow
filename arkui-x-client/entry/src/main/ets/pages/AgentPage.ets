@@ -1,6 +1,5 @@
-import { CampusRoute, ChatMessage, PendingAction } from '../model/ApiModels';
+import { ChatMessage, PendingAction } from '../model/ApiModels';
 import { CampusFlowApi } from '../services/CampusFlowApi';
-import { RouteMap } from '../components/RouteMap';
 import { plainMessage } from '../utils/MessageText';
 
 @Component
@@ -9,6 +8,7 @@ export struct AgentPage {
   @Prop token: string;
   @Prop initialPrompt: string = '';
   onOpenHistory: () => void = () => {};
+  onOpenRoute: () => void = () => {};
   @State private prompt: string = '';
   @State private model: string = 'deepseek-v4-pro';
   @State private messages: ChatMessage[] = [
@@ -16,10 +16,6 @@ export struct AgentPage {
   ];
   @State private pendingActions: PendingAction[] = [];
   @State private loading: boolean = false;
-  @State private origin: string = '六教';
-  @State private destination: string = '菜鸟驿站';
-  @State private route: CampusRoute | null = null;
-  @State private routeError: string = '';
   private sessionId: string = `arkuix-${Date.now()}`;
 
   aboutToAppear(): void {
@@ -47,16 +43,6 @@ export struct AgentPage {
     }
   }
 
-  private async createRoute(): Promise<void> {
-    this.routeError = '';
-    try {
-      this.route = await new CampusFlowApi(this.baseUrl, this.token).campusRoute(this.origin, this.destination);
-    } catch (error) {
-      this.route = null;
-      this.routeError = `路线生成失败：${error}`;
-    }
-  }
-
   private async confirm(action: PendingAction): Promise<void> {
     try {
       const result = await new CampusFlowApi(this.baseUrl, this.token).confirmAction(action.proposal_id);
@@ -65,29 +51,6 @@ export struct AgentPage {
     } catch (error) {
       this.messages = this.messages.concat([{ role: 'assistant', content: `确认失败：${error}` }]);
     }
-  }
-
-  @Builder
-  private routePlanner() {
-    Column({ space: 12 }) {
-      Row() {
-        Text('校园路线').fontSize(18).fontWeight(FontWeight.Bold).fontColor('#171A22')
-        Blank()
-        Text('官方地图数据').fontSize(11).fontColor('#315BFF')
-      }.width('100%')
-      Row({ space: 8 }) {
-        TextInput({ text: this.origin, placeholder: '起点' }).layoutWeight(1).height(44)
-          .backgroundColor('#F4F6FA').borderRadius(13).onChange((value) => this.origin = value)
-        Text('→').fontColor('#7C8393')
-        TextInput({ text: this.destination, placeholder: '终点' }).layoutWeight(1).height(44)
-          .backgroundColor('#F4F6FA').borderRadius(13).onChange((value) => this.destination = value)
-      }.width('100%')
-      Button('生成路线图').width('100%').height(44).fontColor('#FFFFFF').backgroundColor('#171A22')
-        .borderRadius(14).onClick(() => this.createRoute())
-      if (this.routeError.length > 0) {
-        Text(this.routeError).fontSize(12).fontColor('#D33D3D').width('100%')
-      }
-    }.width('100%').padding(16).backgroundColor('#FFFFFF').borderRadius(22)
   }
 
   build() {
@@ -100,6 +63,9 @@ export struct AgentPage {
               Text('Agent 会先规划，再调用工具').fontSize(12).fontColor('#7B8292')
             }.alignItems(HorizontalAlign.Start)
             Blank()
+            Button('路线').height(34).fontSize(11).fontColor('#315BFF')
+              .backgroundColor('#E9EEFF').borderRadius(18).margin({ right: 8 })
+              .onClick(() => this.onOpenRoute())
             Button('历史').height(34).fontSize(11).fontColor('#5F6675')
               .backgroundColor('#FFFFFF').borderRadius(18).margin({ right: 8 })
               .onClick(() => this.onOpenHistory())
@@ -107,11 +73,6 @@ export struct AgentPage {
               .height(34).fontSize(11).fontColor('#315BFF').backgroundColor('#E9EEFF').borderRadius(18)
               .onClick(() => this.model = this.model === 'deepseek-v4-pro' ? 'deepseek-flash' : 'deepseek-v4-pro')
           }.width('100%')
-
-          this.routePlanner()
-          if (this.route !== null) {
-            RouteMap({ route: this.route as CampusRoute })
-          }
 
           ForEach(this.messages, (message: ChatMessage) => {
             Row() {

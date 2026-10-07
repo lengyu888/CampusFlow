@@ -41,13 +41,32 @@ class SyncResult:
     errors: dict[str, str]
 
 
-RESOURCE_ENDPOINTS: dict[str, str] = {
-    "identity": "/hduhelp-neo/identity/me",
-    "person": "/hduhelp-neo/academic/person/info",
-    "grades": "/hduhelp-neo/academic/grade",
-    "exams": "/hduhelp-neo/academic/exam",
-    "card_balance": "/hduhelp-neo/campuslife/card/balance",
-    "library_bookings": "/hduhelp-neo/library-booking/bookings",
+RESOURCE_REQUESTS: dict[str, tuple[str, dict[str, Any]]] = {
+    "identity": ("/hduhelp-neo/identity/me", {}),
+    "person": ("/hduhelp-neo/academic/person/info", {}),
+    "grades": ("/hduhelp-neo/academic/grade", {}),
+    "exams": ("/hduhelp-neo/academic/exam", {}),
+    "card_balance": ("/hduhelp-neo/campuslife/card/balance", {}),
+    "library_bookings": ("/hduhelp-neo/library-booking/bookings", {}),
+    "library_attendance": (
+        "/hduhelp-neo/academic/library/attendance",
+        {"dimension": "stats"},
+    ),
+    "library_reading": (
+        "/hduhelp-neo/academic/library/reading",
+        {"metric": "summary"},
+    ),
+    "library_seat_reservations": (
+        "/hduhelp-neo/academic/library/seat/reservations",
+        {"limit": 20},
+    ),
+    "sunrun_overview": ("/hduhelp-neo/subscription/sunrun/overview", {}),
+    "sunrun_group": ("/hduhelp-neo/subscription/sunrun/group", {}),
+    "sunrun_detail": (
+        "/hduhelp-neo/subscription/sunrun/detail",
+        {"start": 1, "end": 20},
+    ),
+    "subscriptions": ("/hduhelp-neo/subscriptions", {}),
 }
 
 
@@ -142,10 +161,14 @@ class HDUHelpService:
         )
 
     async def sync_resources(self, access_token: str) -> SyncResult:
-        names = list(RESOURCE_ENDPOINTS)
+        names = list(RESOURCE_REQUESTS)
         results = await asyncio.gather(
             *(
-                self._resource_request(access_token, RESOURCE_ENDPOINTS[name])
+                self._resource_request(
+                    access_token,
+                    RESOURCE_REQUESTS[name][0],
+                    params=RESOURCE_REQUESTS[name][1],
+                )
                 for name in names
             ),
             return_exceptions=True,
@@ -159,11 +182,18 @@ class HDUHelpService:
                 resources[name] = result
         return SyncResult(resources=resources, errors=errors)
 
-    async def _resource_request(self, access_token: str, path: str) -> Any:
+    async def _resource_request(
+        self,
+        access_token: str,
+        path: str,
+        *,
+        params: dict[str, Any] | None = None,
+    ) -> Any:
         payload = await self._request_json(
             "GET",
             path,
             headers={"Authorization": f"Bearer {access_token}"},
+            params=params or None,
         )
         return payload.get("data", payload)
 

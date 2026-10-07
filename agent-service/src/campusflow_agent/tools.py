@@ -156,7 +156,7 @@ def build_tools(
 
     @tool
     def get_hduhelp_campus_life() -> dict:
-        """读取当前用户已同步的校园卡余额和图书馆座位预约。"""
+        """读取当前用户已同步的校园卡、图书馆、长跑与提醒订阅信息。"""
         if hduhelp_store is None:
             return {"connected": False, "message": "HDUHelp 数据源未启用。"}
         user_id = CURRENT_USER_ID.get()
@@ -164,6 +164,13 @@ def build_tools(
             "connected": hduhelp_store.get_hduhelp_status(user_id)["configured"],
             "card_balance": hduhelp_resource("card_balance"),
             "library_bookings": hduhelp_resource("library_bookings"),
+            "library_attendance": hduhelp_resource("library_attendance"),
+            "library_reading": hduhelp_resource("library_reading"),
+            "library_seat_reservations": hduhelp_resource("library_seat_reservations"),
+            "sunrun_overview": hduhelp_resource("sunrun_overview"),
+            "sunrun_group": hduhelp_resource("sunrun_group"),
+            "sunrun_detail": hduhelp_resource("sunrun_detail"),
+            "subscriptions": hduhelp_resource("subscriptions"),
         }
 
     @tool

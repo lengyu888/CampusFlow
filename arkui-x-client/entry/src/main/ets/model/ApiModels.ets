@@ -239,6 +239,7 @@ export interface HDUHelpDataResponse {
   status: HDUHelpConnectionStatus;
   sections: HDUHelpDisplaySection[];
   suggested_prompts: HDUHelpSuggestedPrompt[];
+  sync_errors: Record<string, string>;
 }
 
 export interface AdminUserSummary {

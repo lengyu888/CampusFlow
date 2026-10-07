@@ -1,4 +1,5 @@
-import { TimetableEntry, UserContextResponse, UserProfile } from '../model/ApiModels';
+import { HDUHelpDataResponse, HDUHelpDisplaySection, TimetableEntry, UserContextResponse,
+  UserProfile } from '../model/ApiModels';
 import { CampusFlowApi } from '../services/CampusFlowApi';
 
 @Component
@@ -7,12 +8,34 @@ export struct HomePage {
   @Prop token: string;
   @Prop user: UserProfile;
   onOpenAgent: () => void = () => {};
+  onOpenRoute: () => void = () => {};
   @State private courses: TimetableEntry[] = [];
   @State private loading: boolean = true;
   @State private errorText: string = '';
+  @State private campusInfo: HDUHelpDisplaySection[] = [];
+  @State private campusInfoError: string = '';
 
   aboutToAppear(): void {
     this.loadToday();
+    this.loadCampusInfo();
+  }
+
+  private async loadCampusInfo(): Promise<void> {
+    try {
+      const data: HDUHelpDataResponse = await new CampusFlowApi(this.baseUrl, this.token).hduHelpData();
+      const preferred = ['card_balance', 'library_attendance', 'library_reading',
+        'library_seat_reservations', 'sunrun_overview', 'sunrun_group', 'exams'];
+      const result: HDUHelpDisplaySection[] = [];
+      preferred.forEach((resource: string) => {
+        const section = data.sections.find((item: HDUHelpDisplaySection) => item.resource === resource);
+        if (section !== undefined && result.length < 3) {
+          result.push(section);
+        }
+      });
+      this.campusInfo = result;
+    } catch (error) {
+      this.campusInfoError = `校园信息暂不可用：${error}`;
+    }
   }
 
   private today(): string {
@@ -54,6 +77,41 @@ export struct HomePage {
           Button('开始规划').height(42).fontColor('#315BFF').backgroundColor('#FFFFFF').borderRadius(14)
             .onClick(() => this.onOpenAgent())
         }.width('100%').padding(20).backgroundColor('#315BFF').borderRadius(26)
+
+        Row({ space: 10 }) {
+          Button('⌖  校园导航').layoutWeight(1).height(44).fontSize(12).fontColor('#171A22')
+            .backgroundColor('#FFFFFF').borderRadius(15).onClick(() => this.onOpenRoute())
+          Button('✦  问问 Agent').layoutWeight(1).height(44).fontSize(12).fontColor('#315BFF')
+            .backgroundColor('#E9EEFF').borderRadius(15).onClick(() => this.onOpenAgent())
+        }.width('100%')
+
+        Row() {
+          Text('校园信息').fontSize(19).fontWeight(FontWeight.Bold).fontColor('#171A22')
+          Blank()
+          Text('HDUHelp').fontSize(11).fontColor('#315BFF')
+        }.width('100%')
+
+        if (this.campusInfo.length > 0) {
+          ForEach(this.campusInfo, (section: HDUHelpDisplaySection) => {
+            Row({ space: 12 }) {
+              Text(section.title.slice(0, 1)).fontSize(15).fontWeight(FontWeight.Bold)
+                .fontColor('#315BFF').width(38).height(38).textAlign(TextAlign.Center)
+                .backgroundColor('#E9EEFF').borderRadius(13)
+              Column({ space: 4 }) {
+                Text(section.title).fontSize(14).fontWeight(FontWeight.Bold).fontColor('#171A22')
+                Text(section.summary).fontSize(11).fontColor('#777E8F').maxLines(2)
+                  .textOverflow({ overflow: TextOverflow.Ellipsis })
+              }.alignItems(HorizontalAlign.Start).layoutWeight(1)
+            }.width('100%').padding(15).backgroundColor('#FFFFFF').borderRadius(18)
+          }, (section: HDUHelpDisplaySection) => section.resource)
+        } else if (this.campusInfoError.length > 0) {
+          Text(this.campusInfoError).fontSize(12).fontColor('#8B91A0').width('100%')
+            .padding(15).backgroundColor('#FFFFFF').borderRadius(18)
+        } else {
+          Text('同步 HDUHelp 后，校园卡、图书馆和长跑信息会显示在这里。')
+            .fontSize(12).fontColor('#7B8292').width('100%')
+            .padding(16).backgroundColor('#FFFFFF').borderRadius(18)
+        }
 
         Row() {
           Text('今日课程').fontSize(19).fontWeight(FontWeight.Bold).fontColor('#171A22')

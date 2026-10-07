@@ -7,6 +7,7 @@ import { LoginPage } from './LoginPage';
 import { OnboardingPage } from './OnboardingPage';
 import { PlanPage } from './PlanPage';
 import { ProfilePage } from './ProfilePage';
+import { RoutePage } from './RoutePage';
 import { SkillsPage } from './SkillsPage';
 
 @Entry
@@ -52,10 +53,10 @@ struct Index {
   private pageContent() {
     if (this.activeTab === 0) {
       HomePage({ baseUrl: this.baseUrl, token: this.token, user: this.user,
-        onOpenAgent: () => this.selectTab(1) })
+        onOpenAgent: () => this.selectTab(1), onOpenRoute: () => this.selectTab(6) })
     } else if (this.activeTab === 1) {
       AgentPage({ baseUrl: this.baseUrl, token: this.token, initialPrompt: this.agentPrompt,
-        onOpenHistory: () => this.selectTab(5) })
+        onOpenHistory: () => this.selectTab(5), onOpenRoute: () => this.selectTab(6) })
     } else if (this.activeTab === 2) {
       PlanPage({ baseUrl: this.baseUrl, token: this.token })
     } else if (this.activeTab === 3) {
@@ -64,8 +65,10 @@ struct Index {
       ProfilePage({ baseUrl: this.baseUrl, token: this.token, user: this.user,
         onUserChanged: (updated) => this.user = updated, onLogout: () => this.logout(),
         onOpenAgent: (prompt) => this.openAgentWithPrompt(prompt) })
-    } else {
+    } else if (this.activeTab === 5) {
       HistoryPage({ baseUrl: this.baseUrl, token: this.token, onBack: () => this.selectTab(1) })
+    } else {
+      RoutePage({ baseUrl: this.baseUrl, token: this.token, onBack: () => this.selectTab(1) })
     }
   }
 

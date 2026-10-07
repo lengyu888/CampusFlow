@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta, timezone
@@ -538,7 +539,32 @@ class CampusStore:
     @staticmethod
     def _session_title(content: str) -> str:
         normalized = " ".join(content.split())
-        return normalized[:32] + ("…" if len(normalized) > 32 else "")
+        compact = normalized.lower()
+        if "校园卡" in normalized and any(word in normalized for word in ("余额", "预算", "消费")):
+            return "校园卡余额与预算"
+        if "阳光长跑" in normalized or ("长跑" in normalized and "跑" in normalized):
+            return "阳光长跑进度"
+        if "图书馆" in normalized and any(
+            word in normalized for word in ("借阅", "预约", "到馆", "阅读")
+        ):
+            return "图书馆记录查询"
+        if "成绩" in normalized and any(
+            word in normalized for word in ("课表", "复习", "提升", "计划")
+        ):
+            return "成绩与课程提升计划"
+        if "课表" in normalized and any(word in normalized for word in ("安排", "规划", "课程")):
+            return "课程安排规划"
+        route_match = re.search(
+            r"从\s*([^，。,.]{1,12})\s*(?:到|去)\s*([^，。,.]{1,12})",
+            normalized,
+        )
+        if route_match:
+            return f"{route_match.group(1).strip()} → {route_match.group(2).strip()}"
+        if any(word in compact for word in ("route", "navigation")) or "路线" in normalized:
+            return "校园路线规划"
+        concise = re.sub(r"^(请|帮我|麻烦|可以|能否|我想|我需要)+", "", normalized).strip()
+        concise = re.split(r"[，。；;,.!?！？]", concise, maxsplit=1)[0].strip()
+        return concise[:18] + ("…" if len(concise) > 18 else "")
 
     def append_history(
         self,
@@ -627,7 +653,12 @@ class CampusStore:
             sql += " ORDER BY updated_at DESC"
             with self._lock:
                 rows = self._connection.execute(sql, parameters).fetchall()
-            return [SessionSummary(**dict(row)) for row in rows]
+            sessions = []
+            for row in rows:
+                payload = dict(row)
+                payload["title"] = self._session_title(payload["title"])
+                sessions.append(SessionSummary(**payload))
+            return sessions
 
         sessions: list[SessionSummary] = []
         with self._lock:
@@ -677,6 +708,26 @@ class CampusStore:
         if cursor.rowcount != 1:
             raise KeyError("session_not_found")
         return next(item for item in self.list_sessions(user_id) if item.session_id == session_id)
+
+    def delete_session(self, user_id: str, session_id: str) -> None:
+        if self._connection is None:
+            with self._lock:
+                existed = self._history.pop((user_id, session_id), None)
+                self._session_titles.pop((user_id, session_id), None)
+            if existed is None:
+                raise KeyError("session_not_found")
+            return
+        with self._lock, self._connection:
+            cursor = self._connection.execute(
+                "DELETE FROM conversation_sessions WHERE user_id = ? AND session_id = ?",
+                (user_id, session_id),
+            )
+            self._connection.execute(
+                "DELETE FROM conversation_messages WHERE user_id = ? AND session_id = ?",
+                (user_id, session_id),
+            )
+        if cursor.rowcount != 1:
+            raise KeyError("session_not_found")
 
     def create_task(
         self,

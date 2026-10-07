@@ -51,6 +51,7 @@ export struct ProfilePage {
   @State private hduHelpDataLoading: boolean = false;
   @State private hduHelpSections: HDUHelpDisplaySection[] = [];
   @State private hduHelpPrompts: HDUHelpSuggestedPrompt[] = [];
+  @State private hduHelpSyncErrors: string[] = [];
   @State private hduHelpDataError: string = '';
 
   aboutToAppear(): void {
@@ -99,11 +100,29 @@ export struct ProfilePage {
       this.hduHelp = result.status;
       this.hduHelpSections = result.sections;
       this.hduHelpPrompts = result.suggested_prompts;
+      this.hduHelpSyncErrors = Object.keys(result.sync_errors).map((resource: string) =>
+        `${this.hduHelpResourceName(resource)}：${result.sync_errors[resource]}`);
     } catch (error) {
       this.hduHelpDataError = `校园档案加载失败：${error}`;
     } finally {
       this.hduHelpDataLoading = false;
     }
+  }
+
+  private hduHelpResourceName(resource: string): string {
+    if (resource === 'library_bookings') {
+      return '图书馆预约';
+    }
+    if (resource === 'sunrun_overview') {
+      return '阳光长跑概览';
+    }
+    if (resource === 'sunrun_group') {
+      return '阳光长跑达标要求';
+    }
+    if (resource === 'sunrun_detail') {
+      return '阳光长跑记录';
+    }
+    return resource;
   }
 
   private async connectHduHelp(): Promise<void> {
@@ -269,6 +288,19 @@ export struct ProfilePage {
                 }, (item: HDUHelpDisplayItem) => `${section.resource}-${item.label}`)
               }.width('100%').padding(17).backgroundColor('#FFFFFF').borderRadius(22)
             }, (section: HDUHelpDisplaySection) => section.resource)
+
+            if (this.hduHelpSyncErrors.length > 0) {
+              Column({ space: 8 }) {
+                Text('暂不可用的数据').fontSize(16).fontWeight(FontWeight.Bold)
+                  .fontColor('#9C3D34').width('100%')
+                Text('以下项目需要在 HDUHelp 补充权限或服务授权，其余成功数据已全部展示。')
+                  .fontSize(11).fontColor('#8D625D').width('100%')
+                ForEach(this.hduHelpSyncErrors, (message: string) => {
+                  Text(message).fontSize(11).fontColor('#8D625D').width('100%').maxLines(3)
+                    .textOverflow({ overflow: TextOverflow.Ellipsis })
+                }, (message: string) => message)
+              }.width('100%').padding(17).backgroundColor('#FFF3F1').borderRadius(22)
+            }
 
             if (this.hduHelpPrompts.length > 0) {
               Column({ space: 11 }) {

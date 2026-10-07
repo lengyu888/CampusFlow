@@ -28,7 +28,10 @@ class Settings(BaseSettings):
     hduhelp_redirect_uri: str | None = None
     hduhelp_scopes: str = (
         "contact:user.id:read,academic:student:read,academic:grade:read,"
-        "academic:exam:read,campuslife:campuscard:read,librarybooking:seat:read"
+        "academic:exam:read,campuslife:campuscard:read,librarybooking:seat:read,"
+        "academic:libraryattendance:read,academic:libraryborrow:read,"
+        "academic:libraryseat:read,subscription:sunrun:read,"
+        "subscription:subscription:read"
     )
     hduhelp_timeout_seconds: float = 20.0
 
