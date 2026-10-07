@@ -231,15 +231,26 @@ export struct ProfilePage {
 
   @Builder
   private dataItem(item: HDUHelpDisplayItem) {
-    Row() {
-      Text(item.label).fontSize(11).fontColor('#7B8292')
-      Blank()
-      Text(item.value).fontSize(item.emphasis ? 17 : 12)
-        .fontWeight(item.emphasis ? FontWeight.Bold : FontWeight.Medium)
-        .fontColor(item.emphasis ? '#315BFF' : '#272B34')
-        .constraintSize({ maxWidth: '68%' }).maxLines(2)
-        .textOverflow({ overflow: TextOverflow.Ellipsis })
-    }.width('100%')
+    if (item.label.length > 12 || item.value.length > 22) {
+      Column({ space: 5 }) {
+        Text(item.label).fontSize(11).fontColor('#7B8292').width('100%')
+        Text(item.value).fontSize(item.emphasis ? 17 : 13)
+          .fontWeight(item.emphasis ? FontWeight.Bold : FontWeight.Medium)
+          .fontColor(item.emphasis ? '#315BFF' : '#272B34')
+          .width('100%').maxLines(3).textOverflow({ overflow: TextOverflow.Ellipsis })
+      }.width('100%').alignItems(HorizontalAlign.Start)
+        .padding(11).backgroundColor('#F6F8FC').borderRadius(13)
+    } else {
+      Row() {
+        Text(item.label).fontSize(11).fontColor('#7B8292')
+        Blank()
+        Text(item.value).fontSize(item.emphasis ? 17 : 12)
+          .fontWeight(item.emphasis ? FontWeight.Bold : FontWeight.Medium)
+          .fontColor(item.emphasis ? '#315BFF' : '#272B34')
+          .constraintSize({ maxWidth: '68%' }).maxLines(2)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+      }.width('100%')
+    }
   }
 
   @Builder

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from .schemas import HDUHelpDisplayItem, HDUHelpDisplaySection, HDUHelpSuggestedPrompt
@@ -72,6 +73,8 @@ RESOURCE_TITLES = {
     "subscriptions": "校园提醒订阅",
 }
 
+CAMPUS_TIMEZONE = timezone(timedelta(hours=8), name="Asia/Shanghai")
+
 
 def _human_label(path: str) -> str:
     leaf = path.rsplit(".", 1)[-1]
@@ -124,6 +127,168 @@ def _generic_section(resource: str, value: Any) -> HDUHelpDisplaySection:
         title=RESOURCE_TITLES.get(resource, resource.replace("_", " ")),
         summary=f"已同步 {len(items)} 项信息" if items else "数据已同步",
         items=items,
+    )
+
+
+def _number(data: Mapping[str, Any], *keys: str) -> float | None:
+    for key in keys:
+        value = data.get(key)
+        if value is None or isinstance(value, bool):
+            continue
+        try:
+            return float(str(value))
+        except ValueError:
+            continue
+    return None
+
+
+def _number_text(value: float | None, suffix: str = "") -> str:
+    if value is None:
+        return ""
+    rendered = f"{value:g}"
+    return f"{rendered}{suffix}"
+
+
+def _local_time(value: Any, *, date_only: bool = False) -> str:
+    try:
+        timestamp = float(str(value))
+    except (TypeError, ValueError):
+        return ""
+    if timestamp <= 0:
+        return ""
+    if timestamp > 10_000_000_000:
+        timestamp /= 1000
+    pattern = "%Y-%m-%d" if date_only else "%Y-%m-%d %H:%M"
+    return datetime.fromtimestamp(timestamp, tz=CAMPUS_TIMEZONE).strftime(pattern)
+
+
+def _clock_time(value: Any) -> str:
+    full = _local_time(value)
+    return full[-5:] if full else ""
+
+
+def _library_attendance_section(value: Any) -> HDUHelpDisplaySection:
+    root = _mapping(value)
+    data = _mapping(root.get("stats")) or root
+    visits = _number(data, "totalVisitCount", "visits", "count")
+    hours = _number(data, "totalStayHours", "totalTime", "duration")
+    days = _number(data, "totalStayDays", "days")
+    month = _first(data, "mostVisitedMonth")
+    month_count = _number(data, "mostVisitedMonthCount")
+    favorite_floor = _first(data, "mostFrequentFloor", "floor")
+    floor_count = _number(data, "mostFrequentFloorCount")
+    summary_parts = []
+    if visits is not None:
+        summary_parts.append(f"累计到馆 {_number_text(visits)} 次")
+    if hours is not None:
+        summary_parts.append(f"在馆 {_number_text(hours)} 小时")
+    return HDUHelpDisplaySection(
+        resource="library_attendance",
+        title="图书馆到馆",
+        summary=" · ".join(summary_parts) or "到馆数据已同步",
+        items=_compact(
+            [
+                _display_item("累计到馆", _number_text(visits, " 次"), emphasis=True),
+                _display_item("累计在馆", _number_text(hours, " 小时")),
+                _display_item("到馆天数", _number_text(days, " 天")),
+                _display_item(
+                    "首次到馆",
+                    _local_time(data.get("firstVisitTime") or data.get("earliestTime")),
+                ),
+                _display_item("最近到馆", _local_time(data.get("latestTime"))),
+                _display_item("最常到馆时段", _first(data, "mostFrequentTimeSlot")),
+                _display_item(
+                    "到馆最多月份",
+                    f"{month} · {_number_text(month_count, ' 次')}" if month else "",
+                ),
+                _display_item(
+                    "最常去楼层",
+                    f"{favorite_floor} · {_number_text(floor_count, ' 次')}"
+                    if favorite_floor
+                    else "",
+                ),
+            ]
+        ),
+    )
+
+
+def _library_reading_section(value: Any) -> HDUHelpDisplaySection:
+    root = _mapping(value)
+    data = _mapping(root.get("summary")) or root
+    books = _number(data, "totalBooks", "borrowCount", "count") or 0
+    percentile = _number(data, "percentile")
+    rank = _number(data, "rank")
+    has_record = bool(data.get("hasRecord", books > 0))
+    items: list[HDUHelpDisplayItem | None] = [
+        _display_item("累计借阅", _number_text(books, " 册"), emphasis=True),
+    ]
+    if has_record and rank is not None and rank > 0:
+        items.append(_display_item("借阅排名", f"第 {_number_text(rank)} 名"))
+    if has_record and percentile is not None and percentile > 0:
+        items.append(_display_item("超过读者", f"{_number_text(percentile)}%"))
+    return HDUHelpDisplaySection(
+        resource="library_reading",
+        title="图书馆借阅",
+        summary=(f"累计借阅 {_number_text(books)} 册" if has_record else "当前暂无借阅记录"),
+        items=_compact(items),
+    )
+
+
+def _library_seat_section(value: Any) -> HDUHelpDisplaySection:
+    reservations = _items(value, "items", "reservations", "data")
+    details: list[HDUHelpDisplayItem | None] = []
+    for reservation in reservations:
+        room = _first(reservation, "room", "roomName") or "图书馆座位"
+        seat = _first(reservation, "seatNo", "seat")
+        state = _first(reservation, "finalState", "status")
+        date = _local_time(
+            reservation.get("reserveDate") or reservation.get("startTime"),
+            date_only=True,
+        )
+        start = _clock_time(reservation.get("startTime"))
+        end = _clock_time(reservation.get("endTime"))
+        duration = _number(reservation, "duration")
+        schedule = "–".join(item for item in (start, end) if item)
+        value_parts = []
+        if seat:
+            value_parts.append(f"{seat} 号座")
+        if schedule:
+            value_parts.append(schedule)
+        if duration is not None:
+            value_parts.append(f"{_number_text(duration)} 小时")
+        if state:
+            value_parts.append(state)
+        details.append(
+            _display_item(
+                " · ".join(item for item in (date, room) if item),
+                " · ".join(value_parts),
+            )
+        )
+    return HDUHelpDisplaySection(
+        resource="library_seat_reservations",
+        title="图书馆座位记录",
+        summary=f"最近 {len(reservations)} 条使用记录" if reservations else "当前没有座位记录",
+        items=_compact(details),
+    )
+
+
+def _subscriptions_section(value: Any) -> HDUHelpDisplaySection:
+    subscriptions = _items(value, "items", "subscriptions", "data")
+    enabled_count = sum(1 for item in subscriptions if bool(item.get("enabled")))
+    details: list[HDUHelpDisplayItem | None] = []
+    for subscription in subscriptions:
+        name = _first(subscription, "name", "title") or "校园提醒"
+        state = "已开启" if bool(subscription.get("enabled")) else "未开启"
+        platform = _first(subscription, "platform")
+        frequency = _first(subscription, "frequency")
+        description = _first(subscription, "description")
+        status = " · ".join(item for item in (state, platform, frequency) if item)
+        details.append(_display_item(name, status or description))
+    return HDUHelpDisplaySection(
+        resource="subscriptions",
+        title="校园提醒订阅",
+        summary=f"{len(subscriptions)} 项提醒 · {enabled_count} 项已开启",
+        items=_compact(details),
     )
 
 
@@ -258,6 +423,18 @@ def build_hduhelp_presentation(
     if "library_bookings" in resources:
         sections.append(_library_section(resources["library_bookings"]))
         handled.add("library_bookings")
+    if "library_attendance" in resources:
+        sections.append(_library_attendance_section(resources["library_attendance"]))
+        handled.add("library_attendance")
+    if "library_reading" in resources:
+        sections.append(_library_reading_section(resources["library_reading"]))
+        handled.add("library_reading")
+    if "library_seat_reservations" in resources:
+        sections.append(_library_seat_section(resources["library_seat_reservations"]))
+        handled.add("library_seat_reservations")
+    if "subscriptions" in resources:
+        sections.append(_subscriptions_section(resources["subscriptions"]))
+        handled.add("subscriptions")
     for resource, value in resources.items():
         if resource not in handled:
             sections.append(_generic_section(resource, value))
