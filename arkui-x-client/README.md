@@ -11,6 +11,7 @@
 - 官方 Skills 安装、权限展示与启停
 - 个人设置、API Key 更新和课表同步
 - HDUHelp OAuth 授权、个人校园数据同步与断开清理
+- HDUHelp 空闲教室、教室占用详情与寝室电费实时查询
 
 ## 工程结构
 
@@ -57,6 +58,17 @@ Android/iOS 宿主目前仅为本地联调开启了 HTTP 明文访问；发布�
 cd arkui-x-client
 npm run check
 npm run build:hap
+```
+
+如果 DevEco Studio 报 `Unable to find 'arkui-x.dir'`，先确认
+`local.properties` 中存在 `arkui-x.dir=C:/Users/<用户名>/AppData/Local/ArkUI-X/Sdk`，并把
+`ARKUIX_SDK_HOME` 设置为同一 SDK 根目录。修改 Windows 用户环境变量后必须完整退出并重开
+DevEco Studio；已经运行的 IDE 进程不会自动读取新变量。
+
+Phone 模拟器访问电脑端 `127.0.0.1:8000` 前，需要建立一次反向端口映射（模拟器重启后重做）：
+
+```powershell
+hdc rport tcp:8000 tcp:8000
 ```
 
 调试 HAP 输出到 `entry/build/default/outputs/default/`。未配置签名证书时会生成 `entry-default-unsigned.hap`，可以完成编译验收，但真机安装前仍需在 DevEco Studio 中配置自动签名。

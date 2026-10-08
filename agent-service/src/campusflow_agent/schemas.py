@@ -301,6 +301,59 @@ class HDUHelpSyncResponse(BaseModel):
     errors: dict[str, str] = Field(default_factory=dict)
 
 
+class ClassroomItem(BaseModel):
+    building_id: str
+    building_name: str
+    location_id: str
+    location_name: str
+    capacity: int = 0
+    self_study: bool = False
+    available: bool = True
+    school_year: str = ""
+    semester: str = ""
+
+
+class ClassroomSearchResponse(BaseModel):
+    query_label: str
+    items: list[ClassroomItem] = Field(default_factory=list)
+    total: int = 0
+    has_more: bool = False
+
+
+class ClassroomUsageItem(BaseModel):
+    week: int
+    weekday: int
+    section: int
+    course_name: str = ""
+    location_name: str = ""
+    start_time: str = ""
+    end_time: str = ""
+
+
+class ClassroomUsageResponse(BaseModel):
+    location_id: str
+    items: list[ClassroomUsageItem] = Field(default_factory=list)
+
+
+class ElectricityHistoryItem(BaseModel):
+    date: str
+    balance: str
+    change: str
+
+
+class ElectricityOverview(BaseModel):
+    bound: bool = False
+    room_name: str = ""
+    campus_name: str = ""
+    building_name: str = ""
+    floor_name: str = ""
+    meter_hint: str = ""
+    balance: float | None = None
+    balance_updated_at: datetime | None = None
+    daily_average: str = ""
+    history: list[ElectricityHistoryItem] = Field(default_factory=list)
+
+
 class TimetableParseResult(BaseModel):
     academic_year: str = ""
     semester: str = ""

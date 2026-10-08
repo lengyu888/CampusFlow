@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from contextvars import ContextVar
 from datetime import date as date_type
@@ -9,6 +10,14 @@ from langchain_core.tools import BaseTool, tool
 from pydantic import BaseModel, Field
 
 from .accounts import AccountStore
+from .campus_services import (
+    building_name,
+    classroom_items,
+    classroom_usage_items,
+    electricity_overview,
+)
+from .hduhelp import HDUHelpError
+from .hduhelp_access import HDUHelpAccess
 from .key_vault import ApiKeyVault
 from .store import CampusStore
 
@@ -51,6 +60,7 @@ def build_tools(
     allowed_tool_names: set[str] | None = None,
     hduhelp_store: AccountStore | None = None,
     credential_vault: ApiKeyVault | None = None,
+    hduhelp_access: HDUHelpAccess | None = None,
 ) -> list[BaseTool]:
     def hduhelp_resource(name: str) -> dict | None:
         if hduhelp_store is None or credential_vault is None:
@@ -174,6 +184,99 @@ def build_tools(
         }
 
     @tool
+    async def get_unused_classrooms(
+        building_id: str | None = None,
+        week: int | None = None,
+        weekday: int | None = None,
+        sections: list[int] | None = None,
+        limit: int = 20,
+    ) -> dict:
+        """实时查询 HDUHelp 空闲教室。
+
+        building_id 可填写 1-12、5n、5s、6n、6s 等楼栋编号；week 为 1-30，
+        weekday 为周一 1 至周日 7，sections 是节次数组。省略时间参数时由服务端
+        使用当前教学周、今天和当前时段。
+        """
+        if hduhelp_access is None:
+            return {"available": False, "message": "HDUHelp 实时服务未启用。"}
+        params: dict[str, object] = {
+            "status": "unused",
+            "limit": max(1, min(limit, 50)),
+        }
+        if building_id:
+            params["buildingID"] = building_id
+        if week is not None:
+            params["week"] = week
+        if weekday is not None:
+            params["weekday"] = weekday
+        if sections:
+            params["section"] = sections
+        try:
+            payload = await hduhelp_access.get(
+                CURRENT_USER_ID.get(),
+                "/hduhelp-neo/academic/classroom",
+                params=params,
+            )
+        except HDUHelpError as exc:
+            return {"available": False, "message": str(exc)}
+        return {
+            "available": True,
+            "building": building_name(building_id) if building_id else "全部教学楼",
+            "time": "指定节次" if sections else "当前时段",
+            "classrooms": classroom_items(payload),
+        }
+
+    @tool
+    async def get_classroom_usage(
+        location_id: str,
+        school_year: str | None = None,
+        semester: str | None = None,
+    ) -> dict:
+        """实时查询指定教室本学期的周次、星期和节次占用安排。"""
+        if hduhelp_access is None:
+            return {"available": False, "message": "HDUHelp 实时服务未启用。"}
+        params: dict[str, object] = {"locationID": location_id}
+        if school_year:
+            params["schoolYear"] = school_year
+        if semester:
+            params["semester"] = semester
+        try:
+            payload = await hduhelp_access.get(
+                CURRENT_USER_ID.get(),
+                "/hduhelp-neo/academic/classroom/usage",
+                params=params,
+            )
+        except HDUHelpError as exc:
+            return {"available": False, "message": str(exc)}
+        return {
+            "available": True,
+            "location_id": location_id,
+            "usage": classroom_usage_items(payload),
+        }
+
+    @tool
+    async def get_electricity_balance() -> dict:
+        """读取当前用户在 HDUHelp 绑定寝室的电费余额和近 14 天变化。"""
+        if hduhelp_access is None:
+            return {"available": False, "message": "HDUHelp 实时服务未启用。"}
+        user_id = CURRENT_USER_ID.get()
+        try:
+            binding, balance, history = await asyncio.gather(
+                hduhelp_access.get(
+                    user_id, "/hduhelp-neo/campuslife/electric/binding"
+                ),
+                hduhelp_access.get(
+                    user_id, "/hduhelp-neo/campuslife/electric/balance"
+                ),
+                hduhelp_access.get(
+                    user_id, "/hduhelp-neo/campuslife/electric/history"
+                ),
+            )
+        except HDUHelpError as exc:
+            return {"available": False, "message": str(exc)}
+        return {"available": True, **electricity_overview(binding, balance, history)}
+
+    @tool
     def propose_task_change(
         action: str,
         title: str,
@@ -239,6 +342,9 @@ def build_tools(
         get_hduhelp_profile,
         get_hduhelp_academics,
         get_hduhelp_campus_life,
+        get_unused_classrooms,
+        get_classroom_usage,
+        get_electricity_balance,
         propose_task_change,
         propose_plan,
     ]

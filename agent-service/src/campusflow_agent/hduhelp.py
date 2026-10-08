@@ -155,7 +155,7 @@ class HDUHelpService:
         )
 
     async def user_info(self, access_token: str) -> dict[str, Any]:
-        return await self._resource_request(
+        return await self.resource_request(
             access_token,
             "/hduhelp-neo/open-apis/authen/user-info",
         )
@@ -164,7 +164,7 @@ class HDUHelpService:
         names = list(RESOURCE_REQUESTS)
         results = await asyncio.gather(
             *(
-                self._resource_request(
+                self.resource_request(
                     access_token,
                     RESOURCE_REQUESTS[name][0],
                     params=RESOURCE_REQUESTS[name][1],
@@ -182,20 +182,33 @@ class HDUHelpService:
                 resources[name] = result
         return SyncResult(resources=resources, errors=errors)
 
-    async def _resource_request(
+    async def resource_request(
         self,
         access_token: str,
         path: str,
         *,
         params: dict[str, Any] | None = None,
     ) -> Any:
-        payload = await self._request_json(
+        payload = await self.request_envelope(
+            access_token,
+            path,
+            params=params,
+        )
+        return payload.get("data", payload)
+
+    async def request_envelope(
+        self,
+        access_token: str,
+        path: str,
+        *,
+        params: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        return await self._request_json(
             "GET",
             path,
             headers={"Authorization": f"Bearer {access_token}"},
             params=params or None,
         )
-        return payload.get("data", payload)
 
     async def _request_json(self, method: str, path: str, **kwargs: Any) -> dict[str, Any]:
         try:

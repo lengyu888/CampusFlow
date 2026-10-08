@@ -1,6 +1,7 @@
 import { AuthResponse, UserProfile } from '../model/ApiModels';
 import { CampusFlowApi } from '../services/CampusFlowApi';
 import { AgentPage } from './AgentPage';
+import { CampusServicesPage } from './CampusServicesPage';
 import { HomePage } from './HomePage';
 import { HistoryPage } from './HistoryPage';
 import { LoginPage } from './LoginPage';
@@ -53,7 +54,8 @@ struct Index {
   private pageContent() {
     if (this.activeTab === 0) {
       HomePage({ baseUrl: this.baseUrl, token: this.token, user: this.user,
-        onOpenAgent: () => this.selectTab(1), onOpenRoute: () => this.selectTab(6) })
+        onOpenAgent: () => this.selectTab(1), onOpenRoute: () => this.selectTab(6),
+        onOpenServices: () => this.selectTab(7) })
     } else if (this.activeTab === 1) {
       AgentPage({ baseUrl: this.baseUrl, token: this.token, initialPrompt: this.agentPrompt,
         onOpenHistory: () => this.selectTab(5), onOpenRoute: () => this.selectTab(6) })
@@ -67,8 +69,10 @@ struct Index {
         onOpenAgent: (prompt) => this.openAgentWithPrompt(prompt) })
     } else if (this.activeTab === 5) {
       HistoryPage({ baseUrl: this.baseUrl, token: this.token, onBack: () => this.selectTab(1) })
-    } else {
+    } else if (this.activeTab === 6) {
       RoutePage({ baseUrl: this.baseUrl, token: this.token, onBack: () => this.selectTab(1) })
+    } else {
+      CampusServicesPage({ baseUrl: this.baseUrl, token: this.token, onBack: () => this.selectTab(0) })
     }
   }
 

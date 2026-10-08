@@ -554,6 +554,51 @@ async def test_hduhelp_pat_prefix_is_validated(client: AsyncClient) -> None:
     assert "hduhelp_pat_" in response.json()["detail"]
 
 
+async def test_live_classroom_and_electricity_services(client: AsyncClient) -> None:
+    await register(client)
+    await client.put(
+        "/api/v1/hduhelp/pat",
+        json={"pat": "hduhelp_pat_test_only_1234567890"},
+    )
+
+    classrooms = await client.get(
+        "/api/v1/campus-services/classrooms",
+        params=[("building_id", "6n"), ("section", "6"), ("section", "7")],
+    )
+    assert classrooms.status_code == 200
+    classroom_payload = classrooms.json()
+    assert classroom_payload["query_label"] == "6教北楼 · 第 6–7 节"
+    assert classroom_payload["total"] == 1
+    assert classroom_payload["items"][0] == {
+        "building_id": "6n",
+        "building_name": "6教北楼",
+        "location_id": "room-602",
+        "location_name": "北楼 602",
+        "capacity": 80,
+        "self_study": True,
+        "available": True,
+        "school_year": "2026-2027",
+        "semester": "1",
+    }
+
+    usage = await client.get(
+        "/api/v1/campus-services/classrooms/room-602/usage"
+    )
+    assert usage.status_code == 200
+    assert usage.json()["items"][0]["course_name"] == "软件工程"
+    assert usage.json()["items"][0]["section"] == 6
+
+    electricity = await client.get("/api/v1/campus-services/electricity")
+    assert electricity.status_code == 200
+    electricity_payload = electricity.json()
+    assert electricity_payload["bound"] is True
+    assert electricity_payload["room_name"] == "27号楼 602室"
+    assert electricity_payload["balance"] == 36.8
+    assert electricity_payload["daily_average"] == "1.25"
+    assert electricity_payload["meter_hint"] == "•••• 3456"
+    assert "meter-123456" not in electricity.text
+
+
 async def test_hduhelp_callback_state_is_one_time(client: AsyncClient) -> None:
     await register(client)
     await client.post("/api/v1/hduhelp/connect")

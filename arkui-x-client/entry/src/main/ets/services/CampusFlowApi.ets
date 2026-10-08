@@ -6,12 +6,15 @@ import {
   CampusMapSummary,
   CampusRoute,
   ChatResponse,
+  ClassroomSearchResponse,
+  ClassroomUsageResponse,
   ConfirmActionResponse,
   HistoryMessage,
   HDUHelpConnectResponse,
   HDUHelpConnectionStatus,
   HDUHelpDataResponse,
   HDUHelpSyncResponse,
+  ElectricityOverview,
   OnboardingResponse,
   PlanningOverview,
   PlanningTask,
@@ -257,5 +260,23 @@ export class CampusFlowApi {
 
   async disconnectHduHelp(): Promise<void> {
     await this.request<void>('/api/v1/hduhelp/connection', http.RequestMethod.DELETE, '{}');
+  }
+
+  async unusedClassrooms(buildingId: string, sections: number[]): Promise<ClassroomSearchResponse> {
+    let query = `limit=30&building_id=${encodeURIComponent(buildingId)}`;
+    sections.forEach((section: number) => {
+      query += `&section=${section}`;
+    });
+    return this.request<ClassroomSearchResponse>(`/api/v1/campus-services/classrooms?${query}`,
+      http.RequestMethod.GET);
+  }
+
+  async electricity(): Promise<ElectricityOverview> {
+    return this.request<ElectricityOverview>('/api/v1/campus-services/electricity', http.RequestMethod.GET);
+  }
+
+  async classroomUsage(locationId: string): Promise<ClassroomUsageResponse> {
+    return this.request<ClassroomUsageResponse>(
+      `/api/v1/campus-services/classrooms/${encodeURIComponent(locationId)}/usage`, http.RequestMethod.GET);
   }
 }

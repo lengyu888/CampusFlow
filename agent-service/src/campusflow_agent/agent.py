@@ -13,6 +13,7 @@ from langchain_openai import ChatOpenAI
 
 from .accounts import AccountStore
 from .config import Settings
+from .hduhelp_access import HDUHelpAccess
 from .key_vault import ApiKeyVault
 from .schemas import PendingAction, ToolTrace
 from .skills import SkillStore
@@ -38,6 +39,8 @@ SYSTEM_PROMPT = """你是 CampusFlow 大学规划与执行 Agent，服务高校�
     回复中概括预计时间与途经点，客户端会根据工具结果绘制路线图。
 13. 用户询问本人学籍、成绩、GPA、考试、校园卡余额或图书馆预约时，调用对应的
     HDUHelp 工具；只使用当前账户已授权、已同步的数据，不推断缺失字段。
+14. 用户询问空闲教室、某教室占用情况或寝室电费时，调用对应的 HDUHelp 实时工具；
+    未指定日期或节次时使用系统当前教学周和当前时段，不要求用户重复提供当前日期。
 """
 
 CAMPUS_TIMEZONE = timezone(timedelta(hours=8), name="Asia/Shanghai")
@@ -68,12 +71,14 @@ class AgentService:
         skill_store: SkillStore | None = None,
         account_store: AccountStore | None = None,
         credential_vault: ApiKeyVault | None = None,
+        hduhelp_access: HDUHelpAccess | None = None,
     ) -> None:
         self.settings = settings
         self.store = store
         self.skill_store = skill_store
         self.account_store = account_store
         self.credential_vault = credential_vault
+        self.hduhelp_access = hduhelp_access
 
     @staticmethod
     def _build_system_prompt(now: datetime | None = None) -> str:
@@ -129,6 +134,7 @@ class AgentService:
                 allowed_tools,
                 self.account_store,
                 self.credential_vault,
+                self.hduhelp_access,
             ),
             system_prompt=self._build_system_prompt(),
         )
@@ -172,6 +178,14 @@ class AgentService:
             }
         ):
             allowed.add("get_hduhelp_campus_life")
+        if self.account_store.get_hduhelp_status(user_id)["configured"]:
+            allowed.update(
+                {
+                    "get_unused_classrooms",
+                    "get_classroom_usage",
+                    "get_electricity_balance",
+                }
+            )
         return allowed
 
     async def chat(

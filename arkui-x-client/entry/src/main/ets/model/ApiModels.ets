@@ -242,6 +242,59 @@ export interface HDUHelpDataResponse {
   sync_errors: Record<string, string>;
 }
 
+export interface ClassroomItem {
+  building_id: string;
+  building_name: string;
+  location_id: string;
+  location_name: string;
+  capacity: number;
+  self_study: boolean;
+  available: boolean;
+  school_year: string;
+  semester: string;
+}
+
+export interface ClassroomSearchResponse {
+  query_label: string;
+  items: ClassroomItem[];
+  total: number;
+  has_more: boolean;
+}
+
+export interface ClassroomUsageItem {
+  week: number;
+  weekday: number;
+  section: number;
+  course_name: string;
+  location_name: string;
+  start_time: string;
+  end_time: string;
+}
+
+export interface ClassroomUsageResponse {
+  location_id: string;
+  items: ClassroomUsageItem[];
+}
+
+export interface ElectricityHistoryItem {
+  date: string;
+  balance: string;
+  change: string;
+}
+
+export interface ElectricityOverview {
+  bound: boolean;
+  room_name: string;
+  campus_name: string;
+  building_name: string;
+  floor_name: string;
+  meter_hint: string;
+  balance: number | null;
+  balance_updated_at: string | null;
+  daily_average: string;
+  history: ElectricityHistoryItem[];
+}
+
 export interface AdminUserSummary {
   user_id: string;
   email: string;

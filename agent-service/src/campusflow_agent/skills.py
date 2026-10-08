@@ -100,11 +100,19 @@ OFFICIAL_SKILLS: tuple[dict[str, Any], ...] = (
     {
         "skill_id": "hduhelp-campus-context",
         "name": "HDUHelp 校园档案",
-        "description": "读取你明确授权并同步的本人学籍、成绩、考试、校园卡余额与图书馆预约。",
+        "description": "读取你明确授权的学籍、学业与校园生活数据，并实时查询空闲教室和寝室电费。",
         "category": "校园数据",
-        "version": "1.0.0",
+        "version": "1.1.0",
         "author": "CampusFlow Official",
-        "capabilities": ["学籍档案", "成绩与 GPA", "考试安排", "校园卡余额", "图书馆预约"],
+        "capabilities": [
+            "学籍档案",
+            "成绩与 GPA",
+            "考试安排",
+            "校园卡余额",
+            "图书馆预约",
+            "空闲教室",
+            "寝室电费",
+        ],
         "permissions": [
             {
                 "code": "hduhelp.profile.read",
@@ -121,7 +129,7 @@ OFFICIAL_SKILLS: tuple[dict[str, Any], ...] = (
             {
                 "code": "hduhelp.campuslife.read",
                 "label": "读取校园生活数据",
-                "description": "读取校园卡余额与图书馆座位预约。",
+                "description": "读取校园卡、图书馆、空闲教室与已绑定寝室的电费数据。",
                 "access": "read",
             },
         ],
@@ -138,6 +146,9 @@ TOOL_SKILLS = {
     "get_hduhelp_profile": "hduhelp-campus-context",
     "get_hduhelp_academics": "hduhelp-campus-context",
     "get_hduhelp_campus_life": "hduhelp-campus-context",
+    "get_unused_classrooms": "hduhelp-campus-context",
+    "get_classroom_usage": "hduhelp-campus-context",
+    "get_electricity_balance": "hduhelp-campus-context",
 }
 
 

@@ -96,6 +96,16 @@ def test_authorized_context_exposes_read_tools_without_installing_skills() -> No
         },
         errors={},
     )
+    accounts.save_hduhelp_connection(
+        user_id=user.user_id,
+        access_token_encrypted="encrypted-pat",
+        refresh_token_encrypted=None,
+        token_type="Bearer",
+        scopes=[],
+        expires_at=datetime.max.replace(tzinfo=UTC),
+        auth_mode="pat",
+        token_hint="•••• test",
+    )
     service = AgentService(
         Settings(app_env="test"),
         CampusStore(),
@@ -113,6 +123,9 @@ def test_authorized_context_exposes_read_tools_without_installing_skills() -> No
         "get_hduhelp_profile",
         "get_hduhelp_academics",
         "get_hduhelp_campus_life",
+        "get_unused_classrooms",
+        "get_classroom_usage",
+        "get_electricity_balance",
     } <= allowed
     assert "propose_plan" not in allowed
 

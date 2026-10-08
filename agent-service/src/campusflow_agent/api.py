@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import asyncio
 import json
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, HTTPException, Request, Response, status
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -23,8 +23,15 @@ from .accounts import (
     AuthenticationError as AccountAuthenticationError,
 )
 from .agent import AgentConfigurationError, AgentService
+from .campus_services import (
+    building_name,
+    classroom_items,
+    classroom_usage_items,
+    electricity_overview,
+)
 from .config import Settings, get_settings
 from .hduhelp import HDUHelpError, HDUHelpService, TokenSet
+from .hduhelp_access import HDUHelpAccess
 from .hduhelp_presenter import build_hduhelp_presentation
 from .key_vault import ApiKeyVault
 from .schedule_subscription import ScheduleSubscriptionError, ScheduleSubscriptionService
@@ -40,7 +47,10 @@ from .schemas import (
     CampusRoute,
     ChatRequest,
     ChatResponse,
+    ClassroomSearchResponse,
+    ClassroomUsageResponse,
     ConfirmActionResponse,
+    ElectricityOverview,
     HDUHelpConnectionStatus,
     HDUHelpConnectResponse,
     HDUHelpDataResponse,
@@ -161,24 +171,31 @@ def create_app(
     skill_store: SkillStore | None = None,
     schedule_subscription_service: ScheduleSubscriptionService | None = None,
     hduhelp_service: HDUHelpService | None = None,
+    hduhelp_access: HDUHelpAccess | None = None,
 ) -> FastAPI:
     settings = settings or get_settings()
     store = store or CampusStore(settings.database_path)
     account_store = account_store or AccountStore(settings.database_path)
     skill_store = skill_store or SkillStore(settings.database_path)
     api_key_vault = api_key_vault or ApiKeyVault(settings)
+    hduhelp_service = hduhelp_service or HDUHelpService(settings)
+    hduhelp_access = hduhelp_access or HDUHelpAccess(
+        account_store,
+        api_key_vault,
+        hduhelp_service,
+    )
     agent_service = agent_service or AgentService(
         settings,
         store,
         skill_store,
         account_store,
         api_key_vault,
+        hduhelp_access,
     )
     vision_service = vision_service or VisionService(settings)
     schedule_subscription_service = (
         schedule_subscription_service or ScheduleSubscriptionService()
     )
-    hduhelp_service = hduhelp_service or HDUHelpService(settings)
 
     app = FastAPI(
         title="CampusFlow Agent API",
@@ -201,6 +218,7 @@ def create_app(
     app.state.skill_store = skill_store
     app.state.schedule_subscription_service = schedule_subscription_service
     app.state.hduhelp_service = hduhelp_service
+    app.state.hduhelp_access = hduhelp_access
 
     web_dir = Path(__file__).parent / "web"
     app.mount("/static", StaticFiles(directory=web_dir), name="static")
@@ -283,44 +301,9 @@ def create_app(
         )
 
     async def active_hduhelp_token(user_id: str) -> str:
-        connection = account_store.get_hduhelp_connection_secret(user_id)
-        if connection is None:
-            raise HTTPException(status_code=404, detail="尚未连接 HDUHelp。")
         try:
-            access_token = api_key_vault.decrypt(connection["access_token_encrypted"])
-        except ValueError as exc:
-            raise HTTPException(
-                status_code=503,
-                detail="HDUHelp 凭据无法解密，请重新连接。",
-            ) from exc
-        if connection.get("auth_mode") == "pat":
-            return access_token
-        try:
-            expires_at = datetime.fromisoformat(connection["expires_at"])
-        except (ValueError, TypeError) as exc:
-            raise HTTPException(
-                status_code=503,
-                detail="HDUHelp 凭据状态异常，请重新连接。",
-            ) from exc
-        if expires_at > datetime.now(UTC) + timedelta(minutes=1):
-            return access_token
-        encrypted_refresh = connection.get("refresh_token_encrypted")
-        if not encrypted_refresh:
-            raise HTTPException(status_code=401, detail="HDUHelp 授权已过期，请重新连接。")
-        try:
-            refresh_token = api_key_vault.decrypt(encrypted_refresh)
-            tokens = await hduhelp_service.refresh(refresh_token)
-            tokens = TokenSet(
-                access_token=tokens.access_token,
-                refresh_token=tokens.refresh_token or refresh_token,
-                token_type=tokens.token_type,
-                scopes=tokens.scopes or json.loads(connection["scopes_json"]),
-                expires_at=tokens.expires_at,
-            )
-            save_hduhelp_tokens(user_id, tokens, update=True)
-            return tokens.access_token
-        except (HDUHelpError, ValueError) as exc:
-            account_store.set_hduhelp_error(user_id, str(exc))
+            return await hduhelp_access.active_token(user_id)
+        except HDUHelpError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     def apply_subscribed_timetable(
@@ -542,6 +525,108 @@ def create_app(
             sections=sections,
             suggested_prompts=prompts,
             sync_errors=account_store.get_hduhelp_sync_errors(user.user_id),
+        )
+
+    @app.get(
+        "/api/v1/campus-services/classrooms",
+        response_model=ClassroomSearchResponse,
+    )
+    async def get_unused_classrooms(
+        user: CurrentUser,
+        building_id: str | None = None,
+        week: Annotated[int | None, Query(ge=1, le=30)] = None,
+        weekday: Annotated[int | None, Query(ge=1, le=7)] = None,
+        section: Annotated[list[int] | None, Query()] = None,
+        limit: Annotated[int, Query(ge=1, le=100)] = 30,
+        offset: Annotated[int, Query(ge=0)] = 0,
+    ) -> ClassroomSearchResponse:
+        params: dict[str, object] = {
+            "status": "unused",
+            "limit": limit,
+            "offset": offset,
+        }
+        if building_id:
+            params["buildingID"] = building_id
+        if week is not None:
+            params["week"] = week
+        if weekday is not None:
+            params["weekday"] = weekday
+        if section:
+            params["section"] = section
+        try:
+            envelope = await hduhelp_access.get_envelope(
+                user.user_id,
+                "/hduhelp-neo/academic/classroom",
+                params=params,
+            )
+        except HDUHelpError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        pagination = envelope.get("pagination")
+        if not isinstance(pagination, dict):
+            pagination = {}
+        period = (
+            f"第 {min(section)}–{max(section)} 节" if section else "当前时段"
+        )
+        location = building_name(building_id) if building_id else "全部教学楼"
+        return ClassroomSearchResponse(
+            query_label=f"{location} · {period}",
+            items=classroom_items(envelope.get("data")),
+            total=int(pagination.get("total") or 0),
+            has_more=bool(pagination.get("hasMore")),
+        )
+
+    @app.get(
+        "/api/v1/campus-services/classrooms/{location_id}/usage",
+        response_model=ClassroomUsageResponse,
+    )
+    async def get_classroom_usage(
+        location_id: str,
+        user: CurrentUser,
+        school_year: str | None = None,
+        semester: str | None = None,
+    ) -> ClassroomUsageResponse:
+        params: dict[str, object] = {"locationID": location_id}
+        if school_year:
+            params["schoolYear"] = school_year
+        if semester:
+            params["semester"] = semester
+        try:
+            payload = await hduhelp_access.get(
+                user.user_id,
+                "/hduhelp-neo/academic/classroom/usage",
+                params=params,
+            )
+        except HDUHelpError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        return ClassroomUsageResponse(
+            location_id=location_id,
+            items=classroom_usage_items(payload),
+        )
+
+    @app.get(
+        "/api/v1/campus-services/electricity",
+        response_model=ElectricityOverview,
+    )
+    async def get_electricity(user: CurrentUser) -> ElectricityOverview:
+        try:
+            binding, balance, history = await asyncio.gather(
+                hduhelp_access.get(
+                    user.user_id,
+                    "/hduhelp-neo/campuslife/electric/binding",
+                ),
+                hduhelp_access.get(
+                    user.user_id,
+                    "/hduhelp-neo/campuslife/electric/balance",
+                ),
+                hduhelp_access.get(
+                    user.user_id,
+                    "/hduhelp-neo/campuslife/electric/history",
+                ),
+            )
+        except HDUHelpError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        return ElectricityOverview.model_validate(
+            electricity_overview(binding, balance, history)
         )
 
     @app.delete("/api/v1/hduhelp/connection", status_code=204)

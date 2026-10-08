@@ -167,6 +167,86 @@ class FakeHDUHelpService:
             errors={"subscriptions": "HDUHelp API 返回 HTTP 403。"},
         )
 
+    async def request_envelope(
+        self,
+        access_token: str,
+        path: str,
+        *,
+        params: dict | None = None,
+    ) -> dict:
+        assert access_token in {
+            "hduhelp-access-token",
+            "hduhelp_pat_test_only_1234567890",
+        }
+        assert path == "/hduhelp-neo/academic/classroom"
+        assert params is not None and params["status"] == "unused"
+        return {
+            "code": 0,
+            "msg": "success",
+            "data": [
+                {
+                    "buildingID": "6n",
+                    "locationID": "room-602",
+                    "locationName": "北楼 602",
+                    "capacity": 80,
+                    "selfStudy": True,
+                    "available": True,
+                    "schoolYear": "2026-2027",
+                    "semester": "1",
+                }
+            ],
+            "pagination": {"total": 1, "hasMore": False},
+        }
+
+    async def resource_request(
+        self,
+        access_token: str,
+        path: str,
+        *,
+        params: dict | None = None,
+    ) -> object:
+        assert access_token in {
+            "hduhelp-access-token",
+            "hduhelp_pat_test_only_1234567890",
+        }
+        if path == "/hduhelp-neo/academic/classroom/usage":
+            assert params == {"locationID": "room-602"}
+            return [
+                {
+                    "week": 3,
+                    "weekday": 3,
+                    "section": 6,
+                    "courseName": "软件工程",
+                    "locationName": "北楼 602",
+                    "startTime": "13:30",
+                    "endTime": "14:15",
+                }
+            ]
+        if path.endswith("/electric/binding"):
+            return {
+                "meterId": "meter-123456",
+                "buildingName": "27号楼",
+                "floorName": "6层",
+                "roomName": "602室",
+                "campusName": "下沙校区",
+            }
+        if path.endswith("/electric/balance"):
+            return {
+                "meterId": "meter-123456",
+                "balance": 36.8,
+                "roomName": "27号楼 602室",
+                "time": 1788969600,
+            }
+        if path.endswith("/electric/history"):
+            return {
+                "average": "1.25",
+                "history": [
+                    {"time": "2026-10-06", "fee": "38.05", "change": "-1.25"},
+                    {"time": "2026-10-07", "fee": "36.80", "change": "-1.25"},
+                ],
+            }
+        raise AssertionError(f"unexpected path: {path}")
+
 
 @pytest_asyncio.fixture
 async def client() -> AsyncIterator[AsyncClient]:

@@ -9,6 +9,7 @@ export struct HomePage {
   @Prop user: UserProfile;
   onOpenAgent: () => void = () => {};
   onOpenRoute: () => void = () => {};
+  onOpenServices: () => void = () => {};
   @State private courses: TimetableEntry[] = [];
   @State private loading: boolean = true;
   @State private errorText: string = '';
@@ -84,6 +85,17 @@ export struct HomePage {
           Button('✦  问问 Agent').layoutWeight(1).height(44).fontSize(12).fontColor('#315BFF')
             .backgroundColor('#E9EEFF').borderRadius(15).onClick(() => this.onOpenAgent())
         }.width('100%')
+
+        Row({ space: 12 }) {
+          Column({ space: 3 }) {
+            Text('校园实时服务').fontSize(14).fontWeight(FontWeight.Bold).fontColor('#171A22')
+            Text('查空闲教室 · 看寝室电费').fontSize(11).fontColor('#777E8F')
+          }.alignItems(HorizontalAlign.Start).layoutWeight(1)
+          Text('LIVE').fontSize(9).fontWeight(FontWeight.Bold).fontColor('#087D5B')
+            .padding({ left: 8, right: 8, top: 5, bottom: 5 }).backgroundColor('#E5F7F0').borderRadius(9)
+          Text('›').fontSize(23).fontColor('#315BFF')
+        }.width('100%').padding(16).backgroundColor('#FFFFFF').borderRadius(18)
+          .onClick(() => this.onOpenServices())
 
         Row() {
           Text('校园信息').fontSize(19).fontWeight(FontWeight.Bold).fontColor('#171A22')
