@@ -1,6 +1,29 @@
 from campusflow_agent.hduhelp_presenter import build_hduhelp_presentation
 
 
+def test_identity_is_presented_as_a_clear_localized_account_card() -> None:
+    sections, _ = build_hduhelp_presentation(
+        {
+            "identity": {
+                "id": "01KYW79WS0XABP298GJ542XH2B",
+                "nickName": "HDUHELP 用户",
+                "status": "ACTIVE",
+            }
+        }
+    )
+
+    section = sections[0]
+    assert section.title == "HDUHelp 账户"
+    assert section.summary == "HDUHELP 用户 · 正常"
+    assert [(item.label, item.value) for item in section.items] == [
+        ("账户状态", "正常"),
+        ("昵称", "HDUHELP 用户"),
+        ("账户标识", "01KYW7…XH2B"),
+    ]
+    assert "ACTIVE" not in str(section.model_dump())
+    assert "01KYW79WS0XABP298GJ542XH2B" not in str(section.model_dump())
+
+
 def test_library_resources_are_presented_as_clear_chinese_summaries() -> None:
     sections, _ = build_hduhelp_presentation(
         {

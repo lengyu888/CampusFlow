@@ -72,7 +72,8 @@ struct Index {
     } else if (this.activeTab === 6) {
       RoutePage({ baseUrl: this.baseUrl, token: this.token, onBack: () => this.selectTab(1) })
     } else {
-      CampusServicesPage({ baseUrl: this.baseUrl, token: this.token, onBack: () => this.selectTab(0) })
+      CampusServicesPage({ baseUrl: this.baseUrl, token: this.token, onBack: () => this.selectTab(0),
+        onOpenAgent: (prompt) => this.openAgentWithPrompt(prompt) })
     }
   }
 

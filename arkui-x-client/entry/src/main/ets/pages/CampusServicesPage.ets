@@ -4,7 +4,11 @@ import {
   ClassroomUsageItem,
   ClassroomUsageResponse,
   ElectricityHistoryItem,
-  ElectricityOverview
+  ElectricityOverview,
+  HDUHelpDataResponse,
+  HDUHelpDisplayItem,
+  HDUHelpDisplaySection,
+  HDUHelpSuggestedPrompt
 } from '../model/ApiModels';
 import { CampusFlowApi } from '../services/CampusFlowApi';
 
@@ -21,6 +25,7 @@ export struct CampusServicesPage {
   @Prop baseUrl: string;
   @Prop token: string;
   onBack: () => void = () => {};
+  onOpenAgent: (prompt: string) => void = () => {};
   @State private activeService: number = 0;
   @State private selectedBuilding: number = 0;
   @State private selectedPeriod: number = 0;
@@ -34,6 +39,11 @@ export struct CampusServicesPage {
   @State private usageLoading: boolean = false;
   @State private electricityLoading: boolean = true;
   @State private electricityError: string = '';
+  @State private campusInfoLoading: boolean = true;
+  @State private campusInfoError: string = '';
+  @State private campusSections: HDUHelpDisplaySection[] = [];
+  @State private campusPrompts: HDUHelpSuggestedPrompt[] = [];
+  @State private campusConfigured: boolean = false;
   @State private electricityData: ElectricityOverview = {
     bound: false,
     room_name: '',
@@ -59,6 +69,7 @@ export struct CampusServicesPage {
   aboutToAppear(): void {
     this.loadClassrooms();
     this.loadElectricity();
+    this.loadCampusInfo();
   }
 
   private periodSections(): number[] {
@@ -113,6 +124,23 @@ export struct CampusServicesPage {
       this.electricityError = `电费数据加载失败：${error}`;
     } finally {
       this.electricityLoading = false;
+    }
+  }
+
+  private async loadCampusInfo(): Promise<void> {
+    this.campusInfoLoading = true;
+    this.campusInfoError = '';
+    try {
+      const result: HDUHelpDataResponse = await new CampusFlowApi(this.baseUrl, this.token).hduHelpData();
+      this.campusConfigured = result.status.configured;
+      this.campusSections = result.sections;
+      this.campusPrompts = result.suggested_prompts;
+    } catch (error) {
+      this.campusInfoError = `校园档案加载失败：${error}`;
+      this.campusSections = [];
+      this.campusPrompts = [];
+    } finally {
+      this.campusInfoLoading = false;
     }
   }
 
@@ -318,6 +346,98 @@ export struct CampusServicesPage {
     }.width('100%').alignItems(HorizontalAlign.Start)
   }
 
+  @Builder
+  private campusDataItem(item: HDUHelpDisplayItem) {
+    if (item.label.length > 12 || item.value.length > 22) {
+      Column({ space: 5 }) {
+        Text(item.label).fontSize(11).fontColor('#7B8292').width('100%')
+        Text(item.value).fontSize(item.emphasis ? 17 : 13)
+          .fontWeight(item.emphasis ? FontWeight.Bold : FontWeight.Medium)
+          .fontColor(item.emphasis ? '#315BFF' : '#272B34')
+          .width('100%').maxLines(3).textOverflow({ overflow: TextOverflow.Ellipsis })
+      }.width('100%').alignItems(HorizontalAlign.Start)
+        .padding(11).backgroundColor('#F6F8FC').borderRadius(13)
+    } else {
+      Row() {
+        Text(item.label).fontSize(11).fontColor('#7B8292')
+        Blank()
+        Text(item.value).fontSize(item.emphasis ? 17 : 12)
+          .fontWeight(item.emphasis ? FontWeight.Bold : FontWeight.Medium)
+          .fontColor(item.emphasis ? '#315BFF' : '#272B34')
+          .constraintSize({ maxWidth: '68%' }).maxLines(2)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+      }.width('100%')
+    }
+  }
+
+  @Builder
+  private campusInfoView() {
+    Column({ space: 14 }) {
+      Row() {
+        Column({ space: 4 }) {
+          Text('我的校园档案').fontSize(19).fontWeight(FontWeight.Bold).fontColor('#171A22')
+          Text('HDUHelp 同步数据，Agent 可按需调用').fontSize(11).fontColor('#7B8292')
+        }.alignItems(HorizontalAlign.Start).layoutWeight(1)
+        Button('刷新').height(34).fontSize(11).fontColor('#315BFF').backgroundColor('#E9EEFF')
+          .borderRadius(12).onClick(() => this.loadCampusInfo())
+      }.width('100%').padding(18).backgroundColor('#FFFFFF').borderRadius(24)
+
+      if (this.campusInfoLoading) {
+        Text('正在整理校园档案…').fontSize(13).fontColor('#7B8292').width('100%')
+          .padding(20).backgroundColor('#FFFFFF').borderRadius(20)
+      } else if (this.campusInfoError.length > 0) {
+        Text(this.campusInfoError).fontSize(12).fontColor('#B42318').width('100%')
+          .padding(18).backgroundColor('#FFF0F0').borderRadius(18)
+      } else if (!this.campusConfigured) {
+        Column({ space: 8 }) {
+          Text('尚未连接 HDUHelp').fontSize(18).fontWeight(FontWeight.Bold).fontColor('#171A22')
+          Text('请前往“我的”配置个人令牌，连接后可查看校园卡、图书馆、长跑等信息。')
+            .fontSize(12).fontColor('#7B8292')
+        }.width('100%').alignItems(HorizontalAlign.Start).padding(20)
+          .backgroundColor('#FFFFFF').borderRadius(22)
+      } else {
+        Row() {
+          Column({ space: 5 }) {
+            Text('已连接的数据').fontSize(11).fontWeight(FontWeight.Bold).fontColor('#315BFF')
+            Text(`${this.campusSections.length} 个信息分区`).fontSize(21).fontWeight(FontWeight.Bold)
+              .fontColor('#171A22')
+          }.alignItems(HorizontalAlign.Start).layoutWeight(1)
+          Text('HDUHelp').fontSize(11).fontWeight(FontWeight.Bold).fontColor('#315BFF')
+            .padding({ left: 10, right: 10, top: 6, bottom: 6 }).backgroundColor('#FFFFFF').borderRadius(10)
+        }.width('100%').padding(18).backgroundColor('#E9EEFF').borderRadius(22)
+
+        ForEach(this.campusSections, (section: HDUHelpDisplaySection) => {
+          Column({ space: 11 }) {
+            Row() {
+              Column({ space: 3 }) {
+                Text(section.title).fontSize(17).fontWeight(FontWeight.Bold).fontColor('#171A22')
+                Text(section.summary).fontSize(11).fontColor('#7B8292').maxLines(2)
+                  .textOverflow({ overflow: TextOverflow.Ellipsis })
+              }.alignItems(HorizontalAlign.Start).layoutWeight(1)
+              Text('✓').fontSize(13).fontColor('#19966B').width(28).height(28)
+                .textAlign(TextAlign.Center).backgroundColor('#E8F7F1').borderRadius(10)
+            }.width('100%')
+            ForEach(section.items, (item: HDUHelpDisplayItem) => {
+              this.campusDataItem(item)
+            }, (item: HDUHelpDisplayItem) => `${section.resource}-${item.label}`)
+          }.width('100%').padding(17).backgroundColor('#FFFFFF').borderRadius(22)
+        }, (section: HDUHelpDisplaySection) => section.resource)
+
+        if (this.campusPrompts.length > 0) {
+          Column({ space: 10 }) {
+            Text('继续问 Agent').fontSize(18).fontWeight(FontWeight.Bold).fontColor('#171A22').width('100%')
+            Text('直接基于校园档案完成查询和规划').fontSize(11).fontColor('#7B8292').width('100%')
+            ForEach(this.campusPrompts.slice(0, 4), (suggestion: HDUHelpSuggestedPrompt) => {
+              Button(suggestion.title + '  ↗').width('100%').height(44).fontSize(12)
+                .fontColor('#315BFF').backgroundColor('#F2F5FF').borderRadius(14)
+                .onClick(() => this.onOpenAgent(suggestion.prompt))
+            }, (suggestion: HDUHelpSuggestedPrompt) => suggestion.prompt_id)
+          }.width('100%').padding(18).backgroundColor('#FFFFFF').borderRadius(22)
+        }
+      }
+    }.width('100%').alignItems(HorizontalAlign.Start)
+  }
+
   build() {
     Column() {
       Row({ space: 12 }) {
@@ -334,6 +454,7 @@ export struct CampusServicesPage {
       Row({ space: 6 }) {
         this.serviceTab(0, '空闲教室')
         this.serviceTab(1, '寝室电费')
+        this.serviceTab(2, '校园档案')
       }.width('100%').padding({ left: 22, right: 22, top: 4, bottom: 4 })
         .backgroundColor('#E9ECF3').borderRadius(17)
 
@@ -341,8 +462,10 @@ export struct CampusServicesPage {
         Column() {
           if (this.activeService === 0) {
             this.classroomView()
-          } else {
+          } else if (this.activeService === 1) {
             this.electricityView()
+          } else {
+            this.campusInfoView()
           }
         }.width('100%').padding({ left: 18, right: 18, top: 16, bottom: 40 })
       }.layoutWeight(1).width('100%')

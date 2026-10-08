@@ -130,6 +130,37 @@ def _generic_section(resource: str, value: Any) -> HDUHelpDisplaySection:
     )
 
 
+def _identity_section(value: Any) -> HDUHelpDisplaySection:
+    data = _mapping(value)
+    account_id = _first(data, "id", "userId", "user_id", "openId", "open_id")
+    account_hint = account_id
+    if len(account_id) > 12:
+        account_hint = f"{account_id[:6]}…{account_id[-4:]}"
+    name = _first(data, "name", "nickname", "nickName") or "HDUHelp 用户"
+    raw_status = _first(data, "status").upper()
+    status = {
+        "ACTIVE": "正常",
+        "ENABLED": "正常",
+        "INACTIVE": "未激活",
+        "DISABLED": "已停用",
+        "LOCKED": "已锁定",
+    }.get(raw_status, raw_status or "已连接")
+    identity_type = _first(data, "identityType", "identity_type")
+    return HDUHelpDisplaySection(
+        resource="identity",
+        title="HDUHelp 账户",
+        summary=f"{name} · {status}",
+        items=_compact(
+            [
+                _display_item("账户状态", status, emphasis=True),
+                _display_item("昵称", name),
+                _display_item("身份类型", identity_type),
+                _display_item("账户标识", account_hint),
+            ]
+        ),
+    )
+
+
 def _number(data: Mapping[str, Any], *keys: str) -> float | None:
     for key in keys:
         value = data.get(key)
@@ -406,7 +437,7 @@ def build_hduhelp_presentation(
     sections: list[HDUHelpDisplaySection] = []
     handled: set[str] = set()
     if "identity" in resources:
-        sections.append(_generic_section("identity", resources["identity"]))
+        sections.append(_identity_section(resources["identity"]))
         handled.add("identity")
     if "person" in resources:
         sections.append(_person_section(resources["person"]))
