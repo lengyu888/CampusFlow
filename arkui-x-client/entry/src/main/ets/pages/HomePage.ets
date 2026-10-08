@@ -67,7 +67,7 @@ export struct HomePage {
         Row({ space: 12 }) {
           Column({ space: 3 }) {
             Text('校园实时服务').fontSize(14).fontWeight(FontWeight.Bold).fontColor('#171A22')
-            Text('教室 · 电费 · 校园档案').fontSize(11).fontColor('#777E8F')
+            Text('教室 · 电费 · 图书馆 · 校园卡').fontSize(11).fontColor('#777E8F')
           }.alignItems(HorizontalAlign.Start).layoutWeight(1)
           Text('LIVE').fontSize(9).fontWeight(FontWeight.Bold).fontColor('#087D5B')
             .padding({ left: 8, right: 8, top: 5, bottom: 5 }).backgroundColor('#E5F7F0').borderRadius(9)

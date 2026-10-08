@@ -97,11 +97,15 @@ export struct ProfilePage {
     this.hduHelpDataError = '';
     try {
       const result: HDUHelpDataResponse = await new CampusFlowApi(this.baseUrl, this.token).hduHelpData();
+      const archiveResources: string[] = ['identity', 'person', 'grades'];
       this.hduHelp = result.status;
-      this.hduHelpSections = result.sections;
-      this.hduHelpPrompts = result.suggested_prompts;
-      this.hduHelpSyncErrors = Object.keys(result.sync_errors).map((resource: string) =>
-        `${this.hduHelpResourceName(resource)}：${result.sync_errors[resource]}`);
+      this.hduHelpSections = result.sections.filter((section: HDUHelpDisplaySection) =>
+        archiveResources.includes(section.resource));
+      this.hduHelpPrompts = result.suggested_prompts.filter((suggestion: HDUHelpSuggestedPrompt) =>
+        suggestion.resource !== null && archiveResources.includes(suggestion.resource));
+      this.hduHelpSyncErrors = Object.keys(result.sync_errors)
+        .filter((resource: string) => archiveResources.includes(resource))
+        .map((resource: string) => `${this.hduHelpResourceName(resource)}：${result.sync_errors[resource]}`);
     } catch (error) {
       this.hduHelpDataError = `校园档案加载失败：${error}`;
     } finally {

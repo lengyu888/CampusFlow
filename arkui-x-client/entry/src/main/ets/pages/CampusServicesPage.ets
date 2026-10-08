@@ -136,7 +136,7 @@ export struct CampusServicesPage {
       this.campusSections = result.sections;
       this.campusPrompts = result.suggested_prompts;
     } catch (error) {
-      this.campusInfoError = `校园档案加载失败：${error}`;
+      this.campusInfoError = `校园生活数据加载失败：${error}`;
       this.campusSections = [];
       this.campusPrompts = [];
     } finally {
@@ -163,7 +163,7 @@ export struct CampusServicesPage {
     Button(label)
       .layoutWeight(1)
       .height(40)
-      .fontSize(13)
+      .fontSize(10)
       .fontWeight(this.activeService === index ? FontWeight.Bold : FontWeight.Medium)
       .fontColor(this.activeService === index ? '#FFFFFF' : '#596174')
       .backgroundColor(this.activeService === index ? '#171A22' : Color.Transparent)
@@ -370,20 +370,80 @@ export struct CampusServicesPage {
     }
   }
 
+  private librarySections(): HDUHelpDisplaySection[] {
+    return this.campusSections.filter((section: HDUHelpDisplaySection) =>
+      section.resource.startsWith('library_'));
+  }
+
+  private campusCardSections(): HDUHelpDisplaySection[] {
+    return this.campusSections.filter((section: HDUHelpDisplaySection) =>
+      section.resource === 'card_balance');
+  }
+
+  private otherLiveSections(): HDUHelpDisplaySection[] {
+    const archived: string[] = ['identity', 'person', 'grades', 'card_balance'];
+    return this.campusSections.filter((section: HDUHelpDisplaySection) =>
+      !archived.includes(section.resource) && !section.resource.startsWith('library_'));
+  }
+
+  private libraryPrompts(): HDUHelpSuggestedPrompt[] {
+    return this.campusPrompts.filter((suggestion: HDUHelpSuggestedPrompt) =>
+      suggestion.resource !== null && suggestion.resource.startsWith('library_'));
+  }
+
+  private campusLifePrompts(): HDUHelpSuggestedPrompt[] {
+    return this.campusPrompts.filter((suggestion: HDUHelpSuggestedPrompt) =>
+      suggestion.resource !== 'identity' && suggestion.resource !== 'person' && suggestion.resource !== 'grades' &&
+      (suggestion.resource === null || !suggestion.resource.startsWith('library_')));
+  }
+
   @Builder
-  private campusInfoView() {
+  private liveDataSection(section: HDUHelpDisplaySection) {
+    Column({ space: 11 }) {
+      Row() {
+        Column({ space: 3 }) {
+          Text(section.title).fontSize(17).fontWeight(FontWeight.Bold).fontColor('#171A22')
+          Text(section.summary).fontSize(11).fontColor('#7B8292').maxLines(2)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+        }.alignItems(HorizontalAlign.Start).layoutWeight(1)
+        Text('✓').fontSize(13).fontColor('#19966B').width(28).height(28)
+          .textAlign(TextAlign.Center).backgroundColor('#E8F7F1').borderRadius(10)
+      }.width('100%')
+      ForEach(section.items, (item: HDUHelpDisplayItem) => {
+        this.campusDataItem(item)
+      }, (item: HDUHelpDisplayItem) => `${section.resource}-${item.label}`)
+    }.width('100%').padding(17).backgroundColor('#FFFFFF').borderRadius(22)
+  }
+
+  @Builder
+  private agentPromptBlock(prompts: HDUHelpSuggestedPrompt[], subtitle: string) {
+    if (prompts.length > 0) {
+      Column({ space: 10 }) {
+        Text('继续问 Agent').fontSize(18).fontWeight(FontWeight.Bold).fontColor('#171A22').width('100%')
+        Text(subtitle).fontSize(11).fontColor('#7B8292').width('100%')
+        ForEach(prompts.slice(0, 4), (suggestion: HDUHelpSuggestedPrompt) => {
+          Button(suggestion.title + '  ↗').width('100%').height(44).fontSize(12)
+            .fontColor('#315BFF').backgroundColor('#F2F5FF').borderRadius(14)
+            .onClick(() => this.onOpenAgent(suggestion.prompt))
+        }, (suggestion: HDUHelpSuggestedPrompt) => suggestion.prompt_id)
+      }.width('100%').padding(18).backgroundColor('#FFFFFF').borderRadius(22)
+    }
+  }
+
+  @Builder
+  private libraryView() {
     Column({ space: 14 }) {
       Row() {
         Column({ space: 4 }) {
-          Text('我的校园档案').fontSize(19).fontWeight(FontWeight.Bold).fontColor('#171A22')
-          Text('HDUHelp 同步数据，Agent 可按需调用').fontSize(11).fontColor('#7B8292')
+          Text('我的图书馆').fontSize(19).fontWeight(FontWeight.Bold).fontColor('#171A22')
+          Text('到馆、借阅与座位使用记录').fontSize(11).fontColor('#7B8292')
         }.alignItems(HorizontalAlign.Start).layoutWeight(1)
         Button('刷新').height(34).fontSize(11).fontColor('#315BFF').backgroundColor('#E9EEFF')
           .borderRadius(12).onClick(() => this.loadCampusInfo())
       }.width('100%').padding(18).backgroundColor('#FFFFFF').borderRadius(24)
 
       if (this.campusInfoLoading) {
-        Text('正在整理校园档案…').fontSize(13).fontColor('#7B8292').width('100%')
+        Text('正在同步图书馆数据…').fontSize(13).fontColor('#7B8292').width('100%')
           .padding(20).backgroundColor('#FFFFFF').borderRadius(20)
       } else if (this.campusInfoError.length > 0) {
         Text(this.campusInfoError).fontSize(12).fontColor('#B42318').width('100%')
@@ -391,49 +451,63 @@ export struct CampusServicesPage {
       } else if (!this.campusConfigured) {
         Column({ space: 8 }) {
           Text('尚未连接 HDUHelp').fontSize(18).fontWeight(FontWeight.Bold).fontColor('#171A22')
-          Text('请前往“我的”配置个人令牌，连接后可查看校园卡、图书馆、长跑等信息。')
+          Text('请前往“我的”配置个人令牌，连接后可查看图书馆记录。')
             .fontSize(12).fontColor('#7B8292')
         }.width('100%').alignItems(HorizontalAlign.Start).padding(20)
           .backgroundColor('#FFFFFF').borderRadius(22)
       } else {
-        Row() {
-          Column({ space: 5 }) {
-            Text('已连接的数据').fontSize(11).fontWeight(FontWeight.Bold).fontColor('#315BFF')
-            Text(`${this.campusSections.length} 个信息分区`).fontSize(21).fontWeight(FontWeight.Bold)
-              .fontColor('#171A22')
-          }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-          Text('HDUHelp').fontSize(11).fontWeight(FontWeight.Bold).fontColor('#315BFF')
-            .padding({ left: 10, right: 10, top: 6, bottom: 6 }).backgroundColor('#FFFFFF').borderRadius(10)
-        }.width('100%').padding(18).backgroundColor('#E9EEFF').borderRadius(22)
-
-        ForEach(this.campusSections, (section: HDUHelpDisplaySection) => {
-          Column({ space: 11 }) {
-            Row() {
-              Column({ space: 3 }) {
-                Text(section.title).fontSize(17).fontWeight(FontWeight.Bold).fontColor('#171A22')
-                Text(section.summary).fontSize(11).fontColor('#7B8292').maxLines(2)
-                  .textOverflow({ overflow: TextOverflow.Ellipsis })
-              }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-              Text('✓').fontSize(13).fontColor('#19966B').width(28).height(28)
-                .textAlign(TextAlign.Center).backgroundColor('#E8F7F1').borderRadius(10)
-            }.width('100%')
-            ForEach(section.items, (item: HDUHelpDisplayItem) => {
-              this.campusDataItem(item)
-            }, (item: HDUHelpDisplayItem) => `${section.resource}-${item.label}`)
-          }.width('100%').padding(17).backgroundColor('#FFFFFF').borderRadius(22)
-        }, (section: HDUHelpDisplaySection) => section.resource)
-
-        if (this.campusPrompts.length > 0) {
-          Column({ space: 10 }) {
-            Text('继续问 Agent').fontSize(18).fontWeight(FontWeight.Bold).fontColor('#171A22').width('100%')
-            Text('直接基于校园档案完成查询和规划').fontSize(11).fontColor('#7B8292').width('100%')
-            ForEach(this.campusPrompts.slice(0, 4), (suggestion: HDUHelpSuggestedPrompt) => {
-              Button(suggestion.title + '  ↗').width('100%').height(44).fontSize(12)
-                .fontColor('#315BFF').backgroundColor('#F2F5FF').borderRadius(14)
-                .onClick(() => this.onOpenAgent(suggestion.prompt))
-            }, (suggestion: HDUHelpSuggestedPrompt) => suggestion.prompt_id)
-          }.width('100%').padding(18).backgroundColor('#FFFFFF').borderRadius(22)
+        if (this.librarySections().length === 0) {
+          Text('当前没有可展示的图书馆数据').fontSize(12).fontColor('#7B8292').width('100%')
+            .padding(20).backgroundColor('#FFFFFF').borderRadius(20)
+        } else {
+          ForEach(this.librarySections(), (section: HDUHelpDisplaySection) => {
+            this.liveDataSection(section)
+          }, (section: HDUHelpDisplaySection) => section.resource)
         }
+        this.agentPromptBlock(this.libraryPrompts(), '结合到馆与借阅记录继续规划')
+      }
+    }.width('100%').alignItems(HorizontalAlign.Start)
+  }
+
+  @Builder
+  private campusCardView() {
+    Column({ space: 14 }) {
+      Row() {
+        Column({ space: 4 }) {
+          Text('校园卡余额').fontSize(19).fontWeight(FontWeight.Bold).fontColor('#171A22')
+          Text('余额与其他校园生活动态').fontSize(11).fontColor('#7B8292')
+        }.alignItems(HorizontalAlign.Start).layoutWeight(1)
+        Button('刷新').height(34).fontSize(11).fontColor('#315BFF').backgroundColor('#E9EEFF')
+          .borderRadius(12).onClick(() => this.loadCampusInfo())
+      }.width('100%').padding(18).backgroundColor('#FFFFFF').borderRadius(24)
+
+      if (this.campusInfoLoading) {
+        Text('正在同步校园卡数据…').fontSize(13).fontColor('#7B8292').width('100%')
+          .padding(20).backgroundColor('#FFFFFF').borderRadius(20)
+      } else if (this.campusInfoError.length > 0) {
+        Text(this.campusInfoError).fontSize(12).fontColor('#B42318').width('100%')
+          .padding(18).backgroundColor('#FFF0F0').borderRadius(18)
+      } else if (!this.campusConfigured) {
+        Text('请先在“我的”连接 HDUHelp，随后即可查询校园卡余额。')
+          .fontSize(12).fontColor('#7B8292').width('100%')
+          .padding(20).backgroundColor('#FFFFFF').borderRadius(20)
+      } else {
+        if (this.campusCardSections().length === 0) {
+          Text('当前没有可展示的校园卡数据').fontSize(12).fontColor('#7B8292').width('100%')
+            .padding(20).backgroundColor('#FFFFFF').borderRadius(20)
+        } else {
+          ForEach(this.campusCardSections(), (section: HDUHelpDisplaySection) => {
+            this.liveDataSection(section)
+          }, (section: HDUHelpDisplaySection) => section.resource)
+        }
+
+        if (this.otherLiveSections().length > 0) {
+          Text('其他校园服务').fontSize(16).fontWeight(FontWeight.Bold).fontColor('#171A22').width('100%')
+          ForEach(this.otherLiveSections(), (section: HDUHelpDisplaySection) => {
+            this.liveDataSection(section)
+          }, (section: HDUHelpDisplaySection) => section.resource)
+        }
+        this.agentPromptBlock(this.campusLifePrompts(), '结合余额、考试与提醒继续规划')
       }
     }.width('100%').alignItems(HorizontalAlign.Start)
   }
@@ -454,8 +528,9 @@ export struct CampusServicesPage {
       Row({ space: 6 }) {
         this.serviceTab(0, '空闲教室')
         this.serviceTab(1, '寝室电费')
-        this.serviceTab(2, '校园档案')
-      }.width('100%').padding({ left: 22, right: 22, top: 4, bottom: 4 })
+        this.serviceTab(2, '图书馆')
+        this.serviceTab(3, '校园卡')
+      }.width('100%').padding({ left: 8, right: 8, top: 4, bottom: 4 })
         .backgroundColor('#E9ECF3').borderRadius(17)
 
       Scroll() {
@@ -464,8 +539,10 @@ export struct CampusServicesPage {
             this.classroomView()
           } else if (this.activeService === 1) {
             this.electricityView()
+          } else if (this.activeService === 2) {
+            this.libraryView()
           } else {
-            this.campusInfoView()
+            this.campusCardView()
           }
         }.width('100%').padding({ left: 18, right: 18, top: 16, bottom: 40 })
       }.layoutWeight(1).width('100%')
