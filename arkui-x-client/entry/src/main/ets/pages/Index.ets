@@ -6,7 +6,7 @@ import { HomePage } from './HomePage';
 import { HistoryPage } from './HistoryPage';
 import { LoginPage } from './LoginPage';
 import { OnboardingPage } from './OnboardingPage';
-import { PlanPage } from './PlanPage';
+import { PlanCenterPage } from './PlanCenterPage';
 import { ProfilePage } from './ProfilePage';
 import { RoutePage } from './RoutePage';
 import { SkillsPage } from './SkillsPage';
@@ -58,9 +58,11 @@ struct Index {
         onOpenServices: () => this.selectTab(7) })
     } else if (this.activeTab === 1) {
       AgentPage({ baseUrl: this.baseUrl, token: this.token, initialPrompt: this.agentPrompt,
-        onOpenHistory: () => this.selectTab(5), onOpenRoute: () => this.selectTab(6) })
+        onOpenHistory: () => this.selectTab(5), onOpenRoute: () => this.selectTab(6),
+        onOpenPlan: () => this.selectTab(2) })
     } else if (this.activeTab === 2) {
-      PlanPage({ baseUrl: this.baseUrl, token: this.token })
+      PlanCenterPage({ baseUrl: this.baseUrl, token: this.token,
+        onOpenAgent: (prompt) => this.openAgentWithPrompt(prompt) })
     } else if (this.activeTab === 3) {
       SkillsPage({ baseUrl: this.baseUrl, token: this.token })
     } else if (this.activeTab === 4) {

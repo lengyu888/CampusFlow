@@ -64,7 +64,30 @@ npm run build:hap
 如果 DevEco Studio 报 `Unable to find 'arkui-x.dir'`，先确认
 `local.properties` 中存在 `arkui-x.dir=C:/Users/<用户名>/AppData/Local/ArkUI-X/Sdk`，并把
 `ARKUIX_SDK_HOME` 设置为同一 SDK 根目录。修改 Windows 用户环境变量后必须完整退出并重开
-DevEco Studio；已经运行的 IDE 进程不会自动读取新变量。
+DevEco Studio；已经运行的 IDE 进程不会自动读取新变量。项目提供一键修复命令，它会验证
+SDK、重建 `local.properties`、持久化环境变量，并停止持有旧环境的 Hvigor daemon：
+
+```powershell
+npm run fix:deveco
+```
+
+也可以在 DevEco Studio 的 `文件 > 设置 > ArkUI-X` 页面点击安装路径右侧的“编辑”，选择
+ArkUI-X SDK 根目录。该目录应直接包含版本子目录，例如：
+
+```text
+C:\Users\<用户名>\AppData\Local\ArkUI-X\Sdk\24\arkui-x\sdkConfig.json
+```
+
+页面中应选择到 `...\ArkUI-X\Sdk`，不要选择到 `24` 或 `arkui-x`。脚本会依次从命令行参数、
+当前进程环境变量、Windows 用户环境变量、`local.properties`、DevEco 页面配置和默认目录中
+自动发现 SDK。路径位于其他磁盘时可显式指定：
+
+```powershell
+npm run fix:deveco -- -SdkPath "D:\Huawei\ArkUI-X\Sdk"
+```
+
+如果 IDE 仍在运行，先保存工作并从“文件 > 退出”完全关闭（任务管理器中不再有
+`devecostudio64.exe`），再重新打开项目。不要直接复用报错前启动的 Hvigor daemon。
 
 Phone 模拟器访问电脑端 `127.0.0.1:8000` 前，需要建立一次反向端口映射（模拟器重启后重做）：
 

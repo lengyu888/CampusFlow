@@ -1,4 +1,4 @@
-import { ChatMessage, PendingAction } from '../model/ApiModels';
+import { ChatMessage, PendingAction, PendingMilestonePreview } from '../model/ApiModels';
 import { CampusFlowApi } from '../services/CampusFlowApi';
 import { plainMessage } from '../utils/MessageText';
 
@@ -9,6 +9,7 @@ export struct AgentPage {
   @Prop initialPrompt: string = '';
   onOpenHistory: () => void = () => {};
   onOpenRoute: () => void = () => {};
+  onOpenPlan: () => void = () => {};
   @State private prompt: string = '';
   @State private model: string = 'deepseek-v4-pro';
   @State private messages: ChatMessage[] = [
@@ -16,6 +17,7 @@ export struct AgentPage {
   ];
   @State private pendingActions: PendingAction[] = [];
   @State private loading: boolean = false;
+  @State private decisionId: string = '';
   private sessionId: string = `arkuix-${Date.now()}`;
 
   aboutToAppear(): void {
@@ -44,13 +46,49 @@ export struct AgentPage {
   }
 
   private async confirm(action: PendingAction): Promise<void> {
+    this.decisionId = action.proposal_id;
     try {
       const result = await new CampusFlowApi(this.baseUrl, this.token).confirmAction(action.proposal_id);
       this.messages = this.messages.concat([{ role: 'assistant', content: result.message }]);
       this.pendingActions = this.pendingActions.filter((item) => item.proposal_id !== action.proposal_id);
+      this.onOpenPlan();
     } catch (error) {
       this.messages = this.messages.concat([{ role: 'assistant', content: `确认失败：${error}` }]);
+    } finally {
+      this.decisionId = '';
     }
+  }
+
+  private async cancel(action: PendingAction): Promise<void> {
+    this.decisionId = action.proposal_id;
+    try {
+      const result = await new CampusFlowApi(this.baseUrl, this.token).cancelAction(action.proposal_id);
+      this.messages = this.messages.concat([{ role: 'assistant', content: result.message }]);
+      this.pendingActions = this.pendingActions.filter((item) => item.proposal_id !== action.proposal_id);
+    } catch (error) {
+      this.messages = this.messages.concat([{ role: 'assistant', content: `操作失败：${error}` }]);
+    } finally {
+      this.decisionId = '';
+    }
+  }
+
+  private proposalTaskCount(action: PendingAction): number {
+    const milestones = action.payload.milestones ?? [];
+    let count = 0;
+    milestones.forEach((milestone: PendingMilestonePreview) => count += milestone.tasks.length);
+    return count;
+  }
+
+  private proposalMeta(action: PendingAction): string {
+    if (action.kind === 'plan') {
+      const milestoneCount = (action.payload.milestones ?? []).length;
+      const target = action.payload.target_date ?? '未设截止日';
+      return `${milestoneCount} 个里程碑 · ${this.proposalTaskCount(action)} 项任务 · ${target}`;
+    }
+    if (action.start_at !== null) {
+      return `执行时间 ${action.start_at.substring(0, 16).replace('T', ' ')}`;
+    }
+    return '未设置执行时间';
   }
 
   build() {
@@ -95,13 +133,38 @@ export struct AgentPage {
 
           ForEach(this.pendingActions, (action: PendingAction) => {
             Column({ space: 10 }) {
-              Text('等待确认').fontSize(11).fontColor('#FF6B4A').width('100%')
+              Row() {
+                Text(action.kind === 'plan' ? '计划提案' : '待办提案')
+                  .fontSize(11).fontWeight(FontWeight.Bold).fontColor('#FF6B4A')
+                Blank()
+                Text('确认后才会写入').fontSize(10).fontColor('#8B91A0')
+              }.width('100%')
               Text(action.title).fontSize(16).fontWeight(FontWeight.Bold).fontColor('#171A22').width('100%')
+              Text(this.proposalMeta(action)).fontSize(11).fontColor('#626A7A').width('100%')
+              if ((action.payload.summary ?? '').length > 0) {
+                Text(action.payload.summary ?? '').fontSize(12).lineHeight(18).fontColor('#4D5360').width('100%')
+              }
+              if (action.kind === 'plan') {
+                ForEach((action.payload.milestones ?? []).slice(0, 3), (milestone: PendingMilestonePreview) => {
+                  Row({ space: 8 }) {
+                    Text('○').fontSize(13).fontColor('#315BFF')
+                    Text(milestone.title).fontSize(12).fontWeight(FontWeight.Medium).fontColor('#272B34')
+                      .layoutWeight(1)
+                    Text(`${milestone.tasks.length} 项`).fontSize(10).fontColor('#8B91A0')
+                  }.width('100%').padding({ top: 7, bottom: 7, left: 10, right: 10 })
+                    .backgroundColor('#FFFFFF').borderRadius(10)
+                }, (milestone: PendingMilestonePreview) => milestone.title)
+              }
               if (action.conflicts.length > 0) {
                 Text(`检测到冲突：${action.conflicts.join('；')}`).fontSize(12).fontColor('#D33D3D').width('100%')
               }
-              Button('确认执行').height(40).fontColor('#FFFFFF').backgroundColor('#315BFF').borderRadius(12)
-                .onClick(() => this.confirm(action))
+              Row({ space: 9 }) {
+                Button('暂不执行').height(40).fontColor('#5F6675').backgroundColor('#FFFFFF').borderRadius(12)
+                  .layoutWeight(1).enabled(this.decisionId.length === 0).onClick(() => this.cancel(action))
+                Button(this.decisionId === action.proposal_id ? '处理中…' : '确认执行')
+                  .height(40).fontColor('#FFFFFF').backgroundColor('#315BFF').borderRadius(12)
+                  .layoutWeight(1).enabled(this.decisionId.length === 0).onClick(() => this.confirm(action))
+              }.width('100%')
             }.width('100%').padding(16).backgroundColor('#FFF4EE').borderRadius(20)
           }, (action: PendingAction) => action.proposal_id)
 

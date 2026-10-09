@@ -149,6 +149,11 @@ export class CampusFlowApi {
       http.RequestMethod.POST, '{}');
   }
 
+  async cancelAction(proposalId: string): Promise<ConfirmActionResponse> {
+    return this.request<ConfirmActionResponse>(`/api/v1/actions/${encodeURIComponent(proposalId)}/cancel`,
+      http.RequestMethod.POST, '{}');
+  }
+
   async campusRoute(origin: string, destination: string): Promise<CampusRoute> {
     return this.request<CampusRoute>(
       `/api/v1/campus-data/route?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}`,
@@ -189,6 +194,11 @@ export class CampusFlowApi {
   async updateTask(taskId: string, completed: boolean): Promise<PlanningTask> {
     return this.request<PlanningTask>(`/api/v1/tasks/${encodeURIComponent(taskId)}`, PATCH_METHOD,
       JSON.stringify({ completed: completed }));
+  }
+
+  async deleteTask(taskId: string): Promise<void> {
+    await this.request<void>(`/api/v1/tasks/${encodeURIComponent(taskId)}`,
+      http.RequestMethod.DELETE, '{}');
   }
 
   async skills(): Promise<SkillSummary[]> {

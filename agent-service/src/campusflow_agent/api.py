@@ -1082,4 +1082,21 @@ def create_app(
             ),
         )
 
+    @app.post(
+        "/api/v1/actions/{proposal_id}/cancel",
+        response_model=ConfirmActionResponse,
+    )
+    async def cancel_action(proposal_id: str, user: CurrentUser) -> ConfirmActionResponse:
+        try:
+            action = store.cancel_proposal(proposal_id, user.user_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="Proposal not found") from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail="Proposal already resolved") from exc
+        return ConfirmActionResponse(
+            action=action,
+            applied=False,
+            message="已暂不执行，本次提案没有写入规划。",
+        )
+
     return app

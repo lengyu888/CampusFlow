@@ -44,12 +44,37 @@ export interface UserContextResponse {
   campus_map: CampusMapSummary;
 }
 
+export interface PendingTaskPreview {
+  title: string;
+  start_at: string | null;
+  end_at: string | null;
+  reminder_minutes: number | null;
+  location: string | null;
+}
+
+export interface PendingMilestonePreview {
+  title: string;
+  due_at: string | null;
+  tasks: PendingTaskPreview[];
+}
+
+export interface PendingActionPayload {
+  summary?: string;
+  target_date?: string | null;
+  location?: string | null;
+  milestones?: PendingMilestonePreview[];
+}
+
 export interface PendingAction {
   proposal_id: string;
   action: string;
   kind: string;
   title: string;
+  start_at: string | null;
+  end_at: string | null;
+  reminder_minutes: number | null;
   reason: string | null;
+  payload: PendingActionPayload;
   conflicts: string[];
   status: string;
 }
@@ -128,6 +153,8 @@ export interface CampusRoute {
 
 export interface PlanningTask {
   task_id: string;
+  plan_id: string | null;
+  milestone_id: string | null;
   title: string;
   start_at: string | null;
   end_at: string | null;
@@ -135,9 +162,33 @@ export interface PlanningTask {
   location: string | null;
   status: string;
   source: string;
+  created_at: string;
+  completed_at: string | null;
+}
+
+export interface PlanMilestone {
+  milestone_id: string;
+  title: string;
+  due_at: string | null;
+  task_count: number;
+  completed_count: number;
+}
+
+export interface PlanSummary {
+  plan_id: string;
+  title: string;
+  summary: string;
+  target_date: string | null;
+  status: string;
+  progress: number;
+  task_count: number;
+  completed_count: number;
+  milestones: PlanMilestone[];
+  created_at: string;
 }
 
 export interface PlanningOverview {
+  plans: PlanSummary[];
   tasks: PlanningTask[];
   total_tasks: number;
   completed_tasks: number;

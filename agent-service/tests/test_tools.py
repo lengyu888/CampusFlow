@@ -161,6 +161,30 @@ def test_proposal_cannot_be_confirmed_by_another_user() -> None:
         raise AssertionError("a proposal must only be confirmed by its owner")
 
 
+def test_cancelled_proposal_cannot_be_applied() -> None:
+    store = CampusStore()
+    proposal = store.create_proposal(
+        user_id="student-001",
+        action="create",
+        title="不再执行的复习任务",
+        start_at=None,
+        end_at=None,
+        reminder_minutes=None,
+        reason=None,
+    )
+
+    cancelled = store.cancel_proposal(proposal.proposal_id, "student-001")
+
+    assert cancelled.status == "cancelled"
+    assert store.planning_overview("student-001").total_tasks == 0
+    try:
+        store.confirm_proposal(proposal.proposal_id, "student-001")
+    except ValueError as exc:
+        assert str(exc) == "proposal_already_resolved"
+    else:
+        raise AssertionError("a cancelled proposal must not be applied")
+
+
 def test_plan_proposal_creates_milestones_tasks_and_reports_conflict() -> None:
     store = CampusStore()
     store.set_user_context(

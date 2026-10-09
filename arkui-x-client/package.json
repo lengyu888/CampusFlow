@@ -3,6 +3,7 @@
   "private": true,
   "scripts": {
     "check": "node scripts/static-check.mjs",
-    "build:hap": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-hap.ps1"
+    "build:hap": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-hap.ps1",
+    "fix:deveco": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/prepare-deveco.ps1"
   }
 }

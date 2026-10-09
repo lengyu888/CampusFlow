@@ -521,6 +521,16 @@ class CampusStore:
                 )
             return confirmed
 
+    def cancel_proposal(self, proposal_id: str, user_id: str) -> PendingAction:
+        proposal = self.get_proposal(proposal_id, user_id)
+        if proposal is None:
+            raise KeyError("proposal_not_found")
+        if proposal.status != "pending":
+            raise ValueError("proposal_already_resolved")
+        cancelled = proposal.model_copy(update={"status": "cancelled"})
+        self._replace_proposal(cancelled, user_id)
+        return cancelled
+
     def get_proposal(self, proposal_id: str, user_id: str | None = None) -> PendingAction | None:
         if self._connection is not None:
             sql = "SELECT payload_json FROM action_proposals WHERE proposal_id = ?"

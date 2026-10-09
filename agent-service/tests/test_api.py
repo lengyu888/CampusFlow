@@ -241,6 +241,13 @@ async def test_unknown_proposal_returns_404(client: AsyncClient) -> None:
     assert response.status_code == 404
 
 
+async def test_unknown_proposal_cancel_returns_404(client: AsyncClient) -> None:
+    await register(client)
+    await complete_onboarding(client)
+    response = await client.post("/api/v1/actions/not-found/cancel")
+    assert response.status_code == 404
+
+
 async def test_planning_task_lifecycle_and_course_conflict(client: AsyncClient) -> None:
     await register(client)
     await complete_onboarding(client)
