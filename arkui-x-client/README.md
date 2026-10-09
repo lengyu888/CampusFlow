@@ -36,7 +36,7 @@ arkui-x-client/
 1. 安装 DevEco Studio 6.1.1 Release，并配置 ArkUI-X SDK 6.1.1 / API 24。
 2. 在 DevEco Studio 中打开本目录，等待 Hvigor 同步。
 3. Android、iOS 宿主工程已由官方 ACE Tools 生成并纳入版本管理；修改模块或平台配置后再运行 `ace modify --project` 同步。
-4. 先启动仓库中的 FastAPI 服务，再运行 `entry`。
+4. 先按仓库根目录 README 启动 FastAPI 服务，再运行 `entry`。
 
 登录页可直接修改服务地址：
 
@@ -94,6 +94,10 @@ Phone 模拟器访问电脑端 `127.0.0.1:8000` 前，需要建立一次反向�
 ```powershell
 hdc rport tcp:8000 tcp:8000
 ```
+
+随后在 DevEco Studio 顶部选择 `entry` 和已启动的 Phone 模拟器，点击运行；登录页服务地址
+填写 `http://127.0.0.1:8000`。如果构建成功但列表中没有设备，请先在设备管理器下载对应系统
+镜像并启动模拟器，等设备状态变为在线后再回到运行配置。
 
 调试 HAP 输出到 `entry/build/default/outputs/default/`。未配置签名证书时会生成 `entry-default-unsigned.hap`，可以完成编译验收，但真机安装前仍需在 DevEco Studio 中配置自动签名。
 

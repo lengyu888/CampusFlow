@@ -1,6 +1,20 @@
 # CampusFlow Agent Service
 
-运行和测试说明见仓库根目录的 `README.md`。服务启动后访问：
+## 启动
+
+在本目录执行：
+
+```powershell
+py -3.11 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -U pip
+python -m pip install -e ".[dev]"
+Copy-Item .env.example .env
+python -m uvicorn campusflow_agent.main:app --host 0.0.0.0 --port 8000
+```
+
+后续启动只需激活 `.venv` 并执行最后一行。详细环境变量、客户端联调和测试说明见仓库根目录
+的 `README.md`。服务启动后访问：
 
 - 健康检查：`GET /health`
 - 注册/登录：`POST /api/v1/auth/register`、`POST /api/v1/auth/login`
@@ -38,6 +52,7 @@
 - 快速待办：`POST /api/v1/tasks`
 - 完成/恢复待办：`PATCH /api/v1/tasks/{task_id}`
 - 删除待办：`DELETE /api/v1/tasks/{task_id}`
+- 删除计划卡片并保留其待办：`DELETE /api/v1/plans/{plan_id}`
 - 确认事务：`POST /api/v1/actions/{proposal_id}/confirm`
 
 ## HDUHelp Connect
