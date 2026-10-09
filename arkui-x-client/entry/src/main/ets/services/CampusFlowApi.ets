@@ -35,6 +35,11 @@ interface SettingsPayload {
   api_key?: string;
 }
 
+interface TaskCreatePayload {
+  title: string;
+  start_at: string | null;
+}
+
 interface RequestHeaders {
   'Accept': string;
   'Content-Type': string;
@@ -187,8 +192,9 @@ export class CampusFlowApi {
     return this.request<PlanningOverview>('/api/v1/planning', http.RequestMethod.GET);
   }
 
-  async createTask(title: string): Promise<PlanningTask> {
-    return this.request<PlanningTask>('/api/v1/tasks', http.RequestMethod.POST, JSON.stringify({ title: title }));
+  async createTask(title: string, startAt: string | null = null): Promise<PlanningTask> {
+    const payload: TaskCreatePayload = { title: title, start_at: startAt };
+    return this.request<PlanningTask>('/api/v1/tasks', http.RequestMethod.POST, JSON.stringify(payload));
   }
 
   async updateTask(taskId: string, completed: boolean): Promise<PlanningTask> {
@@ -198,6 +204,11 @@ export class CampusFlowApi {
 
   async deleteTask(taskId: string): Promise<void> {
     await this.request<void>(`/api/v1/tasks/${encodeURIComponent(taskId)}`,
+      http.RequestMethod.DELETE, '{}');
+  }
+
+  async deletePlan(planId: string): Promise<void> {
+    await this.request<void>(`/api/v1/plans/${encodeURIComponent(planId)}`,
       http.RequestMethod.DELETE, '{}');
   }
 

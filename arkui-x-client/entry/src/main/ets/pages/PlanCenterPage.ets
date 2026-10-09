@@ -1,8 +1,6 @@
 import {
-  PlanMilestone,
   PlanningOverview,
   PlanningTask,
-  PlanSummary,
   TimetableEntry,
   UserContextResponse
 } from '../model/ApiModels';
@@ -29,11 +27,13 @@ export struct PlanCenterPage {
   @State private timetable: TimetableEntry[] = [];
   @State private calendarMonth: number = new Date(new Date().getFullYear(), new Date().getMonth(), 1).getTime();
   @State private selectedDate: string = '';
+  @State private draftTaskDate: string = '';
   @State private deletePendingId: string = '';
   private taskInputController: TextInputController = new TextInputController();
 
   aboutToAppear(): void {
     this.selectedDate = this.dateKey(new Date());
+    this.draftTaskDate = this.selectedDate;
     this.reload();
     this.loadTimetable();
   }
@@ -58,7 +58,16 @@ export struct PlanCenterPage {
       return '待安排';
     }
     const start = task.start_at.substring(11, 16);
+    if (task.source === 'manual' && task.end_at === null) {
+      return '全天';
+    }
     return task.end_at === null ? start : `${start}–${task.end_at.substring(11, 16)}`;
+  }
+
+  private relativeDate(offset: number): string {
+    const date = new Date();
+    date.setDate(date.getDate() + offset);
+    return this.dateKey(date);
   }
 
   private taskOverdue(task: PlanningTask): boolean {
@@ -66,16 +75,6 @@ export struct PlanCenterPage {
       return false;
     }
     return new Date(task.end_at ?? task.start_at).getTime() < Date.now();
-  }
-
-  private planStatusLabel(plan: PlanSummary): string {
-    if (plan.status === 'completed') {
-      return '已完成';
-    }
-    if (plan.status === 'overdue') {
-      return '已逾期';
-    }
-    return plan.overdue_count > 0 ? `${plan.overdue_count} 项逾期` : '进行中';
   }
 
   private calendarDays(): CalendarDay[] {
@@ -143,7 +142,8 @@ export struct PlanCenterPage {
       return;
     }
     try {
-      await new CampusFlowApi(this.baseUrl, this.token).createTask(this.title.trim());
+      const startAt = this.draftTaskDate.length === 0 ? null : `${this.draftTaskDate}T23:59:00+08:00`;
+      await new CampusFlowApi(this.baseUrl, this.token).createTask(this.title.trim(), startAt);
       this.title = '';
       this.taskInputController.stopEditing();
       await this.reload();
@@ -182,40 +182,6 @@ export struct PlanCenterPage {
 
   private reviewPrompt(): string {
     return '请结合我的近期课程和未完成任务，安排今天晚上的复习计划。先检查时间冲突，给出具体时间段和提醒，等待我确认后再写入。';
-  }
-
-  @Builder
-  private PlanCard(plan: PlanSummary) {
-    Column({ space: 10 }) {
-      Row() {
-        Column({ space: 4 }) {
-          Text(plan.title).fontSize(15).fontWeight(FontWeight.Bold).fontColor('#171A22')
-          Text(plan.target_date === null ? '持续计划' : `目标 ${plan.target_date}`)
-            .fontSize(10).fontColor('#7B8292')
-        }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-        Column({ space: 4 }) {
-          Text(`${plan.progress}%`).fontSize(20).fontWeight(FontWeight.Bold).fontColor('#315BFF')
-          Text(this.planStatusLabel(plan)).fontSize(9)
-            .fontColor(plan.status === 'overdue' || plan.overdue_count > 0 ? '#D94D43' : '#7B8292')
-        }.alignItems(HorizontalAlign.End)
-      }.width('100%')
-      if (plan.summary.length > 0) {
-        Text(plan.summary).fontSize(11).lineHeight(17).fontColor('#626A7A').width('100%')
-      }
-      Row() {
-        Row().height(6).width(`${plan.progress}%`).backgroundColor('#315BFF').borderRadius(3)
-      }.width('100%').height(6).backgroundColor('#E7EBF5').borderRadius(3)
-      ForEach(plan.milestones, (milestone: PlanMilestone) => {
-        Row({ space: 9 }) {
-          Text(milestone.completed_count === milestone.task_count && milestone.task_count > 0 ? '✓' : '○')
-            .fontSize(12).fontColor(milestone.completed_count === milestone.task_count &&
-              milestone.task_count > 0 ? '#21A77A' : '#315BFF')
-          Text(milestone.title).fontSize(12).fontColor('#333844').layoutWeight(1)
-          Text(`${milestone.completed_count}/${milestone.task_count}`).fontSize(10).fontColor('#8B91A0')
-        }.width('100%')
-      }, (milestone: PlanMilestone) =>
-        `${milestone.milestone_id}-${milestone.completed_count}-${milestone.task_count}`)
-    }.width('100%').padding(15).backgroundColor('#FFFFFF').borderRadius(18)
   }
 
   @Builder
@@ -290,20 +256,6 @@ export struct PlanCenterPage {
           }.width('100%')
         }.width('100%').padding(17).backgroundColor('#171A22').borderRadius(22)
 
-        if (this.overview.plans.length > 0) {
-          Column({ space: 11 }) {
-            Row() {
-              Text('计划进展').fontSize(17).fontWeight(FontWeight.Bold).fontColor('#171A22')
-              Blank()
-              Text(`${this.overview.plans.length} 个`).fontSize(11).fontColor('#7B8292')
-            }.width('100%')
-            ForEach(this.overview.plans, (plan: PlanSummary) => {
-              this.PlanCard(plan)
-            }, (plan: PlanSummary) =>
-              `${plan.plan_id}-${plan.status}-${plan.progress}-${plan.completed_count}-${plan.overdue_count}`)
-          }.width('100%')
-        }
-
         Column({ space: 12 }) {
           Row() {
             Button('上月').width(56).height(34).fontSize(10).fontColor('#315BFF')
@@ -377,6 +329,28 @@ export struct PlanCenterPage {
               .backgroundColor('#F4F6FA').borderRadius(14).onChange((value) => this.title = value)
             Button('+').width(46).height(46).fontSize(22).fontColor('#FFFFFF').backgroundColor('#315BFF')
               .borderRadius(14).onClick(() => this.addTask())
+          }.width('100%')
+          Row() {
+            Text('待办日期').fontSize(10).fontColor('#8B91A0')
+            Blank()
+            Text(this.draftTaskDate.length === 0 ? '无日期' : this.draftTaskDate)
+              .fontSize(10).fontWeight(FontWeight.Medium).fontColor('#315BFF')
+          }.width('100%')
+          Row({ space: 6 }) {
+            Button('今天').height(30).fontSize(9).layoutWeight(1)
+              .fontColor(this.draftTaskDate === this.relativeDate(0) ? '#FFFFFF' : '#315BFF')
+              .backgroundColor(this.draftTaskDate === this.relativeDate(0) ? '#315BFF' : '#E9EEFF')
+              .borderRadius(10).onClick(() => this.draftTaskDate = this.relativeDate(0))
+            Button('明天').height(30).fontSize(9).layoutWeight(1)
+              .fontColor(this.draftTaskDate === this.relativeDate(1) ? '#FFFFFF' : '#315BFF')
+              .backgroundColor(this.draftTaskDate === this.relativeDate(1) ? '#315BFF' : '#E9EEFF')
+              .borderRadius(10).onClick(() => this.draftTaskDate = this.relativeDate(1))
+            Button('日历所选').height(30).fontSize(9).layoutWeight(1).fontColor('#315BFF')
+              .backgroundColor('#E9EEFF').borderRadius(10).onClick(() => this.draftTaskDate = this.selectedDate)
+            Button('无日期').height(30).fontSize(9).layoutWeight(1)
+              .fontColor(this.draftTaskDate.length === 0 ? '#FFFFFF' : '#6F7687')
+              .backgroundColor(this.draftTaskDate.length === 0 ? '#315BFF' : '#F0F2F6')
+              .borderRadius(10).onClick(() => this.draftTaskDate = '')
           }.width('100%')
         }.width('100%').padding(16).backgroundColor('#FFFFFF').borderRadius(20)
 

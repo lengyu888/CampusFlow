@@ -877,6 +877,49 @@ class CampusStore:
                 raise KeyError("task_not_found")
             self._tasks[user_id] = remaining
 
+    def delete_plan(self, user_id: str, plan_id: str) -> None:
+        """Remove a plan card while preserving its tasks as standalone todos."""
+        if self._connection is not None:
+            with self._lock, self._connection:
+                existed = self._connection.execute(
+                    "SELECT 1 FROM plans WHERE plan_id = ? AND user_id = ?",
+                    (plan_id, user_id),
+                ).fetchone()
+                if existed is None:
+                    raise KeyError("plan_not_found")
+                self._connection.execute(
+                    """
+                    UPDATE planning_tasks
+                    SET plan_id = NULL, milestone_id = NULL
+                    WHERE plan_id = ? AND user_id = ?
+                    """,
+                    (plan_id, user_id),
+                )
+                self._connection.execute(
+                    "DELETE FROM plan_milestones WHERE plan_id = ? AND user_id = ?",
+                    (plan_id, user_id),
+                )
+                self._connection.execute(
+                    "DELETE FROM plans WHERE plan_id = ? AND user_id = ?",
+                    (plan_id, user_id),
+                )
+            return
+        with self._lock:
+            plans = self._plans.get(user_id, [])
+            remaining_plans = [item for item in plans if item.get("plan_id") != plan_id]
+            if len(remaining_plans) == len(plans):
+                raise KeyError("plan_not_found")
+            self._plans[user_id] = remaining_plans
+            self._milestones[user_id] = [
+                item
+                for item in self._milestones.get(user_id, [])
+                if item.get("plan_id") != plan_id
+            ]
+            for task in self._tasks.get(user_id, []):
+                if task.get("plan_id") == plan_id:
+                    task["plan_id"] = None
+                    task["milestone_id"] = None
+
     def _apply_plan_proposal(self, user_id: str, proposal: PendingAction) -> None:
         milestones = [
             milestone

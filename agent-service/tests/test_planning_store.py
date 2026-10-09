@@ -107,3 +107,39 @@ def test_pending_tasks_stay_before_completed_tasks(tmp_path) -> None:
     tasks = store.list_tasks("user-1")
 
     assert [task.task_id for task in tasks] == [pending.task_id, completed.task_id]
+
+
+def test_delete_plan_preserves_tasks_as_standalone_todos(tmp_path) -> None:
+    store = CampusStore(str(tmp_path / "campusflow.db"))
+    tomorrow = datetime.now(UTC) + timedelta(days=1)
+    proposal = store.create_plan_proposal(
+        user_id="user-1",
+        title="可删除计划卡片",
+        summary="任务需要保留",
+        target_date=tomorrow.date().isoformat(),
+        milestones=[
+            {
+                "title": "里程碑",
+                "due_at": tomorrow.isoformat(),
+                "tasks": [
+                    {
+                        "title": "保留的待办",
+                        "start_at": tomorrow.isoformat(),
+                    }
+                ],
+            }
+        ],
+        reason=None,
+    )
+    store.confirm_proposal(proposal.proposal_id, "user-1")
+    overview = store.planning_overview("user-1")
+    plan_id = overview.plans[0].plan_id
+
+    store.delete_plan("user-1", plan_id)
+
+    updated = store.planning_overview("user-1")
+    assert updated.plans == []
+    assert len(updated.tasks) == 1
+    assert updated.tasks[0].title == "保留的待办"
+    assert updated.tasks[0].plan_id is None
+    assert updated.tasks[0].milestone_id is None

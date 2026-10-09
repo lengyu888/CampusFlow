@@ -1061,6 +1061,14 @@ def create_app(
             raise HTTPException(status_code=404, detail="待办不存在。") from exc
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
+    @app.delete("/api/v1/plans/{plan_id}", status_code=204)
+    async def delete_plan(plan_id: str, user: CurrentUser) -> Response:
+        try:
+            store.delete_plan(user.user_id, plan_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="计划不存在。") from exc
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+
     @app.post(
         "/api/v1/actions/{proposal_id}/confirm",
         response_model=ConfirmActionResponse,

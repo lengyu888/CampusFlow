@@ -54,7 +54,8 @@ struct Index {
   private pageContent() {
     if (this.activeTab === 0) {
       HomePage({ baseUrl: this.baseUrl, token: this.token, user: this.user,
-        onOpenAgent: () => this.selectTab(1), onOpenRoute: () => this.selectTab(6),
+        onOpenAgent: () => this.selectTab(1), onOpenPlan: () => this.selectTab(2),
+        onOpenRoute: () => this.selectTab(6),
         onOpenServices: () => this.selectTab(7) })
     } else if (this.activeTab === 1) {
       AgentPage({ baseUrl: this.baseUrl, token: this.token, initialPrompt: this.agentPrompt,
