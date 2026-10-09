@@ -213,7 +213,8 @@ export struct PlanCenterPage {
           Text(milestone.title).fontSize(12).fontColor('#333844').layoutWeight(1)
           Text(`${milestone.completed_count}/${milestone.task_count}`).fontSize(10).fontColor('#8B91A0')
         }.width('100%')
-      }, (milestone: PlanMilestone) => milestone.milestone_id)
+      }, (milestone: PlanMilestone) =>
+        `${milestone.milestone_id}-${milestone.completed_count}-${milestone.task_count}`)
     }.width('100%').padding(15).backgroundColor('#FFFFFF').borderRadius(18)
   }
 
@@ -255,7 +256,7 @@ export struct PlanCenterPage {
             .backgroundColor(task.status === 'completed' ? '#315BFF' : '#E9EEFF')
             .borderRadius(10).onClick(() => this.toggle(task))
         }.width('100%').padding(10).backgroundColor('#FFFFFF').borderRadius(13)
-      }, (task: PlanningTask) => task.task_id)
+      }, (task: PlanningTask) => `${task.task_id}-${task.status}-${task.completed_at ?? ''}`)
     }.width('100%').padding(13).backgroundColor('#EEF2FF').borderRadius(16)
   }
 
@@ -298,7 +299,8 @@ export struct PlanCenterPage {
             }.width('100%')
             ForEach(this.overview.plans, (plan: PlanSummary) => {
               this.PlanCard(plan)
-            }, (plan: PlanSummary) => plan.plan_id)
+            }, (plan: PlanSummary) =>
+              `${plan.plan_id}-${plan.status}-${plan.progress}-${plan.completed_count}-${plan.overdue_count}`)
           }.width('100%')
         }
 
@@ -340,7 +342,8 @@ export struct PlanCenterPage {
                     .borderRadius(12).onClick(() => this.selectedDate = item.date)
                 }
               }
-            }, (item: CalendarDay) => item.key)
+            }, (item: CalendarDay) =>
+              `${item.key}-${item.courseCount}-${item.taskCount}-${this.selectedDate}`)
           }.columnsTemplate('repeat(7, 1fr)').columnsGap(4).rowsGap(4).width('100%')
             .height(this.calendarDays().length > 35 ? 300 : 250)
           this.DayTimeline()
@@ -402,7 +405,7 @@ export struct PlanCenterPage {
               .backgroundColor(this.deletePendingId === task.task_id ? '#E4564F' : '#FFF0EE')
               .borderRadius(10).onClick(() => this.requestDelete(task))
           }.width('100%').padding(15).backgroundColor('#FFFFFF').borderRadius(18)
-        }, (task: PlanningTask) => task.task_id)
+        }, (task: PlanningTask) => `${task.task_id}-${task.status}-${task.completed_at ?? ''}`)
       }.width('100%').padding({ left: 18, right: 18, top: 18, bottom: 110 })
     }.width('100%').height('100%').backgroundColor('#F5F7FB')
   }
