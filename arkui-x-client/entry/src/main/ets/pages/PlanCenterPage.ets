@@ -28,6 +28,7 @@ export struct PlanCenterPage {
   @State private calendarMonth: number = new Date(new Date().getFullYear(), new Date().getMonth(), 1).getTime();
   @State private selectedDate: string = '';
   @State private draftTaskDate: string = '';
+  @State private draftTaskTime: string = '';
   @State private deletePendingId: string = '';
   private taskInputController: TextInputController = new TextInputController();
 
@@ -59,7 +60,7 @@ export struct PlanCenterPage {
     }
     const start = task.start_at.substring(11, 16);
     if (task.source === 'manual' && task.end_at === null) {
-      return '全天';
+      return start === '23:59' ? '全天' : start;
     }
     return task.end_at === null ? start : `${start}–${task.end_at.substring(11, 16)}`;
   }
@@ -68,6 +69,34 @@ export struct PlanCenterPage {
     const date = new Date();
     date.setDate(date.getDate() + offset);
     return this.dateKey(date);
+  }
+
+  private selectDraftTime(value: string): void {
+    if (this.draftTaskDate.length === 0) {
+      this.draftTaskDate = this.relativeDate(0);
+    }
+    this.draftTaskTime = value;
+  }
+
+  private openTimePicker(): void {
+    const selected = new Date();
+    if (this.draftTaskDate.length > 0) {
+      const dateParts = this.draftTaskDate.split('-');
+      selected.setFullYear(Number(dateParts[0]), Number(dateParts[1]) - 1, Number(dateParts[2]));
+    }
+    if (this.draftTaskTime.length > 0) {
+      const parts = this.draftTaskTime.split(':');
+      selected.setHours(Number(parts[0]), Number(parts[1]), 0, 0);
+    }
+    this.getUIContext().showTimePickerDialog({
+      selected: selected,
+      useMilitaryTime: true,
+      onAccept: (value: TimePickerResult) => {
+        const hour = value.hour === undefined ? selected.getHours() : value.hour;
+        const minute = value.minute === undefined ? selected.getMinutes() : value.minute;
+        this.selectDraftTime(`${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`);
+      }
+    });
   }
 
   private taskOverdue(task: PlanningTask): boolean {
@@ -142,7 +171,8 @@ export struct PlanCenterPage {
       return;
     }
     try {
-      const startAt = this.draftTaskDate.length === 0 ? null : `${this.draftTaskDate}T23:59:00+08:00`;
+      const taskTime = this.draftTaskTime.length === 0 ? '23:59' : this.draftTaskTime;
+      const startAt = this.draftTaskDate.length === 0 ? null : `${this.draftTaskDate}T${taskTime}:00+08:00`;
       await new CampusFlowApi(this.baseUrl, this.token).createTask(this.title.trim(), startAt);
       this.title = '';
       this.taskInputController.stopEditing();
@@ -350,7 +380,34 @@ export struct PlanCenterPage {
             Button('无日期').height(30).fontSize(9).layoutWeight(1)
               .fontColor(this.draftTaskDate.length === 0 ? '#FFFFFF' : '#6F7687')
               .backgroundColor(this.draftTaskDate.length === 0 ? '#315BFF' : '#F0F2F6')
-              .borderRadius(10).onClick(() => this.draftTaskDate = '')
+              .borderRadius(10).onClick(() => {
+                this.draftTaskDate = '';
+                this.draftTaskTime = '';
+              })
+          }.width('100%')
+          Row() {
+            Text('待办时间').fontSize(10).fontColor('#8B91A0')
+            Blank()
+            Text(this.draftTaskTime.length === 0 ? '全天' : this.draftTaskTime)
+              .fontSize(10).fontWeight(FontWeight.Medium).fontColor('#315BFF')
+          }.width('100%')
+          Row({ space: 6 }) {
+            Button('全天').height(30).fontSize(9).layoutWeight(1)
+              .fontColor(this.draftTaskTime.length === 0 ? '#FFFFFF' : '#315BFF')
+              .backgroundColor(this.draftTaskTime.length === 0 ? '#315BFF' : '#E9EEFF')
+              .borderRadius(10).onClick(() => this.draftTaskTime = '')
+            Button('08:00').height(30).fontSize(9).layoutWeight(1)
+              .fontColor(this.draftTaskTime === '08:00' ? '#FFFFFF' : '#315BFF')
+              .backgroundColor(this.draftTaskTime === '08:00' ? '#315BFF' : '#E9EEFF')
+              .borderRadius(10).onClick(() => this.selectDraftTime('08:00'))
+            Button('14:00').height(30).fontSize(9).layoutWeight(1)
+              .fontColor(this.draftTaskTime === '14:00' ? '#FFFFFF' : '#315BFF')
+              .backgroundColor(this.draftTaskTime === '14:00' ? '#315BFF' : '#E9EEFF')
+              .borderRadius(10).onClick(() => this.selectDraftTime('14:00'))
+            Button(this.draftTaskTime.length > 0 && this.draftTaskTime !== '08:00' &&
+              this.draftTaskTime !== '14:00' ? this.draftTaskTime : '自定义')
+              .height(30).fontSize(9).layoutWeight(1).fontColor('#315BFF')
+              .backgroundColor('#E9EEFF').borderRadius(10).onClick(() => this.openTimePicker())
           }.width('100%')
         }.width('100%').padding(16).backgroundColor('#FFFFFF').borderRadius(20)
 

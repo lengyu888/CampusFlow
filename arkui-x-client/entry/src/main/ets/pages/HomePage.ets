@@ -66,7 +66,9 @@ export struct HomePage {
       return '尚未安排日期';
     }
     if (task.source === 'manual' && task.end_at === null) {
-      return task.start_at.substring(0, 10);
+      const time = task.start_at.substring(11, 16);
+      return time === '23:59' ? task.start_at.substring(0, 10) :
+        `${task.start_at.substring(0, 10)} · ${time}`;
     }
     return `${task.start_at.substring(0, 10)} · ${task.start_at.substring(11, 16)}`;
   }
