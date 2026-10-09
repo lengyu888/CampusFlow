@@ -50,7 +50,7 @@ class PlanMilestoneInput(BaseModel):
         description="里程碑截止时间，ISO 8601 格式",
     )
     tasks: list[PlanTaskInput] = Field(
-        default_factory=list,
+        min_length=1,
         description="该里程碑下的待办列表",
     )
 

@@ -354,7 +354,7 @@ class CampusStore:
                     )
                 )
             milestone_title = str(milestone.get("title", "")).strip()[:120]
-            if milestone_title:
+            if milestone_title and tasks:
                 normalized_milestones.append(
                     {
                         "title": milestone_title,
@@ -362,6 +362,9 @@ class CampusStore:
                         "tasks": tasks,
                     }
                 )
+        if not normalized_milestones:
+            raise ValueError("计划至少需要一个包含具体任务的里程碑。")
+
         proposal = self.create_proposal(
             user_id=user_id,
             action="create",
@@ -809,13 +812,21 @@ class CampusStore:
                            reminder_minutes, location, status, source, created_at, completed_at
                     FROM planning_tasks
                     WHERE user_id = ?
-                    ORDER BY status ASC, COALESCE(start_at, created_at) ASC
+                    ORDER BY CASE WHEN status = 'pending' THEN 0 ELSE 1 END,
+                             COALESCE(start_at, created_at) ASC
                     """,
                     (user_id,),
                 ).fetchall()
             return [PlanningTask(**dict(row)) for row in rows]
         with self._lock:
-            return [PlanningTask.model_validate(item) for item in self._tasks.get(user_id, [])]
+            tasks = [PlanningTask.model_validate(item) for item in self._tasks.get(user_id, [])]
+            return sorted(
+                tasks,
+                key=lambda task: (
+                    task.status == "completed",
+                    task.start_at or task.created_at,
+                ),
+            )
 
     def update_task_status(self, user_id: str, task_id: str, completed: bool) -> PlanningTask:
         status = "completed" if completed else "pending"
@@ -867,6 +878,13 @@ class CampusStore:
             self._tasks[user_id] = remaining
 
     def _apply_plan_proposal(self, user_id: str, proposal: PendingAction) -> None:
+        milestones = [
+            milestone
+            for milestone in proposal.payload.get("milestones", [])
+            if milestone.get("tasks")
+        ]
+        if not milestones:
+            raise ValueError("plan_has_no_tasks")
         plan_id = uuid4().hex
         now = datetime.now(UTC)
         target_date = proposal.payload.get("target_date") or None
@@ -894,7 +912,7 @@ class CampusStore:
                         "created_at": now.isoformat(),
                     }
                 )
-        for order, milestone in enumerate(proposal.payload.get("milestones", [])):
+        for order, milestone in enumerate(milestones):
             milestone_id = uuid4().hex
             milestone_record = {
                 "milestone_id": milestone_id,
@@ -955,9 +973,22 @@ class CampusStore:
                 plans_raw = list(self._plans.get(user_id, []))
                 milestones_raw = list(self._milestones.get(user_id, []))
         plans: list[PlanSummary] = []
+        now_local = self._campus_local(datetime.now(UTC))
+        today = now_local.date()
         for plan in plans_raw:
             plan_tasks = [task for task in tasks if task.plan_id == plan["plan_id"]]
+            if not plan_tasks:
+                # Older versions could persist a plan containing milestones but
+                # no executable tasks. Keep the record for audit purposes but do
+                # not surface an unusable 0/0 plan in the execution center.
+                continue
             completed = sum(task.status == "completed" for task in plan_tasks)
+            overdue = sum(
+                task.status == "pending"
+                and task.start_at is not None
+                and self._campus_local(task.end_at or task.start_at) < now_local
+                for task in plan_tasks
+            )
             milestone_models = []
             for milestone in milestones_raw:
                 if milestone["plan_id"] != plan["plan_id"]:
@@ -965,6 +996,8 @@ class CampusStore:
                 milestone_tasks = [
                     task for task in plan_tasks if task.milestone_id == milestone["milestone_id"]
                 ]
+                if not milestone_tasks:
+                    continue
                 milestone_models.append(
                     PlanMilestone(
                         milestone_id=milestone["milestone_id"],
@@ -976,26 +1009,46 @@ class CampusStore:
                 )
             count = len(plan_tasks)
             progress = round(completed * 100 / count) if count else 0
+            target_date = plan.get("target_date")
+            target_day = None
+            if target_date:
+                try:
+                    target_day = date.fromisoformat(str(target_date))
+                except ValueError:
+                    # Preserve legacy plans with malformed dates instead of
+                    # making the whole planning overview unavailable.
+                    target_day = None
+            plan_status = "active"
+            if completed == count:
+                plan_status = "completed"
+            elif target_day is not None and target_day < today:
+                plan_status = "overdue"
             plans.append(
                 PlanSummary(
                     plan_id=plan["plan_id"],
                     title=plan["title"],
                     summary=plan.get("summary", ""),
-                    target_date=plan.get("target_date"),
-                    status="completed" if count and completed == count else "active",
+                    target_date=target_date,
+                    status=plan_status,
                     progress=progress,
                     task_count=count,
                     completed_count=completed,
+                    overdue_count=overdue,
                     milestones=milestone_models,
                     created_at=plan["created_at"],
                 )
             )
         completed_tasks = sum(task.status == "completed" for task in tasks)
-        today = date.today()
         due_today = sum(
             task.status == "pending"
             and task.start_at is not None
             and self._campus_local(task.start_at).date() == today
+            for task in tasks
+        )
+        overdue_tasks = sum(
+            task.status == "pending"
+            and task.start_at is not None
+            and self._campus_local(task.end_at or task.start_at) < now_local
             for task in tasks
         )
         return PlanningOverview(
@@ -1004,6 +1057,7 @@ class CampusStore:
             total_tasks=len(tasks),
             completed_tasks=completed_tasks,
             due_today=due_today,
+            overdue_tasks=overdue_tasks,
             progress=round(completed_tasks * 100 / len(tasks)) if tasks else 0,
         )
 

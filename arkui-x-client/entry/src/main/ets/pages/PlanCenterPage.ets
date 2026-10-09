@@ -22,7 +22,7 @@ export struct PlanCenterPage {
   @Prop token: string;
   onOpenAgent: (prompt: string) => void = () => {};
   @State private overview: PlanningOverview = {
-    plans: [], tasks: [], total_tasks: 0, completed_tasks: 0, due_today: 0, progress: 0
+    plans: [], tasks: [], total_tasks: 0, completed_tasks: 0, due_today: 0, overdue_tasks: 0, progress: 0
   };
   @State private title: string = '';
   @State private errorText: string = '';
@@ -30,6 +30,7 @@ export struct PlanCenterPage {
   @State private calendarMonth: number = new Date(new Date().getFullYear(), new Date().getMonth(), 1).getTime();
   @State private selectedDate: string = '';
   @State private deletePendingId: string = '';
+  private taskInputController: TextInputController = new TextInputController();
 
   aboutToAppear(): void {
     this.selectedDate = this.dateKey(new Date());
@@ -58,6 +59,23 @@ export struct PlanCenterPage {
     }
     const start = task.start_at.substring(11, 16);
     return task.end_at === null ? start : `${start}–${task.end_at.substring(11, 16)}`;
+  }
+
+  private taskOverdue(task: PlanningTask): boolean {
+    if (task.status === 'completed' || task.start_at === null) {
+      return false;
+    }
+    return new Date(task.end_at ?? task.start_at).getTime() < Date.now();
+  }
+
+  private planStatusLabel(plan: PlanSummary): string {
+    if (plan.status === 'completed') {
+      return '已完成';
+    }
+    if (plan.status === 'overdue') {
+      return '已逾期';
+    }
+    return plan.overdue_count > 0 ? `${plan.overdue_count} 项逾期` : '进行中';
   }
 
   private calendarDays(): CalendarDay[] {
@@ -127,6 +145,7 @@ export struct PlanCenterPage {
     try {
       await new CampusFlowApi(this.baseUrl, this.token).createTask(this.title.trim());
       this.title = '';
+      this.taskInputController.stopEditing();
       await this.reload();
     } catch (error) {
       this.errorText = `创建失败：${error}`;
@@ -174,7 +193,11 @@ export struct PlanCenterPage {
           Text(plan.target_date === null ? '持续计划' : `目标 ${plan.target_date}`)
             .fontSize(10).fontColor('#7B8292')
         }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-        Text(`${plan.progress}%`).fontSize(20).fontWeight(FontWeight.Bold).fontColor('#315BFF')
+        Column({ space: 4 }) {
+          Text(`${plan.progress}%`).fontSize(20).fontWeight(FontWeight.Bold).fontColor('#315BFF')
+          Text(this.planStatusLabel(plan)).fontSize(9)
+            .fontColor(plan.status === 'overdue' || plan.overdue_count > 0 ? '#D94D43' : '#7B8292')
+        }.alignItems(HorizontalAlign.End)
       }.width('100%')
       if (plan.summary.length > 0) {
         Text(plan.summary).fontSize(11).lineHeight(17).fontColor('#626A7A').width('100%')
@@ -269,7 +292,7 @@ export struct PlanCenterPage {
         if (this.overview.plans.length > 0) {
           Column({ space: 11 }) {
             Row() {
-              Text('进行中的计划').fontSize(17).fontWeight(FontWeight.Bold).fontColor('#171A22')
+              Text('计划进展').fontSize(17).fontWeight(FontWeight.Bold).fontColor('#171A22')
               Blank()
               Text(`${this.overview.plans.length} 个`).fontSize(11).fontColor('#7B8292')
             }.width('100%')
@@ -281,12 +304,12 @@ export struct PlanCenterPage {
 
         Column({ space: 12 }) {
           Row() {
-            Button('‹').width(34).height(34).fontSize(22).fontColor('#315BFF')
+            Button('上月').width(56).height(34).fontSize(10).fontColor('#315BFF')
               .backgroundColor('#E9EEFF').borderRadius(12).onClick(() => this.moveMonth(-1))
             Blank()
             Text(this.monthLabel()).fontSize(18).fontWeight(FontWeight.Bold).fontColor('#171A22')
             Blank()
-            Button('›').width(34).height(34).fontSize(22).fontColor('#315BFF')
+            Button('下月').width(56).height(34).fontSize(10).fontColor('#315BFF')
               .backgroundColor('#E9EEFF').borderRadius(12).onClick(() => this.moveMonth(1))
           }.width('100%')
           Row() {
@@ -330,7 +353,8 @@ export struct PlanCenterPage {
           }.layoutWeight(1).padding(18).backgroundColor('#FFFFFF').borderRadius(20)
           Column({ space: 6 }) {
             Text(`${this.overview.due_today}`).fontSize(28).fontWeight(FontWeight.Bold).fontColor('#FF6B4A')
-            Text('今日待执行').fontSize(12).fontColor('#777E8F')
+            Text(this.overview.overdue_tasks > 0 ? `今日待执行 · ${this.overview.overdue_tasks} 项逾期` : '今日待执行')
+              .fontSize(11).fontColor(this.overview.overdue_tasks > 0 ? '#D94D43' : '#777E8F')
           }.layoutWeight(1).padding(18).backgroundColor('#FFFFFF').borderRadius(20)
         }.width('100%')
 
@@ -345,7 +369,8 @@ export struct PlanCenterPage {
               .fontSize(10).fontColor('#315BFF')
           }.width('100%')
           Row({ space: 10 }) {
-            TextInput({ text: this.title, placeholder: '快速记录一个待办' }).layoutWeight(1).height(46)
+            TextInput({ text: this.title, placeholder: '快速记录一个待办', controller: this.taskInputController })
+              .layoutWeight(1).height(46)
               .backgroundColor('#F4F6FA').borderRadius(14).onChange((value) => this.title = value)
             Button('+').width(46).height(46).fontSize(22).fontColor('#FFFFFF').backgroundColor('#315BFF')
               .borderRadius(14).onClick(() => this.addTask())
@@ -367,7 +392,10 @@ export struct PlanCenterPage {
                 .decoration({ type: task.status === 'completed' ?
                   TextDecorationType.LineThrough : TextDecorationType.None })
               Text(`${this.taskDate(task).length > 0 ? this.taskDate(task) + ' · ' + this.taskTime(task) : '待安排时间'}${task.location === null ? '' : ' · ' + task.location}`)
-                .fontSize(10).fontColor('#8B91A0')
+                .fontSize(10).fontColor(this.taskOverdue(task) ? '#D94D43' : '#8B91A0')
+              if (this.taskOverdue(task)) {
+                Text('已逾期').fontSize(9).fontColor('#D94D43')
+              }
             }.alignItems(HorizontalAlign.Start).layoutWeight(1)
             Button(this.deletePendingId === task.task_id ? '确认' : '删除').height(30).fontSize(10)
               .fontColor(this.deletePendingId === task.task_id ? '#FFFFFF' : '#A25B55')

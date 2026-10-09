@@ -104,10 +104,11 @@ class PlanSummary(BaseModel):
     title: str
     summary: str = ""
     target_date: date | None = None
-    status: Literal["active", "completed"] = "active"
+    status: Literal["active", "completed", "overdue"] = "active"
     progress: int = Field(default=0, ge=0, le=100)
     task_count: int = 0
     completed_count: int = 0
+    overdue_count: int = 0
     milestones: list[PlanMilestone] = Field(default_factory=list)
     created_at: datetime
 
@@ -118,6 +119,7 @@ class PlanningOverview(BaseModel):
     total_tasks: int = 0
     completed_tasks: int = 0
     due_today: int = 0
+    overdue_tasks: int = 0
     progress: int = Field(default=0, ge=0, le=100)
 
 

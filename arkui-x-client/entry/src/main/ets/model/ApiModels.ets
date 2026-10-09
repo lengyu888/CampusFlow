@@ -183,6 +183,7 @@ export interface PlanSummary {
   progress: number;
   task_count: number;
   completed_count: number;
+  overdue_count: number;
   milestones: PlanMilestone[];
   created_at: string;
 }
@@ -193,6 +194,7 @@ export interface PlanningOverview {
   total_tasks: number;
   completed_tasks: number;
   due_today: number;
+  overdue_tasks: number;
   progress: number;
 }
 
