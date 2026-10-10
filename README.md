@@ -180,6 +180,8 @@ Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:8000/api/v1/chat" `
 
 详细测试方式见本文末尾的“测试”以及 [ArkUI-X 联调说明](docs/arkui-x-integration.md)。
 完整开发顺序和阶段验收条件见 [分阶段开发计划](docs/development-phases.md)。
+协作者提交代码前请阅读 [协作开发流程](CONTRIBUTING.md)；`main` 分支禁止直接推送，所有变更
+必须通过 Pull Request 审查后合并。
 
 ## 测试
 
