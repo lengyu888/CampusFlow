@@ -1,5 +1,6 @@
 import { AuthResponse } from '../model/ApiModels';
 import { CampusFlowApi } from '../services/CampusFlowApi';
+import { AppTheme } from '../theme/AppTheme';
 
 @Component
 export struct LoginPage {
@@ -42,12 +43,12 @@ export struct LoginPage {
   private inputField(label: string, hint: string, value: string, onChange: (value: string) => void,
     inputType: InputType = InputType.Normal) {
     Column({ space: 7 }) {
-      Text(label).fontSize(12).fontColor('#6F7688').fontWeight(FontWeight.Medium).width('100%')
+      Text(label).fontSize(14).fontColor(AppTheme.secondary).fontWeight(FontWeight.Medium).width('100%')
       TextInput({ placeholder: hint, text: value })
         .type(inputType)
         .height(52)
         .fontSize(15)
-        .backgroundColor('#F5F7FB')
+        .backgroundColor(AppTheme.field)
         .borderRadius(16)
         .padding({ left: 16, right: 16 })
         .onChange(onChange)
@@ -61,19 +62,19 @@ export struct LoginPage {
       Column({ space: 22 }) {
         Column({ space: 10 }) {
           Row() {
-            Text('CF').fontColor('#FFFFFF').fontSize(17).fontWeight(FontWeight.Bold)
+            Text('CF').fontColor(AppTheme.surface).fontSize(17).fontWeight(FontWeight.Bold)
           }
           .width(54).height(54).justifyContent(FlexAlign.Center)
-          .backgroundColor('#315BFF').borderRadius(18)
-          Text('CampusFlow').fontSize(30).fontWeight(FontWeight.Bold).fontColor('#171A22')
-          Text('让校园安排顺着你的目标流动').fontSize(14).fontColor('#777E8F')
+          .backgroundColor(AppTheme.blue).borderRadius(18)
+          Text('CampusFlow').fontSize(34).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
+          Text('让校园安排顺着你的目标流动').fontSize(15).fontColor(AppTheme.secondary)
         }
         .width('100%')
         .alignItems(HorizontalAlign.Start)
 
         Column({ space: 16 }) {
           Text(this.registerMode ? '创建你的校园智能体' : '欢迎回来')
-            .fontSize(22).fontWeight(FontWeight.Bold).fontColor('#171A22').width('100%')
+            .fontSize(22).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink).width('100%')
           if (this.registerMode) {
             this.inputField('昵称', '你的称呼', this.displayName, (value) => this.displayName = value)
           }
@@ -85,32 +86,35 @@ export struct LoginPage {
               (value) => this.apiKey = value, InputType.Password)
           }
           if (this.errorText.length > 0) {
-            Text(this.errorText).fontSize(12).fontColor('#D33D3D').width('100%')
+            Text(this.errorText).fontSize(14).fontColor(AppTheme.red).width('100%')
           }
           Button(this.loading ? '连接中…' : (this.registerMode ? '注册并继续' : '登录'))
             .width('100%').height(52).fontSize(16).fontWeight(FontWeight.Bold)
-            .fontColor('#FFFFFF').backgroundColor('#315BFF').borderRadius(16)
+            .fontColor(AppTheme.surface).backgroundColor(AppTheme.blue).borderRadius(16)
             .enabled(!this.loading)
             .onClick(() => this.submit())
           Button(this.registerMode ? '已有账号，直接登录' : '第一次使用？创建账号')
-            .width('100%').height(44).fontSize(14).fontColor('#315BFF')
+            .width('100%').height(44).fontSize(14).fontColor(AppTheme.blue)
             .backgroundColor(Color.Transparent)
             .onClick(() => {
-              this.registerMode = !this.registerMode;
-              this.errorText = '';
+              this.getUIContext().animateTo({ duration: AppTheme.motion(200), curve: Curve.EaseOut }, () => {
+                this.registerMode = !this.registerMode;
+                this.errorText = '';
+              });
             })
         }
         .width('100%')
         .padding(22)
-        .backgroundColor('#FFFFFF')
-        .borderRadius(26)
+        .backgroundColor(AppTheme.surface)
+        .borderRadius(20)
 
-        Text('API Key 仅通过加密接口传输与存储，登录后无需再次填写。')
-          .fontSize(12).fontColor('#8C92A0').textAlign(TextAlign.Center)
+        Text('登录后自动使用已保存的模型配置，无需重复填写 API Key。')
+          .fontSize(13).fontColor(AppTheme.secondary).textAlign(TextAlign.Center)
       }
       .width('100%')
-      .padding({ left: 22, right: 22, top: 52, bottom: 36 })
+      .alignItems(HorizontalAlign.Start).justifyContent(FlexAlign.Start)
+      .padding({ left: 20, right: 20, top: 40, bottom: 32 })
     }
-    .width('100%').height('100%').backgroundColor('#F1F4FA')
+    .width('100%').height('100%').backgroundColor(AppTheme.bg)
   }
 }

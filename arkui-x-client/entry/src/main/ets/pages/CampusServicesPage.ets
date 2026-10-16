@@ -11,6 +11,8 @@ import {
   HDUHelpSuggestedPrompt
 } from '../model/ApiModels';
 import { CampusFlowApi } from '../services/CampusFlowApi';
+import { AppTheme } from '../theme/AppTheme';
+import { AppIcon } from '../components/AppIcon';
 
 class CampusServiceOption implements SelectOption {
   value: string;
@@ -160,34 +162,41 @@ export struct CampusServicesPage {
 
   @Builder
   private serviceTab(index: number, label: string) {
-    Button(label)
+    Button() {
+      Text(label).fontSize(13)
+        .fontWeight(this.activeService === index ? FontWeight.Bold : FontWeight.Medium)
+        .fontColor(this.activeService === index ? AppTheme.ink : AppTheme.secondary)
+        .maxLines(1)
+    }
       .layoutWeight(1)
-      .height(40)
-      .fontSize(10)
-      .fontWeight(this.activeService === index ? FontWeight.Bold : FontWeight.Medium)
-      .fontColor(this.activeService === index ? '#FFFFFF' : '#596174')
-      .backgroundColor(this.activeService === index ? '#171A22' : Color.Transparent)
-      .borderRadius(13)
-      .onClick(() => this.activeService = index)
+      .height(44)
+      .padding({ left: 4, right: 4 })
+      .backgroundColor(this.activeService === index ? AppTheme.surface : Color.Transparent)
+      .borderRadius(10)
+      .onClick(() => {
+        this.getUIContext().animateTo({ duration: AppTheme.motion(180), curve: Curve.EaseOut }, () => {
+          this.activeService = index;
+        });
+      })
   }
 
   @Builder
   private classroomCard(room: ClassroomItem) {
     Row({ space: 12 }) {
       Column({ space: 2 }) {
-        Text(room.location_name).fontSize(16).fontWeight(FontWeight.Bold).fontColor('#171A22')
-        Text(room.building_name).fontSize(11).fontColor('#7B8292')
+        Text(room.location_name).fontSize(16).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
+        Text(room.building_name).fontSize(13).fontColor(AppTheme.secondary)
       }.alignItems(HorizontalAlign.Start).layoutWeight(1)
       Column({ space: 4 }) {
-        Text(room.self_study ? '可自习' : '空闲').fontSize(11).fontWeight(FontWeight.Bold)
-          .fontColor(room.self_study ? '#087D5B' : '#315BFF')
-        Text(room.capacity > 0 ? `${room.capacity} 座` : '容量未知').fontSize(10).fontColor('#9096A4')
+        Text(room.self_study ? '可自习' : '空闲').fontSize(13).fontWeight(FontWeight.Bold)
+          .fontColor(room.self_study ? AppTheme.green : AppTheme.blue)
+        Text(room.capacity > 0 ? `${room.capacity} 座` : '容量未知').fontSize(12).fontColor(AppTheme.muted)
       }.alignItems(HorizontalAlign.End)
-      Text('›').fontSize(22).fontColor('#A4AAB7')
+      AppIcon({ name: 'chevron', iconSize: 18, color: AppTheme.muted })
     }
     .width('100%')
     .padding(16)
-    .backgroundColor('#FFFFFF')
+    .backgroundColor(AppTheme.surface)
     .borderRadius(18)
     .onClick(() => this.loadUsage(room))
   }
@@ -198,20 +207,20 @@ export struct CampusServicesPage {
       Column({ space: 12 }) {
         Row() {
           Column({ space: 3 }) {
-            Text('找一间现在能用的教室').fontSize(18).fontWeight(FontWeight.Bold).fontColor('#171A22')
-            Text('时间由系统自动判断，也可按节次筛选').fontSize(11).fontColor('#7B8292')
+            Text('找一间现在能用的教室').fontSize(18).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
+            Text('时间由系统自动判断，也可按节次筛选').fontSize(13).fontColor(AppTheme.secondary)
           }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-          Button('刷新').height(34).fontSize(11).fontColor('#315BFF').backgroundColor('#E9EEFF')
+          Button('刷新').height(44).fontSize(13).fontColor(AppTheme.blue).backgroundColor(AppTheme.blueSoft)
             .borderRadius(12).onClick(() => this.loadClassrooms())
         }.width('100%')
 
         Select(this.buildingLabels.map((label: string) => new CampusServiceOption(label)))
           .selected(this.selectedBuilding)
           .value(this.buildingLabels[this.selectedBuilding])
-          .fontColor('#171A22')
-          .backgroundColor('#F3F5F9')
-          .optionBgColor('#FFFFFF').optionFontColor('#171A22')
-          .selectedOptionBgColor('#E9EEFF').selectedOptionFontColor('#315BFF')
+          .fontColor(AppTheme.ink)
+          .backgroundColor(AppTheme.field)
+          .optionBgColor(AppTheme.surface).optionFontColor(AppTheme.ink)
+          .selectedOptionBgColor(AppTheme.blueSoft).selectedOptionFontColor(AppTheme.blue)
           .borderRadius(14)
           .width('100%')
           .onSelect((index: number) => {
@@ -221,58 +230,61 @@ export struct CampusServicesPage {
 
         Row({ space: 6 }) {
           ForEach(this.periodLabels, (label: string, index: number) => {
-            Button(label).layoutWeight(1).height(34).fontSize(10)
-              .fontColor(this.selectedPeriod === index ? '#FFFFFF' : '#596174')
-              .backgroundColor(this.selectedPeriod === index ? '#315BFF' : '#F3F5F9')
+            Button(label).layoutWeight(1).height(44).fontSize(12)
+              .fontColor(this.selectedPeriod === index ? AppTheme.surface : AppTheme.secondary)
+              .backgroundColor(this.selectedPeriod === index ? AppTheme.blue : AppTheme.field)
               .borderRadius(11)
               .onClick(() => {
-                this.selectedPeriod = index;
+                this.getUIContext().animateTo({ duration: AppTheme.motion(160), curve: Curve.EaseOut }, () => {
+                  this.selectedPeriod = index;
+                });
                 this.loadClassrooms();
               })
           }, (label: string) => label)
         }.width('100%')
-      }.width('100%').padding(18).backgroundColor('#FFFFFF').borderRadius(24)
+      }.width('100%').padding(18).backgroundColor(AppTheme.surface).borderRadius(20)
 
       if (this.usageTitle.length > 0) {
         Column({ space: 10 }) {
           Row() {
             Column({ space: 3 }) {
-              Text(this.usageTitle).fontSize(16).fontWeight(FontWeight.Bold).fontColor('#FFFFFF')
-              Text('本学期占用安排').fontSize(11).fontColor('#AEB9D8')
+              Text(this.usageTitle).fontSize(16).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
+              Text('本学期占用安排').fontSize(13).fontColor(AppTheme.secondary)
             }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-            Text('×').fontSize(20).fontColor('#FFFFFF').onClick(() => this.usageTitle = '')
+            Button('关闭').height(44).fontSize(14).fontColor(AppTheme.blue)
+              .backgroundColor(Color.Transparent).onClick(() => this.usageTitle = '')
           }.width('100%')
           if (this.usageLoading) {
-            Text('正在读取占用情况…').fontSize(12).fontColor('#AEB9D8').width('100%')
+            Text('正在读取占用情况…').fontSize(14).fontColor(AppTheme.secondary).width('100%')
           } else if (this.usageItems.length === 0) {
-            Text('本学期没有查到占用记录').fontSize(12).fontColor('#AEB9D8').width('100%')
+            Text('本学期没有查到占用记录').fontSize(14).fontColor(AppTheme.secondary).width('100%')
           } else {
             ForEach(this.usageItems.slice(0, 8), (item: ClassroomUsageItem) => {
               Row() {
                 Text(`第${item.week}周 · ${this.weekdayName(item.weekday)} · 第${item.section}节`)
-                  .fontSize(11).fontColor('#FFFFFF').layoutWeight(1)
-                Text(item.course_name).fontSize(11).fontColor('#AEB9D8').maxLines(1)
+                  .fontSize(13).fontColor(AppTheme.ink).layoutWeight(1)
+                Text(item.course_name).fontSize(13).fontColor(AppTheme.secondary).maxLines(1)
               }.width('100%')
             }, (item: ClassroomUsageItem) => `${item.week}-${item.weekday}-${item.section}-${item.course_name}`)
           }
-        }.width('100%').padding(18).backgroundColor('#171A22').borderRadius(22)
+        }.width('100%').padding(18).backgroundColor(AppTheme.surface).borderRadius(18)
       }
 
       Row() {
-        Text(this.classroomLabel).fontSize(13).fontWeight(FontWeight.Bold).fontColor('#171A22')
+        Text(this.classroomLabel).fontSize(15).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
         Blank()
-        Text(`${this.classroomTotal} 间可用`).fontSize(11).fontColor('#315BFF')
+        Text(`${this.classroomTotal} 间可用`).fontSize(13).fontColor(AppTheme.blue)
       }.width('100%')
 
       if (this.classroomLoading) {
-        Text('正在查询 HDUHelp 实时教室状态…').fontSize(12).fontColor('#7B8292').width('100%')
-          .padding(18).backgroundColor('#FFFFFF').borderRadius(18)
+        Text('正在查询 HDUHelp 实时教室状态…').fontSize(14).fontColor(AppTheme.secondary).width('100%')
+          .padding(18).backgroundColor(AppTheme.surface).borderRadius(18)
       } else if (this.classroomError.length > 0) {
-        Text(this.classroomError).fontSize(12).fontColor('#D33D3D').width('100%')
-          .padding(18).backgroundColor('#FFF0F0').borderRadius(18)
+        Text(this.classroomError).fontSize(14).fontColor(AppTheme.red).width('100%')
+          .padding(18).backgroundColor(AppTheme.bg).borderRadius(18)
       } else if (this.classrooms.length === 0) {
-        Text('当前筛选条件下没有空闲教室').fontSize(13).fontColor('#7B8292').width('100%')
-          .padding(20).backgroundColor('#FFFFFF').borderRadius(18)
+        Text('当前筛选条件下没有空闲教室').fontSize(15).fontColor(AppTheme.secondary).width('100%')
+          .padding(20).backgroundColor(AppTheme.surface).borderRadius(18)
       } else {
         ForEach(this.classrooms.slice(0, 20), (room: ClassroomItem) => {
           this.classroomCard(room)
@@ -285,63 +297,63 @@ export struct CampusServicesPage {
   private electricityView() {
     Column({ space: 14 }) {
       if (this.electricityLoading) {
-        Text('正在读取寝室电费…').fontSize(13).fontColor('#7B8292').width('100%')
-          .padding(20).backgroundColor('#FFFFFF').borderRadius(20)
+        Text('正在读取寝室电费…').fontSize(15).fontColor(AppTheme.secondary).width('100%')
+          .padding(20).backgroundColor(AppTheme.surface).borderRadius(20)
       } else if (this.electricityError.length > 0) {
-        Text(this.electricityError).fontSize(12).fontColor('#D33D3D').width('100%')
-          .padding(18).backgroundColor('#FFF0F0').borderRadius(18)
+        Text(this.electricityError).fontSize(14).fontColor(AppTheme.red).width('100%')
+          .padding(18).backgroundColor(AppTheme.bg).borderRadius(18)
       } else if (!this.electricityData.bound) {
         Column({ space: 8 }) {
-          Text('尚未绑定寝室电表').fontSize(18).fontWeight(FontWeight.Bold).fontColor('#171A22')
-          Text('请先在 HDUHelp 中完成电表绑定，再返回刷新。').fontSize(12).fontColor('#7B8292')
-          Button('重新检查').height(40).fontColor('#FFFFFF').backgroundColor('#315BFF').borderRadius(13)
+          Text('尚未绑定寝室电表').fontSize(18).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
+          Text('请先在 HDUHelp 中完成电表绑定，再返回刷新。').fontSize(14).fontColor(AppTheme.secondary)
+          Button('重新检查').height(44).fontColor(AppTheme.surface).backgroundColor(AppTheme.blue).borderRadius(13)
             .onClick(() => this.loadElectricity())
-        }.width('100%').alignItems(HorizontalAlign.Start).padding(20).backgroundColor('#FFFFFF').borderRadius(22)
+        }.width('100%').alignItems(HorizontalAlign.Start).padding(20).backgroundColor(AppTheme.surface).borderRadius(18)
       } else {
         Column({ space: 18 }) {
           Row() {
             Column({ space: 4 }) {
-              Text('当前电费余额').fontSize(12).fontColor('#B9C4E4')
+              Text('当前电费余额').fontSize(14).fontColor(AppTheme.secondary)
               Row({ space: 5 }) {
-                Text('¥').fontSize(21).fontWeight(FontWeight.Bold).fontColor('#FFFFFF')
-                Text(this.balanceText()).fontSize(42).fontWeight(FontWeight.Bold).fontColor('#FFFFFF')
+                Text('¥').fontSize(21).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
+                Text(this.balanceText()).fontSize(40).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
               }
-              Text(this.electricityData.room_name).fontSize(13).fontColor('#FFFFFF')
+              Text(this.electricityData.room_name).fontSize(15).fontColor(AppTheme.secondary)
             }.alignItems(HorizontalAlign.Start).layoutWeight(1)
             Column({ space: 5 }) {
-              Text('日均消耗').fontSize(10).fontColor('#B9C4E4')
+              Text('日均消耗').fontSize(12).fontColor(AppTheme.secondary)
               Text(`¥${this.electricityData.daily_average.length > 0 ? this.electricityData.daily_average : '--'}`)
-                .fontSize(18).fontWeight(FontWeight.Bold).fontColor('#7EE1BE')
-              Text(this.electricityData.meter_hint).fontSize(9).fontColor('#8490B3')
+                .fontSize(18).fontWeight(FontWeight.Bold).fontColor(AppTheme.green)
+              Text(this.electricityData.meter_hint).fontSize(11).fontColor(AppTheme.secondary)
             }.alignItems(HorizontalAlign.End)
           }.width('100%')
           Row() {
-            Text(`更新于 ${this.updatedText()}`).fontSize(10).fontColor('#8490B3').layoutWeight(1)
-            Button('刷新余额').height(34).fontSize(10).fontColor('#171A22').backgroundColor('#FFFFFF')
+            Text(`更新于 ${this.updatedText()}`).fontSize(12).fontColor(AppTheme.secondary).layoutWeight(1)
+            Button('刷新余额').height(44).fontSize(14).fontColor(AppTheme.blue).backgroundColor(AppTheme.blueSoft)
               .borderRadius(11).onClick(() => this.loadElectricity())
           }.width('100%')
-        }.width('100%').padding(22).backgroundColor('#171A22').borderRadius(26)
+        }.width('100%').padding(20).backgroundColor(AppTheme.surface).borderRadius(20)
 
         Column({ space: 12 }) {
           Row() {
-            Text('近 14 天余额').fontSize(17).fontWeight(FontWeight.Bold).fontColor('#171A22')
+            Text('近 14 天余额').fontSize(17).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
             Blank()
-            Text('HDUHelp 实时数据').fontSize(10).fontColor('#315BFF')
+            Text('HDUHelp 实时数据').fontSize(12).fontColor(AppTheme.blue)
           }.width('100%')
           if (this.electricityData.history.length === 0) {
-            Text('暂无历史记录').fontSize(12).fontColor('#7B8292').width('100%')
+            Text('暂无历史记录').fontSize(14).fontColor(AppTheme.secondary).width('100%')
           } else {
             ForEach(this.electricityData.history, (item: ElectricityHistoryItem) => {
               Row() {
-                Text(item.date.slice(5)).fontSize(12).fontColor('#7B8292').width(52)
-                Text(`余额 ¥${item.balance}`).fontSize(13).fontWeight(FontWeight.Medium)
-                  .fontColor('#171A22').layoutWeight(1)
-                Text(item.change === '-' ? '首日' : `${item.change} 元`).fontSize(11)
-                  .fontColor(item.change.startsWith('-') ? '#E05A47' : '#087D5B')
+                Text(item.date.slice(5)).fontSize(14).fontColor(AppTheme.secondary).width(52)
+                Text(`余额 ¥${item.balance}`).fontSize(15).fontWeight(FontWeight.Medium)
+                  .fontColor(AppTheme.ink).layoutWeight(1)
+                Text(item.change === '-' ? '首日' : `${item.change} 元`).fontSize(13)
+                  .fontColor(item.change.startsWith('-') ? AppTheme.orange : AppTheme.green)
               }.width('100%').padding({ top: 8, bottom: 8 })
             }, (item: ElectricityHistoryItem) => item.date)
           }
-        }.width('100%').padding(18).backgroundColor('#FFFFFF').borderRadius(22)
+        }.width('100%').padding(18).backgroundColor(AppTheme.surface).borderRadius(18)
       }
     }.width('100%').alignItems(HorizontalAlign.Start)
   }
@@ -350,20 +362,20 @@ export struct CampusServicesPage {
   private campusDataItem(item: HDUHelpDisplayItem) {
     if (item.label.length > 12 || item.value.length > 22) {
       Column({ space: 5 }) {
-        Text(item.label).fontSize(11).fontColor('#7B8292').width('100%')
-        Text(item.value).fontSize(item.emphasis ? 17 : 13)
+        Text(item.label).fontSize(13).fontColor(AppTheme.secondary).width('100%')
+        Text(item.value).fontSize(item.emphasis ? 17 : 15)
           .fontWeight(item.emphasis ? FontWeight.Bold : FontWeight.Medium)
-          .fontColor(item.emphasis ? '#315BFF' : '#272B34')
+          .fontColor(item.emphasis ? AppTheme.blue : AppTheme.ink)
           .width('100%').maxLines(3).textOverflow({ overflow: TextOverflow.Ellipsis })
       }.width('100%').alignItems(HorizontalAlign.Start)
-        .padding(11).backgroundColor('#F6F8FC').borderRadius(13)
+        .padding(11).backgroundColor(AppTheme.field).borderRadius(13)
     } else {
       Row() {
-        Text(item.label).fontSize(11).fontColor('#7B8292')
+        Text(item.label).fontSize(13).fontColor(AppTheme.secondary)
         Blank()
-        Text(item.value).fontSize(item.emphasis ? 17 : 12)
+        Text(item.value).fontSize(item.emphasis ? 17 : 15)
           .fontWeight(item.emphasis ? FontWeight.Bold : FontWeight.Medium)
-          .fontColor(item.emphasis ? '#315BFF' : '#272B34')
+          .fontColor(item.emphasis ? AppTheme.blue : AppTheme.ink)
           .constraintSize({ maxWidth: '68%' }).maxLines(2)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
       }.width('100%')
@@ -402,31 +414,39 @@ export struct CampusServicesPage {
     Column({ space: 11 }) {
       Row() {
         Column({ space: 3 }) {
-          Text(section.title).fontSize(17).fontWeight(FontWeight.Bold).fontColor('#171A22')
-          Text(section.summary).fontSize(11).fontColor('#7B8292').maxLines(2)
+          Text(section.title).fontSize(17).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
+          Text(section.summary).fontSize(13).fontColor(AppTheme.secondary).maxLines(2)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
         }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-        Text('✓').fontSize(13).fontColor('#19966B').width(28).height(28)
-          .textAlign(TextAlign.Center).backgroundColor('#E8F7F1').borderRadius(10)
+        Row() {
+          AppIcon({ name: 'check', iconSize: 16, color: AppTheme.green })
+        }.width(28).height(28).justifyContent(FlexAlign.Center)
+          .backgroundColor(AppTheme.greenSoft).borderRadius(10)
       }.width('100%')
       ForEach(section.items, (item: HDUHelpDisplayItem) => {
         this.campusDataItem(item)
       }, (item: HDUHelpDisplayItem) => `${section.resource}-${item.label}`)
-    }.width('100%').padding(17).backgroundColor('#FFFFFF').borderRadius(22)
+    }.width('100%').padding(17).backgroundColor(AppTheme.surface).borderRadius(18)
   }
 
   @Builder
   private agentPromptBlock(prompts: HDUHelpSuggestedPrompt[], subtitle: string) {
     if (prompts.length > 0) {
       Column({ space: 10 }) {
-        Text('继续问 Agent').fontSize(18).fontWeight(FontWeight.Bold).fontColor('#171A22').width('100%')
-        Text(subtitle).fontSize(11).fontColor('#7B8292').width('100%')
+        Text('继续问 Agent').fontSize(18).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink).width('100%')
+        Text(subtitle).fontSize(13).fontColor(AppTheme.secondary).width('100%')
         ForEach(prompts.slice(0, 4), (suggestion: HDUHelpSuggestedPrompt) => {
-          Button(suggestion.title + '  ↗').width('100%').height(44).fontSize(12)
-            .fontColor('#315BFF').backgroundColor('#F2F5FF').borderRadius(14)
+          Button() {
+            Row({ space: 10 }) {
+              Text(suggestion.title).fontSize(15).fontColor(AppTheme.blue)
+                .layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+              AppIcon({ name: 'chevron', iconSize: 16, color: AppTheme.blue })
+            }.width('100%')
+          }.width('100%').height(48).padding({ left: 14, right: 14 })
+            .backgroundColor(AppTheme.blueSoft).borderRadius(12)
             .onClick(() => this.onOpenAgent(suggestion.prompt))
         }, (suggestion: HDUHelpSuggestedPrompt) => suggestion.prompt_id)
-      }.width('100%').padding(18).backgroundColor('#FFFFFF').borderRadius(22)
+      }.width('100%').padding(18).backgroundColor(AppTheme.surface).borderRadius(18)
     }
   }
 
@@ -435,30 +455,30 @@ export struct CampusServicesPage {
     Column({ space: 14 }) {
       Row() {
         Column({ space: 4 }) {
-          Text('我的图书馆').fontSize(19).fontWeight(FontWeight.Bold).fontColor('#171A22')
-          Text('到馆、借阅与座位使用记录').fontSize(11).fontColor('#7B8292')
+          Text('我的图书馆').fontSize(19).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
+          Text('到馆、借阅与座位使用记录').fontSize(13).fontColor(AppTheme.secondary)
         }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-        Button('刷新').height(34).fontSize(11).fontColor('#315BFF').backgroundColor('#E9EEFF')
+        Button('刷新').height(44).fontSize(13).fontColor(AppTheme.blue).backgroundColor(AppTheme.blueSoft)
           .borderRadius(12).onClick(() => this.loadCampusInfo())
-      }.width('100%').padding(18).backgroundColor('#FFFFFF').borderRadius(24)
+      }.width('100%').padding(18).backgroundColor(AppTheme.surface).borderRadius(20)
 
       if (this.campusInfoLoading) {
-        Text('正在同步图书馆数据…').fontSize(13).fontColor('#7B8292').width('100%')
-          .padding(20).backgroundColor('#FFFFFF').borderRadius(20)
+        Text('正在同步图书馆数据…').fontSize(15).fontColor(AppTheme.secondary).width('100%')
+          .padding(20).backgroundColor(AppTheme.surface).borderRadius(20)
       } else if (this.campusInfoError.length > 0) {
-        Text(this.campusInfoError).fontSize(12).fontColor('#B42318').width('100%')
-          .padding(18).backgroundColor('#FFF0F0').borderRadius(18)
+        Text(this.campusInfoError).fontSize(14).fontColor(AppTheme.red).width('100%')
+          .padding(18).backgroundColor(AppTheme.bg).borderRadius(18)
       } else if (!this.campusConfigured) {
         Column({ space: 8 }) {
-          Text('尚未连接 HDUHelp').fontSize(18).fontWeight(FontWeight.Bold).fontColor('#171A22')
+          Text('尚未连接 HDUHelp').fontSize(18).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
           Text('请前往“我的”配置个人令牌，连接后可查看图书馆记录。')
-            .fontSize(12).fontColor('#7B8292')
+            .fontSize(14).fontColor(AppTheme.secondary)
         }.width('100%').alignItems(HorizontalAlign.Start).padding(20)
-          .backgroundColor('#FFFFFF').borderRadius(22)
+          .backgroundColor(AppTheme.surface).borderRadius(18)
       } else {
         if (this.librarySections().length === 0) {
-          Text('当前没有可展示的图书馆数据').fontSize(12).fontColor('#7B8292').width('100%')
-            .padding(20).backgroundColor('#FFFFFF').borderRadius(20)
+          Text('当前没有可展示的图书馆数据').fontSize(14).fontColor(AppTheme.secondary).width('100%')
+            .padding(20).backgroundColor(AppTheme.surface).borderRadius(20)
         } else {
           ForEach(this.librarySections(), (section: HDUHelpDisplaySection) => {
             this.liveDataSection(section)
@@ -474,27 +494,27 @@ export struct CampusServicesPage {
     Column({ space: 14 }) {
       Row() {
         Column({ space: 4 }) {
-          Text('校园卡余额').fontSize(19).fontWeight(FontWeight.Bold).fontColor('#171A22')
-          Text('余额与其他校园生活动态').fontSize(11).fontColor('#7B8292')
+          Text('校园卡余额').fontSize(19).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
+          Text('余额与其他校园生活动态').fontSize(13).fontColor(AppTheme.secondary)
         }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-        Button('刷新').height(34).fontSize(11).fontColor('#315BFF').backgroundColor('#E9EEFF')
+        Button('刷新').height(44).fontSize(13).fontColor(AppTheme.blue).backgroundColor(AppTheme.blueSoft)
           .borderRadius(12).onClick(() => this.loadCampusInfo())
-      }.width('100%').padding(18).backgroundColor('#FFFFFF').borderRadius(24)
+      }.width('100%').padding(18).backgroundColor(AppTheme.surface).borderRadius(20)
 
       if (this.campusInfoLoading) {
-        Text('正在同步校园卡数据…').fontSize(13).fontColor('#7B8292').width('100%')
-          .padding(20).backgroundColor('#FFFFFF').borderRadius(20)
+        Text('正在同步校园卡数据…').fontSize(15).fontColor(AppTheme.secondary).width('100%')
+          .padding(20).backgroundColor(AppTheme.surface).borderRadius(20)
       } else if (this.campusInfoError.length > 0) {
-        Text(this.campusInfoError).fontSize(12).fontColor('#B42318').width('100%')
-          .padding(18).backgroundColor('#FFF0F0').borderRadius(18)
+        Text(this.campusInfoError).fontSize(14).fontColor(AppTheme.red).width('100%')
+          .padding(18).backgroundColor(AppTheme.bg).borderRadius(18)
       } else if (!this.campusConfigured) {
         Text('请先在“我的”连接 HDUHelp，随后即可查询校园卡余额。')
-          .fontSize(12).fontColor('#7B8292').width('100%')
-          .padding(20).backgroundColor('#FFFFFF').borderRadius(20)
+          .fontSize(14).fontColor(AppTheme.secondary).width('100%')
+          .padding(20).backgroundColor(AppTheme.surface).borderRadius(20)
       } else {
         if (this.campusCardSections().length === 0) {
-          Text('当前没有可展示的校园卡数据').fontSize(12).fontColor('#7B8292').width('100%')
-            .padding(20).backgroundColor('#FFFFFF').borderRadius(20)
+          Text('当前没有可展示的校园卡数据').fontSize(14).fontColor(AppTheme.secondary).width('100%')
+            .padding(20).backgroundColor(AppTheme.surface).borderRadius(20)
         } else {
           ForEach(this.campusCardSections(), (section: HDUHelpDisplaySection) => {
             this.liveDataSection(section)
@@ -502,7 +522,7 @@ export struct CampusServicesPage {
         }
 
         if (this.otherLiveSections().length > 0) {
-          Text('其他校园服务').fontSize(16).fontWeight(FontWeight.Bold).fontColor('#171A22').width('100%')
+          Text('其他校园服务').fontSize(16).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink).width('100%')
           ForEach(this.otherLiveSections(), (section: HDUHelpDisplaySection) => {
             this.liveDataSection(section)
           }, (section: HDUHelpDisplaySection) => section.resource)
@@ -515,14 +535,14 @@ export struct CampusServicesPage {
   build() {
     Column() {
       Row({ space: 12 }) {
-        Button('‹').width(44).height(44).fontSize(26).fontColor('#171A22').backgroundColor('#FFFFFF')
-          .borderRadius(15).onClick(() => this.onBack())
+        Button() {
+          AppIcon({ name: 'back', iconSize: 22, color: AppTheme.blue })
+        }.width(44).height(44).backgroundColor(AppTheme.surface)
+          .borderRadius(22).onClick(() => this.onBack())
         Column({ space: 3 }) {
-          Text('校园服务').fontSize(25).fontWeight(FontWeight.Bold).fontColor('#171A22')
-          Text('实时教室与生活数据').fontSize(11).fontColor('#7B8292')
+          Text('校园服务').fontSize(28).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
+          Text('实时教室与生活数据').fontSize(13).fontColor(AppTheme.secondary)
         }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-        Text('LIVE').fontSize(10).fontWeight(FontWeight.Bold).fontColor('#087D5B')
-          .padding({ left: 10, right: 10, top: 6, bottom: 6 }).backgroundColor('#E5F7F0').borderRadius(10)
       }.width('100%').padding({ left: 18, right: 18, top: 14, bottom: 12 })
 
       Row({ space: 6 }) {
@@ -530,8 +550,8 @@ export struct CampusServicesPage {
         this.serviceTab(1, '寝室电费')
         this.serviceTab(2, '图书馆')
         this.serviceTab(3, '校园卡')
-      }.width('100%').padding({ left: 8, right: 8, top: 4, bottom: 4 })
-        .backgroundColor('#E9ECF3').borderRadius(17)
+      }.width('90%').alignSelf(ItemAlign.Center).padding(4)
+        .backgroundColor(AppTheme.separator).borderRadius(14)
 
       Scroll() {
         Column() {
@@ -544,8 +564,10 @@ export struct CampusServicesPage {
           } else {
             this.campusCardView()
           }
-        }.width('100%').padding({ left: 18, right: 18, top: 16, bottom: 40 })
+        }.width('100%').alignItems(HorizontalAlign.Start).justifyContent(FlexAlign.Start)
+          .padding({ left: 18, right: 18, top: 16, bottom: 32 })
       }.layoutWeight(1).width('100%')
-    }.width('100%').height('100%').backgroundColor('#F5F7FB')
+    }.width('100%').height('100%').alignItems(HorizontalAlign.Start)
+      .justifyContent(FlexAlign.Start).backgroundColor(AppTheme.bg)
   }
 }

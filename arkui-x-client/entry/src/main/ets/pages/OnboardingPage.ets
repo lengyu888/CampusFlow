@@ -1,5 +1,7 @@
 import { CampusMapSummary, CampusPlaceImport, UserProfile } from '../model/ApiModels';
 import { CampusFlowApi } from '../services/CampusFlowApi';
+import { AppTheme } from '../theme/AppTheme';
+import { AppIcon } from '../components/AppIcon';
 
 @Component
 export struct OnboardingPage {
@@ -56,8 +58,8 @@ export struct OnboardingPage {
   @Builder
   private field(label: string, value: string, onChange: (value: string) => void) {
     Column({ space: 6 }) {
-      Text(label).fontSize(12).fontColor('#6F7688').width('100%')
-      TextInput({ text: value }).height(50).backgroundColor('#F5F7FB').borderRadius(15)
+      Text(label).fontSize(14).fontColor(AppTheme.secondary).width('100%')
+      TextInput({ text: value }).height(50).backgroundColor(AppTheme.field).borderRadius(15)
         .padding({ left: 14, right: 14 }).onChange(onChange)
     }.width('100%').alignItems(HorizontalAlign.Start)
   }
@@ -66,8 +68,12 @@ export struct OnboardingPage {
     Scroll() {
       Column({ space: 20 }) {
         Column({ space: 8 }) {
-          Text('先让 Agent 认识你').fontSize(28).fontWeight(FontWeight.Bold).fontColor('#171A22')
-          Text('这些校园上下文会用于课表问答、冲突检测和路线规划。').fontSize(14).fontColor('#707789')
+          Row() {
+            AppIcon({ name: 'person', iconSize: 26, color: AppTheme.blue })
+          }.width(52).height(52).justifyContent(FlexAlign.Center)
+            .backgroundColor(AppTheme.blueSoft).borderRadius(16).margin({ bottom: 8 })
+          Text('先让 Agent 认识你').fontSize(28).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
+          Text('连接课表，获得更适合你的日程与校园路线。').fontSize(15).fontColor(AppTheme.secondary)
         }.width('100%').alignItems(HorizontalAlign.Start)
 
         Column({ space: 15 }) {
@@ -76,17 +82,18 @@ export struct OnboardingPage {
           this.field('学期', this.semester, (value) => this.semester = value)
           this.field('HDUHelp 课表订阅链接', this.scheduleUrl, (value) => this.scheduleUrl = value)
           Text('课表将从 HDUHelp 安全导入；校园地点使用 CampusFlow 官方杭电数据包。订阅凭据由服务端加密保存。')
-            .fontSize(12).fontColor('#858C9C').width('100%')
+            .fontSize(14).fontColor(AppTheme.secondary).width('100%')
           if (this.message.length > 0) {
-            Text(this.message).fontSize(12).fontColor('#D33D3D').width('100%')
+            Text(this.message).fontSize(14).fontColor(AppTheme.red).width('100%')
           }
           Button(this.loading ? '保存中…' : '完成配置')
-            .width('100%').height(52).fontColor('#FFFFFF').backgroundColor('#315BFF')
+            .width('100%').height(52).fontSize(16).fontColor(AppTheme.surface).backgroundColor(AppTheme.blue)
             .borderRadius(16).enabled(!this.loading).onClick(() => this.finish())
         }
-        .width('100%').padding(22).backgroundColor('#FFFFFF').borderRadius(26)
+        .width('100%').padding(22).backgroundColor(AppTheme.surface).borderRadius(20)
       }
-      .padding({ left: 22, right: 22, top: 44, bottom: 32 })
-    }.width('100%').height('100%').backgroundColor('#F1F4FA')
+      .width('100%').alignItems(HorizontalAlign.Start).justifyContent(FlexAlign.Start)
+      .padding({ left: 20, right: 20, top: 40, bottom: 32 })
+    }.width('100%').height('100%').backgroundColor(AppTheme.bg)
   }
 }

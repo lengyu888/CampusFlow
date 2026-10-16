@@ -1,6 +1,8 @@
 import { CampusDataPlace, CampusDataSnapshot, CampusRoute } from '../model/ApiModels';
 import { RouteMap } from '../components/RouteMap';
 import { CampusFlowApi } from '../services/CampusFlowApi';
+import { AppTheme } from '../theme/AppTheme';
+import { AppIcon } from '../components/AppIcon';
 
 class CampusSelectOption implements SelectOption {
   value: ResourceStr;
@@ -76,36 +78,35 @@ export struct RoutePage {
   build() {
     Column() {
       Row({ space: 12 }) {
-        Button('‹').width(42).height(42).fontSize(26).fontColor('#171A22')
-          .backgroundColor('#FFFFFF').borderRadius(14).onClick(() => this.onBack())
+        Button() {
+          AppIcon({ name: 'back', iconSize: 22, color: AppTheme.blue })
+        }.width(44).height(44).backgroundColor(AppTheme.surface).borderRadius(22)
+          .onClick(() => this.onBack())
         Column({ space: 3 }) {
-          Text('校园导航').fontSize(24).fontWeight(FontWeight.Bold).fontColor('#171A22')
-          Text('路线沿原图校园道路吸附').fontSize(12).fontColor('#7B8292')
+          Text('校园导航').fontSize(28).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
+          Text('查看校园步行路线').fontSize(14).fontColor(AppTheme.secondary)
         }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-        Text('HDU').fontSize(11).fontWeight(FontWeight.Bold).fontColor('#315BFF')
-          .padding({ left: 11, right: 11, top: 7, bottom: 7 })
-          .backgroundColor('#E9EEFF').borderRadius(14)
       }.width('100%').padding({ left: 18, right: 18, top: 18, bottom: 12 })
 
       Scroll() {
         Column({ space: 16 }) {
           Column({ space: 12 }) {
             Row() {
-              Text('选择路线').fontSize(18).fontWeight(FontWeight.Bold).fontColor('#171A22')
+              Text('选择路线').fontSize(18).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
               Blank()
-              Text(`${this.places.length} 个地点`).fontSize(11).fontColor('#7B8292')
+              Text(`${this.places.length} 个地点`).fontSize(13).fontColor(AppTheme.secondary)
             }.width('100%')
 
             if (this.loading) {
-              Text('正在加载地点…').fontSize(13).fontColor('#7B8292').width('100%')
+              Text('正在加载地点…').fontSize(15).fontColor(AppTheme.secondary).width('100%')
             } else {
               Column({ space: 6 }) {
-                Text('起点').fontSize(10).fontColor('#8A90A0').width('100%')
+                Text('起点').fontSize(12).fontColor(AppTheme.secondary).width('100%')
                 Select(this.options()).selected(this.originIndex)
                   .value(this.places[this.originIndex]?.name ?? '')
-                  .fontColor('#171A22').backgroundColor('#F4F6FA')
-                  .optionBgColor('#FFFFFF').optionFontColor('#171A22')
-                  .selectedOptionBgColor('#E9EEFF').selectedOptionFontColor('#315BFF')
+                  .fontColor(AppTheme.ink).backgroundColor(AppTheme.field)
+                  .optionBgColor(AppTheme.surface).optionFontColor(AppTheme.ink)
+                  .selectedOptionBgColor(AppTheme.blueSoft).selectedOptionFontColor(AppTheme.blue)
                   .borderRadius(13).width('100%').height(46)
                   .onSelect((index: number) => {
                     this.originIndex = index;
@@ -113,16 +114,18 @@ export struct RoutePage {
                   })
               }.width('100%').alignItems(HorizontalAlign.Start)
 
-              Button('⇅  交换起终点').height(34).fontSize(11).fontColor('#315BFF')
-                .backgroundColor('#E9EEFF').borderRadius(12).onClick(() => this.swap())
+              Button('交换起终点').height(44).fontSize(14).fontColor(AppTheme.blue)
+                .backgroundColor(AppTheme.blueSoft).borderRadius(12).onClick(() => {
+                  this.getUIContext().animateTo({ duration: AppTheme.motion(200), curve: Curve.EaseOut }, () => this.swap());
+                })
 
               Column({ space: 6 }) {
-                Text('终点').fontSize(10).fontColor('#8A90A0').width('100%')
+                Text('终点').fontSize(12).fontColor(AppTheme.secondary).width('100%')
                 Select(this.options()).selected(this.destinationIndex)
                   .value(this.places[this.destinationIndex]?.name ?? '')
-                  .fontColor('#171A22').backgroundColor('#F4F6FA')
-                  .optionBgColor('#FFFFFF').optionFontColor('#171A22')
-                  .selectedOptionBgColor('#E9EEFF').selectedOptionFontColor('#315BFF')
+                  .fontColor(AppTheme.ink).backgroundColor(AppTheme.field)
+                  .optionBgColor(AppTheme.surface).optionFontColor(AppTheme.ink)
+                  .selectedOptionBgColor(AppTheme.blueSoft).selectedOptionFontColor(AppTheme.blue)
                   .borderRadius(13).width('100%').height(46)
                   .onSelect((index: number) => {
                     this.destinationIndex = index;
@@ -131,27 +134,30 @@ export struct RoutePage {
               }.width('100%').alignItems(HorizontalAlign.Start)
 
               Button(this.routeLoading ? '正在计算道路…' : '生成路线图').width('100%').height(46)
-                .fontSize(14).fontWeight(FontWeight.Bold).fontColor('#FFFFFF')
-                .backgroundColor('#171A22').borderRadius(15).enabled(!this.routeLoading)
+                .fontSize(14).fontWeight(FontWeight.Bold).fontColor(AppTheme.surface)
+                .backgroundColor(AppTheme.blue).borderRadius(15).enabled(!this.routeLoading)
                 .onClick(() => this.createRoute())
             }
 
             if (this.errorText.length > 0) {
-              Text(this.errorText).fontSize(12).fontColor('#C53D3D').width('100%')
+              Text(this.errorText).fontSize(14).fontColor(AppTheme.red).width('100%')
             }
-          }.width('100%').padding(18).backgroundColor('#FFFFFF').borderRadius(22)
+          }.width('100%').padding(18).backgroundColor(AppTheme.surface).borderRadius(18)
 
           if (this.route !== null) {
             RouteMap({ route: this.route as CampusRoute })
           } else if (!this.loading && this.errorText.length === 0) {
             Column({ space: 7 }) {
-              Text('选择两个地点').fontSize(17).fontWeight(FontWeight.Bold).fontColor('#171A22')
+              AppIcon({ name: 'route', iconSize: 32, color: AppTheme.blue })
+              Text('选择两个地点').fontSize(17).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
               Text('路线将在你上传的杭电原地图上绘制，并沿校园道路转折。')
-                .fontSize(12).fontColor('#7B8292').textAlign(TextAlign.Center)
-            }.width('100%').padding(24).backgroundColor('#EEF2FF').borderRadius(22)
+                .fontSize(14).fontColor(AppTheme.secondary).textAlign(TextAlign.Center)
+            }.width('100%').padding(24).backgroundColor(AppTheme.blueSoft).borderRadius(18)
           }
-        }.width('100%').padding({ left: 18, right: 18, top: 4, bottom: 32 })
-      }.layoutWeight(1).width('100%')
-    }.width('100%').height('100%').backgroundColor('#F5F7FB')
+        }.width('100%').alignItems(HorizontalAlign.Start).justifyContent(FlexAlign.Start)
+          .padding({ left: 18, right: 18, top: 4, bottom: 32 })
+      }.layoutWeight(1).width('100%').align(Alignment.TopStart)
+    }.width('100%').height('100%').alignItems(HorizontalAlign.Start)
+      .justifyContent(FlexAlign.Start).backgroundColor(AppTheme.bg)
   }
 }

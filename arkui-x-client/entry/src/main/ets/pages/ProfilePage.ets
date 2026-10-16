@@ -9,9 +9,12 @@ import {
   UserProfile
 } from '../model/ApiModels';
 import { CampusFlowApi } from '../services/CampusFlowApi';
+import { AppTheme } from '../theme/AppTheme';
+import { AppIcon } from '../components/AppIcon';
 
 @Component
 export struct ProfilePage {
+  @StorageLink('reduceMotion') private reduceMotion: boolean = false;
   @Prop baseUrl: string;
   @Prop token: string;
   @Prop user: UserProfile;
@@ -92,7 +95,9 @@ export struct ProfilePage {
   }
 
   private async openHduHelpData(): Promise<void> {
-    this.showHduHelpData = true;
+    this.getUIContext().animateTo({ duration: AppTheme.motion(200), curve: Curve.EaseOut }, () => {
+      this.showHduHelpData = true;
+    });
     this.hduHelpDataLoading = true;
     this.hduHelpDataError = '';
     try {
@@ -227,9 +232,9 @@ export struct ProfilePage {
   @Builder
   private field(label: string, value: string, onChange: (value: string) => void, secure: boolean = false) {
     Column({ space: 6 }) {
-      Text(label).fontSize(11).fontColor('#7E8595').width('100%')
+      Text(label).fontSize(13).fontColor(AppTheme.secondary).width('100%')
       TextInput({ text: value }).type(secure ? InputType.Password : InputType.Normal)
-        .height(46).backgroundColor('#F5F7FB').borderRadius(13).onChange(onChange)
+        .height(48).fontSize(16).backgroundColor(AppTheme.field).borderRadius(12).onChange(onChange)
     }.width('100%').alignItems(HorizontalAlign.Start)
   }
 
@@ -237,20 +242,20 @@ export struct ProfilePage {
   private dataItem(item: HDUHelpDisplayItem) {
     if (item.label.length > 12 || item.value.length > 22) {
       Column({ space: 5 }) {
-        Text(item.label).fontSize(11).fontColor('#7B8292').width('100%')
-        Text(item.value).fontSize(item.emphasis ? 17 : 13)
+        Text(item.label).fontSize(13).fontColor(AppTheme.secondary).width('100%')
+        Text(item.value).fontSize(item.emphasis ? 17 : 15)
           .fontWeight(item.emphasis ? FontWeight.Bold : FontWeight.Medium)
-          .fontColor(item.emphasis ? '#315BFF' : '#272B34')
+          .fontColor(item.emphasis ? AppTheme.blue : AppTheme.ink)
           .width('100%').maxLines(3).textOverflow({ overflow: TextOverflow.Ellipsis })
       }.width('100%').alignItems(HorizontalAlign.Start)
-        .padding(11).backgroundColor('#F6F8FC').borderRadius(13)
+        .padding(11).backgroundColor(AppTheme.field).borderRadius(13)
     } else {
       Row() {
-        Text(item.label).fontSize(11).fontColor('#7B8292')
+        Text(item.label).fontSize(13).fontColor(AppTheme.secondary)
         Blank()
-        Text(item.value).fontSize(item.emphasis ? 17 : 12)
+        Text(item.value).fontSize(item.emphasis ? 17 : 15)
           .fontWeight(item.emphasis ? FontWeight.Bold : FontWeight.Medium)
-          .fontColor(item.emphasis ? '#315BFF' : '#272B34')
+          .fontColor(item.emphasis ? AppTheme.blue : AppTheme.ink)
           .constraintSize({ maxWidth: '68%' }).maxLines(2)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
       }.width('100%')
@@ -261,77 +266,88 @@ export struct ProfilePage {
   private hduHelpDataView() {
     Column() {
       Row({ space: 12 }) {
-        Button('‹').width(42).height(42).fontSize(24).fontColor('#171A22')
-          .backgroundColor('#FFFFFF').borderRadius(14)
+        Button() {
+          AppIcon({ name: 'back', iconSize: 22, color: AppTheme.blue })
+        }.width(44).height(44)
+          .backgroundColor(AppTheme.surface).borderRadius(22)
           .onClick(() => this.showHduHelpData = false)
         Column({ space: 3 }) {
-          Text('我的校园档案').fontSize(23).fontWeight(FontWeight.Bold).fontColor('#171A22')
-          Text('由 HDUHelp 同步，Agent 可按需调用').fontSize(11).fontColor('#7B8292')
+          Text('我的校园档案').fontSize(23).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
+          Text('由 HDUHelp 同步，Agent 可按需调用').fontSize(13).fontColor(AppTheme.secondary)
         }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-        Button('刷新').height(38).fontSize(11).fontColor('#315BFF').backgroundColor('#E9EEFF')
+        Button('刷新').height(44).fontSize(13).fontColor(AppTheme.blue).backgroundColor(AppTheme.blueSoft)
           .borderRadius(14).onClick(() => this.openHduHelpData())
       }.width('100%').padding({ left: 18, right: 18, top: 18, bottom: 12 })
 
       Scroll() {
         Column({ space: 14 }) {
           if (this.hduHelpDataLoading) {
-            Text('正在整理校园数据…').fontSize(13).fontColor('#7B8292').width('100%')
-              .padding(18).backgroundColor('#FFFFFF').borderRadius(20)
+            Text('正在整理校园数据…').fontSize(15).fontColor(AppTheme.secondary).width('100%')
+              .padding(18).backgroundColor(AppTheme.surface).borderRadius(20)
           } else if (this.hduHelpDataError.length > 0) {
-            Text(this.hduHelpDataError).fontSize(12).fontColor('#B42318').width('100%')
-              .padding(16).backgroundColor('#FFF0F0').borderRadius(18)
+            Text(this.hduHelpDataError).fontSize(14).fontColor(AppTheme.red).width('100%')
+              .padding(16).backgroundColor(AppTheme.bg).borderRadius(18)
           } else {
             Column({ space: 7 }) {
-              Text('已连接的数据').fontSize(11).fontWeight(FontWeight.Bold).fontColor('#315BFF').width('100%')
+              Text('已连接的数据').fontSize(13).fontWeight(FontWeight.Bold).fontColor(AppTheme.blue).width('100%')
               Text(`${this.hduHelpSections.length} 个信息分区`).fontSize(20).fontWeight(FontWeight.Bold)
-                .fontColor('#171A22').width('100%')
-            }.width('100%').padding(18).backgroundColor('#E9EEFF').borderRadius(22)
+                .fontColor(AppTheme.ink).width('100%')
+            }.width('100%').padding(18).backgroundColor(AppTheme.blueSoft).borderRadius(18)
 
             ForEach(this.hduHelpSections, (section: HDUHelpDisplaySection) => {
               Column({ space: 10 }) {
                 Row() {
                   Column({ space: 3 }) {
-                    Text(section.title).fontSize(17).fontWeight(FontWeight.Bold).fontColor('#171A22')
-                    Text(section.summary).fontSize(11).fontColor('#7B8292')
+                    Text(section.title).fontSize(17).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
+                    Text(section.summary).fontSize(13).fontColor(AppTheme.secondary)
                   }.alignItems(HorizontalAlign.Start)
                   Blank()
-                  Text('✓').fontSize(13).fontColor('#19966B').width(28).height(28)
-                    .textAlign(TextAlign.Center).backgroundColor('#E8F7F1').borderRadius(10)
+                  Row() {
+                    AppIcon({ name: 'check', iconSize: 16, color: AppTheme.green })
+                  }.width(28).height(28).justifyContent(FlexAlign.Center)
+                    .backgroundColor(AppTheme.greenSoft).borderRadius(10)
                 }.width('100%')
                 ForEach(section.items, (item: HDUHelpDisplayItem) => {
                   this.dataItem(item)
                 }, (item: HDUHelpDisplayItem) => `${section.resource}-${item.label}`)
-              }.width('100%').padding(17).backgroundColor('#FFFFFF').borderRadius(22)
+              }.width('100%').padding(17).backgroundColor(AppTheme.surface).borderRadius(18)
             }, (section: HDUHelpDisplaySection) => section.resource)
 
             if (this.hduHelpSyncErrors.length > 0) {
               Column({ space: 8 }) {
                 Text('暂不可用的数据').fontSize(16).fontWeight(FontWeight.Bold)
-                  .fontColor('#9C3D34').width('100%')
+                  .fontColor(AppTheme.red).width('100%')
                 Text('以下项目需要在 HDUHelp 补充权限或服务授权，其余成功数据已全部展示。')
-                  .fontSize(11).fontColor('#8D625D').width('100%')
+                  .fontSize(13).fontColor(AppTheme.secondary).width('100%')
                 ForEach(this.hduHelpSyncErrors, (message: string) => {
-                  Text(message).fontSize(11).fontColor('#8D625D').width('100%').maxLines(3)
+                  Text(message).fontSize(13).fontColor(AppTheme.secondary).width('100%').maxLines(3)
                     .textOverflow({ overflow: TextOverflow.Ellipsis })
                 }, (message: string) => message)
-              }.width('100%').padding(17).backgroundColor('#FFF3F1').borderRadius(22)
+              }.width('100%').padding(17).backgroundColor(AppTheme.bg).borderRadius(18)
             }
 
             if (this.hduHelpPrompts.length > 0) {
               Column({ space: 11 }) {
-                Text('问问 Agent').fontSize(18).fontWeight(FontWeight.Bold).fontColor('#171A22').width('100%')
-                Text('基于已连接的数据继续完成任务').fontSize(11).fontColor('#7B8292').width('100%')
+                Text('问问 Agent').fontSize(18).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink).width('100%')
+                Text('基于已连接的数据继续完成任务').fontSize(13).fontColor(AppTheme.secondary).width('100%')
                 ForEach(this.hduHelpPrompts, (suggestion: HDUHelpSuggestedPrompt) => {
-                  Button(suggestion.title + '  ↗').width('100%').height(44).fontSize(12)
-                    .fontColor('#315BFF').backgroundColor('#F2F5FF').borderRadius(14)
+                  Button() {
+                    Row({ space: 10 }) {
+                      Text(suggestion.title).fontSize(15).fontColor(AppTheme.blue)
+                        .layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+                      AppIcon({ name: 'chevron', iconSize: 16, color: AppTheme.blue })
+                    }.width('100%')
+                  }.width('100%').height(48).padding({ left: 14, right: 14 })
+                    .backgroundColor(AppTheme.blueSoft).borderRadius(12)
                     .onClick(() => this.onOpenAgent(suggestion.prompt))
                 }, (suggestion: HDUHelpSuggestedPrompt) => suggestion.prompt_id)
-              }.width('100%').padding(18).backgroundColor('#FFFFFF').borderRadius(22)
+              }.width('100%').padding(18).backgroundColor(AppTheme.surface).borderRadius(18)
             }
           }
         }.width('100%').padding({ left: 18, right: 18, bottom: 28 })
       }.layoutWeight(1).width('100%')
-    }.width('100%').height('100%').backgroundColor('#F5F7FB')
+    }.width('100%').height('100%').alignItems(HorizontalAlign.Start)
+      .justifyContent(FlexAlign.Start).backgroundColor(AppTheme.bg)
   }
 
   build() {
@@ -340,142 +356,157 @@ export struct ProfilePage {
     } else {
       Scroll() {
       Column({ space: 18 }) {
+        Text('我的').fontSize(32).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink).width('100%')
         Row({ space: 14 }) {
-          Text(this.user.display_name.slice(0, 1)).fontSize(25).fontWeight(FontWeight.Bold).fontColor('#FFFFFF')
-            .width(58).height(58).textAlign(TextAlign.Center).backgroundColor('#315BFF').borderRadius(20)
+          Text(this.user.display_name.slice(0, 1)).fontSize(25).fontWeight(FontWeight.Bold).fontColor(AppTheme.surface)
+            .width(58).height(58).textAlign(TextAlign.Center).backgroundColor(AppTheme.blue).borderRadius(29)
           Column({ space: 4 }) {
-            Text(this.user.display_name).fontSize(21).fontWeight(FontWeight.Bold).fontColor('#171A22')
-            Text(this.user.email).fontSize(12).fontColor('#7B8292')
-          }.alignItems(HorizontalAlign.Start)
-        }.width('100%')
+            Text(this.user.display_name).fontSize(21).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
+              .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+            Text(this.user.email).fontSize(14).fontColor(AppTheme.secondary)
+              .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+          }.alignItems(HorizontalAlign.Start).layoutWeight(1)
+        }.width('100%').padding(18).backgroundColor(AppTheme.surface).borderRadius(18)
 
         if (this.message.length > 0) {
-          Text(this.message).fontSize(12).fontColor('#315BFF').width('100%')
-            .padding(12).backgroundColor('#E9EEFF').borderRadius(13)
+          Text(this.message).fontSize(14).fontColor(AppTheme.blue).width('100%')
+            .padding(12).backgroundColor(AppTheme.blueSoft).borderRadius(13)
         }
 
         Column({ space: 13 }) {
-          Text('账号与校园').fontSize(17).fontWeight(FontWeight.Bold).fontColor('#171A22').width('100%')
+          Text('账号与校园').fontSize(17).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink).width('100%')
           this.field('昵称', this.displayName, (value) => this.displayName = value)
           this.field('学校', this.school, (value) => this.school = value)
           this.field('校区', this.campus, (value) => this.campus = value)
           this.field('学期', this.semester, (value) => this.semester = value)
           this.field(`更新 API Key（当前 ${this.user.api_key_hint ?? '未配置'}）`, this.newApiKey,
             (value) => this.newApiKey = value, true)
-          Button('保存配置').width('100%').height(43).fontColor('#FFFFFF').backgroundColor('#171A22')
+          Button('保存配置').width('100%').height(48).fontSize(16).fontColor(AppTheme.surface).backgroundColor(AppTheme.blue)
             .borderRadius(13).onClick(() => this.saveProfile())
-        }.width('100%').padding(18).backgroundColor('#FFFFFF').borderRadius(22)
+        }.width('100%').padding(18).backgroundColor(AppTheme.surface).borderRadius(18)
 
         Column({ space: 12 }) {
           Row() {
             Column({ space: 4 }) {
-              Text('HDUHelp 校园档案').fontSize(17).fontWeight(FontWeight.Bold).fontColor('#171A22')
-              Text('PAT 加密保存，也支持官方 OAuth；不提交杭电密码').fontSize(10).fontColor('#7B8292')
-            }.alignItems(HorizontalAlign.Start)
+              Text('HDUHelp 校园档案').fontSize(17).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
+              Text('PAT 加密保存，也支持官方 OAuth；不提交杭电密码').fontSize(12).fontColor(AppTheme.secondary)
+            }.alignItems(HorizontalAlign.Start).layoutWeight(1)
             Blank()
-            Text(this.hduHelp.configured ? '已连接' : '未连接').fontSize(11)
-              .fontColor(this.hduHelp.configured ? '#19966B' : '#8B91A0')
+            Text(this.hduHelp.configured ? '已连接' : '未连接').fontSize(13)
+              .fontColor(this.hduHelp.configured ? AppTheme.green : AppTheme.muted)
           }.width('100%')
           if (this.hduHelpMessage.length > 0) {
-            Text(this.hduHelpMessage).fontSize(11)
-              .fontColor(this.hduHelpMessageIsError ? '#B42318' : '#315BFF')
+            Text(this.hduHelpMessage).fontSize(13)
+              .fontColor(this.hduHelpMessageIsError ? AppTheme.red : AppTheme.blue)
               .width('100%').padding(11)
-              .backgroundColor(this.hduHelpMessageIsError ? '#FFF0F0' : '#E9EEFF')
+              .backgroundColor(this.hduHelpMessageIsError ? AppTheme.bg : AppTheme.blueSoft)
               .borderRadius(12)
           }
           if (this.hduHelp.configured) {
             Column({ space: 3 }) {
               Text(`${this.hduHelp.auth_mode === 'pat' ? `个人令牌 ${this.hduHelp.token_hint ?? ''}` : '官方 OAuth'} · ${this.hduHelp.external_name ?? '当前用户'}`)
-                .fontSize(12).fontColor('#315BFF').width('100%').maxLines(1)
+                .fontSize(14).fontColor(AppTheme.blue).width('100%').maxLines(1)
                 .textOverflow({ overflow: TextOverflow.Ellipsis })
               Text(`${this.hduHelp.resources.length} 类校园数据可供 Agent 使用`)
-                .fontSize(10).fontColor('#6B7CC8').width('100%')
-            }.width('100%').padding(12).backgroundColor('#E9EEFF').borderRadius(13)
+                .fontSize(12).fontColor(AppTheme.secondary).width('100%')
+            }.width('100%').padding(12).backgroundColor(AppTheme.blueSoft).borderRadius(13)
             Row({ space: 9 }) {
-              Button('同步数据').layoutWeight(1).height(42).fontColor('#FFFFFF').backgroundColor('#315BFF')
+              Button('同步数据').layoutWeight(1).height(44).fontColor(AppTheme.surface).backgroundColor(AppTheme.blue)
                 .borderRadius(13).onClick(() => this.syncHduHelp())
-              Button('断开并删除').layoutWeight(1).height(42).fontColor('#D33D3D').backgroundColor('#FFF0F0')
+              Button('断开并删除').layoutWeight(1).height(44).fontColor(AppTheme.red).backgroundColor(AppTheme.bg)
                 .borderRadius(13).onClick(() => this.disconnectHduHelp())
             }.width('100%')
-            Button('查看校园档案与推荐问题').width('100%').height(42).fontColor('#315BFF')
-              .backgroundColor('#E9EEFF').borderRadius(13).onClick(() => this.openHduHelpData())
+            Button('查看校园档案与推荐问题').width('100%').height(44).fontColor(AppTheme.blue)
+              .backgroundColor(AppTheme.blueSoft).borderRadius(13).onClick(() => this.openHduHelpData())
           } else {
             TextInput({ text: this.hduHelpPat, placeholder: 'hduhelp_pat_…' }).type(InputType.Password)
-              .height(46).backgroundColor('#F5F7FB').borderRadius(13)
+              .height(46).backgroundColor(AppTheme.field).borderRadius(13)
               .onChange((value) => this.hduHelpPat = value)
-            Text('令牌仅发送到本机 CampusFlow 后端并以密文保存。').fontSize(10)
-              .fontColor('#7B8292').width('100%')
-            Button('使用令牌连接并同步').width('100%').height(42).fontColor('#FFFFFF')
-              .backgroundColor('#315BFF').borderRadius(13).onClick(() => this.connectHduHelpPat())
-            Button('或使用官方 OAuth').width('100%').height(40).fontColor('#315BFF')
-              .backgroundColor('#E9EEFF').borderRadius(13).onClick(() => this.connectHduHelp())
+            Text('令牌仅发送到本机 CampusFlow 后端并以密文保存。').fontSize(12)
+              .fontColor(AppTheme.secondary).width('100%')
+            Button('使用令牌连接并同步').width('100%').height(44).fontColor(AppTheme.surface)
+              .backgroundColor(AppTheme.blue).borderRadius(13).onClick(() => this.connectHduHelpPat())
+            Button('或使用官方 OAuth').width('100%').height(44).fontColor(AppTheme.blue)
+              .backgroundColor(AppTheme.blueSoft).borderRadius(13).onClick(() => this.connectHduHelp())
             if (this.hduHelpAuthorizeUrl.length > 0) {
               Hyperlink(this.hduHelpAuthorizeUrl, '打开 HDUHelp 官方授权页 ↗')
-                .color('#315BFF').width('100%')
-              Button('我已授权，检查连接').width('100%').height(40).fontColor('#315BFF')
-                .backgroundColor('#E9EEFF').borderRadius(13).onClick(() => this.loadHduHelp())
+                .color(AppTheme.blue).width('100%')
+              Button('我已授权，检查连接').width('100%').height(44).fontColor(AppTheme.blue)
+                .backgroundColor(AppTheme.blueSoft).borderRadius(13).onClick(() => this.loadHduHelp())
             }
           }
-        }.width('100%').padding(18).backgroundColor('#FFFFFF').borderRadius(22)
+        }.width('100%').padding(18).backgroundColor(AppTheme.surface).borderRadius(18)
 
         Column({ space: 12 }) {
           Row() {
-            Text('课表订阅').fontSize(17).fontWeight(FontWeight.Bold).fontColor('#171A22')
+            Text('课表订阅').fontSize(17).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
             Blank()
             Text(this.subscription.configured ? `${this.subscription.event_count} 节` : '未连接')
-              .fontSize(11).fontColor(this.subscription.configured ? '#19966B' : '#8B91A0')
+              .fontSize(13).fontColor(this.subscription.configured ? AppTheme.green : AppTheme.muted)
           }.width('100%')
           TextInput({ text: this.scheduleUrl, placeholder: '粘贴 HDUHelp 订阅链接' }).height(46)
-            .backgroundColor('#F5F7FB').borderRadius(13).onChange((value) => this.scheduleUrl = value)
+            .backgroundColor(AppTheme.field).borderRadius(13).onChange((value) => this.scheduleUrl = value)
           Row({ space: 9 }) {
-            Button('连接新课表').layoutWeight(1).height(42).fontColor('#FFFFFF').backgroundColor('#315BFF')
+            Button('连接新课表').layoutWeight(1).height(44).fontColor(AppTheme.surface).backgroundColor(AppTheme.blue)
               .borderRadius(13).onClick(() => this.saveSubscription())
             if (this.subscription.configured) {
-              Button('立即同步').layoutWeight(1).height(42).fontColor('#315BFF').backgroundColor('#E9EEFF')
+              Button('立即同步').layoutWeight(1).height(44).fontColor(AppTheme.blue).backgroundColor(AppTheme.blueSoft)
                 .borderRadius(13).onClick(() => this.syncSubscription())
             }
           }.width('100%')
-        }.width('100%').padding(18).backgroundColor('#FFFFFF').borderRadius(22)
+        }.width('100%').padding(18).backgroundColor(AppTheme.surface).borderRadius(18)
 
         if (this.user.role === 'admin') {
           Column({ space: 12 }) {
             Row() {
-              Text('用户管理').fontSize(17).fontWeight(FontWeight.Bold).fontColor('#171A22')
+              Text('用户管理').fontSize(17).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
               Blank()
-              Text(`${this.adminUsers.length} 人`).fontSize(11).fontColor('#315BFF')
+              Text(`${this.adminUsers.length} 人`).fontSize(13).fontColor(AppTheme.blue)
             }.width('100%')
             ForEach(this.adminUsers, (account: AdminUserSummary) => {
               Row({ space: 11 }) {
                 Text(account.display_name.slice(0, 1)).fontSize(14).fontWeight(FontWeight.Bold)
-                  .fontColor('#315BFF').width(36).height(36).textAlign(TextAlign.Center)
-                  .backgroundColor('#E9EEFF').borderRadius(12)
+                  .fontColor(AppTheme.blue).width(36).height(36).textAlign(TextAlign.Center)
+                  .backgroundColor(AppTheme.blueSoft).borderRadius(12)
                 Column({ space: 3 }) {
                   Row({ space: 6 }) {
-                    Text(account.display_name).fontSize(14).fontWeight(FontWeight.Medium).fontColor('#171A22')
+                    Text(account.display_name).fontSize(14).fontWeight(FontWeight.Medium).fontColor(AppTheme.ink)
                     if (account.role === 'admin') {
-                      Text('管理员').fontSize(9).fontColor('#FFFFFF').backgroundColor('#315BFF')
+                      Text('管理员').fontSize(11).fontColor(AppTheme.surface).backgroundColor(AppTheme.blue)
                         .padding({ left: 5, right: 5, top: 2, bottom: 2 }).borderRadius(7)
                     }
                   }
-                  Text(account.email).fontSize(10).fontColor('#7B8292').maxLines(1)
+                  Text(account.email).fontSize(12).fontColor(AppTheme.secondary).maxLines(1)
                     .textOverflow({ overflow: TextOverflow.Ellipsis })
                   Text(`${account.timetable_count} 节课 · ${account.campus_place_count} 个地点 · ${account.api_key_configured ? '凭据已配置' : '凭据未配置'}`)
-                    .fontSize(10).fontColor('#8B91A0')
+                    .fontSize(12).fontColor(AppTheme.muted)
                 }.alignItems(HorizontalAlign.Start).layoutWeight(1)
               }.width('100%')
             }, (account: AdminUserSummary) => account.user_id)
-          }.width('100%').padding(18).backgroundColor('#FFFFFF').borderRadius(22)
+          }.width('100%').padding(18).backgroundColor(AppTheme.surface).borderRadius(18)
         }
 
-        Column({ space: 5 }) {
-          Text('API 服务').fontSize(11).fontColor('#7E8595').width('100%')
-          Text(this.baseUrl).fontSize(13).fontColor('#171A22').width('100%')
-        }.width('100%').padding(16).backgroundColor('#FFFFFF').borderRadius(18)
+        Row({ space: 16 }) {
+          Column({ space: 4 }) {
+            Text('减少动态效果').fontSize(16).fontColor(AppTheme.ink)
+            Text('简化页面切换与交互动画').fontSize(13).fontColor(AppTheme.secondary)
+          }.alignItems(HorizontalAlign.Start).layoutWeight(1)
+          Toggle({ type: ToggleType.Switch, isOn: this.reduceMotion })
+            .selectedColor(AppTheme.green)
+            .onChange((value: boolean) => this.reduceMotion = value)
+            .accessibilityText('减少动态效果')
+        }.width('100%').padding(18).backgroundColor(AppTheme.surface).borderRadius(18)
 
-        Button('退出登录').width('100%').height(46).fontColor('#D33D3D').backgroundColor('#FFF0F0')
+        Column({ space: 5 }) {
+          Text('API 服务').fontSize(13).fontColor(AppTheme.secondary).width('100%')
+          Text(this.baseUrl).fontSize(15).fontColor(AppTheme.ink).width('100%')
+        }.width('100%').padding(16).backgroundColor(AppTheme.surface).borderRadius(18)
+
+        Button('退出登录').width('100%').height(46).fontColor(AppTheme.red).backgroundColor(AppTheme.bg)
           .borderRadius(14).onClick(() => this.onLogout())
-      }.width('100%').padding({ left: 18, right: 18, top: 20, bottom: 110 })
-      }.width('100%').height('100%').backgroundColor('#F5F7FB')
+      }.width('100%').alignItems(HorizontalAlign.Start).justifyContent(FlexAlign.Start)
+        .padding({ left: 18, right: 18, top: 20, bottom: 32 })
+      }.width('100%').height('100%').backgroundColor(AppTheme.bg)
     }
   }
 }
