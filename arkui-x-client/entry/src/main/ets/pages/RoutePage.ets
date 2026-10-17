@@ -152,11 +152,11 @@ export struct RoutePage {
     Column() {
       Row({ space: 12 }) {
         Button() {
-          AppIcon({ name: 'back', iconSize: 22, color: AppTheme.blue })
+          AppIcon({ name: 'back', iconSize: 22, color: AppTheme.accent })
         }.width(48).height(48).backgroundColor(AppTheme.surface).borderRadius(22)
           .accessibilityText('返回上一页').onClick(() => this.onBack())
         Column({ space: 3 }) {
-          Text('校园导航').fontSize(28).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
+          Text('校园导航').fontSize(AppTheme.pageTitle).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
           Text('查看校园路线示意与步行估算').fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary)
         }.alignItems(HorizontalAlign.Start).layoutWeight(1)
       }.width('100%').padding({ left: 18, right: 18, top: 12, bottom: 12 })
@@ -165,7 +165,7 @@ export struct RoutePage {
         Column({ space: 16 }) {
           Column({ space: 12 }) {
             Row() {
-              Text('选择路线').fontSize(18).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
+              Text('选择路线').fontSize(AppTheme.sectionTitle).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
               Blank()
               Text(`${this.places.length} 个地点`).fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary)
             }.width('100%')
@@ -185,15 +185,15 @@ export struct RoutePage {
                   .value(this.places[this.originIndex]?.name ?? '')
                   .fontColor(AppTheme.ink).backgroundColor(AppTheme.field)
                   .optionBgColor(AppTheme.surface).optionFontColor(AppTheme.ink)
-                  .selectedOptionBgColor(AppTheme.blueSoft).selectedOptionFontColor(AppTheme.blue)
+                  .selectedOptionBgColor(AppTheme.accentSoft).selectedOptionFontColor(AppTheme.accent)
                   .borderRadius(13).width('100%').constraintSize({ minHeight: 48 })
                   .onSelect((index: number) => {
                     this.choosePlace(index, true);
                   })
               }.width('100%').alignItems(HorizontalAlign.Start)
 
-              Button('交换起终点').constraintSize({ minHeight: 48 }).fontSize(AppTheme.metaSize).fontColor(AppTheme.blue)
-                .backgroundColor(AppTheme.blueSoft).borderRadius(12).onClick(() => {
+              Button('交换起终点').constraintSize({ minHeight: 48 }).fontSize(AppTheme.metaSize).fontColor(AppTheme.accent)
+                .backgroundColor(AppTheme.accentSoft).borderRadius(12).onClick(() => {
                   this.getUIContext().animateTo({ duration: AppTheme.motion(200), curve: Curve.EaseOut }, () => this.swap());
                 })
 
@@ -203,7 +203,7 @@ export struct RoutePage {
                   .value(this.places[this.destinationIndex]?.name ?? '')
                   .fontColor(AppTheme.ink).backgroundColor(AppTheme.field)
                   .optionBgColor(AppTheme.surface).optionFontColor(AppTheme.ink)
-                  .selectedOptionBgColor(AppTheme.blueSoft).selectedOptionFontColor(AppTheme.blue)
+                  .selectedOptionBgColor(AppTheme.accentSoft).selectedOptionFontColor(AppTheme.accent)
                   .borderRadius(13).width('100%').constraintSize({ minHeight: 48 })
                   .onSelect((index: number) => {
                     this.choosePlace(index, false);
@@ -211,8 +211,8 @@ export struct RoutePage {
               }.width('100%').alignItems(HorizontalAlign.Start)
 
               Button(this.routeLoading ? '正在生成示意路线…' : '生成路线图').width('100%').constraintSize({ minHeight: 48 })
-                .fontSize(AppTheme.metaSize).fontWeight(FontWeight.Bold).fontColor(AppTheme.surface)
-                .backgroundColor(AppTheme.blue).borderRadius(15).enabled(!this.routeLoading)
+                .fontSize(AppTheme.metaSize).fontWeight(FontWeight.Bold).fontColor(AppTheme.onAccent)
+                .backgroundColor(AppTheme.accent).borderRadius(15).enabled(!this.routeLoading)
                 .onClick(() => this.createRoute())
             }
 
@@ -235,11 +235,11 @@ export struct RoutePage {
             this.PlaceEvidence(this.route.destination)
           } else if (!this.loading && !this.routeLoading && this.errorText.length === 0 && this.placesError.length === 0 && this.places.length >= 2) {
             Column({ space: 7 }) {
-              AppIcon({ name: 'route', iconSize: 32, color: AppTheme.blue })
+              AppIcon({ name: 'route', iconSize: 32, color: AppTheme.accent })
               Text('选择两个地点').fontSize(17).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
               Text('路线按已有校园地图生成，步行时间为估算；请以现场道路与通行情况为准。')
                 .fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).textAlign(TextAlign.Center)
-            }.width('100%').padding(24).backgroundColor(AppTheme.blueSoft).borderRadius(18)
+            }.width('100%').padding(24).backgroundColor(AppTheme.accentSoft).borderRadius(18)
           }
         }.width('100%').alignItems(HorizontalAlign.Start).justifyContent(FlexAlign.Start)
           .padding({ left: 18, right: 18, top: 4, bottom: 32 })

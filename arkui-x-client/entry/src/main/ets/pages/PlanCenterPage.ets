@@ -784,7 +784,7 @@ export struct PlanCenterPage {
       ForEach(this.dayTimeline(), (item: PlanningTimelineItem) => {
         Column({ space: 8 }) {
           Row({ space: 8 }) {
-            Text(item.time).fontSize(AppTheme.bodySize).fontWeight(FontWeight.Medium).fontColor(AppTheme.actionBlue)
+            Text(item.time).fontSize(AppTheme.bodySize).fontWeight(FontWeight.Medium).fontColor(AppTheme.accent)
               .layoutWeight(1).wordBreak(WordBreak.BREAK_WORD)
             Text(item.completed ? '任务 · 已完成' : item.kind).fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet)
           }.width('100%')
@@ -795,7 +795,7 @@ export struct PlanCenterPage {
             .fontColor(AppTheme.quiet).width('100%').wordBreak(WordBreak.BREAK_WORD)
           if (item.taskId.length > 0) {
             Button('查看任务详情').constraintSize({ minHeight: 48 }).width('100%')
-              .fontSize(AppTheme.bodySize).fontColor(AppTheme.actionBlue).backgroundColor(AppTheme.blueSoft)
+              .fontSize(AppTheme.bodySize).fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft)
               .borderRadius(AppTheme.controlRadius).onClick(() => this.openDetails('task', item.taskId))
           }
         }.width('100%').alignItems(HorizontalAlign.Start).padding(AppTheme.cardInset)
@@ -809,7 +809,7 @@ export struct PlanCenterPage {
         }, (task: PlanningTask) => `${task.task_id}-${this.planningRevision}`)
       }
       Button(`查看无日期待办（${this.unscheduledCount()} 项待完成）`).width('100%').constraintSize({ minHeight: 48 })
-        .fontSize(AppTheme.bodySize).fontColor(AppTheme.actionBlue).backgroundColor(AppTheme.blueSoft)
+        .fontSize(AppTheme.bodySize).fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft)
         .borderRadius(AppTheme.controlRadius).onClick(() => {
           this.selectTaskFilter('undated');
           this.selectView('tasks');
@@ -822,10 +822,10 @@ export struct PlanCenterPage {
     Button({ type: ButtonType.Circle }) {
       Stack() {
         Circle().width(25).height(25)
-          .fill(task.status === 'completed' ? AppTheme.actionBlue : AppTheme.surface)
-          .stroke(task.status === 'completed' ? AppTheme.actionBlue : AppTheme.quiet).strokeWidth(1.5)
+          .fill(task.status === 'completed' ? AppTheme.accent : AppTheme.surface)
+          .stroke(task.status === 'completed' ? AppTheme.accent : AppTheme.quiet).strokeWidth(1.5)
         if (task.status === 'completed') {
-          AppIcon({ name: 'check', iconSize: 15, color: AppTheme.surface })
+          AppIcon({ name: 'check', iconSize: 15, color: AppTheme.onAccent })
         }
       }
     }.width(48).height(48).backgroundColor(Color.Transparent)
@@ -848,12 +848,12 @@ export struct PlanCenterPage {
         TaskScheduleDetails({ startAt: task.start_at, endAt: task.end_at,
           location: task.location, reminderMinutes: task.reminder_minutes })
       } else {
-        Text('时间格式异常，请核对后再安排。').fontSize(AppTheme.metaSize).fontColor(AppTheme.red).width('100%')
+        Text('时间格式异常，请核对后再安排。').fontSize(AppTheme.metaSize).fontColor(AppTheme.danger).width('100%')
       }
       if (task.status === 'completed') {
         Text('已完成').fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
       } else if (this.taskOverdue(task)) {
-        Text('已逾期').fontSize(AppTheme.metaSize).fontColor(AppTheme.red).width('100%')
+        Text('已逾期').fontSize(AppTheme.metaSize).fontColor(AppTheme.danger).width('100%')
       }
     }.width('100%').alignItems(HorizontalAlign.Start).padding(12)
       .backgroundColor(AppTheme.canvas).borderRadius(AppTheme.controlRadius)
@@ -872,7 +872,7 @@ export struct PlanCenterPage {
       ForEach(plan.milestones, (milestone: PlanMilestone) => {
         Column({ space: 8 }) {
           Divider().color(AppTheme.line)
-          Text(milestone.title).fontSize(16).fontWeight(FontWeight.Medium).wordBreak(WordBreak.BREAK_WORD)
+          Text(milestone.title).fontSize(AppTheme.bodySize).fontWeight(FontWeight.Medium).wordBreak(WordBreak.BREAK_WORD)
             .fontColor(AppTheme.ink).width('100%')
           Text(`截止：${formatPlanDateTime(milestone.due_at)} · ${milestone.completed_count}/${milestone.task_count} 项已完成`)
             .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
@@ -888,7 +888,7 @@ export struct PlanCenterPage {
       if (this.ungroupedPlanTasks(plan).length > 0) {
         Column({ space: 8 }) {
           Divider().color(AppTheme.line)
-          Text('未归入里程碑的任务').fontSize(16).fontWeight(FontWeight.Medium)
+          Text('未归入里程碑的任务').fontSize(AppTheme.bodySize).fontWeight(FontWeight.Medium)
             .fontColor(AppTheme.ink).width('100%')
           ForEach(this.ungroupedPlanTasks(plan), (task: PlanningTask) => {
             this.PlanTask(task)
@@ -904,7 +904,7 @@ export struct PlanCenterPage {
   @Builder
   private TaskDetailLink(task: PlanningTask) {
     Button('查看任务详情').width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
-      .fontColor(AppTheme.actionBlue).backgroundColor(AppTheme.blueSoft).borderRadius(AppTheme.controlRadius)
+      .fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft).borderRadius(AppTheme.controlRadius)
       .onClick(() => this.openDetails('task', task.task_id))
   }
 
@@ -916,11 +916,11 @@ export struct PlanCenterPage {
       Text(`${this.overview.completed_tasks}/${this.overview.total_tasks} 项任务已完成`)
         .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
       if (this.overview.plans.length === 0 && !this.loading && this.loaded) {
-        Text('还没有已确认的目标计划。向 Agent 描述目标，确认提案后在这里推进。')
+        Text('还没有已确认的目标计划。向助手描述目标，确认提案后在这里推进。')
           .fontSize(AppTheme.bodySize).fontColor(AppTheme.quiet).width('100%')
       }
-      Button('让 Agent 规划这一周').width('100%').constraintSize({ minHeight: 48 })
-        .fontSize(AppTheme.bodySize).fontColor(AppTheme.actionBlue).backgroundColor(AppTheme.blueSoft)
+      Button('让助手规划这一周').width('100%').constraintSize({ minHeight: 48 })
+        .fontSize(AppTheme.bodySize).fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft)
         .borderRadius(AppTheme.controlRadius).onClick(() => this.onOpenAgent(this.planPrompt()))
       ForEach(this.overview.plans, (plan: PlanSummary) => {
         Column({ space: 12 }) {
@@ -931,7 +931,7 @@ export struct PlanCenterPage {
           Text(plan.target_date === null ? '未设截止日' : `截止 ${plan.target_date}`)
             .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
           Button('打开完整计划').width('100%').constraintSize({ minHeight: 48 })
-            .fontSize(AppTheme.bodySize).fontColor(AppTheme.actionBlue).backgroundColor(AppTheme.blueSoft)
+            .fontSize(AppTheme.bodySize).fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft)
             .borderRadius(AppTheme.controlRadius).onClick(() => this.openDetails('plan', plan.plan_id))
           Button(this.expandedPlanIds.includes(plan.plan_id) ? '收起里程碑与任务' : '在列表展开里程碑与任务')
             .width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
@@ -950,9 +950,9 @@ export struct PlanCenterPage {
     Button({ type: ButtonType.Normal }) {
       Text(label).fontSize(AppTheme.bodySize).width('100%').textAlign(TextAlign.Center)
         .fontWeight(this.dateChoiceSelected(choice, value) ? FontWeight.Medium : FontWeight.Regular)
-        .fontColor(this.dateChoiceSelected(choice, value) ? AppTheme.surface : AppTheme.quiet)
+        .fontColor(this.dateChoiceSelected(choice, value) ? AppTheme.onAccent : AppTheme.quiet)
     }.constraintSize({ minHeight: 48 }).padding(10).layoutWeight(1)
-      .backgroundColor(this.dateChoiceSelected(choice, value) ? AppTheme.actionBlue : AppTheme.canvas)
+      .backgroundColor(this.dateChoiceSelected(choice, value) ? AppTheme.accent : AppTheme.canvas)
       .accessibilityText(`${label}${this.dateChoiceSelected(choice, value) ? '，已选中' : ''}`)
       .borderRadius(AppTheme.controlRadius).onClick(() => this.selectDraftDate(value, choice))
   }
@@ -962,9 +962,9 @@ export struct PlanCenterPage {
     Button({ type: ButtonType.Normal }) {
       Text(label).fontSize(AppTheme.bodySize).width('100%').textAlign(TextAlign.Center)
         .fontWeight(this.draftTaskTime === value ? FontWeight.Medium : FontWeight.Regular)
-        .fontColor(this.draftTaskTime === value ? AppTheme.surface : AppTheme.quiet)
+        .fontColor(this.draftTaskTime === value ? AppTheme.onAccent : AppTheme.quiet)
     }.constraintSize({ minHeight: 48 }).padding(10).layoutWeight(1)
-      .backgroundColor(this.draftTaskTime === value ? AppTheme.actionBlue : AppTheme.canvas)
+      .backgroundColor(this.draftTaskTime === value ? AppTheme.accent : AppTheme.canvas)
       .accessibilityText(`${label}${this.draftTaskTime === value ? '，已选中' : ''}`)
       .borderRadius(AppTheme.controlRadius).onClick(() => this.selectDraftTime(value))
   }
@@ -976,11 +976,11 @@ export struct PlanCenterPage {
         Text(this.monthLabel()).fontSize(AppTheme.sectionTitle).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
           .layoutWeight(1)
         Button({ type: ButtonType.Circle }) {
-          AppIcon({ name: 'back', iconSize: 17, color: AppTheme.actionBlue })
+          AppIcon({ name: 'back', iconSize: 17, color: AppTheme.accent })
         }.width(48).height(48).backgroundColor(Color.Transparent).accessibilityText('上个月')
           .onClick(() => this.moveMonth(-1))
         Button({ type: ButtonType.Circle }) {
-          AppIcon({ name: 'chevron', iconSize: 17, color: AppTheme.actionBlue })
+          AppIcon({ name: 'chevron', iconSize: 17, color: AppTheme.accent })
         }.width(48).height(48).backgroundColor(Color.Transparent).accessibilityText('下个月')
           .onClick(() => this.moveMonth(1))
       }.width('100%')
@@ -1005,8 +1005,8 @@ export struct PlanCenterPage {
                         .fontSize(AppTheme.metaSize)
                     }.width('100%').justifyContent(FlexAlign.Center)
                   }.width('100%').height(48).padding(0)
-                    .fontColor(this.selectedDate === item.date ? AppTheme.surface : AppTheme.ink)
-                    .backgroundColor(this.selectedDate === item.date ? AppTheme.actionBlue : Color.Transparent)
+                    .fontColor(this.selectedDate === item.date ? AppTheme.onAccent : AppTheme.ink)
+                    .backgroundColor(this.selectedDate === item.date ? AppTheme.accent : Color.Transparent)
                     .borderRadius(AppTheme.controlRadius)
                     .accessibilityText(`${item.date}，${item.courseCount} 节课，${item.taskCount} 项任务${this.selectedDate === item.date ? '，已选中' : ''}`)
                     .onClick(() => this.selectDay(item.date))
@@ -1026,17 +1026,18 @@ export struct PlanCenterPage {
       Text('待办内容').fontSize(AppTheme.bodySize).fontColor(AppTheme.quiet).width('100%')
       Row({ space: 8 }) {
         TextInput({ text: this.title, placeholder: '快速记录一个待办', controller: this.taskInputController })
-          .layoutWeight(1).height(48).fontSize(AppTheme.bodySize).fontColor(AppTheme.ink)
-          .backgroundColor(AppTheme.canvas).borderRadius(AppTheme.controlRadius).onChange((value) => this.title = value)
+          .layoutWeight(1).constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize).fontColor(AppTheme.ink)
+          .backgroundColor(AppTheme.canvas).borderRadius(AppTheme.controlRadius)
+          .border({ width: 1, color: AppTheme.outline }).onChange((value) => this.title = value)
         Button({ type: ButtonType.Circle }) {
-          AppIcon({ name: 'plus', iconSize: 22, color: AppTheme.surface })
-        }.width(48).height(48).backgroundColor(AppTheme.actionBlue)
+          AppIcon({ name: 'plus', iconSize: 22, color: AppTheme.onAccent })
+        }.width(48).height(48).backgroundColor(AppTheme.accent)
           .accessibilityText('预览添加待办').enabled(this.title.trim().length > 0 && !this.writesBlocked()).onClick(() => this.addTask())
       }.width('100%')
       Row() {
         Text('日期').fontSize(AppTheme.bodySize).fontColor(AppTheme.quiet)
         Text(this.draftTaskDate.length === 0 ? '无日期' : this.draftTaskDate)
-          .fontSize(AppTheme.bodySize).fontWeight(FontWeight.Medium).fontColor(AppTheme.actionBlue)
+          .fontSize(AppTheme.bodySize).fontWeight(FontWeight.Medium).fontColor(AppTheme.accent)
           .layoutWeight(1).textAlign(TextAlign.End)
       }.width('100%')
       Row({ space: 8 }) {
@@ -1050,7 +1051,7 @@ export struct PlanCenterPage {
       Row() {
         Text('时间').fontSize(AppTheme.bodySize).fontColor(AppTheme.quiet)
         Text(this.draftTaskTime.length === 0 ? '全天' : this.draftTaskTime)
-          .fontSize(AppTheme.bodySize).fontWeight(FontWeight.Medium).fontColor(AppTheme.actionBlue)
+          .fontSize(AppTheme.bodySize).fontWeight(FontWeight.Medium).fontColor(AppTheme.accent)
           .layoutWeight(1).textAlign(TextAlign.End)
       }.width('100%')
       Row({ space: 8 }) {
@@ -1062,9 +1063,9 @@ export struct PlanCenterPage {
         Button({ type: ButtonType.Normal }) {
           Text(this.draftTaskTime.length > 0 && this.draftTaskTime !== '08:00' &&
             this.draftTaskTime !== '14:00' ? this.draftTaskTime : '自定义')
-            .fontSize(AppTheme.bodySize).fontColor(AppTheme.actionBlue).width('100%').textAlign(TextAlign.Center)
+            .fontSize(AppTheme.bodySize).fontColor(AppTheme.accent).width('100%').textAlign(TextAlign.Center)
         }.constraintSize({ minHeight: 48 }).padding(10).layoutWeight(1)
-          .backgroundColor(AppTheme.blueSoft).borderRadius(AppTheme.controlRadius).accessibilityText('自定义时间')
+          .backgroundColor(AppTheme.accentSoft).borderRadius(AppTheme.controlRadius).accessibilityText('自定义时间')
           .onClick(() => this.openTimePicker())
       }.width('100%')
     }.width('100%').alignItems(HorizontalAlign.Start)
@@ -1074,8 +1075,9 @@ export struct PlanCenterPage {
   private EditField(label: string, value: string, placeholder: string, change: (value: string) => void) {
     Column({ space: 8 }) {
       Text(label).fontSize(AppTheme.bodySize).fontColor(AppTheme.quiet).width('100%')
-      TextInput({ text: value, placeholder: placeholder }).height(48).width('100%').fontSize(AppTheme.bodySize)
-        .fontColor(AppTheme.ink).backgroundColor(AppTheme.surface).borderRadius(AppTheme.controlRadius).onChange(change)
+      TextInput({ text: value, placeholder: placeholder }).constraintSize({ minHeight: 48 }).width('100%').fontSize(AppTheme.bodySize)
+        .fontColor(AppTheme.ink).backgroundColor(AppTheme.surface).borderRadius(AppTheme.controlRadius)
+        .border({ width: 1, color: AppTheme.outline }).onChange(change)
     }.width('100%')
   }
 
@@ -1095,7 +1097,7 @@ export struct PlanCenterPage {
         Text('这里保存提醒设置；系统通知实际送达仍取决于平台支持与通知权限。')
           .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
         Button('预览任务更改').width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
-          .fontColor(AppTheme.surface).backgroundColor(AppTheme.actionBlue).borderRadius(AppTheme.controlRadius)
+          .fontColor(AppTheme.onAccent).backgroundColor(AppTheme.accent).borderRadius(AppTheme.controlRadius)
           .enabled(!this.writesBlocked()).onClick(() => this.previewTaskEdit())
         Button('放弃这份编辑草稿').width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
           .fontColor(AppTheme.quiet).backgroundColor(AppTheme.surface).borderRadius(AppTheme.controlRadius)
@@ -1119,7 +1121,7 @@ export struct PlanCenterPage {
           .onChange((value: string) => this.editPlanSummary = value)
         this.EditField('截止日期', this.editPlanDate, 'YYYY-MM-DD，留空不设截止日', (value: string) => this.editPlanDate = value)
         Button('预览计划更改').width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
-          .fontColor(AppTheme.surface).backgroundColor(AppTheme.actionBlue).borderRadius(AppTheme.controlRadius)
+          .fontColor(AppTheme.onAccent).backgroundColor(AppTheme.accent).borderRadius(AppTheme.controlRadius)
           .enabled(!this.writesBlocked()).onClick(() => this.previewPlanEdit())
         Button('放弃这份编辑草稿').width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
           .fontColor(AppTheme.quiet).backgroundColor(AppTheme.surface).borderRadius(AppTheme.controlRadius)
@@ -1140,7 +1142,7 @@ export struct PlanCenterPage {
           Text(`${this.taskScheduleLabel(task)} · ${task.status === 'completed' ? '已完成' : '待完成'}`)
             .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%').wordBreak(WordBreak.BREAK_WORD)
           if (this.taskOverdue(task)) {
-            Text('已逾期').fontSize(AppTheme.metaSize).fontColor(AppTheme.red)
+            Text('已逾期').fontSize(AppTheme.metaSize).fontColor(AppTheme.danger)
           }
         }.width('100%').alignItems(HorizontalAlign.Start)
       }.layoutWeight(1).constraintSize({ minHeight: 48 }).padding({ top: 8, bottom: 8 })
@@ -1154,8 +1156,8 @@ export struct PlanCenterPage {
   @Builder
   private TaskFilter(label: string, filter: string) {
     Button(label).layoutWeight(1).constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
-      .fontColor(this.taskFilter === filter ? AppTheme.surface : AppTheme.quiet)
-      .backgroundColor(this.taskFilter === filter ? AppTheme.actionBlue : AppTheme.surface)
+      .fontColor(this.taskFilter === filter ? AppTheme.onAccent : AppTheme.quiet)
+      .backgroundColor(this.taskFilter === filter ? AppTheme.accent : AppTheme.surface)
       .borderRadius(AppTheme.controlRadius)
       .accessibilityText(`${label}${this.taskFilter === filter ? '，已选中' : ''}`)
       .onClick(() => this.selectTaskFilter(filter))
@@ -1189,10 +1191,10 @@ export struct PlanCenterPage {
   private ViewTab(label: string, view: string) {
     Button({ type: ButtonType.Normal }) {
       Text(label).fontSize(AppTheme.bodySize).fontWeight(this.currentView === view ? FontWeight.Bold : FontWeight.Regular)
-        .fontColor(this.currentView === view ? AppTheme.actionBlue : AppTheme.quiet)
+        .fontColor(this.currentView === view ? AppTheme.accent : AppTheme.quiet)
         .width('100%').textAlign(TextAlign.Center).wordBreak(WordBreak.BREAK_WORD)
     }.layoutWeight(1).constraintSize({ minHeight: 48 }).padding({ left: 4, right: 4, top: 8, bottom: 8 })
-      .backgroundColor(this.currentView === view ? AppTheme.blueSoft : Color.Transparent)
+      .backgroundColor(this.currentView === view ? AppTheme.accentSoft : Color.Transparent)
       .borderRadius(AppTheme.controlRadius).accessibilityText(`${label}${this.currentView === view ? '，已选中' : ''}`)
       .onClick(() => this.selectView(view))
   }
@@ -1209,8 +1211,8 @@ export struct PlanCenterPage {
               Text(`${day.courseCount + day.taskCount} 项`).fontSize(AppTheme.metaSize)
             }.width('100%').alignItems(HorizontalAlign.Center)
           }.width(56).constraintSize({ minHeight: 72 }).padding(8)
-            .fontColor(this.selectedDate === day.date ? AppTheme.surface : AppTheme.ink)
-            .backgroundColor(this.selectedDate === day.date ? AppTheme.actionBlue : AppTheme.surface)
+            .fontColor(this.selectedDate === day.date ? AppTheme.onAccent : AppTheme.ink)
+            .backgroundColor(this.selectedDate === day.date ? AppTheme.accent : AppTheme.surface)
             .borderRadius(AppTheme.controlRadius)
             .accessibilityText(`${day.date}，${day.courseCount} 节课，${day.taskCount} 项任务${this.selectedDate === day.date ? '，已选中' : ''}`)
             .onClick(() => this.selectDay(day.date))
@@ -1225,10 +1227,10 @@ export struct PlanCenterPage {
       this.WeekStrip()
       Row({ space: 8 }) {
         Button('回到今天').constraintSize({ minHeight: 48 }).layoutWeight(1).fontSize(AppTheme.bodySize)
-          .fontColor(AppTheme.actionBlue).backgroundColor(AppTheme.surface).borderRadius(AppTheme.controlRadius)
+          .fontColor(AppTheme.accent).backgroundColor(AppTheme.surface).borderRadius(AppTheme.controlRadius)
           .onClick(() => this.selectDay(this.relativeDate(0)))
         Button(this.calendarExpanded ? '收起月历' : '展开月历').constraintSize({ minHeight: 48 }).layoutWeight(1)
-          .fontSize(AppTheme.bodySize).fontColor(AppTheme.actionBlue).backgroundColor(AppTheme.blueSoft)
+          .fontSize(AppTheme.bodySize).fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft)
           .borderRadius(AppTheme.controlRadius).onClick(() => this.toggleCalendar())
       }.width('100%')
       if (this.calendarExpanded) {
@@ -1236,8 +1238,8 @@ export struct PlanCenterPage {
           .backgroundColor(AppTheme.surface).borderRadius(AppTheme.cardRadius)
       }
       this.DayTimeline()
-      Button('让 Agent 安排今晚复习').width('100%').constraintSize({ minHeight: 48 })
-        .fontSize(AppTheme.bodySize).fontColor(AppTheme.actionBlue).backgroundColor(AppTheme.blueSoft)
+      Button('让助手安排今晚复习').width('100%').constraintSize({ minHeight: 48 })
+        .fontSize(AppTheme.bodySize).fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft)
         .borderRadius(AppTheme.controlRadius).onClick(() => this.onOpenAgent(this.reviewPrompt()))
     }.width('100%').padding({ left: AppTheme.pageInset, right: AppTheme.pageInset, top: 12, bottom: 24 })
   }
@@ -1267,14 +1269,14 @@ export struct PlanCenterPage {
               Text('属于已确认计划；完成状态会同步到目标进度。').fontSize(AppTheme.metaSize)
                 .fontColor(AppTheme.quiet).width('100%')
               Button('查看所属计划').width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
-                .fontColor(AppTheme.actionBlue).backgroundColor(AppTheme.blueSoft).borderRadius(AppTheme.controlRadius)
+                .fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft).borderRadius(AppTheme.controlRadius)
                 .onClick(() => this.openDetails('plan', task.plan_id ?? ''))
             }
             Button('编辑任务与时间').width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
-              .fontColor(AppTheme.actionBlue).backgroundColor(AppTheme.blueSoft).borderRadius(AppTheme.controlRadius)
+              .fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft).borderRadius(AppTheme.controlRadius)
               .enabled(!this.writesBlocked()).onClick(() => this.beginTaskEdit(task))
             Button('预览删除任务').width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
-              .fontColor(AppTheme.red).backgroundColor(AppTheme.redSoft).borderRadius(AppTheme.controlRadius)
+              .fontColor(AppTheme.danger).backgroundColor(AppTheme.dangerSoft).borderRadius(AppTheme.controlRadius)
               .enabled(!this.writesBlocked()).onClick(() => this.requestDelete(task))
           }.width('100%')
         }, (task: PlanningTask) => `${task.task_id}-${this.planningRevision}`)
@@ -1289,10 +1291,10 @@ export struct PlanCenterPage {
               .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
             this.PlanBody(plan)
             Button('编辑计划信息').width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
-              .fontColor(AppTheme.actionBlue).backgroundColor(AppTheme.blueSoft).borderRadius(AppTheme.controlRadius)
+              .fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft).borderRadius(AppTheme.controlRadius)
               .enabled(!this.writesBlocked()).onClick(() => this.beginPlanEdit(plan))
             Button('预览删除计划').width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
-              .fontColor(AppTheme.red).backgroundColor(AppTheme.redSoft).borderRadius(AppTheme.controlRadius)
+              .fontColor(AppTheme.danger).backgroundColor(AppTheme.dangerSoft).borderRadius(AppTheme.controlRadius)
               .enabled(!this.writesBlocked()).onClick(() => this.requestPlanDelete(plan))
           }.width('100%').padding(AppTheme.cardInset).backgroundColor(AppTheme.surface).borderRadius(AppTheme.cardRadius)
         }, (plan: PlanSummary) => `${plan.plan_id}-${this.planningRevision}`)
@@ -1304,7 +1306,7 @@ export struct PlanCenterPage {
           '暂时无法读取对应内容，请重新加载。' : '此项目已不存在，或不属于当前账号。')
           .fontSize(AppTheme.bodySize).fontColor(AppTheme.quiet).width('100%')
         Button('重新加载计划').width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
-          .fontColor(AppTheme.actionBlue).backgroundColor(AppTheme.blueSoft).borderRadius(AppTheme.controlRadius)
+          .fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft).borderRadius(AppTheme.controlRadius)
           .enabled(!this.loading).onClick(() => this.reload(true))
       }
     }.width('100%').alignItems(HorizontalAlign.Start)
@@ -1316,7 +1318,7 @@ export struct PlanCenterPage {
       Row({ space: 8 }) {
         if (this.detailKind.length > 0) {
           Button({ type: ButtonType.Circle }) {
-            AppIcon({ name: 'back', iconSize: 22, color: AppTheme.actionBlue })
+            AppIcon({ name: 'back', iconSize: 22, color: AppTheme.accent })
           }.width(48).height(48).backgroundColor(AppTheme.surface)
             .accessibilityText(this.backLabel())
             .onClick(() => this.closeDetails())
@@ -1330,21 +1332,21 @@ export struct PlanCenterPage {
         }.layoutWeight(1).alignItems(HorizontalAlign.Start)
         if (this.detailKind.length === 0) {
           Button('添加待办').constraintSize({ minHeight: 48 }).padding(12).fontSize(AppTheme.bodySize)
-            .fontColor(AppTheme.surface).backgroundColor(AppTheme.actionBlue).borderRadius(AppTheme.controlRadius)
+            .fontColor(AppTheme.onAccent).backgroundColor(AppTheme.accent).borderRadius(AppTheme.controlRadius)
             .onClick(() => this.openDetails('draft'))
         }
       }.width('100%').padding({ left: AppTheme.pageInset, right: AppTheme.pageInset, top: 16 })
       if (this.errorText.length > 0) {
         Row({ space: 8 }) {
-          Text(this.errorText).fontSize(AppTheme.metaSize).fontColor(AppTheme.red).layoutWeight(1)
+          Text(this.errorText).fontSize(AppTheme.metaSize).fontColor(AppTheme.danger).layoutWeight(1)
             .wordBreak(WordBreak.BREAK_WORD)
-          Button('刷新').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize).fontColor(AppTheme.red)
+          Button('刷新').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize).fontColor(AppTheme.danger)
             .backgroundColor(Color.Transparent).enabled(!this.loading).onClick(() => this.reload(true))
         }.width('100%').padding({ left: AppTheme.pageInset, right: AppTheme.pageInset })
       }
       if (this.loading) {
         Row({ space: 8 }) {
-          LoadingProgress().width(18).height(18).color(AppTheme.actionBlue)
+          LoadingProgress().width(18).height(18).color(AppTheme.accent)
           Text('正在更新计划…').fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet)
         }.width('100%').padding({ left: AppTheme.pageInset, right: AppTheme.pageInset })
       }
@@ -1354,7 +1356,7 @@ export struct PlanCenterPage {
       }
       if (this.actionState.phase !== 'idle' && this.detailKind !== 'action') {
         Button(this.actionBlocksWrites() ? '查看待处理变更 / 核对结果' : '查看上次变更结果').width('100%').constraintSize({ minHeight: 48 })
-          .fontSize(AppTheme.bodySize).fontColor(AppTheme.actionBlue).backgroundColor(AppTheme.blueSoft)
+          .fontSize(AppTheme.bodySize).fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft)
           .borderRadius(AppTheme.controlRadius).onClick(() => this.openDetails('action'))
           .padding({ left: AppTheme.pageInset, right: AppTheme.pageInset })
       }

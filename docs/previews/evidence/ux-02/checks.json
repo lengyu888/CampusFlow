@@ -1,0 +1,157 @@
+{
+  "type": "Browser approximation, local PNG and actual theme checks; not ArkUI/native acceptance",
+  "passed": 10,
+  "checks": [
+    "浏览器边界与每个 CSS 颜色逐项匹配当前 AppTheme",
+    "实算实际 token 的正文、警告、错误、焦点及按压色对",
+    "七张真实本地 PNG 全部解码，40/48 缩图在双背景上尺寸准确",
+    "表单关联错误提示，模拟保存仍保留输入",
+    "未知结果使用警告色且不能再次保存，只核对一次原型回执",
+    "加载、空记录、警告、错误、成功的文字与视觉互不冒充",
+    "图片失败保留所有文字路径，恢复后仍加载真实资源",
+    "首步引导、空态与两个校园入口仅执行明确原型路径",
+    "360/390 与大字下文字可换行、触区不缩小且无横向溢出",
+    "减少动态设置关闭动画，刷新重置演示且不产生外联"
+  ],
+  "contrasts": [
+    {
+      "foreground": "ink",
+      "background": "surface",
+      "ratio": 12.661,
+      "required": 4.5
+    },
+    {
+      "foreground": "secondary",
+      "background": "surface",
+      "ratio": 5.288,
+      "required": 4.5
+    },
+    {
+      "foreground": "secondary",
+      "background": "canvas",
+      "ratio": 4.852,
+      "required": 4.5
+    },
+    {
+      "foreground": "accent",
+      "background": "surface",
+      "ratio": 6.557,
+      "required": 4.5
+    },
+    {
+      "foreground": "accent",
+      "background": "accentSoft",
+      "ratio": 5.596,
+      "required": 4.5
+    },
+    {
+      "foreground": "onAccent",
+      "background": "accent",
+      "ratio": 6.557,
+      "required": 4.5
+    },
+    {
+      "foreground": "outline",
+      "background": "surface",
+      "ratio": 3.838,
+      "required": 3
+    },
+    {
+      "foreground": "focus",
+      "background": "surface",
+      "ratio": 6.557,
+      "required": 3
+    },
+    {
+      "foreground": "warning",
+      "background": "warningSoft",
+      "ratio": 5.039,
+      "required": 4.5
+    },
+    {
+      "foreground": "danger",
+      "background": "dangerSoft",
+      "ratio": 5.256,
+      "required": 4.5
+    },
+    {
+      "foreground": "success",
+      "background": "successSoft",
+      "ratio": 5.14,
+      "required": 4.5
+    },
+    {
+      "foreground": "onAccent",
+      "background": "pressed",
+      "ratio": 8.311,
+      "required": 4.5
+    },
+    {
+      "foreground": "accent",
+      "background": "pressedSoft",
+      "ratio": 5.038,
+      "required": 4.5
+    },
+    {
+      "foreground": "disabledContent",
+      "background": "disabledSurface",
+      "ratio": 3.649,
+      "required": null,
+      "note": "Disabled controls only; not an ordinary text compliance claim."
+    }
+  ],
+  "resources": [
+    {
+      "name": "xj_onboarding",
+      "bytes": 1842715,
+      "width": 1448,
+      "height": 1086,
+      "pngColorType": 2
+    },
+    {
+      "name": "xj_empty_day",
+      "bytes": 1682313,
+      "width": 1536,
+      "height": 1024,
+      "pngColorType": 6
+    },
+    {
+      "name": "xj_course_entry",
+      "bytes": 1004028,
+      "width": 1254,
+      "height": 1254,
+      "pngColorType": 6
+    },
+    {
+      "name": "xj_focus_entry",
+      "bytes": 1558531,
+      "width": 1254,
+      "height": 1254,
+      "pngColorType": 6
+    },
+    {
+      "name": "xj_campus_entry",
+      "bytes": 1340472,
+      "width": 1254,
+      "height": 1254,
+      "pngColorType": 6
+    },
+    {
+      "name": "xj_focus_end",
+      "bytes": 1576293,
+      "width": 1536,
+      "height": 1024,
+      "pngColorType": 6
+    },
+    {
+      "name": "xj_review_empty",
+      "bytes": 1696770,
+      "width": 1536,
+      "height": 1024,
+      "pngColorType": 6
+    }
+  ],
+  "resourceBytes": 10701122,
+  "errors": [],
+  "externalRequests": []
+}

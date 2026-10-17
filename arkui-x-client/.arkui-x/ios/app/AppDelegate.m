@@ -96,7 +96,7 @@
 
 - (void)setNavRootVC:(id)viewController {
     self.window = [[UIWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];
-    self.window.backgroundColor = [UIColor whiteColor];
+    self.window.backgroundColor = [UIColor colorWithRed:246.0/255.0 green:244.0/255.0 blue:239.0/255.0 alpha:1.0];
     [self.window makeKeyAndVisible];
     UINavigationController *navi = [[UINavigationController alloc]initWithRootViewController:viewController];
     [self setNaviAppearance:navi];
@@ -107,11 +107,11 @@
     if (@available(iOS 13.0, *)) {
         UINavigationBarAppearance *appearance = [UINavigationBarAppearance new];
         [appearance configureWithOpaqueBackground];
-        appearance.backgroundColor = UIColor.whiteColor;
+        appearance.backgroundColor = [UIColor colorWithRed:246.0/255.0 green:244.0/255.0 blue:239.0/255.0 alpha:1.0];
         navi.navigationBar.standardAppearance = appearance;
         navi.navigationBar.scrollEdgeAppearance = appearance;
     } else {
-        navi.navigationBar.barTintColor = UIColor.whiteColor;
+        navi.navigationBar.barTintColor = [UIColor colorWithRed:246.0/255.0 green:244.0/255.0 blue:239.0/255.0 alpha:1.0];
         navi.navigationBar.translucent = NO;
     }
 }

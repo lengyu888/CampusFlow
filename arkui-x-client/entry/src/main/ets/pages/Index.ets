@@ -398,10 +398,11 @@ struct Index {
   private SecondaryHeader(title: string) {
     Row({ space: 8 }) {
       Button({ type: ButtonType.Normal }) {
-        AppIcon({ name: 'back', iconSize: 22, color: AppTheme.actionBlue })
+        AppIcon({ name: 'back', iconSize: 22, color: AppTheme.accent })
       }.width(48).height(48).backgroundColor(Color.Transparent).borderRadius(AppTheme.controlRadius)
         .accessibilityText('返回上一页').onClick(() => this.goBack())
-      Text(title).fontSize(18).fontWeight(FontWeight.Medium).fontColor(AppTheme.ink).layoutWeight(1)
+      Text(title).fontSize(AppTheme.sectionTitle).fontWeight(FontWeight.Medium).fontColor(AppTheme.ink)
+        .layoutWeight(1).wordBreak(WordBreak.BREAK_WORD)
     }.width('100%').padding({ left: 8, right: 20, top: 4, bottom: 4 }).backgroundColor(AppTheme.surface)
       .border({ width: { bottom: 1 }, color: AppTheme.line })
   }
@@ -411,11 +412,12 @@ struct Index {
     Button({ type: ButtonType.Normal }) {
       Column({ space: 4 }) {
         AppIcon({ name: icon, iconSize: 23,
-          color: this.selectedTab() === tab ? AppTheme.blue : AppTheme.secondary })
-        Text(label).fontSize(12).fontWeight(this.selectedTab() === tab ? FontWeight.Medium : FontWeight.Regular)
-          .fontColor(this.selectedTab() === tab ? AppTheme.blue : AppTheme.secondary)
-      }.height(52).justifyContent(FlexAlign.Center)
-    }.layoutWeight(1).height(56).backgroundColor(Color.Transparent).borderRadius(16)
+          color: this.selectedTab() === tab ? AppTheme.accent : AppTheme.secondary })
+        Text(label).fontSize(AppTheme.metaSize).fontWeight(this.selectedTab() === tab ? FontWeight.Medium : FontWeight.Regular)
+          .fontColor(this.selectedTab() === tab ? AppTheme.accent : AppTheme.secondary)
+      }.constraintSize({ minHeight: 48 }).justifyContent(FlexAlign.Center)
+    }.layoutWeight(1).constraintSize({ minHeight: 56 }).padding({ top: 4, bottom: 4 })
+      .backgroundColor(this.selectedTab() === tab ? AppTheme.accentSoft : Color.Transparent).borderRadius(AppTheme.controlRadius)
       .accessibilityText(`${label}${this.selectedTab() === tab ? '，已选中' : ''}`)
       .onClick(() => this.selectTab(tab))
   }
@@ -456,9 +458,9 @@ struct Index {
         }.layoutWeight(1).width('100%').clip(true)
           .opacity(this.contentOpacity).translate({ y: this.contentOffset })
         if (isRootRoute(this.activeTab) && !(this.activeTab === 2 && this.planInnerActive)) {
-          Row() {
+          Row({ space: 4 }) {
             this.navItem(0, 'home', '今日')
-            this.navItem(1, 'agent', 'Agent')
+            this.navItem(1, 'assistant', '助手')
             this.navItem(2, 'calendar', '计划')
             this.navItem(8, 'classroom', '校园')
           }.width('100%').constraintSize({ minHeight: 64 })

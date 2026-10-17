@@ -1,5 +1,6 @@
 import { UserProfile, WeatherForecast } from '../model/ApiModels';
 import { AppIcon } from '../components/AppIcon';
+import { AppIllustration } from '../components/AppIllustration';
 import { AppTheme } from '../theme/AppTheme';
 import { EvidencePanel } from '../components/EvidencePanel';
 import { CampusKnowledgePanel } from '../components/CampusKnowledgePanel';
@@ -112,7 +113,7 @@ export struct CampusPage {
           Text('城市级预报 · 不读取设备位置').fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet)
         }.layoutWeight(1).alignItems(HorizontalAlign.Start)
         Button('刷新').constraintSize({ minHeight: 48, minWidth: 64 }).fontSize(AppTheme.metaSize)
-          .fontColor(AppTheme.actionBlue).backgroundColor(AppTheme.blueSoft).enabled(!this.weatherLoading)
+          .fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft).enabled(!this.weatherLoading)
           .onClick(() => this.loadWeather())
       }.width('100%')
       if (this.weatherLoading) {
@@ -141,10 +142,14 @@ export struct CampusPage {
   }
 
   @Builder
-  private Entry(icon: string, title: string, description: string, action: () => void) {
+  private Entry(icon: string, title: string, description: string, action: () => void, illustration: Resource | undefined = undefined) {
     Button({ type: ButtonType.Normal }) {
-      Row({ space: 14 }) {
-        AppIcon({ name: icon, iconSize: 24, color: AppTheme.actionBlue })
+      Row({ space: 12 }) {
+        if (illustration !== undefined) {
+          AppIllustration({ source: illustration, imageWidth: 44, imageHeight: 44, fallbackIcon: icon })
+        } else {
+          Stack() { AppIcon({ name: icon, iconSize: 24, color: AppTheme.accent }) }.width(44).height(44)
+        }
         Column({ space: 5 }) {
           Text(title).fontSize(AppTheme.bodySize).fontWeight(FontWeight.Medium)
             .fontColor(AppTheme.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
@@ -169,31 +174,31 @@ export struct CampusPage {
               .wordBreak(WordBreak.BREAK_WORD)
           }.layoutWeight(1).alignItems(HorizontalAlign.Start)
           Button({ type: ButtonType.Circle }) {
-            Text(this.user.display_name.slice(0, 1)).fontSize(18).fontColor(AppTheme.actionBlue)
-          }.width(48).height(48).backgroundColor(AppTheme.blueSoft)
+            Text(this.user.display_name.slice(0, 1)).fontSize(AppTheme.sectionTitle).fontColor(AppTheme.accent)
+          }.width(48).height(48).backgroundColor(AppTheme.accentSoft)
             .accessibilityText('打开个人设置').onClick(() => this.onOpenProfile())
         }.width('100%')
         this.WeatherCard()
         CampusKnowledgePanel({ baseUrl: this.baseUrl, token: this.token, campusScope: this.campusIdentity(), active: this.active })
         Column({ space: 12 }) {
-          this.Entry('calendar', '我的课表', '手动维护、预览导入与检查变更', () => this.onOpenTimetable())
-          this.Entry('route', '校园导航', '选择地点，查看路线和步行估算', () => this.onOpenRoute())
+          this.Entry('calendar', '我的课表', '手动维护、预览导入与检查变更', () => this.onOpenTimetable(), $r('app.media.xj_course_entry'))
+          this.Entry('route', '校园导航', '选择地点，查看路线和步行估算', () => this.onOpenRoute(), $r('app.media.xj_campus_entry'))
           this.Entry('classroom', '校园服务', '教室、借阅与个人校园信息', () => this.onOpenServices())
           this.Entry('skills', '能力管理', '查看权限，按需要启用或停用', () => this.onOpenSkills())
           this.Entry('calendar', '数据与连接', '管理课表订阅、校园账号和模型配置', () => this.onOpenProfile())
         }.width('100%')
         Button({ type: ButtonType.Normal }) {
           Row({ space: 12 }) {
-            AppIcon({ name: 'agent', iconSize: 24, color: AppTheme.actionBlue })
+            AppIcon({ name: 'assistant', iconSize: 24, color: AppTheme.accent })
             Column({ space: 5 }) {
-              Text('让 Agent 帮你找').fontSize(AppTheme.bodySize).fontWeight(FontWeight.Medium)
-                .fontColor(AppTheme.actionBlue).width('100%')
+              Text('让助手帮你找').fontSize(AppTheme.bodySize).fontWeight(FontWeight.Medium)
+                .fontColor(AppTheme.accent).width('100%')
               Text('结合已有课表，先核对再安排').fontSize(AppTheme.metaSize)
                 .fontColor(AppTheme.quiet).width('100%').wordBreak(WordBreak.BREAK_WORD)
             }.layoutWeight(1).alignItems(HorizontalAlign.Start)
           }.width('100%')
         }.width('100%').constraintSize({ minHeight: 80 }).padding(AppTheme.cardInset)
-          .backgroundColor(AppTheme.blueSoft).borderRadius(AppTheme.cardRadius)
+          .backgroundColor(AppTheme.accentSoft).borderRadius(AppTheme.cardRadius)
           .onClick(() => this.onOpenAgent('根据我的课表，帮我看看今天需要注意的校园安排。请说明信息来源。'))
         Text('校园信息的覆盖范围以连接的数据源为准。时间安排先预览，确认后再执行。')
           .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')

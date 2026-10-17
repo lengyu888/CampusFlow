@@ -54,7 +54,7 @@ export class PlatformVoiceDriver implements VoiceDriver {
   }
 
   private async getProvider(): Promise<VoiceDriver> {
-    if (this.disposed) { throw new VoiceInteractionError('语音已停止，请重新打开 Agent 页面。'); }
+    if (this.disposed) { throw new VoiceInteractionError('语音已停止，请重新打开助手页面。'); }
     if (this.provider !== null) { return this.provider; }
     if (this.pendingProvider === null) {
       this.pendingProvider = this.nativePlatform() ? import('./NativeBridgeVoiceDriver').then((module) => {

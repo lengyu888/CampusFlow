@@ -60,7 +60,7 @@ export struct LearningPreferencesPanel {
       TextInput({ text: value, placeholder: placeholder }).type(InputType.Number).height(48)
         .fontSize(AppTheme.bodySize).backgroundColor(AppTheme.field).borderRadius(AppTheme.controlRadius)
         .enabled(this.editable()).onChange((text: string) => this.editField(field, text)).accessibilityText(label)
-      if (this.fieldError(field).length > 0) { Text(this.fieldError(field)).fontSize(AppTheme.metaSize).fontColor(AppTheme.red).width('100%') }
+      if (this.fieldError(field).length > 0) { Text(this.fieldError(field)).fontSize(AppTheme.metaSize).fontColor(AppTheme.danger).width('100%') }
     }.width('100%').alignItems(HorizontalAlign.Start)
   }
   build() {
@@ -69,28 +69,29 @@ export struct LearningPreferencesPanel {
         Row({ space: 12 }) {
           Column({ space: 4 }) {
             Text('学习偏好').fontSize(AppTheme.sectionTitle).fontWeight(FontWeight.Medium).fontColor(AppTheme.ink).width('100%')
-            Text(this.summary()).fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%').wordBreak(WordBreak.BREAK_WORD)
+            Text(this.summary()).fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
           }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-          Text(this.expanded ? '收起' : '展开').fontSize(AppTheme.metaSize).fontColor(AppTheme.actionBlue)
+          Text(this.expanded ? '收起' : '展开').fontSize(AppTheme.metaSize).fontColor(AppTheme.accent)
         }.width('100%')
       }.width('100%').constraintSize({ minHeight: 64 }).backgroundColor(AppTheme.surface).borderRadius(AppTheme.cardRadius)
         .onClick(() => this.expanded = !this.expanded)
       if (this.expanded) {
         Text('只保存下面这些主动填写的选项。启用后作为安排建议，课程冲突、截止时间和你当次明确要求优先。不会自动推断习惯。')
-          .fontSize(AppTheme.bodySize).fontColor(AppTheme.quiet).width('100%')
+          .fontSize(AppTheme.bodySize).fontColor(AppTheme.secondary).width('100%')
         if (this.state.snapshot !== null) {
           Text(`当前已保存：${this.state.snapshot.enabled ? '启用' : '停用'}，学习 ${this.state.snapshot.session_minutes} 分钟 / 休息 ${this.state.snapshot.break_minutes} 分钟，每日 ${this.state.snapshot.daily_minutes} 分钟，${this.periodLabel(this.state.snapshot.preferred_period)}。`)
-            .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%').wordBreak(WordBreak.BREAK_WORD)
+            .fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
           Text(this.state.snapshot.updated_at === null ? '尚无已保存偏好。' : `更新时间：${formatPlanDateTime(this.state.snapshot.updated_at)}`)
-            .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+            .fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
         }
         if (this.state.message.length > 0) {
-          FeedbackPanel({ kind: this.busy() ? 'loading' : ['unknown', 'stale', 'error'].includes(this.state.phase) ? 'warning' : 'info',
+          FeedbackPanel({ kind: this.busy() ? 'loading' : this.state.phase === 'unknown' ? 'unknown' :
+            this.state.phase === 'stale' ? 'warning' : this.state.phase === 'error' ? 'error' : 'info',
             title: this.state.phase === 'unknown' ? '保存结果待核对' : '学习偏好状态', message: this.state.message })
         }
         Row({ space: 12 }) {
           Text('在后续安排中使用这些偏好').fontSize(AppTheme.bodySize).fontColor(AppTheme.ink).layoutWeight(1)
-          Toggle({ type: ToggleType.Switch, isOn: this.state.draft.enabled }).selectedColor(AppTheme.green)
+          Toggle({ type: ToggleType.Switch, isOn: this.state.draft.enabled }).selectedColor(AppTheme.accent)
             .enabled(this.editable()).onChange((enabled: boolean) => this.setEnabled(enabled)).accessibilityText('启用学习偏好，需要保存后生效')
         }.width('100%').constraintSize({ minHeight: 48 })
         this.NumberField('session', '单次学习（分钟）', this.state.draft.session, '15–120')
@@ -101,38 +102,38 @@ export struct LearningPreferencesPanel {
           ForEach(['any', 'morning', 'afternoon', 'evening'], (period: string) => {
             Button(`${this.periodLabel(period)}${this.state.draft.period === period ? ' · 已选' : ''}`)
               .constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize).margin({ right: 8, bottom: 8 })
-              .fontColor(this.state.draft.period === period ? '#FFFFFF' : AppTheme.actionBlue)
-              .backgroundColor(this.state.draft.period === period ? AppTheme.actionBlue : AppTheme.blueSoft)
+              .fontColor(this.state.draft.period === period ? AppTheme.onAccent : AppTheme.accent)
+              .backgroundColor(this.state.draft.period === period ? AppTheme.accent : AppTheme.accentSoft)
               .enabled(this.editable()).onClick(() => this.editField('period', period))
           }, (period: string) => period)
         }.width('100%')
         if (this.state.phase === 'unknown' || this.state.canRetry) {
-          Button('使用原操作重试核对').width('100%').constraintSize({ minHeight: 48 }).fontColor(AppTheme.actionBlue)
-            .backgroundColor(AppTheme.blueSoft).enabled(this.state.canRetry && !this.busy()).onClick(() => this.instance().retry())
+          Button('使用原操作重试核对').width('100%').constraintSize({ minHeight: 48 }).fontColor(AppTheme.accent)
+            .backgroundColor(AppTheme.accentSoft).enabled(this.state.canRetry && !this.busy()).onClick(() => this.instance().retry())
         } else {
           Button('保存偏好与开关').width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
-            .fontColor('#FFFFFF').backgroundColor(AppTheme.actionBlue).enabled(this.editable() && this.state.dirty).onClick(() => this.instance().save())
+            .fontColor(AppTheme.onAccent).backgroundColor(AppTheme.accent).enabled(this.editable() && this.state.dirty).onClick(() => this.instance().save())
         }
-        Button('读取最新值 · 保留草稿').width('100%').constraintSize({ minHeight: 48 }).fontColor(AppTheme.actionBlue)
-          .backgroundColor(AppTheme.blueSoft).enabled(!this.busy() && (this.state.phase !== 'unknown' || this.state.canRetry)).onClick(() => this.instance().load())
+        Button('读取最新值 · 保留草稿').width('100%').constraintSize({ minHeight: 48 }).fontColor(AppTheme.accent)
+          .backgroundColor(AppTheme.accentSoft).enabled(!this.busy() && (this.state.phase !== 'unknown' || this.state.canRetry)).onClick(() => this.instance().load())
         if (this.state.dirty && this.editable()) {
-          Button('放弃未保存草稿').width('100%').constraintSize({ minHeight: 48 }).fontColor(AppTheme.quiet)
+          Button('放弃未保存草稿').width('100%').constraintSize({ minHeight: 48 }).fontColor(AppTheme.secondary)
             .backgroundColor(AppTheme.field).onClick(() => this.discardConfirm = true)
         }
         if (this.discardConfirm) {
-          Text('确认后重新读取当前偏好；读取失败仍保留草稿。').fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
-          Button('确认放弃并读取').constraintSize({ minHeight: 48 }).fontColor(AppTheme.red).backgroundColor(AppTheme.redSoft)
+          Text('确认后重新读取当前偏好；读取失败仍保留草稿。').fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
+          Button('确认放弃并读取').constraintSize({ minHeight: 48 }).fontColor(AppTheme.danger).backgroundColor(AppTheme.dangerSoft)
             .enabled(!this.busy()).onClick(() => { this.discardConfirm = false; this.instance().load(true); })
           Button('保留草稿').constraintSize({ minHeight: 48 }).onClick(() => this.discardConfirm = false)
         }
         if (this.state.confirmClear) {
-          Text('确认清除后停用并恢复默认值，只影响后续请求；已开始的运行和历史不会撤回。').fontSize(AppTheme.bodySize).fontColor(AppTheme.red).width('100%')
-          Button('确认清除学习偏好').width('100%').constraintSize({ minHeight: 48 }).fontColor(AppTheme.red)
-            .backgroundColor(AppTheme.redSoft).enabled(this.editable()).onClick(() => this.instance().clear())
+          Text('确认清除后停用并恢复默认值，只影响后续请求；已开始的运行和历史不会撤回。').fontSize(AppTheme.bodySize).fontColor(AppTheme.danger).width('100%')
+          Button('确认清除学习偏好').width('100%').constraintSize({ minHeight: 48 }).fontColor(AppTheme.danger)
+            .backgroundColor(AppTheme.dangerSoft).enabled(this.editable()).onClick(() => this.instance().clear())
           Button('保留偏好').constraintSize({ minHeight: 48 }).onClick(() => this.instance().cancelClear())
         } else {
-          Button('清除学习偏好…').width('100%').constraintSize({ minHeight: 48 }).fontColor(AppTheme.red)
-            .backgroundColor(AppTheme.redSoft).enabled(this.editable()).onClick(() => this.instance().askClear())
+          Button('清除学习偏好…').width('100%').constraintSize({ minHeight: 48 }).fontColor(AppTheme.danger)
+            .backgroundColor(AppTheme.dangerSoft).enabled(this.editable()).onClick(() => this.instance().askClear())
         }
       }
     }.width('100%').alignItems(HorizontalAlign.Start).padding(AppTheme.cardInset)

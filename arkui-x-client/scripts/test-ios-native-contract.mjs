@@ -179,7 +179,7 @@ test('interrupted native journal stays queryable for cleanup and cannot silently
 
 test('system notifications contain generic lock-screen text and no account/task/transcript payload', () => {
   const add = method(reminders, 'addItems:');
-  assert.match(add, /content.title = @"CampusFlow 提醒"/);
+  assert.match(add, /content.title = @"行简提醒"/);
   assert.match(add, /content.body = @"你有一项安排即将开始，打开应用查看。"/);
   assert.doesNotMatch(add, /content\.userInfo\s*=|content\.(title|body)\s*=\s*(job|desired|self|command)/);
   assert.match(add, /triggerWithTimeInterval:delay repeats:NO/);

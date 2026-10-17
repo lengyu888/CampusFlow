@@ -3,9 +3,9 @@ import { AppTheme } from '../theme/AppTheme';
 // One 24-unit vector grid keeps icon weight consistent across native platforms.
 @Component
 export struct AppIcon {
-  @Watch('redraw') @Prop name: string = 'agent';
+  @Watch('redraw') @Prop name: string = 'assistant';
   @Watch('redraw') @Prop iconSize: number = 24;
-  @Watch('redraw') @Prop color: string = AppTheme.blue;
+  @Watch('redraw') @Prop color: string = AppTheme.accent;
   private settings: RenderingContextSettings = new RenderingContextSettings(true);
   private context: CanvasRenderingContext2D = new CanvasRenderingContext2D(this.settings);
   private ready: boolean = false;
@@ -35,6 +35,13 @@ export struct AppIcon {
 
   private trace(): void {
     switch (this.name) {
+      case 'assistant':
+      case 'agent':
+        this.roundedBox(3, 3, 18, 14);
+        this.line([[5, 17], [5, 21], [10, 17]]);
+        this.line([[7, 8], [17, 8]]);
+        this.line([[7, 12], [14, 12]]);
+        break;
       case 'home':
         this.line([[3, 10], [12, 3], [21, 10]]);
         this.line([[5, 9], [5, 21], [10, 21], [10, 15], [14, 15], [14, 21], [19, 21], [19, 9]]);
@@ -141,7 +148,10 @@ export struct AppIcon {
         this.line([[7, 12], [13, 12]]);
         break;
       default:
-        this.line([[12, 2], [14.8, 9.2], [22, 12], [14.8, 14.8], [12, 22], [9.2, 14.8], [2, 12], [9.2, 9.2], [12, 2]]);
+        this.context.moveTo(22, 12);
+        this.context.arc(12, 12, 10, 0, Math.PI * 2);
+        this.line([[12, 11], [12, 17]]);
+        this.line([[12, 7], [12, 7.4]]);
     }
   }
 

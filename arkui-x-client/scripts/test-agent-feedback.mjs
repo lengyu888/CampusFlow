@@ -55,7 +55,7 @@ test('server error codes give actionable safe messages and retain typed identity
     assert.ok(error.message.length > 0);
     assert.doesNotMatch(error.message, /private-provider|diagnostics/);
   }
-  assert.match(requestFailure(401, '{"code":"LOGIN_REQUIRED"}').message, /重新登录 CampusFlow/);
+  assert.match(requestFailure(401, '{"code":"LOGIN_REQUIRED"}').message, /重新登录行简/);
   assert.match(requestFailure(503, '{"code":"MODEL_KEY_REQUIRED"}').message, /API Key/);
   assert.match(requestFailure(504, '{"code":"REQUEST_TIMEOUT"}').message, /先核对/);
 });

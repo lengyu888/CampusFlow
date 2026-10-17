@@ -94,16 +94,16 @@ export struct SkillsPage {
   build() {
     Scroll() {
       Column({ space: 24 }) {
-        Text('查看用途和权限，再决定是否交给 Agent 使用。')
+        Text('查看用途和权限，再决定是否交给助手使用。')
           .fontSize(AppTheme.bodySize).fontColor(AppTheme.quiet).width('100%')
         Row({ space: 8 }) {
           Button(this.loaded ? `全部 ${this.skills.length}` : '全部').layoutWeight(1).constraintSize({ minHeight: 48 })
-            .fontSize(AppTheme.bodySize).fontColor(!this.installedOnly ? '#FFFFFF' : AppTheme.actionBlue)
-            .backgroundColor(!this.installedOnly ? AppTheme.actionBlue : AppTheme.blueSoft)
+            .fontSize(AppTheme.bodySize).fontColor(!this.installedOnly ? AppTheme.onAccent : AppTheme.accent)
+            .backgroundColor(!this.installedOnly ? AppTheme.accent : AppTheme.accentSoft)
             .borderRadius(AppTheme.controlRadius).onClick(() => this.selectFilter(false))
           Button(this.loaded ? `已安装 ${this.installedCount()}` : '已安装').layoutWeight(1).constraintSize({ minHeight: 48 })
-            .fontSize(AppTheme.bodySize).fontColor(this.installedOnly ? '#FFFFFF' : AppTheme.actionBlue)
-            .backgroundColor(this.installedOnly ? AppTheme.actionBlue : AppTheme.blueSoft)
+            .fontSize(AppTheme.bodySize).fontColor(this.installedOnly ? AppTheme.onAccent : AppTheme.accent)
+            .backgroundColor(this.installedOnly ? AppTheme.accent : AppTheme.accentSoft)
             .borderRadius(AppTheme.controlRadius).onClick(() => this.selectFilter(true))
         }.width('100%')
         if (this.loading) {
@@ -124,7 +124,7 @@ export struct SkillsPage {
         ForEach(this.visibleSkills(), (skill: SkillSummary) => {
           Column({ space: 12 }) {
             Row({ space: 12 }) {
-              AppIcon({ name: 'skills', iconSize: 24, color: AppTheme.actionBlue })
+              AppIcon({ name: 'skills', iconSize: 24, color: AppTheme.accent })
               Text(skill.name).fontSize(AppTheme.sectionTitle).fontWeight(FontWeight.Medium)
                 .fontColor(AppTheme.ink).layoutWeight(1).wordBreak(WordBreak.BREAK_WORD)
             }.width('100%')
@@ -133,7 +133,7 @@ export struct SkillsPage {
             Text(skill.description).fontSize(AppTheme.bodySize).fontColor(AppTheme.ink).width('100%')
             Button(this.expandedIds.includes(skill.skill_id) ? '收起权限与版本' : `查看 ${skill.permissions.length} 项权限与版本`)
               .width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
-              .fontColor(AppTheme.actionBlue).backgroundColor(AppTheme.blueSoft).borderRadius(AppTheme.controlRadius)
+              .fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft).borderRadius(AppTheme.controlRadius)
               .onClick(() => this.toggleDetails(skill.skill_id))
             if (this.expandedIds.includes(skill.skill_id)) {
               Text(`版本 ${skill.version} · ${skill.author}${skill.update_available ? ' · 有可用更新' : ''}`)
@@ -149,7 +149,7 @@ export struct SkillsPage {
               }, (permission: SkillPermission) => permission.code)
               Button(this.busyId === skill.skill_id ? '正在提交…' : !skill.installed ? '同意以上权限并安装' : skill.enabled ? '停用此能力' : '启用以上权限')
                 .width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
-                .fontColor('#FFFFFF').backgroundColor(AppTheme.actionBlue).borderRadius(AppTheme.controlRadius)
+                .fontColor(AppTheme.onAccent).backgroundColor(AppTheme.accent).borderRadius(AppTheme.controlRadius)
                 .enabled(!this.loading && this.busyId.length === 0 && this.errorText.length === 0)
                 .onClick(() => { if (skill.installed) { this.toggle(skill); } else { this.install(skill); } })
             } else if (skill.installed && skill.enabled) {

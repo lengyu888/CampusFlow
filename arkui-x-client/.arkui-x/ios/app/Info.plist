@@ -11,7 +11,7 @@
 	<key>CFBundleName</key>
 	<string>{{CFBundleName}}</string>
 	<key>CFBundleDisplayName</key>
-	<string>{{CFBundleDisplayName}}</string>
+	<string>行简</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleVersion</key>
@@ -23,9 +23,9 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>按下语音输入时使用麦克风，将语音转为可编辑文字；CampusFlow 不保存录音。</string>
+	<string>按下语音输入时使用麦克风，将语音转为可编辑文字；行简不保存录音。</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>使用系统语音识别将语音转为文字。系统服务可能联网处理音频，CampusFlow 不保存录音。</string>
+	<string>使用系统语音识别将语音转为文字。系统服务可能联网处理音频，行简不保存录音。</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>

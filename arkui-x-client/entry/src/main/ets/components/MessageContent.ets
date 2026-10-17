@@ -44,7 +44,7 @@ export struct MessageContent {
   build() {
     Column({ space: 12 }) {
       if (this.isUser || this.showOriginal) {
-        Text(this.content).fontSize(16).fontColor(this.isUser ? '#FFFFFF' : AppTheme.ink)
+        Text(this.content).fontSize(16).fontColor(this.isUser ? AppTheme.onAccent : AppTheme.ink)
           .width('100%').wordBreak(WordBreak.BREAK_WORD).copyOption(CopyOptions.InApp)
       } else {
         ForEach(this.blocks, (item: MessageBlock) => {
@@ -78,7 +78,7 @@ export struct MessageContent {
           Text('长按上方原文可复制完整回答').fontSize(12).fontColor(AppTheme.secondary).width('100%')
         }
         Button({ type: ButtonType.Normal }) {
-          Text(this.showOriginal ? '返回排版' : '查看完整原文').fontSize(12).fontColor(AppTheme.blue)
+          Text(this.showOriginal ? '返回排版' : '查看完整原文').fontSize(12).fontColor(AppTheme.accent)
             .width('100%').textAlign(TextAlign.Start)
         }.backgroundColor(Color.Transparent)
           .constraintSize({ minHeight: 48 }).padding({ top: 10, bottom: 10, left: 0, right: 0 })

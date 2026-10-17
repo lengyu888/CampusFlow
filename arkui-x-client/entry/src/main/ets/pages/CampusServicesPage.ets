@@ -292,12 +292,12 @@ export struct CampusServicesPage {
   private classroomCard(room: ClassroomItem) {
     Row({ space: 12 }) {
       Column({ space: 2 }) {
-        Text(room.location_name).fontSize(16).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
+        Text(room.location_name).fontSize(AppTheme.bodySize).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
         Text(room.building_name).fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary)
       }.alignItems(HorizontalAlign.Start).layoutWeight(1)
       Column({ space: 4 }) {
         Text(room.self_study ? '自习标记' : '空闲记录').fontSize(AppTheme.metaSize).fontWeight(FontWeight.Bold)
-          .fontColor(room.self_study ? AppTheme.green : AppTheme.blue)
+          .fontColor(room.self_study ? AppTheme.success : AppTheme.accent)
         Text(room.capacity > 0 ? `${room.capacity} 座` : '容量未知').fontSize(AppTheme.metaSize).fontColor(AppTheme.muted)
       }.alignItems(HorizontalAlign.End)
       AppIcon({ name: 'chevron', iconSize: 18, color: AppTheme.muted })
@@ -315,10 +315,10 @@ export struct CampusServicesPage {
       Column({ space: 12 }) {
         Row() {
           Column({ space: 3 }) {
-            Text('查询教室空闲记录').fontSize(18).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
+            Text('查询教室空闲记录').fontSize(AppTheme.sectionTitle).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
             Text('按节次查询；出发前核对来源与现场情况').fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary)
           }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-          Button('刷新').constraintSize({ minHeight: 48 }).fontSize(AppTheme.metaSize).fontColor(AppTheme.blue).backgroundColor(AppTheme.blueSoft)
+          Button('刷新').constraintSize({ minHeight: 48 }).fontSize(AppTheme.metaSize).fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft)
             .borderRadius(12).onClick(() => this.loadClassrooms())
         }.width('100%')
 
@@ -328,7 +328,7 @@ export struct CampusServicesPage {
           .fontColor(AppTheme.ink)
           .backgroundColor(AppTheme.field)
           .optionBgColor(AppTheme.surface).optionFontColor(AppTheme.ink)
-          .selectedOptionBgColor(AppTheme.blueSoft).selectedOptionFontColor(AppTheme.blue)
+          .selectedOptionBgColor(AppTheme.accentSoft).selectedOptionFontColor(AppTheme.accent)
           .borderRadius(14)
           .width('100%')
           .onSelect((index: number) => {
@@ -339,7 +339,7 @@ export struct CampusServicesPage {
           ForEach(this.periodLabels, (label: string, index: number) => {
             Button(label).layoutWeight(1).constraintSize({ minHeight: 48 }).fontSize(AppTheme.metaSize)
               .fontColor(this.selectedPeriod === index ? AppTheme.surface : AppTheme.secondary)
-              .backgroundColor(this.selectedPeriod === index ? AppTheme.blue : AppTheme.field)
+              .backgroundColor(this.selectedPeriod === index ? AppTheme.accent : AppTheme.field)
               .borderRadius(11)
               .onClick(() => {
                 this.getUIContext().animateTo({ duration: AppTheme.motion(160), curve: Curve.EaseOut }, () => {
@@ -354,10 +354,10 @@ export struct CampusServicesPage {
         Column({ space: 10 }) {
           Row() {
             Column({ space: 3 }) {
-              Text(this.usageTitle).fontSize(16).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
+              Text(this.usageTitle).fontSize(AppTheme.bodySize).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
               Text('本学期占用安排').fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary)
             }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-            Button('关闭').constraintSize({ minHeight: 48 }).fontSize(AppTheme.metaSize).fontColor(AppTheme.blue)
+            Button('关闭').constraintSize({ minHeight: 48 }).fontSize(AppTheme.metaSize).fontColor(AppTheme.accent)
               .backgroundColor(Color.Transparent).onClick(() => this.closeUsage())
           }.width('100%')
           if (this.usageLoading) {
@@ -389,7 +389,7 @@ export struct CampusServicesPage {
       Row() {
         Text(this.classroomLabel).fontSize(AppTheme.bodySize).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
         Blank()
-        Text(this.classroomLoading || this.classroomError.length > 0 ? '待查询' : `${this.classroomTotal} 条记录`).fontSize(AppTheme.metaSize).fontColor(AppTheme.blue)
+        Text(this.classroomLoading || this.classroomError.length > 0 ? '待查询' : `${this.classroomTotal} 条记录`).fontSize(AppTheme.metaSize).fontColor(AppTheme.accent)
       }.width('100%')
 
       if (!this.classroomLoading && this.classroomError.length === 0) {
@@ -422,9 +422,9 @@ export struct CampusServicesPage {
         FeedbackPanel({ kind: 'error', title: '电费数据暂不可用', message: this.electricityError, actionLabel: '重试', onAction: () => this.loadElectricity() })
       } else if (!this.electricityData.bound) {
         Column({ space: 8 }) {
-          Text('本次未取得已绑定电表记录').fontSize(18).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
+          Text('本次未取得已绑定电表记录').fontSize(AppTheme.sectionTitle).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
           Text('请先核对来源状态。若尚未绑定，可在 HDUHelp 中完成绑定后刷新。').fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary)
-          Button('重新检查').constraintSize({ minHeight: 48 }).fontColor(AppTheme.surface).backgroundColor(AppTheme.blue).borderRadius(13)
+          Button('重新检查').constraintSize({ minHeight: 48 }).fontColor(AppTheme.onAccent).backgroundColor(AppTheme.accent).borderRadius(13)
             .onClick(() => this.loadElectricity())
         }.width('100%').alignItems(HorizontalAlign.Start).padding(20).backgroundColor(AppTheme.surface).borderRadius(18)
       } else {
@@ -441,13 +441,13 @@ export struct CampusServicesPage {
             Column({ space: 5 }) {
               Text('日均消耗').fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary)
               Text(`¥${this.electricityData.daily_average.length > 0 ? this.electricityData.daily_average : '--'}`)
-                .fontSize(18).fontWeight(FontWeight.Bold).fontColor(AppTheme.green)
+                .fontSize(AppTheme.sectionTitle).fontWeight(FontWeight.Bold).fontColor(AppTheme.success)
               Text(this.electricityData.meter_hint).fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary)
             }.alignItems(HorizontalAlign.End)
           }.width('100%')
           Row() {
             Text(`更新于 ${this.updatedText()}`).fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).layoutWeight(1)
-            Button('刷新余额').constraintSize({ minHeight: 48 }).fontSize(AppTheme.metaSize).fontColor(AppTheme.blue).backgroundColor(AppTheme.blueSoft)
+            Button('刷新余额').constraintSize({ minHeight: 48 }).fontSize(AppTheme.metaSize).fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft)
               .borderRadius(11).onClick(() => this.loadElectricity())
           }.width('100%')
         }.width('100%').padding(20).backgroundColor(AppTheme.surface).borderRadius(20)
@@ -456,7 +456,7 @@ export struct CampusServicesPage {
           Row() {
             Text('近 14 天余额').fontSize(17).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
             Blank()
-            Text('HDUHelp 数据').fontSize(AppTheme.metaSize).fontColor(AppTheme.blue)
+            Text('HDUHelp 数据').fontSize(AppTheme.metaSize).fontColor(AppTheme.accent)
           }.width('100%')
           if (this.electricityData.history.length === 0) {
             Text('暂无历史记录').fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
@@ -467,7 +467,7 @@ export struct CampusServicesPage {
                 Text(`余额 ¥${item.balance}`).fontSize(AppTheme.bodySize).fontWeight(FontWeight.Medium)
                   .fontColor(AppTheme.ink).layoutWeight(1)
                 Text(item.change === '-' ? '首日' : `${item.change} 元`).fontSize(AppTheme.metaSize)
-                  .fontColor(item.change.startsWith('-') ? AppTheme.orange : AppTheme.green)
+                  .fontColor(item.change.startsWith('-') ? AppTheme.warning : AppTheme.success)
               }.width('100%').padding({ top: 8, bottom: 8 })
             }, (item: ElectricityHistoryItem) => item.date)
           }
@@ -486,7 +486,7 @@ export struct CampusServicesPage {
         Text(item.label).fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
         Text(item.value).fontSize(item.emphasis ? 18 : AppTheme.bodySize)
           .fontWeight(item.emphasis ? FontWeight.Bold : FontWeight.Medium)
-          .fontColor(item.emphasis ? AppTheme.blue : AppTheme.ink)
+          .fontColor(item.emphasis ? AppTheme.accent : AppTheme.ink)
           .width('100%').wordBreak(WordBreak.BREAK_WORD)
       }.width('100%').alignItems(HorizontalAlign.Start)
         .padding(11).backgroundColor(AppTheme.field).borderRadius(13)
@@ -496,7 +496,7 @@ export struct CampusServicesPage {
         Blank()
         Text(item.value).fontSize(item.emphasis ? 18 : AppTheme.bodySize)
           .fontWeight(item.emphasis ? FontWeight.Bold : FontWeight.Medium)
-          .fontColor(item.emphasis ? AppTheme.blue : AppTheme.ink)
+          .fontColor(item.emphasis ? AppTheme.accent : AppTheme.ink)
           .constraintSize({ maxWidth: '68%' }).wordBreak(WordBreak.BREAK_WORD)
       }.width('100%')
     }
@@ -553,17 +553,17 @@ export struct CampusServicesPage {
   private agentPromptBlock(prompts: HDUHelpSuggestedPrompt[], subtitle: string) {
     if (prompts.length > 0) {
       Column({ space: 10 }) {
-        Text('继续问 Agent').fontSize(18).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink).width('100%')
+        Text('继续问助手').fontSize(AppTheme.sectionTitle).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink).width('100%')
         Text(subtitle).fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
         ForEach(prompts, (suggestion: HDUHelpSuggestedPrompt) => {
           Button() {
             Row({ space: 10 }) {
-              Text(suggestion.title).fontSize(AppTheme.bodySize).fontColor(AppTheme.blue)
+              Text(suggestion.title).fontSize(AppTheme.bodySize).fontColor(AppTheme.accent)
                 .layoutWeight(1).wordBreak(WordBreak.BREAK_WORD)
-              AppIcon({ name: 'chevron', iconSize: 16, color: AppTheme.blue })
+              AppIcon({ name: 'chevron', iconSize: 16, color: AppTheme.accent })
             }.width('100%')
           }.width('100%').constraintSize({ minHeight: 48 }).padding({ left: 14, right: 14 })
-            .backgroundColor(AppTheme.blueSoft).borderRadius(12)
+            .backgroundColor(AppTheme.accentSoft).borderRadius(12)
             .onClick(() => this.onOpenAgent(suggestion.prompt))
         }, (suggestion: HDUHelpSuggestedPrompt) => suggestion.prompt_id)
       }.width('100%').padding(18).backgroundColor(AppTheme.surface).borderRadius(18)
@@ -578,7 +578,7 @@ export struct CampusServicesPage {
           Text('我的图书馆').fontSize(19).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
           Text('到馆、借阅与座位使用记录').fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary)
         }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-        Button('刷新').constraintSize({ minHeight: 48 }).fontSize(AppTheme.metaSize).fontColor(AppTheme.blue).backgroundColor(AppTheme.blueSoft)
+        Button('刷新').constraintSize({ minHeight: 48 }).fontSize(AppTheme.metaSize).fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft)
           .borderRadius(12).onClick(() => this.loadCampusInfo())
       }.width('100%').padding(18).backgroundColor(AppTheme.surface).borderRadius(20)
 
@@ -588,7 +588,7 @@ export struct CampusServicesPage {
         FeedbackPanel({ kind: 'error', title: '校园数据暂不可用', message: this.campusInfoError, actionLabel: '重试', onAction: () => this.loadCampusInfo() })
       } else if (!this.campusConfigured) {
         Column({ space: 8 }) {
-          Text('尚未连接 HDUHelp').fontSize(18).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
+          Text('尚未连接 HDUHelp').fontSize(AppTheme.sectionTitle).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
           Text('请在个人设置中配置个人令牌，连接后可查看图书馆记录。')
             .fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary)
           Button('打开数据与连接').constraintSize({ minHeight: 48 }).onClick(() => this.onOpenProfile())
@@ -616,7 +616,7 @@ export struct CampusServicesPage {
           Text('校园卡余额').fontSize(19).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
           Text('余额与其他校园生活动态').fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary)
         }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-        Button('刷新').constraintSize({ minHeight: 48 }).fontSize(AppTheme.metaSize).fontColor(AppTheme.blue).backgroundColor(AppTheme.blueSoft)
+        Button('刷新').constraintSize({ minHeight: 48 }).fontSize(AppTheme.metaSize).fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft)
           .borderRadius(12).onClick(() => this.loadCampusInfo())
       }.width('100%').padding(18).backgroundColor(AppTheme.surface).borderRadius(20)
 
@@ -638,7 +638,7 @@ export struct CampusServicesPage {
         }
 
         if (this.otherLiveSections().length > 0) {
-          Text('其他校园服务').fontSize(16).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink).width('100%')
+          Text('其他校园服务').fontSize(AppTheme.bodySize).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink).width('100%')
           ForEach(this.otherLiveSections(), (section: HDUHelpDisplaySection) => {
             this.liveDataSection(section)
           }, (section: HDUHelpDisplaySection) => section.resource)
@@ -652,11 +652,11 @@ export struct CampusServicesPage {
     Column() {
       Row({ space: 12 }) {
         Button() {
-          AppIcon({ name: 'back', iconSize: 22, color: AppTheme.blue })
+          AppIcon({ name: 'back', iconSize: 22, color: AppTheme.accent })
         }.width(48).constraintSize({ minHeight: 48 }).backgroundColor(AppTheme.surface)
           .borderRadius(22).accessibilityText('返回上一页').onClick(() => this.onBack())
         Column({ space: 3 }) {
-          Text('校园服务').fontSize(28).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
+          Text('校园服务').fontSize(AppTheme.pageTitle).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
           Text('查看教室与已连接的校园信息').fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary)
         }.alignItems(HorizontalAlign.Start).layoutWeight(1)
       }.width('100%').padding({ left: 18, right: 18, top: 14, bottom: 12 })

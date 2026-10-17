@@ -98,7 +98,7 @@ export struct LoginPage {
     Scroll() {
       Column({ space: 22 }) {
         Column({ space: 8 }) {
-          Text('CampusFlow').fontSize(AppTheme.pageTitle).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
+          Text('行简').fontSize(AppTheme.pageTitle).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
           Text('登录后，把课表和待办安排在一起。').fontSize(AppTheme.bodySize).fontColor(AppTheme.quiet)
         }.width('100%').alignItems(HorizontalAlign.Start)
 
@@ -120,11 +120,11 @@ export struct LoginPage {
           }
           Button(this.loading ? '连接中…' : (this.registerMode ? '注册并继续' : '登录'))
             .width('100%').constraintSize({ minHeight: 52 }).fontSize(AppTheme.bodySize).fontWeight(FontWeight.Bold)
-            .fontColor(AppTheme.surface).backgroundColor(AppTheme.blue).borderRadius(AppTheme.controlRadius)
+            .fontColor(AppTheme.onAccent).backgroundColor(AppTheme.accent).borderRadius(AppTheme.controlRadius)
             .enabled(!this.loading)
             .onClick(() => this.submit())
           Button(this.registerMode ? '已有账号，直接登录' : '第一次使用？创建账号')
-            .width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize).fontColor(AppTheme.blue)
+            .width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize).fontColor(AppTheme.accent)
             .backgroundColor(Color.Transparent)
             .enabled(!this.loading)
             .onClick(() => {
@@ -144,7 +144,7 @@ export struct LoginPage {
             Text(`${this.localDisplayName} · 本机已保存 ${this.localHistoryCount} 个会话`)
               .fontSize(AppTheme.bodySize).fontColor(AppTheme.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
             Button('离线查看本机对话').constraintSize({ minHeight: 48 }).width('100%')
-              .fontSize(AppTheme.bodySize).fontColor(AppTheme.blue).backgroundColor(AppTheme.blueSoft)
+              .fontSize(AppTheme.bodySize).fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft)
               .enabled(!this.loading).onClick(() => this.onOpenLocalHistory())
             Text('仅查看已保存的文字，不会登录或发送请求。解锁此设备的人可查看；退出账号会清除本机记录。')
               .fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
@@ -158,13 +158,13 @@ export struct LoginPage {
             Text('清除本机记录不会删除服务端会话。清除后需联网重新保存。')
               .fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
             Button('确认清除本机记录').constraintSize({ minHeight: 48 }).width('100%')
-              .fontColor(AppTheme.red).backgroundColor(AppTheme.surface).enabled(!this.loading)
+              .fontColor(AppTheme.danger).backgroundColor(AppTheme.surface).enabled(!this.loading)
               .onClick(() => this.clearLocalHistory())
             Button('保留').constraintSize({ minHeight: 48 }).enabled(!this.loading)
               .onClick(() => this.confirmCleanup = false)
           } else {
             Button('清理本机记录后重试').constraintSize({ minHeight: 48 }).width('100%')
-              .fontColor(AppTheme.blue).backgroundColor(AppTheme.blueSoft).enabled(!this.loading)
+              .fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft).enabled(!this.loading)
               .onClick(() => this.confirmCleanup = true)
           }
         }

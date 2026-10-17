@@ -19,7 +19,7 @@ export class CampusFlowRequestError extends Error {
 function knownErrorMessage(code: string): string {
   switch (code) {
     case 'LOGIN_REQUIRED':
-      return '请重新登录 CampusFlow 后再试。';
+      return '请重新登录行简后再试。';
     case 'MODEL_AUTH_INVALID':
       return '模型服务凭据无效，请在个人设置中检查或更新 API Key。';
     case 'MODEL_KEY_REQUIRED':
@@ -87,7 +87,7 @@ function knownErrorMessage(code: string): string {
     case 'ACTION_UNSUPPORTED':
       return '暂不支持执行此类提案。';
     case 'NETWORK_ERROR':
-      return '无法连接 CampusFlow 服务，请检查网络和服务地址。';
+      return '无法连接行简服务，请检查网络和服务地址。';
     case 'INVALID_RESPONSE':
       return '服务返回了无法识别的结果，请稍后刷新核对。';
     case 'TIMETABLE_STALE':
@@ -126,7 +126,7 @@ function httpErrorMessage(statusCode: number): string {
     case 429:
       return '请求过于频繁，请稍后再试。';
     default:
-      return statusCode >= 500 ? 'CampusFlow 服务暂时不可用，请稍后再试。'
+      return statusCode >= 500 ? '行简服务暂时不可用，请稍后再试。'
         : '请求未能完成，请检查输入后再试。';
   }
 }

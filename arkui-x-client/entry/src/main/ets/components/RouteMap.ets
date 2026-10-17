@@ -1,5 +1,6 @@
 import { CampusRoute } from '../model/ApiModels';
 import { ROUTE_MAP_ASPECT_RATIO, RouteMapGeometry, routeMapGeometry, routeScreenPoint } from '../utils/RouteGeometry';
+import { AppTheme } from '../theme/AppTheme';
 
 @Component
 export struct RouteMap {
@@ -21,11 +22,11 @@ export struct RouteMap {
     }
     const first = this.route.path[0];
     const firstPoint = routeScreenPoint(first.x, first.y, geometry);
-    this.context.strokeStyle = '#315BFF';
+    this.context.strokeStyle = AppTheme.accent;
     this.context.lineWidth = 4 * geometry.scale;
     this.context.lineJoin = 'round';
     this.context.lineCap = 'round';
-    this.context.shadowColor = '#FFFFFF';
+    this.context.shadowColor = AppTheme.surface;
     this.context.shadowBlur = 5 * geometry.scale;
     this.context.beginPath();
     this.context.moveTo(firstPoint.x, firstPoint.y);
@@ -42,10 +43,11 @@ export struct RouteMap {
       const screenPoint = routeScreenPoint(point.x, point.y, geometry);
       const radius = (index === 0 || index === this.route.path.length - 1 ? 7 : 3.5) * geometry.scale;
       this.context.beginPath();
-      this.context.fillStyle = index === 0 ? '#171A22' : (index === this.route.path.length - 1 ? '#FF6B4A' : '#FFFFFF');
+      this.context.fillStyle = index === 0 ? AppTheme.ink :
+        (index === this.route.path.length - 1 ? AppTheme.terracotta : AppTheme.surface);
       this.context.arc(screenPoint.x, screenPoint.y, radius, 0, Math.PI * 2);
       this.context.fill();
-      this.context.strokeStyle = '#315BFF';
+      this.context.strokeStyle = AppTheme.accent;
       this.context.lineWidth = 2 * geometry.scale;
       this.context.stroke();
     }
@@ -76,37 +78,37 @@ export struct RouteMap {
       .width('100%')
       .aspectRatio(ROUTE_MAP_ASPECT_RATIO)
       .clip(true)
-      .borderRadius(22)
+      .borderRadius(AppTheme.controlRadius)
 
-      Text('原图：HDUHELP 杭电地图 · 蓝色路线为 CampusFlow 叠加层')
-        .fontSize(10).fontColor('#8A90A0').width('100%')
+      Text('原图：HDUHELP 杭电地图 · 墨绿路线为行简示意叠加层')
+        .fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
 
       Row({ space: 8 }) {
         Column({ space: 4 }) {
           Text(`${this.route.origin.name} → ${this.route.destination.name}`)
-            .fontSize(17)
-            .fontWeight(FontWeight.Bold)
-            .fontColor('#171A22')
-            .width('100%')
+            .fontSize(AppTheme.bodySize)
+            .fontWeight(FontWeight.Medium)
+            .fontColor(AppTheme.ink)
+            .width('100%').wordBreak(WordBreak.BREAK_WORD)
           Text(`估算 ${this.route.estimated_distance_meters} 米 · 步行约 ${this.route.total_minutes} 分钟`)
-            .fontSize(13)
-            .fontColor('#697083')
+            .fontSize(AppTheme.metaSize)
+            .fontColor(AppTheme.secondary)
             .width('100%')
         }
         .alignItems(HorizontalAlign.Start)
         .layoutWeight(1)
         Text('示意路线')
-          .fontSize(11)
-          .fontColor('#315BFF')
-          .backgroundColor('#E9EEFF')
+          .fontSize(AppTheme.metaSize)
+          .fontColor(AppTheme.accent)
+          .backgroundColor(AppTheme.accentSoft)
           .padding({ left: 10, right: 10, top: 6, bottom: 6 })
-          .borderRadius(20)
+          .borderRadius(8)
       }
       .width('100%')
     }
     .width('100%')
-    .padding(14)
-    .backgroundColor('#FFFFFF')
-    .borderRadius(24)
+    .padding(AppTheme.cardInset)
+    .backgroundColor(AppTheme.surface)
+    .borderRadius(AppTheme.cardRadius)
   }
 }

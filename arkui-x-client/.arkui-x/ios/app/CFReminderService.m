@@ -341,7 +341,7 @@
     NSTimeInterval delay = [desired[identifier] doubleValue] / 1000 - NSDate.date.timeIntervalSince1970;
     if (delay <= 0) { [self abortReplace:job]; return; }
     UNMutableNotificationContent *content = [UNMutableNotificationContent new];
-    content.title = @"CampusFlow 提醒";
+    content.title = @"行简提醒";
     content.body = @"你有一项安排即将开始，打开应用查看。";
     content.sound = UNNotificationSound.defaultSound;
     // No task title, account, endpoint, tokens, transcript or deep-link mutation in userInfo.

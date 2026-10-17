@@ -1,30 +1,48 @@
-// CampusFlow design contract. Native system font follows user text scaling.
+// 行简纸页主题。Layout numbers are vp; text sizes follow native fp scaling.
 export class AppTheme {
-  static readonly bg: string = '#F5F7FA';
-  static readonly surface: string = '#FFFFFF';
-  static readonly ink: string = '#182A43';
-  static readonly secondary: string = '#526176';
-  static readonly muted: string = '#69778A';
-  static readonly blue: string = '#2864D7';
-  static readonly blueSoft: string = '#EAF0FC';
-  static readonly green: string = '#237354';
-  static readonly greenSoft: string = '#EDF7F1';
-  static readonly orange: string = '#986019';
-  static readonly orangeSoft: string = '#FFF6E7';
-  static readonly red: string = '#B2443B';
-  static readonly separator: string = '#DFE5EF';
-  static readonly field: string = '#F5F7FA';
+  static readonly canvas: string = '#F6F4EF';
+  static readonly surface: string = '#FFFEFB';
+  static readonly ink: string = '#29352F';
+  static readonly secondary: string = '#626E65';
+  static readonly accent: string = '#416454';
+  static readonly accentSoft: string = '#E7EEE6';
+  static readonly onAccent: string = '#FFFEFB';
+  static readonly line: string = '#DCE2D8';
+  static readonly outline: string = '#788578';
+  static readonly terracotta: string = '#9B573B';
+  static readonly success: string = '#3D7054';
+  static readonly successSoft: string = '#EDF4EA';
+  static readonly warning: string = '#886023';
+  static readonly warningSoft: string = '#FBF2DF';
+  static readonly danger: string = '#A4493E';
+  static readonly dangerSoft: string = '#FFF0EC';
+  static readonly dangerOutline: string = '#D8A59A';
+  static readonly warningOutline: string = '#D9C398';
+  static readonly focus: string = AppTheme.accent;
+  static readonly pressed: string = '#355445';
+  static readonly pressedSoft: string = '#D8E4D7';
+  static readonly disabledContent: string = '#717B72';
+  static readonly disabledSurface: string = '#E8EBE4';
 
-  // Aliases keep existing components on the same palette during the migration.
-  static readonly canvas: string = '#F5F7FA';
-  static readonly actionBlue: string = '#2864D7';
-  static readonly quiet: string = '#526176';
-  static readonly line: string = '#DFE5EF';
-  static readonly redSoft: string = '#FFF0EE';
+  // Legacy names remain aliases so existing business-state callers keep their meaning.
+  static readonly bg: string = AppTheme.canvas;
+  static readonly field: string = AppTheme.canvas;
+  static readonly muted: string = AppTheme.secondary;
+  static readonly quiet: string = AppTheme.secondary;
+  static readonly blue: string = AppTheme.accent;
+  static readonly actionBlue: string = AppTheme.accent;
+  static readonly blueSoft: string = AppTheme.accentSoft;
+  static readonly green: string = AppTheme.success;
+  static readonly greenSoft: string = AppTheme.successSoft;
+  static readonly orange: string = AppTheme.warning;
+  static readonly orangeSoft: string = AppTheme.warningSoft;
+  static readonly red: string = AppTheme.danger;
+  static readonly redSoft: string = AppTheme.dangerSoft;
+  static readonly separator: string = AppTheme.line;
   static readonly pageInset: number = 20;
   static readonly sectionGap: number = 24;
   static readonly cardInset: number = 16;
-  static readonly cardRadius: number = 18;
+  static readonly cardRadius: number = 16;
   static readonly controlRadius: number = 12;
   static readonly pageTitle: number = 28;
   static readonly sectionTitle: number = 18;

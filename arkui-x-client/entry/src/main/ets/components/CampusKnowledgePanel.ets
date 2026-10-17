@@ -67,42 +67,42 @@ export struct CampusKnowledgePanel {
   private SourceDetail(hit: KnowledgeHit) {
     Column({ space: 8 }) {
       Text(`${hit.title} · ${hit.section}`).fontSize(AppTheme.bodySize).fontWeight(FontWeight.Medium).fontColor(AppTheme.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
-      Text(`适用范围：${hit.school} · ${hit.campus}`).fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
-      Text('原文摘录').fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+      Text(`适用范围：${hit.school} · ${hit.campus}`).fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
+      Text('原文摘录').fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
       Text(hit.excerpt).fontSize(AppTheme.bodySize).fontColor(AppTheme.ink).width('100%').copyOption(CopyOptions.LocalDevice)
-      Text(hit.summary).fontSize(AppTheme.bodySize).fontColor(AppTheme.quiet).width('100%').wordBreak(WordBreak.BREAK_WORD)
-      Text(`原文链接（可长按复制）\n${hit.url}`).fontSize(AppTheme.metaSize).fontColor(AppTheme.actionBlue)
+      Text(hit.summary).fontSize(AppTheme.bodySize).fontColor(AppTheme.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+      Text(`原文链接（可长按复制）\n${hit.url}`).fontSize(AppTheme.metaSize).fontColor(AppTheme.accent)
         .width('100%').wordBreak(WordBreak.BREAK_WORD).copyOption(CopyOptions.LocalDevice)
       EvidencePanel({ evidence: knowledgeEvidence(hit), active: this.active })
-      Button('收起出处').constraintSize({ minHeight: 48 }).fontColor(AppTheme.actionBlue).backgroundColor(AppTheme.blueSoft).onClick(() => this.closeSource())
+      Button('收起出处').constraintSize({ minHeight: 48 }).fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft).onClick(() => this.closeSource())
     }.width('100%').alignItems(HorizontalAlign.Start).padding(12).backgroundColor(AppTheme.field).borderRadius(12)
   }
   build() {
     Column({ space: 12 }) {
       Text('校园资料 · 有出处再回答').fontSize(AppTheme.sectionTitle).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink).width('100%')
       Text('查阅精选官方办事与使用指南，不查询实时开放、座位、考试或个人数据；无需模型密钥。')
-        .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+        .fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
       TextInput({ text: this.query, placeholder: '例如：校外怎么访问图书馆数据库' }).height(48).fontSize(AppTheme.bodySize)
         .backgroundColor(AppTheme.field).borderRadius(AppTheme.controlRadius).onChange((text: string) => this.query = text)
         .accessibilityText('输入校园资料问题，最多200字')
       Button(this.loading ? '查询中…' : '查询官方资料').width('100%').constraintSize({ minHeight: 48 })
-        .fontSize(AppTheme.bodySize).fontColor('#FFFFFF').backgroundColor(AppTheme.actionBlue)
+        .fontSize(AppTheme.bodySize).fontColor(AppTheme.onAccent).backgroundColor(AppTheme.accent)
         .enabled(!this.loading && this.active).onClick(() => this.search())
       if (this.message.length > 0) { FeedbackPanel({ kind: 'warning', title: '本次资料查询', message: this.message }) }
       if (this.result !== null) {
-        Text(`查询：${this.result.query}`).fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+        Text(`查询：${this.result.query}`).fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
         if (this.result.status !== 'found') {
           FeedbackPanel({ kind: 'empty', title: this.result.status === 'unsupported' ? '当前校区尚未收录' : '没有可靠命中', message: this.result.message })
         } else {
-          Text(this.result.message).fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+          Text(this.result.message).fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
           ForEach(this.result.hits, (hit: KnowledgeHit) => {
             Column({ space: 8 }) {
               Text(hit.title).fontSize(AppTheme.bodySize).fontWeight(FontWeight.Medium).fontColor(AppTheme.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
-              Text(hit.section).fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+              Text(hit.section).fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
               Text(hit.summary).fontSize(AppTheme.bodySize).fontColor(AppTheme.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
-              Text(`资料整理核对：${hit.reviewed_at}；不代表现行有效期。`).fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+              Text(`资料整理核对：${hit.reviewed_at}；不代表现行有效期。`).fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
               Button(this.sourceLoading === hit.source_id ? '读取中…' : '查看摘录与出处').constraintSize({ minHeight: 48 })
-                .fontColor(AppTheme.actionBlue).backgroundColor(AppTheme.blueSoft).enabled(this.sourceLoading !== hit.source_id)
+                .fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft).enabled(this.sourceLoading !== hit.source_id)
                 .onClick(() => this.openSource(hit.source_id))
             }.width('100%').alignItems(HorizontalAlign.Start).padding(12).backgroundColor(AppTheme.field).borderRadius(12)
           }, (hit: KnowledgeHit) => hit.source_id)

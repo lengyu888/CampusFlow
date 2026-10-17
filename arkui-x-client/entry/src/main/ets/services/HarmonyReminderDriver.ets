@@ -149,7 +149,7 @@ export class HarmonyReminderDriver implements ReminderDriver {
       const request: reminderAgentManager.ReminderRequestCalendar = {
         reminderType: reminderAgentManager.ReminderType.REMINDER_TYPE_CALENDAR,
         dateTime: { year: date.getFullYear(), month: date.getMonth() + 1, day: date.getDate(), hour: date.getHours(), minute: date.getMinutes(), second: date.getSeconds() },
-        title: 'CampusFlow 提醒', content: '你有一项安排即将开始，打开应用查看。',
+        title: '行简提醒', content: '你有一项安排即将开始，打开应用查看。',
         expiredContent: '有一项安排已到提醒时间，请打开应用核对。',
         notificationId: saved.notificationId, slotType: notificationManager.SlotType.SERVICE_INFORMATION,
         wantAgent: { pkgName: 'com.campusflow.agent', abilityName: 'EntryAbility' },

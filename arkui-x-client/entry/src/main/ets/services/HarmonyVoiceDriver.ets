@@ -42,7 +42,7 @@ export class HarmonyVoiceDriver implements VoiceDriver {
     this.recognitionId = id;
     const revision = ++this.recognitionRevision;
     if (this.context === undefined) {
-      throw new VoiceInteractionError('暂时无法申请麦克风权限，请返回 Agent 页面后重试。');
+      throw new VoiceInteractionError('暂时无法申请麦克风权限，请返回助手页面后重试。');
     }
     let granted = false;
     try {
@@ -54,7 +54,7 @@ export class HarmonyVoiceDriver implements VoiceDriver {
     }
     if (this.disposed || revision !== this.recognitionRevision) { return; }
     if (!granted) {
-      throw new VoiceInteractionError('未获得麦克风权限。可在系统设置中允许 CampusFlow 使用麦克风，或继续文字输入。');
+      throw new VoiceInteractionError('未获得麦克风权限。可在系统设置中允许行简使用麦克风，或继续文字输入。');
     }
     let engine: speechRecognizer.SpeechRecognitionEngine;
     try {

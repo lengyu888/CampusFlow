@@ -1,5 +1,6 @@
 import { PlanningOverview, PlanningTask, TimetableEntry, UserContextResponse } from '../model/ApiModels';
 import { CampusFlowApi } from '../services/CampusFlowApi';
+import { AppTheme } from '../theme/AppTheme';
 
 interface CalendarDay {
   key: string;
@@ -110,23 +111,23 @@ export struct PlanPage {
     Scroll() {
       Column({ space: 18 }) {
         Column({ space: 4 }) {
-          Text('规划').fontSize(28).fontWeight(FontWeight.Bold).fontColor('#171A22')
-          Text('课程、日历与行动在同一条时间线上').fontSize(13).fontColor('#777E8F')
+          Text('计划').fontSize(AppTheme.pageTitle).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
+          Text('课程、日历与行动在同一条时间线上').fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary)
         }.width('100%').alignItems(HorizontalAlign.Start)
 
         Column({ space: 12 }) {
           Row() {
-            Button('‹').width(34).height(34).fontSize(22).fontColor('#315BFF')
-              .backgroundColor('#E9EEFF').borderRadius(12).onClick(() => this.moveMonth(-1))
+            Button('‹').width(44).height(44).fontSize(22).fontColor(AppTheme.accent)
+              .backgroundColor(AppTheme.accentSoft).borderRadius(12).onClick(() => this.moveMonth(-1))
             Blank()
-            Text(this.monthLabel()).fontSize(18).fontWeight(FontWeight.Bold).fontColor('#171A22')
+            Text(this.monthLabel()).fontSize(AppTheme.sectionTitle).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
             Blank()
-            Button('›').width(34).height(34).fontSize(22).fontColor('#315BFF')
-              .backgroundColor('#E9EEFF').borderRadius(12).onClick(() => this.moveMonth(1))
+            Button('›').width(44).height(44).fontSize(22).fontColor(AppTheme.accent)
+              .backgroundColor(AppTheme.accentSoft).borderRadius(12).onClick(() => this.moveMonth(1))
           }.width('100%')
           Row() {
             ForEach(['日', '一', '二', '三', '四', '五', '六'], (label: string) => {
-              Text(label).fontSize(10).fontColor('#8B91A0').textAlign(TextAlign.Center).layoutWeight(1)
+              Text(label).fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).textAlign(TextAlign.Center).layoutWeight(1)
             }, (label: string) => label)
           }.width('100%')
           Grid() {
@@ -136,17 +137,17 @@ export struct PlanPage {
                   Blank().height(44)
                 } else {
                   Column({ space: 3 }) {
-                    Text(`${item.day}`).fontSize(12)
+                    Text(`${item.day}`).fontSize(AppTheme.metaSize)
                       .fontWeight(this.selectedDate === item.date ? FontWeight.Bold : FontWeight.Regular)
-                      .fontColor(this.selectedDate === item.date ? '#FFFFFF' : '#171A22')
+                      .fontColor(this.selectedDate === item.date ? AppTheme.onAccent : AppTheme.ink)
                     if (item.courseCount > 0) {
-                      Text(`${item.courseCount}`).fontSize(8)
-                        .fontColor(this.selectedDate === item.date ? '#FFFFFF' : '#315BFF')
+                      Text(`${item.courseCount}`).fontSize(AppTheme.metaSize)
+                        .fontColor(this.selectedDate === item.date ? AppTheme.onAccent : AppTheme.accent)
                     } else {
-                      Text('·').fontSize(8).fontColor('#CDD2DD')
+                      Text('·').fontSize(AppTheme.metaSize).fontColor(AppTheme.separator)
                     }
                   }.width('100%').height(44).justifyContent(FlexAlign.Center)
-                    .backgroundColor(this.selectedDate === item.date ? '#315BFF' : '#F5F7FB')
+                    .backgroundColor(this.selectedDate === item.date ? AppTheme.accent : AppTheme.field)
                     .borderRadius(12).onClick(() => this.selectedDate = item.date)
                 }
               }
@@ -156,65 +157,65 @@ export struct PlanPage {
 
           Column({ space: 9 }) {
             Row() {
-              Text(this.selectedDate).fontSize(12).fontWeight(FontWeight.Bold).fontColor('#315BFF')
+              Text(this.selectedDate).fontSize(AppTheme.metaSize).fontWeight(FontWeight.Bold).fontColor(AppTheme.accent)
               Blank()
-              Text(`${this.selectedCourses().length} 节课`).fontSize(11).fontColor('#7B8292')
+              Text(`${this.selectedCourses().length} 节课`).fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary)
             }.width('100%')
             if (this.selectedCourses().length === 0) {
-              Text('当天没有课程安排').fontSize(12).fontColor('#8B91A0').width('100%')
+              Text('当天没有课程安排').fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
             } else {
               ForEach(this.selectedCourses(), (course: TimetableEntry) => {
                 Row({ space: 10 }) {
-                  Text(course.start_time).fontSize(12).fontWeight(FontWeight.Bold).fontColor('#315BFF').width(42)
+                  Text(course.start_time).fontSize(AppTheme.metaSize).fontWeight(FontWeight.Bold).fontColor(AppTheme.accent).width(42)
                   Column({ space: 2 }) {
-                    Text(course.title).fontSize(13).fontWeight(FontWeight.Medium).fontColor('#171A22')
+                    Text(course.title).fontSize(AppTheme.metaSize).fontWeight(FontWeight.Medium).fontColor(AppTheme.ink)
                     Text(`${course.location}${course.teacher.length > 0 ? ` · ${course.teacher}` : ''}`)
-                      .fontSize(10).fontColor('#8B91A0')
+                      .fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary)
                   }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-                }.width('100%').padding(10).backgroundColor('#F7F8FC').borderRadius(13)
+                }.width('100%').padding(10).backgroundColor(AppTheme.field).borderRadius(13)
               }, (course: TimetableEntry) => `${course.date}-${course.start_time}-${course.title}`)
             }
-          }.width('100%').padding(13).backgroundColor('#EEF2FF').borderRadius(16)
-        }.width('100%').padding(17).backgroundColor('#FFFFFF').borderRadius(22)
+          }.width('100%').padding(13).backgroundColor(AppTheme.accentSoft).borderRadius(16)
+        }.width('100%').padding(17).backgroundColor(AppTheme.surface).borderRadius(22)
 
         Row({ space: 12 }) {
           Column({ space: 6 }) {
-            Text(`${this.overview.progress}%`).fontSize(28).fontWeight(FontWeight.Bold).fontColor('#315BFF')
-            Text('总体进度').fontSize(12).fontColor('#777E8F')
-          }.layoutWeight(1).padding(18).backgroundColor('#FFFFFF').borderRadius(20)
+            Text(`${this.overview.progress}%`).fontSize(AppTheme.pageTitle).fontWeight(FontWeight.Bold).fontColor(AppTheme.accent)
+            Text('总体进度').fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary)
+          }.layoutWeight(1).padding(18).backgroundColor(AppTheme.surface).borderRadius(20)
           Column({ space: 6 }) {
-            Text(`${this.overview.due_today}`).fontSize(28).fontWeight(FontWeight.Bold).fontColor('#FF6B4A')
-            Text('今日到期').fontSize(12).fontColor('#777E8F')
-          }.layoutWeight(1).padding(18).backgroundColor('#FFFFFF').borderRadius(20)
+            Text(`${this.overview.due_today}`).fontSize(AppTheme.pageTitle).fontWeight(FontWeight.Bold).fontColor(AppTheme.warning)
+            Text('今日到期').fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary)
+          }.layoutWeight(1).padding(18).backgroundColor(AppTheme.surface).borderRadius(20)
         }.width('100%')
 
         Row({ space: 10 }) {
           TextInput({ text: this.title, placeholder: '添加一个待办' }).layoutWeight(1).height(48)
-            .backgroundColor('#FFFFFF').borderRadius(15).onChange((value) => this.title = value)
-          Button('+').width(48).height(48).fontSize(23).fontColor('#FFFFFF').backgroundColor('#315BFF')
+            .backgroundColor(AppTheme.surface).borderRadius(15).onChange((value) => this.title = value)
+          Button('+').width(48).height(48).fontSize(23).fontColor(AppTheme.onAccent).backgroundColor(AppTheme.accent)
             .borderRadius(15).onClick(() => this.addTask())
         }.width('100%')
 
         if (this.errorText.length > 0) {
-          Text(this.errorText).fontSize(12).fontColor('#D33D3D').width('100%')
+          Text(this.errorText).fontSize(AppTheme.metaSize).fontColor(AppTheme.danger).width('100%')
         }
 
         ForEach(this.overview.tasks, (task: PlanningTask) => {
           Row({ space: 13 }) {
             Button(task.status === 'completed' ? '✓' : '')
-              .width(28).height(28).fontSize(13).fontColor('#FFFFFF')
-              .backgroundColor(task.status === 'completed' ? '#315BFF' : '#E8EBF2')
+              .width(44).height(44).fontSize(AppTheme.metaSize).fontColor(AppTheme.onAccent)
+              .backgroundColor(task.status === 'completed' ? AppTheme.accent : AppTheme.field)
               .borderRadius(9).onClick(() => this.toggle(task))
             Column({ space: 4 }) {
-              Text(task.title).fontSize(15).fontWeight(FontWeight.Medium)
-                .fontColor(task.status === 'completed' ? '#999EAA' : '#171A22')
+              Text(task.title).fontSize(AppTheme.bodySize).fontWeight(FontWeight.Medium)
+                .fontColor(task.status === 'completed' ? AppTheme.muted : AppTheme.ink)
                 .decoration({ type: task.status === 'completed' ? TextDecorationType.LineThrough : TextDecorationType.None })
-              Text(task.location ?? (task.source === 'agent' ? '由 Agent 创建' : '手动创建'))
-                .fontSize(11).fontColor('#8B91A0')
+              Text(task.location ?? (task.source === 'agent' ? '由助手创建' : '手动创建'))
+                .fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary)
             }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-          }.width('100%').padding(17).backgroundColor('#FFFFFF').borderRadius(18)
+          }.width('100%').padding(17).backgroundColor(AppTheme.surface).borderRadius(18)
         }, (task: PlanningTask) => task.task_id)
-      }.width('100%').padding({ left: 18, right: 18, top: 18, bottom: 110 })
-    }.width('100%').height('100%').backgroundColor('#F5F7FB')
+      }.width('100%').padding({ left: AppTheme.pageInset, right: AppTheme.pageInset, top: 18, bottom: 110 })
+    }.width('100%').height('100%').backgroundColor(AppTheme.canvas)
   }
 }

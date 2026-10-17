@@ -1,0 +1,132 @@
+[
+  {
+    "id": "A1",
+    "file": "arkui-x-client/entry/src/main/resources/base/media/xj_onboarding.png",
+    "source_file": "exec-cfa387bf-af2f-4f5c-89bd-b0f3fff7d848.png",
+    "generated_date": "2026-10-18",
+    "tool": "built-in image_gen",
+    "width": 1448,
+    "height": 1086,
+    "mode": "RGB",
+    "bytes": 1842715,
+    "sha256": "0fa293db0d8b2fa672e10cf8f87c82615ceee4951f16f445d451cd6271713bd6",
+    "alpha_extrema": null,
+    "transparent_background": false,
+    "title": "首次使用：一张校园书桌（4:3，非透明）",
+    "prompt": "为中文校园事务与学习规划应用「行简」创作一张原创编辑插图。画面是午后自然光落在一张简洁书桌的局部：一本合上的素色书、一张没有文字的日程纸、一支铅笔，窗影只保留两三块柔和几何形。低饱和平面水粉，细微铅笔边缘，物体造型克制准确，有手工感但不是儿童涂鸦。纸白#F6F4EF背景，墨绿#416454为主，少量陶土#9B573B和暖灰，避免彩虹配色。横向4:3，物体位于中下部，四周留出足够干净空间，适合小尺寸手机引导卡。不要文字、字母、数字、Logo、人物、脸、机器人、星芒、闪光、发光边缘、3D塑料、厚投影、照片质感、复杂纹理。不在图片里画按钮或界面。"
+  },
+  {
+    "id": "A2",
+    "file": "arkui-x-client/entry/src/main/resources/base/media/xj_empty_day.png",
+    "source_file": "exec-029d87b6-c31b-4d06-b619-2e5df4b7c94f.png",
+    "generated_date": "2026-10-18",
+    "tool": "built-in image_gen",
+    "width": 1536,
+    "height": 1024,
+    "mode": "RGBA",
+    "bytes": 1682313,
+    "sha256": "938ddefad745d4be5df52e9a3aecc64e28523ad042eef4ea9f0957623431998c",
+    "alpha_extrema": [
+      0,
+      254
+    ],
+    "transparent_background": true,
+    "title": "当天没有安排：留出的一页（3:2，透明）",
+    "prompt": "沿用参考图的低饱和平面水粉笔触、铅笔边缘和纸白/墨绿/陶土色系，原创绘制一本轻轻打开的日程本，右页只有一条细书签，所有页面没有文字、数字和日历格。一本书加一小片叶子，最多两个主体，画面安静而完整，表达还有可自由安排的空间。横向3:2，中下部构图，透明背景，物体边缘干净，在暖白背景上仍能识别。不要新增桌面、人物、表情、机器人、庆祝粒子、星芒、重阴影或可读文字。UI文案将由真实控件另行显示。"
+  },
+  {
+    "id": "A3",
+    "file": "arkui-x-client/entry/src/main/resources/base/media/xj_course_entry.png",
+    "source_file": "exec-6ba75f10-3cf0-4486-a129-62f828d3423a.png",
+    "generated_date": "2026-10-18",
+    "tool": "built-in image_gen",
+    "width": 1254,
+    "height": 1254,
+    "mode": "RGBA",
+    "bytes": 1004028,
+    "sha256": "f05015851a1e63d0065f863fe69a59733d76966be7ae268e02d563b7dfe6c516",
+    "alpha_extrema": [
+      0,
+      255
+    ],
+    "transparent_background": true,
+    "title": "录入课表快捷入口（1:1，透明）",
+    "prompt": "沿用参考图的同一笔触与色板，原创绘制一个适合40到48像素显示的简洁课表卡夹：两张错开一点的纸片，最上面仅有三条短横线和一个墨绿夹子，不含文字或数字。方形构图，透明背景，主体居中占约75%，最多三种主体色，轮廓在缩小后清楚。不要手机屏幕、真实界面、复杂表格、投影光晕、表情、3D塑料。它是快捷入口的装饰图，点击标签会由UI另外渲染。"
+  },
+  {
+    "id": "A4",
+    "file": "arkui-x-client/entry/src/main/resources/base/media/xj_focus_entry.png",
+    "source_file": "exec-33a15010-f2fe-41ac-b6c0-f933062e9be1.png",
+    "generated_date": "2026-10-18",
+    "tool": "built-in image_gen",
+    "width": 1254,
+    "height": 1254,
+    "mode": "RGBA",
+    "bytes": 1558531,
+    "sha256": "666ee6d10ee6c8e6a8a833072bbe250bfb0f83ad43a0b2ed482016c9d9ab9914",
+    "alpha_extrema": [
+      0,
+      255
+    ],
+    "transparent_background": true,
+    "title": "开始专注快捷入口（1:1，透明）",
+    "prompt": "沿用参考图的同一笔触与纸白墨绿陶土色板，原创绘制一本合上的小书，书上放一支细铅笔，侧边露出一枚短书签。方形，透明背景，主体占约75%，适合40到48像素小图显示。少量平面明暗，不画文字、数字、时钟刻度、脸、闹铃、光环、星星或复杂书页。造型沉静明确，不可爱卖萌，不像通用AI工具图标。"
+  },
+  {
+    "id": "A5",
+    "file": "arkui-x-client/entry/src/main/resources/base/media/xj_campus_entry.png",
+    "source_file": "exec-80f2c7c3-4fa4-4657-b3ef-45715242bd1a.png",
+    "generated_date": "2026-10-18",
+    "tool": "built-in image_gen",
+    "width": 1254,
+    "height": 1254,
+    "mode": "RGBA",
+    "bytes": 1340472,
+    "sha256": "c819a08e845ad6db0faec999f825d75f30559018691761a10e5bdbdded25092d",
+    "alpha_extrema": [
+      0,
+      255
+    ],
+    "transparent_background": true,
+    "title": "校园常用入口（1:1，透明）",
+    "prompt": "沿用参考图的同一笔触与色板，原创绘制一张半折的无字校园简图，只用两条路径线和一个朴素的教学楼轮廓表达地点，最多三个形状层次。方形透明背景，小尺寸仍可辨认，墨绿为主，少量陶土标记。不要伪造任何学校Logo、真实校园平面图、经纬度、可读文字、定位当前位置提示或复杂地图细节。不使用发光蓝色定位针和3D塑料质感。"
+  },
+  {
+    "id": "A6",
+    "file": "arkui-x-client/entry/src/main/resources/base/media/xj_focus_end.png",
+    "source_file": "exec-8a474f19-8c4a-4db5-ba8c-4cb677174f32.png",
+    "generated_date": "2026-10-18",
+    "tool": "built-in image_gen",
+    "width": 1536,
+    "height": 1024,
+    "mode": "RGBA",
+    "bytes": 1576293,
+    "sha256": "7a6d78908c17554f5baec2a9395ffef9f8d10da3cc508b60f59ac08866ab9fec",
+    "alpha_extrema": [
+      0,
+      254
+    ],
+    "transparent_background": true,
+    "title": "专注结束：合上这一页（3:2，透明）",
+    "prompt": "沿用参考图的平面水粉和克制铅笔边缘，原创绘制一本刚合上的书与一枚平放的纸书签，旁边只有一小片叶。横向3:2，透明背景，画面重心偏下，墨绿纸白为主，一处小陶土色。表达暂停、整理和结束，不表达奖励或成绩。不要对勾文字、奖杯、徽章、星光、彩纸、人物、热气动画、金色发光或数字。与首次引导图看起来属于同一套。"
+  },
+  {
+    "id": "A7",
+    "file": "arkui-x-client/entry/src/main/resources/base/media/xj_review_empty.png",
+    "source_file": "exec-193c92e9-d289-4247-a1f2-380da8e7f8a1.png",
+    "generated_date": "2026-10-18",
+    "tool": "built-in image_gen",
+    "width": 1536,
+    "height": 1024,
+    "mode": "RGBA",
+    "bytes": 1696770,
+    "sha256": "4bae2e30a628de9fa0a0f932fc3704463ded5ff73e5a3fd118f9c53afe6db090",
+    "alpha_extrema": [
+      0,
+      254
+    ],
+    "transparent_background": true,
+    "title": "复盘尚无记录：一枚书签（3:2，透明）",
+    "prompt": "沿用参考图的同一系列风格，原创绘制两张干净的记录纸与一枚墨绿书签，纸上只允许两三条非常淡的非文字短线，线条不能组成字符或统计图。横向3:2，透明背景，主体简洁，暖白墨绿和一处陶土。表达可以从第一条记录开始；不要空洞的机器人、数据仪表盘、柱状图、完成百分比、时钟数字、人物或品牌标记。避免与空日程图完全相同的构图。"
+  }
+]

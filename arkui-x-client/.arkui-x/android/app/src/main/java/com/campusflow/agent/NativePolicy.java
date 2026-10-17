@@ -7,7 +7,7 @@ import java.util.List;
 final class NativePolicy {
     static final int MAX_REMINDERS = 60;
     static final long HORIZON_MS = 366L * 24 * 60 * 60 * 1000;
-    static final String NOTIFICATION_TITLE = "CampusFlow 提醒";
+    static final String NOTIFICATION_TITLE = "行简提醒";
     static final String NOTIFICATION_BODY = "你有一项安排即将开始，打开应用查看。";
 
     private NativePolicy() { }

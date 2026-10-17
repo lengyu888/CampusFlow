@@ -220,19 +220,19 @@ export struct HistoryPage {
     Column() {
       Row({ space: 4 }) {
         Button({ type: ButtonType.Normal }) {
-          AppIcon({ name: 'back', iconSize: 21, color: AppTheme.blue })
+          AppIcon({ name: 'back', iconSize: 21, color: AppTheme.accent })
         }.width(48).constraintSize({ minHeight: 48 }).backgroundColor(Color.Transparent).borderRadius(22)
-          .accessibilityText(this.selected === null ? (this.offlineOnly ? '返回登录' : '返回 Agent') : '返回历史会话')
+          .accessibilityText(this.selected === null ? (this.offlineOnly ? '返回登录' : '返回助手') : '返回历史会话')
           .onClick(() => this.goBack())
         Text(this.selected === null ? '历史会话' : (this.selected as SessionSummary).title)
           .fontSize(17).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
           .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).layoutWeight(1)
         if (this.selected === null) {
-          Button('刷新').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize).fontColor(AppTheme.blue)
+          Button('刷新').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize).fontColor(AppTheme.accent)
             .backgroundColor(Color.Transparent).padding({ left: 12, right: 12 })
             .enabled(!this.loading && !this.deleting).onClick(() => this.reload())
         } else {
-          Button('刷新').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize).fontColor(AppTheme.actionBlue)
+          Button('刷新').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize).fontColor(AppTheme.accent)
             .backgroundColor(Color.Transparent).enabled(!this.loading && !this.deleting).onClick(() => this.retryRead())
         }
       }.width('100%').constraintSize({ minHeight: 64 }).padding({ left: 7, right: 10 })
@@ -249,7 +249,7 @@ export struct HistoryPage {
           .width('100%').padding({ left: 20, right: 20, bottom: 6 })
       }
       if (this.chatBusy) {
-        Text('Agent 正在回复，结束后可删除会话。').fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary)
+        Text('助手正在回复，结束后可删除会话。').fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary)
           .width('100%').padding({ left: 20, right: 20, bottom: 6 })
       }
       if (this.remoteDeleteBusy) {
@@ -259,7 +259,7 @@ export struct HistoryPage {
 
       if (this.loading && this.sessions.length === 0 && this.selected === null) {
         Column({ space: 12 }) {
-          LoadingProgress().width(28).height(28).color(AppTheme.blue)
+          LoadingProgress().width(28).height(28).color(AppTheme.accent)
           Text('正在读取会话…').fontSize(AppTheme.bodySize).fontColor(AppTheme.secondary)
         }.layoutWeight(1).width('100%').justifyContent(FlexAlign.Center)
       } else if (this.selected === null) {
@@ -268,8 +268,8 @@ export struct HistoryPage {
             Text(`${this.sessions.length} 个会话 · 只读回顾`).fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
             if (this.sessions.length === 0 && this.errorText.length === 0) {
               FeedbackPanel({ kind: 'info', title: this.offlineOnly ? '本机暂无完整会话' : '还没有会话',
-                message: this.offlineOnly ? '联网登录后可保存完整对话，再在这里离线回看。' : '向 Agent 描述一个目标，之后可在这里回顾文字。',
-                actionLabel: this.offlineOnly ? '返回登录' : '前往 Agent', onAction: () => this.onBack() })
+                message: this.offlineOnly ? '联网登录后可保存完整对话，再在这里离线回看。' : '向助手描述一个目标，之后可在这里回顾文字。',
+                actionLabel: this.offlineOnly ? '返回登录' : '前往助手', onAction: () => this.onBack() })
             }
             Column() {
               ForEach(this.sessions, (session: SessionSummary, index: number) => {
@@ -290,7 +290,7 @@ export struct HistoryPage {
                       .fontSize(AppTheme.metaSize).fontColor(AppTheme.muted).layoutWeight(1)
                     Text(session.model_name === 'deepseek-flash' ? 'Flash' : session.model_name === 'deepseek-v4-pro' ? 'V4 Pro' : session.model_name)
                       .fontSize(AppTheme.metaSize).fontColor(AppTheme.muted)
-                    Button(this.offlineOnly ? '移除本机副本' : '删除').constraintSize({ minHeight: 48 }).fontSize(AppTheme.metaSize).fontColor(AppTheme.red)
+                    Button(this.offlineOnly ? '移除本机副本' : '删除').constraintSize({ minHeight: 48 }).fontSize(AppTheme.metaSize).fontColor(AppTheme.danger)
                       .padding({ left: 6, right: 6 }).backgroundColor(Color.Transparent).borderRadius(15)
                       .enabled(!this.chatBusy && !this.deleting && !this.remoteDeleteBusy)
                       .onClick(() => this.requestDelete(session.session_id))
@@ -300,12 +300,12 @@ export struct HistoryPage {
                       Text(this.offlineOnly ? '仅移除此设备上的副本，服务端记录不受影响。' : '删除服务端会话及本机副本？此操作无法恢复。').fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary)
                         .width('100%')
                       Row({ space: 10 }) {
-                        Button('保留').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize).fontColor(AppTheme.blue)
+                        Button('保留').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize).fontColor(AppTheme.accent)
                           .backgroundColor(AppTheme.surface).borderRadius(13).layoutWeight(1)
                           .enabled(!this.deleting)
                           .onClick(() => this.requestDelete(''))
-                        Button(this.deleting ? '处理中…' : '确认删除').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize).fontColor('#FFFFFF')
-                          .backgroundColor(AppTheme.red).borderRadius(13).layoutWeight(1)
+                        Button(this.deleting ? '处理中…' : '确认删除').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize).fontColor(AppTheme.onAccent)
+                          .backgroundColor(AppTheme.danger).borderRadius(13).layoutWeight(1)
                           .enabled(!this.chatBusy && !this.deleting && !this.remoteDeleteBusy)
                           .onClick(() => this.deleteSession(session))
                       }.width('100%')
@@ -343,7 +343,7 @@ export struct HistoryPage {
                   MessageContent({ content: message.content, isUser: message.role === 'user' })
                 }.padding({ left: 16, right: 16, top: 13, bottom: 13 })
                   .width(message.role === 'user' ? '90%' : '100%')
-                  .backgroundColor(message.role === 'user' ? AppTheme.actionBlue : Color.Transparent)
+                  .backgroundColor(message.role === 'user' ? AppTheme.accent : Color.Transparent)
                   .borderRadius(message.role === 'user' ? { topLeft: 20, topRight: 20, bottomLeft: 20, bottomRight: 6 }
                     : { topLeft: 20, topRight: 20, bottomLeft: 6, bottomRight: 20 })
                 if (message.role !== 'user') {

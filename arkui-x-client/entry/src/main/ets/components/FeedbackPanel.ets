@@ -1,7 +1,7 @@
 import { AppIcon } from './AppIcon';
 import { AppTheme } from '../theme/AppTheme';
 
-// Shared status semantics: loading never masquerades as an empty successful result.
+// Unknown means the result needs checking; it must never look like confirmed success.
 @Component
 export struct FeedbackPanel {
   @Prop kind: string = 'info';
@@ -12,25 +12,38 @@ export struct FeedbackPanel {
   onAction: () => void = () => {};
 
   private color(): string {
-    if (this.kind === 'error') { return AppTheme.red; }
-    if (this.kind === 'success') { return AppTheme.green; }
-    return AppTheme.quiet;
+    if (this.kind === 'error') { return AppTheme.danger; }
+    if (this.kind === 'success') { return AppTheme.success; }
+    if (this.kind === 'warning' || this.kind === 'unknown') { return AppTheme.warning; }
+    return AppTheme.secondary;
   }
 
   private background(): string {
-    if (this.kind === 'error') { return AppTheme.redSoft; }
-    if (this.kind === 'success') { return AppTheme.greenSoft; }
+    if (this.kind === 'error') { return AppTheme.dangerSoft; }
+    if (this.kind === 'success') { return AppTheme.successSoft; }
+    if (this.kind === 'warning' || this.kind === 'unknown') { return AppTheme.warningSoft; }
     return AppTheme.surface;
+  }
+
+  private borderColor(): string {
+    if (this.kind === 'error') { return AppTheme.dangerOutline; }
+    if (this.kind === 'warning' || this.kind === 'unknown') { return AppTheme.warningOutline; }
+    return AppTheme.line;
+  }
+
+  private icon(): string {
+    if (this.kind === 'success') { return 'check'; }
+    if (this.kind === 'error' || this.kind === 'warning' || this.kind === 'unknown') { return 'warning'; }
+    return 'info';
   }
 
   build() {
     Column({ space: 10 }) {
       Row({ space: 10 }) {
         if (this.kind === 'loading') {
-          LoadingProgress().width(22).height(22).color(AppTheme.actionBlue)
+          LoadingProgress().width(22).height(22).color(AppTheme.accent)
         } else {
-          AppIcon({ name: this.kind === 'success' ? 'check' : (this.kind === 'error' ? 'warning' : 'info'),
-            iconSize: 22, color: this.color() })
+          AppIcon({ name: this.icon(), iconSize: 22, color: this.color() })
         }
         Text(this.title).fontSize(AppTheme.bodySize).fontWeight(FontWeight.Medium)
           .fontColor(this.color()).layoutWeight(1).wordBreak(WordBreak.BREAK_WORD)
@@ -41,12 +54,14 @@ export struct FeedbackPanel {
       }
       if (this.actionLabel.length > 0) {
         Button(this.busy ? '处理中…' : this.actionLabel).width('100%').constraintSize({ minHeight: 48 })
-          .fontSize(AppTheme.bodySize).fontColor(this.kind === 'error' ? AppTheme.red : AppTheme.actionBlue)
-          .backgroundColor(this.kind === 'error' ? AppTheme.surface : AppTheme.blueSoft)
+          .fontSize(AppTheme.bodySize).fontColor(this.busy ? AppTheme.disabledContent :
+            (this.kind === 'error' ? AppTheme.danger : AppTheme.accent))
+          .backgroundColor(this.busy ? AppTheme.disabledSurface :
+            (this.kind === 'error' || this.kind === 'warning' || this.kind === 'unknown' ? AppTheme.surface : AppTheme.accentSoft))
           .borderRadius(AppTheme.controlRadius).enabled(!this.busy).onClick(() => this.onAction())
       }
     }.width('100%').alignItems(HorizontalAlign.Start).padding(AppTheme.cardInset)
       .backgroundColor(this.background()).borderRadius(AppTheme.cardRadius)
-      .border({ width: 1, color: this.kind === 'error' ? '#F1D5D1' : AppTheme.line })
+      .border({ width: 1, color: this.borderColor() })
   }
 }
