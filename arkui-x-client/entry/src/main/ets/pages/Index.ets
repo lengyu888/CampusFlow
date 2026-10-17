@@ -1,3 +1,4 @@
+import { KeyboardAvoidMode } from '@ohos.arkui.UIContext';
 import { AuthResponse, UserProfile } from '../model/ApiModels';
 import { CampusFlowApi } from '../services/CampusFlowApi';
 import { AgentPage } from './AgentPage';
@@ -33,6 +34,8 @@ struct Index {
 
   aboutToAppear(): void {
     PersistentStorage.persistProp('reduceMotion', false);
+    // Resize the flex layout so the composer remains above the system keyboard.
+    this.getUIContext().setKeyboardAvoidMode(KeyboardAvoidMode.RESIZE);
   }
 
   onBackPress(): boolean {
