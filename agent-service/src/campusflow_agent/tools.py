@@ -5,7 +5,7 @@ import json
 from contextvars import ContextVar
 from datetime import UTC, datetime, timedelta
 from datetime import date as date_type
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Annotated
 
 from langchain_core.tools import BaseTool, tool
 from pydantic import BaseModel, Field
@@ -21,6 +21,7 @@ from .evidence import campus_supported, data_evidence, hdu_evidence
 from .hduhelp import HDUHelpError
 from .hduhelp_access import HDUHelpAccess
 from .key_vault import ApiKeyVault
+from .knowledge import KnowledgeService
 from .schemas import PlanEditRequest, PlanningActionRequest
 from .store import CampusStore
 from .timetable_service import TimetableService
@@ -70,7 +71,9 @@ def build_tools(
     credential_vault: ApiKeyVault | None = None,
     hduhelp_access: HDUHelpAccess | None = None,
     weather_service: WeatherService | None = None,
+    knowledge_service: KnowledgeService | None = None,
 ) -> list[BaseTool]:
+    knowledge = knowledge_service or KnowledgeService()
     def profile():
         if hduhelp_store is not None:
             try:
@@ -291,6 +294,18 @@ def build_tools(
                 "当前尚未接入学校官方通知源，演示通知不会用于真实查询。",
             ),
         }
+
+    @tool
+    def search_campus_knowledge(query: Annotated[str, Field(min_length=1, max_length=200)]) -> dict:
+        """检索当前账号校区已核对的公开官方参考资料。
+
+        只作静态参考：命中时引用 [title·section] 及原文链接，保留 reviewed_at；
+        missing/unsupported 时明确缺少依据，不能猜测。不能据此回答实时座位、开放或个人数据。
+        """
+        user = profile()
+        return knowledge.search(
+            query, user.school or "" if user else "", user.campus or "" if user else ""
+        ).model_dump(mode="json")
 
     @tool
     def find_campus_places(query: str, origin: str = "") -> dict:
@@ -651,6 +666,7 @@ def build_tools(
         get_schedule,
         get_weather,
         search_campus_notices,
+        search_campus_knowledge,
         find_campus_places,
         plan_campus_route,
         get_hduhelp_profile,

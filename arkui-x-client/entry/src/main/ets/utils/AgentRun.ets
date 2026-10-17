@@ -257,7 +257,8 @@ export class AgentRunController {
     } catch (error) {
       if (!this.current(revision)) { return; }
       if (error instanceof CampusFlowRequestError && error.code !== 'INVALID_RESPONSE' &&
-        (['RUN_SESSION_BUSY', 'RUN_ID_REUSED', 'RUN_INVALID', 'RUN_DELETED', 'MODEL_KEY_REQUIRED', 'LOGIN_REQUIRED',
+        (['RUN_SESSION_BUSY', 'RUN_ID_REUSED', 'RUN_INVALID', 'RUN_DELETED', 'MODEL_KEY_REQUIRED', 'MODEL_NOT_FOUND', 'MODEL_CAPABILITY_UNSUPPORTED',
+          'MODEL_PROVIDER_KEY_REQUIRED', 'MODEL_CONFIG_INVALID', 'LOGIN_REQUIRED',
           'RUN_LIMIT', 'RUN_WORKER_BUSY'].includes(error.code) || [401, 403, 422].includes(error.statusCode))) {
         this.state.phase = 'error'; this.state.canRetryStart = false; this.state.errorCode = error.code;
         this.state.message = error.code === 'RUN_DELETED' ? this.failure(error) : error.message; this.publish();

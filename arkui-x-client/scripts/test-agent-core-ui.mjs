@@ -10,6 +10,8 @@ const helper = await import(`data:text/javascript;base64,${Buffer.from(stripType
 const reliabilitySource = readFileSync(new URL('../entry/src/main/ets/utils/ActionReliability.ets', import.meta.url), 'utf8')
   .replace(/^import \{[\s\S]*?\} from '[^']+';\r?\n/gm, '');
 const reliability = await import(`data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(reliabilitySource)).toString('base64')}`);
+const catalogSource = readFileSync(new URL('../entry/src/main/ets/utils/ModelCatalog.ets', import.meta.url), 'utf8').replace(/^import [^\n]+;\r?\n/gm, '');
+const catalog = await import(`data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(catalogSource)).toString('base64')}`);
 const source = readFileSync(new URL('../entry/src/main/ets/pages/AgentPage.ets', import.meta.url), 'utf8');
 const boundary = source.indexOf('\n  @Builder');
 assert.ok(boundary > 0);
@@ -22,7 +24,7 @@ const controllerSource = source.slice(0, boundary)
   .replace('export struct AgentPage', 'class AgentPage') + '\n}\n';
 const create = new Function('CampusFlowApi', 'Scroller', 'CampusFlowRequestError', 'displayToolTraces',
   'mergeActions', 'restoreDraft', 'localRequestFailure', 'AppTheme', 'localHistory', 'Edge',
-  'AgentRunController', ...Object.keys(reliability), stripTypeScriptTypes(controllerSource) + '\nreturn AgentPage;');
+  'AgentRunController', ...Object.keys(catalog), ...Object.keys(reliability), stripTypeScriptTypes(controllerSource) + '\nreturn AgentPage;');
 
 function pending(id, title = '相同标题') {
   return { proposal_id: id, action: 'create', kind: 'task', title, start_at: null, end_at: null,
@@ -55,13 +57,14 @@ function harness(handlers = {}) {
     confirmAction(...args) { return this.call('confirmAction', args); }
     cancelAction(...args) { return this.call('cancelAction', args); }
     actionStatus(...args) { return this.call('actionStatus', args); }
+    async models() { return { default_model: 'deepseek-v4-pro', models: ['deepseek-v4-pro', 'deepseek-flash'].map(id => ({ id, label: id, provider: 'DeepSeek', supports_tools: true, supports_streaming: true, supports_reasoning: true, available: true, unavailable_reason: '' })) }; }
   }
   class Scroller {
     scrollTo(value) { scroll.push({ kind: 'position', ...value }); }
     scrollEdge(edge) { scroll.push({ kind: 'edge', edge }); }
   }
   const Page = create(Api, Scroller, helper.CampusFlowRequestError, helper.displayToolTraces,
-    helper.mergeActions, helper.restoreDraft, helper.localRequestFailure, {}, {}, { Bottom: 'bottom' }, makeRunController(helper.CampusFlowRequestError, helper.localRequestFailure), ...Object.values(reliability));
+    helper.mergeActions, helper.restoreDraft, helper.localRequestFailure, {}, {}, { Bottom: 'bottom' }, makeRunController(helper.CampusFlowRequestError, helper.localRequestFailure), ...Object.values(catalog), ...Object.values(reliability));
   const page = new Page();
   page.baseUrl = 'http://fixture.invalid';
   page.token = 'fixture-token';
@@ -216,12 +219,14 @@ test('hidden-page responses do not move its scroll or replace the draft on retur
   assert.equal(page.prompt, '返回后继续写的草稿');
 });
 
-test('model options restore the previous reading position and busy requests keep their original model', () => {
+test('model options restore the previous reading position and busy requests keep their original model', async () => {
   const { page, scroll, calls } = harness();
   page.scrollOffset = 840;
   page.toggleOptions();
   assert.equal(page.optionsExpanded, true);
   assert.equal(scroll.at(-1).yOffset, 0);
+  await Promise.resolve(); await Promise.resolve();
+  await page.loadModels();
   page.selectModel('deepseek-flash');
   assert.equal(page.model, 'deepseek-flash');
   page.loading = true;

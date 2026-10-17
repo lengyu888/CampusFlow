@@ -18,6 +18,10 @@ class Settings(BaseSettings):
     database_path: str = "data/campusflow.db"
     app_secret_key: str | None = None
 
+    # Additional providers are opt-in; key_env is read only from the server process environment.
+    model_catalog_json: str = Field(default="[]", max_length=32000, repr=False)
+    model_default_id: str = Field(default="deepseek-v4-pro", min_length=1, max_length=128)
+
     deepseek_base_url: str = "https://api.deepseek.com"
     deepseek_reasoning_effort: Literal["low", "high", "max"] = "high"
     deepseek_thinking_enabled: bool = True

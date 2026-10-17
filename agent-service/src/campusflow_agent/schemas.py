@@ -9,8 +9,24 @@ from pydantic import BaseModel, ConfigDict, Field, SecretStr, StrictBool
 
 class ChatRequest(BaseModel):
     session_id: str = Field(min_length=1, max_length=128, examples=["session-001"])
-    model: Literal["deepseek-v4-pro", "deepseek-flash"] = "deepseek-v4-pro"
+    model: str = Field(default="deepseek-v4-pro", pattern=r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$")
     message: str = Field(min_length=1, max_length=8000)
+
+
+class ModelCatalogEntry(BaseModel):
+    id: str
+    label: str
+    provider: str
+    supports_tools: bool
+    supports_streaming: bool
+    supports_reasoning: bool
+    available: bool
+    unavailable_reason: str
+
+
+class ModelCatalogResponse(BaseModel):
+    models: list[ModelCatalogEntry]
+    default_model: str
 
 
 class DataEvidence(BaseModel):
@@ -152,7 +168,7 @@ class HistoryMessage(BaseModel):
 class SessionSummary(BaseModel):
     session_id: str
     title: str
-    model_name: Literal["deepseek-v4-pro", "deepseek-flash"]
+    model_name: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$")
     last_message: str
     message_count: int
     created_at: datetime

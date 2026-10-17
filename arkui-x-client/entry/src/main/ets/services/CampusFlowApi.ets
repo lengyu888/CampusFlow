@@ -35,7 +35,7 @@ import {
   TimetableSaveReceipt,
   UserContextResponse,
   UserProfile,
-  WeatherForecast
+  WeatherForecast, ModelCatalog, LearningPreferenceSnapshot, LearningPreferenceWrite, LearningPreferenceDelete, KnowledgeSearch, KnowledgeHit
 } from '../model/ApiModels';
 import { CampusFlowRequestError, localRequestFailure, requestFailure } from '../utils/AgentFeedback';
 
@@ -72,6 +72,21 @@ export class CampusFlowApi {
   constructor(baseUrl: string, accessToken: string = '') {
     this.baseUrl = baseUrl.replace(/\/$/, '');
     this.accessToken = accessToken;
+  }
+
+  async models(): Promise<ModelCatalog> { return this.request('/api/v1/models', http.RequestMethod.GET); }
+  async learningPreferences(): Promise<LearningPreferenceSnapshot> { return this.request('/api/v1/learning-preferences', http.RequestMethod.GET); }
+  async saveLearningPreferences(payload: LearningPreferenceWrite): Promise<LearningPreferenceSnapshot> {
+    return this.request('/api/v1/learning-preferences', http.RequestMethod.PUT, JSON.stringify(payload));
+  }
+  async clearLearningPreferences(payload: LearningPreferenceDelete): Promise<LearningPreferenceSnapshot> {
+    return this.request('/api/v1/learning-preferences', http.RequestMethod.DELETE, JSON.stringify(payload));
+  }
+  async searchKnowledge(query: string): Promise<KnowledgeSearch> {
+    return this.request(`/api/v1/knowledge/search?q=${encodeURIComponent(query)}`, http.RequestMethod.GET);
+  }
+  async knowledgeSource(id: string): Promise<KnowledgeHit> {
+    return this.request(`/api/v1/knowledge/sources/${encodeURIComponent(id)}`, http.RequestMethod.GET);
   }
 
   private formatError(responseCode: number, text: string): string {
@@ -113,7 +128,7 @@ export class CampusFlowApi {
       }
       const text = response.result as string;
       if (response.responseCode < 200 || response.responseCode >= 300) {
-        if (path === '/api/v1/chat' || path.startsWith('/api/v1/agent-runs') || path.startsWith('/api/v1/actions/') || path.startsWith('/api/v1/planning/') ||
+        if (path === '/api/v1/models' || path === '/api/v1/learning-preferences' || path.startsWith('/api/v1/knowledge/') || path === '/api/v1/chat' || path.startsWith('/api/v1/agent-runs') || path.startsWith('/api/v1/actions/') || path.startsWith('/api/v1/planning/') ||
           path === '/api/v1/tasks' || path.startsWith('/api/v1/tasks/') ||
           path === '/api/v1/me/timetable' || path.startsWith('/api/v1/me/timetable/') || path.startsWith('/api/v1/weather?')) {
           throw requestFailure(response.responseCode, text);

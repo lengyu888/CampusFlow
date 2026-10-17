@@ -37,16 +37,18 @@ OFFICIAL_SKILLS: tuple[dict[str, Any], ...] = (
     {
         "skill_id": "campus-navigator",
         "name": "校园地点助手",
-        "description": "根据校园地图查找教学楼、自习空间与生活服务，并提供地点建议。",
+        "description": "查找校园地点与参考路线，并检索带原文出处和核对日期的官方公开资料。",
         "category": "校园生活",
-        "version": "1.2.0",
+        "version": "1.3.0",
         "author": "CampusFlow Official",
-        "capabilities": ["地点检索", "别名识别", "开放状态", "校园步行路线图"],
+        "capabilities": [
+            "地点检索", "别名识别", "开放说明（参考）", "校园步行路线图", "官方资料检索",
+        ],
         "permissions": [
             {
                 "code": "places.read",
-                "label": "读取校园地点",
-                "description": "读取当前校区中已确认的建筑与地点数据。",
+                "label": "读取校园地点与公开资料",
+                "description": "读取当前校区的建筑地点与已核对的官方公开资料；不读取个人账号数据。",
                 "access": "read",
             }
         ],
@@ -144,6 +146,7 @@ TOOL_SKILLS = {
     "get_planning": "ddl-guardian",
     "find_campus_places": "campus-navigator",
     "plan_campus_route": "campus-navigator",
+    "search_campus_knowledge": "campus-navigator",
     "propose_task_change": "ddl-guardian",
     "get_hduhelp_profile": "hduhelp-campus-context",
     "get_hduhelp_academics": "hduhelp-campus-context",

@@ -2,6 +2,9 @@
 
 CampusFlow 是面向高校学生的跨端 AI Agent。客户端采用 ArkUI-X/ArkTS，以一套主代码构建 HarmonyOS、Android 和 iOS 应用；服务端采用 Python、FastAPI、LangChain 和 DeepSeek。
 
+> **第九至十六阶段开发分支说明（2026-10-18）**：新增统一界面、课表维护、可靠提案、可恢复 Agent 运行、来源及时效展示、三端语音/系统提醒适配，以及模型目录、主动学习偏好、校园原文检索。详见 [阶段总表](docs/roadmap-9-16.md)、[当前架构](docs/architecture.md)、[第十六阶段验收](docs/stage-16-selected-enhancements.md)。原生编译、实机和真实模型能力仍需另行验证；第十七阶段未开展。旧文中的初版阶段/设备描述仅保留为历史记录，不是当前分支验收证据。
+
+
 当前仓库已打通账户与首次配置、校园数据、Agent 对话、智能规划与执行、Skills、历史会话以及 ArkUI-X Phone 客户端。主要能力包括：
 
 - DeepSeek `deepseek-v4-pro` / `deepseek-flash` 模型接入

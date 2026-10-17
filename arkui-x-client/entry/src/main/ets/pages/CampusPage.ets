@@ -2,6 +2,7 @@ import { UserProfile, WeatherForecast } from '../model/ApiModels';
 import { AppIcon } from '../components/AppIcon';
 import { AppTheme } from '../theme/AppTheme';
 import { EvidencePanel } from '../components/EvidencePanel';
+import { CampusKnowledgePanel } from '../components/CampusKnowledgePanel';
 import { FeedbackPanel } from '../components/FeedbackPanel';
 import { CampusFlowApi } from '../services/CampusFlowApi';
 import { shanghaiDate } from '../utils/DailyAgenda';
@@ -173,6 +174,7 @@ export struct CampusPage {
             .accessibilityText('打开个人设置').onClick(() => this.onOpenProfile())
         }.width('100%')
         this.WeatherCard()
+        CampusKnowledgePanel({ baseUrl: this.baseUrl, token: this.token, campusScope: this.campusIdentity(), active: this.active })
         Column({ space: 12 }) {
           this.Entry('calendar', '我的课表', '手动维护、预览导入与检查变更', () => this.onOpenTimetable())
           this.Entry('route', '校园导航', '选择地点，查看路线和步行估算', () => this.onOpenRoute())
