@@ -1,6 +1,7 @@
 import { HistoryMessage, SessionSummary } from '../model/ApiModels';
 import { CampusFlowApi } from '../services/CampusFlowApi';
 import { plainMessage } from '../utils/MessageText';
+import { MessageContent } from '../components/MessageContent';
 import { AppTheme } from '../theme/AppTheme';
 import { AppIcon } from '../components/AppIcon';
 
@@ -98,7 +99,7 @@ export struct HistoryPage {
         .backgroundColor(AppTheme.bg)
 
       if (this.errorText.length > 0) {
-        Text(this.errorText).fontSize(13).lineHeight(20).fontColor(AppTheme.red).width('100%')
+        Text(this.errorText).fontSize(13).fontColor(AppTheme.red).width('100%')
           .padding({ left: 20, right: 20, top: 8, bottom: 8 })
       }
 
@@ -134,8 +135,8 @@ export struct HistoryPage {
                   Row({ space: 10 }) {
                     Column({ space: 7 }) {
                       Text(session.title).fontSize(17).fontWeight(FontWeight.Medium).fontColor(AppTheme.ink)
-                        .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
-                      Text(plainMessage(session.last_message)).fontSize(14).lineHeight(21)
+                        .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
+                      Text(plainMessage(session.last_message)).fontSize(14)
                         .fontColor(AppTheme.secondary).maxLines(2)
                         .textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
                     }.alignItems(HorizontalAlign.Start).layoutWeight(1)
@@ -178,6 +179,8 @@ export struct HistoryPage {
       } else {
         Scroll() {
           Column({ space: 15 }) {
+            Text((this.selected as SessionSummary).title).fontSize(20).fontWeight(FontWeight.Bold)
+              .fontColor(AppTheme.ink).wordBreak(WordBreak.BREAK_WORD).width('100%')
             Text('已保存的对话').fontSize(12).fontColor(AppTheme.muted).width('100%')
               .textAlign(TextAlign.Center).margin({ bottom: 4, top: 4 })
             ForEach(this.messages, (message: HistoryMessage, index: number) => {
@@ -185,9 +188,10 @@ export struct HistoryPage {
                 if (message.role === 'user') {
                   Blank()
                 }
-                Text(plainMessage(message.content)).fontSize(16).lineHeight(25).copyOption(CopyOptions.InApp)
-                  .fontColor(message.role === 'user' ? '#FFFFFF' : AppTheme.ink)
-                  .padding({ left: 16, right: 16, top: 13, bottom: 13 }).constraintSize({ maxWidth: '90%' })
+                Column() {
+                  MessageContent({ content: message.content, isUser: message.role === 'user' })
+                }.padding({ left: 16, right: 16, top: 13, bottom: 13 })
+                  .width(message.role === 'user' ? '90%' : '100%')
                   .backgroundColor(message.role === 'user' ? AppTheme.blue : AppTheme.surface)
                   .borderRadius(message.role === 'user' ? { topLeft: 20, topRight: 20, bottomLeft: 20, bottomRight: 6 }
                     : { topLeft: 20, topRight: 20, bottomLeft: 6, bottomRight: 20 })
