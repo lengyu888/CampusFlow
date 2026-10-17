@@ -70,6 +70,55 @@ class ChatResponse(BaseModel):
     pending_actions: list[PendingAction] = Field(default_factory=list)
 
 
+RunStatus = Literal[
+    "queued", "running", "succeeded", "failed", "cancelled", "timed_out",
+    "budget_exceeded", "interrupted",
+]
+
+
+class AgentRunRequest(ChatRequest):
+    run_id: UUID
+
+
+class RunToolProgress(BaseModel):
+    call_id: str
+    tool_name: str
+    label: str
+    state: Literal["running", "success", "error"]
+    summary: str = ""
+
+
+class RunSnapshot(BaseModel):
+    run_id: str
+    session_id: str
+    model: str
+    message: str
+    status: RunStatus
+    created_at: datetime
+    updated_at: datetime
+    seq: int = 0
+    partial_answer: str = ""
+    tool_progress: list[RunToolProgress] = Field(default_factory=list)
+    model_calls: int = 0
+    tool_calls: int = 0
+    result: ChatResponse | None = None
+    error_code: str | None = None
+    error_message: str | None = None
+
+
+class RunEvent(BaseModel):
+    seq: int
+    kind: str
+    at: datetime
+    data: dict[str, Any] = Field(default_factory=dict)
+
+
+class RunEventsPage(BaseModel):
+    run_id: str
+    events: list[RunEvent]
+    snapshot: RunSnapshot
+
+
 class HistoryMessage(BaseModel):
     role: Literal["user", "assistant"]
     content: str

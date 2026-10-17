@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -9,15 +10,18 @@ from uuid import uuid4
 
 from langchain.agents import create_agent
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+from langchain_core.utils.function_calling import convert_to_openai_tool
 from langchain_openai import ChatOpenAI
+from openai import AsyncOpenAI
 
 from .accounts import AccountStore
 from .config import Settings
 from .hduhelp_access import HDUHelpAccess
 from .key_vault import ApiKeyVault
-from .schemas import PendingAction, ToolTrace
+from .schemas import CampusRoute, PendingAction, ToolTrace
 from .skills import SkillStore
 from .store import CampusStore
+from .tool_presentation import present_tool_trace
 from .tools import CURRENT_USER_ID, build_tools
 
 SYSTEM_PROMPT = """你是 CampusFlow 大学规划与执行 Agent，服务高校学生。
@@ -57,6 +61,10 @@ ROUTE_REQUEST_PATTERN = re.compile(
 
 class AgentConfigurationError(RuntimeError):
     pass
+
+
+class AgentBudgetExceeded(RuntimeError):
+    """A safe, user-readable runtime limit; never embeds provider/tool diagnostics."""
 
 
 @dataclass
@@ -191,6 +199,359 @@ class AgentService:
             )
         return allowed
 
+    def _build_runtime_client(self, *, api_key: str, model_name: str) -> AsyncOpenAI:
+        """Provider boundary for the bounded runtime; the legacy graph stays compatible."""
+        if not api_key.strip():
+            raise AgentConfigurationError("DeepSeek API Key is required")
+        if model_name not in {"deepseek-v4-pro", "deepseek-flash"}:
+            raise AgentConfigurationError("Unsupported DeepSeek model")
+        return AsyncOpenAI(
+            api_key=api_key,
+            base_url=self.settings.deepseek_base_url,
+            timeout=self.settings.agent_timeout_seconds,
+            max_retries=0,
+        )
+
+    async def _open_runtime_stream(
+        self, client: Any, model_name: str, messages: list[dict], tools: list[dict]
+    ) -> Any:
+        # Native DeepSeek-compatible messages preserve reasoning_content only in memory.
+        # Generic ChatOpenAI discards this field, breaking thinking + tool continuations.
+        options: dict[str, Any] = {
+            "model": model_name,
+            "messages": messages,
+            "stream": True,
+            "max_tokens": self.settings.agent_max_tokens,
+            "reasoning_effort": self.settings.deepseek_reasoning_effort,
+            "extra_body": {
+                "thinking": {
+                    "type": "enabled" if self.settings.deepseek_thinking_enabled else "disabled"
+                }
+            },
+        }
+        if tools:
+            options["tools"] = tools
+        return await client.chat.completions.create(**options)
+
+    @staticmethod
+    def _runtime_json(value: Any) -> str:
+        return json.dumps(value, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
+
+    def _runtime_context(
+        self, system: dict, history: list[list[dict]], turn: list[dict], tools: list[dict]
+    ) -> list[dict]:
+        """Trim only old complete dialogue pairs; never split a live tool exchange."""
+        size = len(self._runtime_json({"messages": [system, *turn], "tools": tools}))
+        if size > self.settings.agent_max_context_chars:
+            raise AgentBudgetExceeded("本轮上下文已达到上限，请缩小查询范围后再试。")
+        first = len(history)
+        for index in range(len(history) - 1, -1, -1):
+            # Inserting a pair adds each message plus its separating comma. Calculating
+            # a bounded suffix avoids repeatedly serializing a large accumulated history.
+            extra = sum(len(self._runtime_json(item)) + 1 for item in history[index])
+            if size + extra > self.settings.agent_max_context_chars:
+                break
+            size += extra
+            first = index
+        del history[:first]
+        return [system, *(item for pair in history for item in pair), *turn]
+
+    async def _runtime_tool(
+        self,
+        *,
+        call: dict,
+        tool: Any,
+        count: int,
+        user_id: str,
+        emit: Callable[[str, dict], Awaitable[None]],
+        check_cancelled: Callable[[], None],
+    ) -> tuple[ToolTrace, PendingAction | None]:
+        check_cancelled()
+        name = call["function"]["name"]
+        trace = ToolTrace(tool_call_id=call["id"], tool_name=name)
+        label = present_tool_trace(trace, []).label
+        # Unknown provider-supplied names/arguments are not display text.
+        event_name = name if tool is not None else "unavailable_tool"
+        await emit("tool_start", {
+            "call_id": call["id"], "tool_name": event_name, "label": label, "count": count,
+        })
+        check_cancelled()
+        try:
+            arguments = json.loads(call["function"]["arguments"])
+            if not isinstance(arguments, dict):
+                raise ValueError("tool arguments must be an object")
+            trace.arguments = arguments
+            if tool is None:
+                raise ValueError("tool unavailable")
+            invocation = {
+                "type": "tool_call", "name": name, "id": call["id"], "args": arguments,
+            }
+            if getattr(tool, "coroutine", None) is not None:
+                result = await tool.ainvoke(invocation)
+            else:
+                # Local SQLite/read tools are short synchronous operations. Running them in
+                # an executor would let a cancelled await leave a writing thread behind.
+                result = tool.invoke(invocation)
+            check_cancelled()
+            trace.status = result.status if isinstance(result, ToolMessage) else "success"
+            trace.result = self._decode_tool_result(
+                result.content if isinstance(result, ToolMessage) else result
+            )
+            if trace.status == "error":
+                trace.result = {"error": "工具未完成，请检查输入或稍后重试。"}
+        except Exception:
+            # Tool validation/transport errors may contain credentials or personal input.
+            # Cancellation inherits BaseException and must propagate rather than recover.
+            trace.status = "error"
+            trace.result = {"error": "工具未完成，请检查输入或稍后重试。"}
+        check_cancelled()
+        pending = None
+        if trace.status == "success" and name in {
+            "propose_task_change", "propose_plan", "propose_plan_change",
+        }:
+            try:
+                pending = PendingAction.model_validate(trace.result)
+            except ValueError:
+                pass
+        trace.display = present_tool_trace(trace, [pending] if pending else [])
+        if self.skill_store is not None and tool is not None:
+            self.skill_store.record_tool_run(user_id, name)
+        await emit("tool_end", {
+            "call_id": call["id"], "tool_name": event_name, "label": trace.display.label,
+            "state": trace.status, "summary": trace.display.summary,
+        })
+        check_cancelled()
+        return trace, pending
+
+    def _runtime_tool_content(self, trace: ToolTrace) -> str:
+        """Bound only model context; keep the actual proposal/result intact in the reply."""
+        try:
+            content = self._runtime_json(trace.result)
+        except (TypeError, ValueError):
+            return '{"error":"工具结果格式无法读取。"}'
+        limit = min(6000, self.settings.agent_max_context_chars // 4)
+        if len(content) <= limit:
+            return content
+        # Do not silently turn a partial JSON object into an apparently complete result.
+        # Large proposals are still fully visible in the returned confirmation card.
+        summary = trace.display.summary if trace.display else "工具返回结果较长。"
+        envelope = {
+            "truncated": True, "summary": summary,
+            "notice": "以下仅为结果摘录，不能据此宣称已查看全部数据。",
+            "preview": content[:max(0, limit - 600)],
+        }
+        encoded = self._runtime_json(envelope)
+        while len(encoded) > limit:
+            envelope["preview"] = envelope["preview"][:len(envelope["preview"]) // 2]
+            encoded = self._runtime_json(envelope)
+        return encoded
+
+    async def run(
+        self,
+        *,
+        user_id: str,
+        session_id: str,
+        api_key: str,
+        model_name: str,
+        message: str,
+        emit: Callable[[str, dict], Awaitable[None]],
+        check_cancelled: Callable[[], None],
+    ) -> AgentReply:
+        """Bounded, sequential streaming execution. The caller owns history + run commit.
+
+        A completed local tool may have produced a pending proposal before cancellation;
+        stopping a run never means that such a preview has been confirmed or rolled back.
+        """
+        check_cancelled()
+        token = CURRENT_USER_ID.set(user_id)
+        try:
+            return await self._run_bounded(
+                user_id=user_id, session_id=session_id, api_key=api_key, model_name=model_name,
+                message=message, emit=emit, check_cancelled=check_cancelled,
+            )
+        finally:
+            CURRENT_USER_ID.reset(token)
+
+    async def _run_bounded(
+        self,
+        *,
+        user_id: str,
+        session_id: str,
+        api_key: str,
+        model_name: str,
+        message: str,
+        emit: Callable[[str, dict], Awaitable[None]],
+        check_cancelled: Callable[[], None],
+    ) -> AgentReply:
+        if len(message) > self.settings.agent_max_context_chars:
+            raise AgentBudgetExceeded("本轮输入已达到上限，请缩小查询范围后再试。")
+        runtime_tools = build_tools(
+            self.store, self.allowed_tools_for_user(user_id), self.account_store,
+            self.credential_vault, self.hduhelp_access,
+        )
+        tool_map = {tool.name: tool for tool in runtime_tools}
+        route_request = self._extract_route_request(message)
+        if route_request is not None and "plan_campus_route" in tool_map:
+            call_id = f"direct-route-{uuid4().hex}"
+            route_trace, _ = await self._runtime_tool(
+                call={"id": call_id, "function": {
+                    "name": "plan_campus_route", "arguments": self._runtime_json({
+                        "origin": route_request[0], "destination": route_request[1],
+                    }),
+                }},
+                tool=tool_map["plan_campus_route"], count=1, user_id=user_id,
+                emit=emit, check_cancelled=check_cancelled,
+            )
+            answer = "校园路线暂时未能生成，请核对起点、终点名称后再试。"
+            if route_trace.status == "success":
+                try:
+                    answer = self._route_answer(CampusRoute.model_validate(route_trace.result))
+                except ValueError:
+                    pass
+            if len(answer) > self.settings.agent_max_output_chars:
+                raise AgentBudgetExceeded("本轮输出已达到上限，请缩小请求范围后再试。")
+            await emit("answer_delta", {"text": answer})
+            check_cancelled()
+            return AgentReply(message=answer, tool_traces=[route_trace])
+
+        schemas = [convert_to_openai_tool(tool) for tool in runtime_tools]
+        system = {"role": "system", "content": self._build_system_prompt()}
+        history: list[list[dict]] = []
+        previous_user = None
+        for entry in self.store.get_history(user_id, session_id):
+            if entry.role == "user":
+                previous_user = {"role": "user", "content": entry.content}
+            elif entry.role == "assistant" and previous_user is not None:
+                history.append([previous_user, {"role": "assistant", "content": entry.content}])
+                previous_user = None
+        turn: list[dict] = [{"role": "user", "content": message}]
+        traces: list[ToolTrace] = []
+        pending: list[PendingAction] = []
+        used_call_ids: set[str] = set()
+        tool_count = 0
+        output_count = 0
+        client = self._build_runtime_client(api_key=api_key, model_name=model_name)
+        try:
+            for model_count in range(1, self.settings.agent_max_model_calls + 1):
+                check_cancelled()
+                context = self._runtime_context(system, history, turn, schemas)
+                await emit("model_start", {"count": model_count})
+                await emit("answer_reset", {})
+                check_cancelled()
+                stream = await self._open_runtime_stream(client, model_name, context, schemas)
+                answer = ""
+                reasoning = ""
+                calls: dict[int, dict] = {}
+                finish = None
+                buffered_chars = 0
+                try:
+                    async for chunk in stream:
+                        check_cancelled()
+                        choices = chunk.choices
+                        if not choices:
+                            continue  # Optional usage-only terminal chunk.
+                        choice = choices[0]
+                        if choice.index != 0 or finish is not None:
+                            raise RuntimeError("模型流式响应不完整，请稍后重试。")
+                        delta = choice.delta
+                        text = getattr(delta, "content", None)
+                        private = getattr(delta, "reasoning_content", None)
+                        if text is not None and not isinstance(text, str):
+                            raise RuntimeError("模型流式响应格式无法读取，请稍后重试。")
+                        if private is not None and not isinstance(private, str):
+                            raise RuntimeError("模型流式响应格式无法读取，请稍后重试。")
+                        if private:
+                            reasoning += private
+                            buffered_chars += len(private)
+                        if text:
+                            output_count += len(text)
+                            buffered_chars += len(text)
+                            if output_count > self.settings.agent_max_output_chars:
+                                raise AgentBudgetExceeded(
+                                    "本轮输出已达到上限，请缩小请求范围后再试。"
+                                )
+                        for part in getattr(delta, "tool_calls", None) or []:
+                            if not isinstance(part.index, int) or not 0 <= part.index < 50:
+                                raise RuntimeError("模型工具请求格式无法读取，请重试。")
+                            call = calls.setdefault(part.index, {
+                                "id": "", "type": "function",
+                                "function": {"name": "", "arguments": ""},
+                            })
+                            for key, value in (
+                                ("id", part.id),
+                                ("name", part.function.name if part.function else None),
+                                ("arguments", part.function.arguments if part.function else None),
+                            ):
+                                if value is not None:
+                                    if not isinstance(value, str):
+                                        raise RuntimeError("模型工具请求格式无法读取，请重试。")
+                                    target = call if key == "id" else call["function"]
+                                    target[key] += value
+                                    buffered_chars += len(value)
+                        if buffered_chars > self.settings.agent_max_context_chars:
+                            raise AgentBudgetExceeded(
+                                "本轮模型响应已达到上限，请缩小请求范围后再试。"
+                            )
+                        if text:
+                            answer += text
+                            await emit("answer_delta", {"text": text})
+                        if choice.finish_reason is not None:
+                            finish = choice.finish_reason
+                finally:
+                    await stream.close()
+                check_cancelled()
+                if finish == "length":
+                    raise AgentBudgetExceeded("模型输出已达到单次上限，请缩小请求范围后再试。")
+                if finish not in {"stop", "tool_calls"} or (finish == "tool_calls") != bool(calls):
+                    raise RuntimeError("模型流式响应未完整结束，请稍后重试。")
+                if not calls:
+                    if not answer.strip():
+                        raise RuntimeError("Agent 未返回可展示的文本，请稍后重试。")
+                    check_cancelled()
+                    return AgentReply(message=answer, tool_traces=traces, pending_actions=pending)
+                batch = [calls[index] for index in sorted(calls)]
+                if tool_count + len(batch) > self.settings.agent_max_tool_calls:
+                    raise AgentBudgetExceeded("本轮工具调用已达到上限，请缩小任务范围后再试。")
+                for call in batch:
+                    call_id = call["id"]
+                    if (
+                        not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", call_id)
+                        or call_id in used_call_ids
+                        or not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", call["function"]["name"])
+                    ):
+                        raise RuntimeError("模型工具请求标识无效，请重试。")
+                    used_call_ids.add(call_id)
+                assistant: dict[str, Any] = {
+                    "role": "assistant", "content": answer or None, "tool_calls": batch,
+                }
+                if reasoning:
+                    assistant["reasoning_content"] = reasoning
+                turn.append(assistant)
+                # Include generated arguments/private protocol context before any side effect.
+                self._runtime_context(system, history, turn, schemas)
+                for call in batch:
+                    # The previous tool result consumes context too. Do not start another
+                    # side effect if the current exchange already exceeds the input budget.
+                    self._runtime_context(system, history, turn, schemas)
+                    tool_count += 1
+                    trace, proposal = await self._runtime_tool(
+                        call=call, tool=tool_map.get(call["function"]["name"]),
+                        count=tool_count, user_id=user_id, emit=emit,
+                        check_cancelled=check_cancelled,
+                    )
+                    traces.append(trace)
+                    if proposal is not None and all(
+                        item.proposal_id != proposal.proposal_id for item in pending
+                    ):
+                        pending.append(proposal)
+                    turn.append({
+                        "role": "tool", "tool_call_id": call["id"],
+                        "content": self._runtime_tool_content(trace),
+                    })
+            raise AgentBudgetExceeded("本轮模型调用已达到上限，请缩小任务范围后再试。")
+        finally:
+            await client.close()
+
     async def chat(
         self,
         *,
@@ -267,19 +628,7 @@ class AgentService:
             return None
 
         route_data = route.model_dump(mode="json")
-        waypoint_names = [
-            point.label
-            for point in route.path
-            if point.place_id
-            and point.place_id not in {route.origin.place_id, route.destination.place_id}
-        ]
-        via = f"，途经{'、'.join(waypoint_names)}" if waypoint_names else ""
-        answer = (
-            f"路线已生成：从{route.origin.name}到{route.destination.name}{via}，"
-            f"步行约 {route.total_minutes} 分钟、{route.estimated_distance_meters} 米。"
-            f"目的地当前{'开放' if route.destination.open_now else '未开放'}，"
-            f"开放时间为 {route.destination.open_hours}。"
-        )
+        answer = self._route_answer(route)
         trace = ToolTrace(
             tool_call_id=f"direct-route-{uuid4().hex}",
             tool_name="plan_campus_route",
@@ -291,6 +640,21 @@ class AgentService:
             self.skill_store.record_tool_run(user_id, trace.tool_name)
         return AgentReply(message=answer, tool_traces=[trace])
 
+    @staticmethod
+    def _route_answer(route: CampusRoute) -> str:
+        waypoint_names = [
+            point.label
+            for point in route.path
+            if point.place_id
+            and point.place_id not in {route.origin.place_id, route.destination.place_id}
+        ]
+        via = f"，途经{'、'.join(waypoint_names)}" if waypoint_names else ""
+        return (
+            f"路线已生成：从{route.origin.name}到{route.destination.name}{via}，"
+            f"步行约 {route.total_minutes} 分钟、{route.estimated_distance_meters} 米。"
+            f"目的地当前{'开放' if route.destination.open_now else '未开放'}，"
+            f"开放时间为 {route.destination.open_hours}。"
+        )
     @staticmethod
     def _messages_for_latest_turn(messages: list[Any], user_message: str) -> list[Any]:
         start = 0

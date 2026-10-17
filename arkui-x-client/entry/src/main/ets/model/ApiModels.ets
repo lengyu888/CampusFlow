@@ -168,6 +168,65 @@ export interface ChatResponse {
   tool_traces?: ToolTrace[];
 }
 
+export type RunStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled' | 'timed_out' | 'budget_exceeded' | 'interrupted';
+
+export interface RunStartRequest {
+  run_id: string;
+  session_id: string;
+  model: string;
+  message: string;
+}
+
+export interface RunToolProgress {
+  call_id: string;
+  tool_name: string;
+  label: string;
+  state: string;
+  summary: string;
+}
+
+export interface RunSnapshot {
+  run_id: string;
+  session_id: string;
+  model: string;
+  message: string;
+  status: RunStatus;
+  created_at: string;
+  updated_at: string;
+  seq: number;
+  partial_answer: string;
+  tool_progress: RunToolProgress[];
+  model_calls: number;
+  tool_calls: number;
+  result: ChatResponse | null;
+  error_code: string | null;
+  error_message: string | null;
+}
+
+export interface RunEventData {
+  text?: string;
+  call_id?: string;
+  tool_name?: string;
+  label?: string;
+  state?: string;
+  summary?: string;
+  count?: number;
+  status?: string;
+}
+
+export interface RunEvent {
+  seq: number;
+  kind: string;
+  at: string;
+  data: RunEventData;
+}
+
+export interface RunEventsPage {
+  run_id: string;
+  events: RunEvent[];
+  snapshot: RunSnapshot;
+}
+
 export interface ConfirmActionResponse {
   receipt?: ActionReceipt | null;
   applied: boolean;

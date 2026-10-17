@@ -1,4 +1,4 @@
-import { HistoryMessage, SessionSummary, PendingAction, PendingMilestonePreview, PendingTaskPreview, ToolDisplaySummary, PlanningTaskDraft, PlanningPlanDraft } from '../model/ApiModels';
+import { HistoryMessage, SessionSummary, PendingAction, PendingMilestonePreview, PendingTaskPreview, ToolDisplaySummary, PlanningTaskDraft, PlanningPlanDraft, RunSnapshot, RunToolProgress } from '../model/ApiModels';
 import { CampusFlowApi } from '../services/CampusFlowApi';
 import { localHistory } from '../services/LocalHistory';
 import { MessageContent } from '../components/MessageContent';
@@ -10,6 +10,7 @@ import { CampusFlowRequestError, displayToolTraces, mergeActions, restoreDraft, 
 import common from '@ohos.app.ability.common';
 import { PlatformVoiceDriver } from '../services/PlatformVoiceDriver';
 import { VoiceInteraction, VoiceState } from '../utils/VoiceInteraction';
+import { AgentRunController, AgentRunState } from '../utils/AgentRun';
 import { validActionPreview, validReliableAction, canConfirmAction, decisionDisposition, sameActionCandidate, validatedActionReceipt, sameActionReceipt, receiptTaskId, receiptPlanId } from '../utils/ActionReliability';
 
 interface ConversationEntry {
@@ -19,6 +20,11 @@ interface ConversationEntry {
   tools: ToolDisplaySummary[];
   failedPrompt: string;
   failureCode: string;
+  runId?: string;
+  incomplete?: boolean;
+  restored?: boolean;
+  revision?: number;
+  sessionId?: string;
 }
 
 interface DecisionFeedback {
@@ -36,6 +42,11 @@ interface ProposalOrigin {
 interface ChatAnchor {
   id: string;
   y: number;
+}
+
+interface HistorySaveGeneration {
+  sessionId: string;
+  revision: number;
 }
 
 @Component
@@ -102,6 +113,17 @@ export struct AgentPage {
   private restoreOptionsOffset: number = -1;
   private notifiedReceiptIds: string[] = [];
   private invalidatedProposalIds: string[] = [];
+  @State private runState: AgentRunState = { phase: 'idle', runId: '', request: null, snapshot: null, events: [], recent: [],
+    message: '', listMessage: '', listLoading: false, lastAppliedSeq: 0, canRetryStart: false, errorCode: '' };
+  @State private runRecordsExpanded: boolean = false;
+  @State private runProgressExpanded: boolean = false;
+  private runInteraction: AgentRunController | null = null;
+  private restoredRunIds: string[] = [];
+  private cachedRunRequests: string[] = [];
+  private displayedRunFailures: string[] = [];
+  private historySaveGenerations: HistorySaveGeneration[] = [];
+  private nextHistorySaveRevision: number = 0;
+  private deletedRunSessionIds: string[] = [];
 
   aboutToAppear(): void {
     this.pageActive = true;
@@ -115,13 +137,24 @@ export struct AgentPage {
     this.conversationRevision++;
     this.voiceInteraction?.dispose();
     this.voiceInteraction = null;
+    this.runInteraction?.dispose();
+    this.runInteraction = null;
   }
 
   private sessionDeleted(): void {
     if (this.deletedSessionId !== this.sessionId) {
+      this.removeDeletedRunSession(this.deletedSessionId);
       return;
     }
     this.cancelVoice();
+    this.runInteraction?.dispose();
+    this.runInteraction = null;
+    this.runState = { phase: 'idle', runId: '', request: null, snapshot: null, events: [], recent: [],
+      message: '', listMessage: '', listLoading: false, lastAppliedSeq: 0, canRetryStart: false, errorCode: '' };
+    this.restoredRunIds = [];
+    this.cachedRunRequests = [];
+    this.displayedRunFailures = [];
+    this.historySaveGenerations = [];
     this.conversationRevision++;
     this.sessionId = `arkuix-${Date.now()}-${this.conversationRevision}`;
     this.savedMessages = [];
@@ -145,27 +178,82 @@ export struct AgentPage {
     this.cacheNotice = '原会话已删除，下次发送将开始新会话。';
   }
 
-  private async saveConversation(text: string, answer: string, sentAt: string): Promise<void> {
-    const now = new Date().toISOString();
-    this.savedMessages = this.savedMessages.concat([
-      { role: 'user', content: text, created_at: sentAt },
-      { role: 'assistant', content: answer, created_at: now }
-    ]);
+  private removeDeletedRunSession(sessionId: string): void {
+    if (sessionId.length === 0) { return; }
+    this.deletedRunSessionIds = this.deletedRunSessionIds.includes(sessionId) ? this.deletedRunSessionIds :
+      this.deletedRunSessionIds.concat([sessionId]);
+    const removedMessages = this.messages.filter((item: ConversationEntry) => item.sessionId === sessionId);
+    const messageIds = removedMessages.map((item: ConversationEntry) => item.id);
+    const runIds = removedMessages.map((item: ConversationEntry) => item.runId ?? '');
+    const proposalIds = this.proposalOrigins.filter((origin: ProposalOrigin) => messageIds.includes(origin.messageId))
+      .map((origin: ProposalOrigin) => origin.proposalId);
+    this.messages = this.messages.filter((item: ConversationEntry) => item.sessionId !== sessionId);
+    this.proposalOrigins = this.proposalOrigins.filter((origin: ProposalOrigin) => !messageIds.includes(origin.messageId));
+    this.pendingActions = this.pendingActions.filter((action: PendingAction) => !proposalIds.includes(action.proposal_id));
+    this.decisionFeedback = this.decisionFeedback.filter((item: DecisionFeedback) => !proposalIds.includes(item.proposalId));
+    this.messageAnchors = this.messageAnchors.filter((item: ChatAnchor) => !messageIds.includes(item.id));
+    this.proposalAnchors = this.proposalAnchors.filter((item: ChatAnchor) => !proposalIds.includes(item.id));
+    this.historySaveGenerations = this.historySaveGenerations.filter((item: HistorySaveGeneration) => item.sessionId !== sessionId);
+    this.restoredRunIds = this.restoredRunIds.filter((id: string) => !runIds.includes(id));
+    this.expandedReceiptIds = this.expandedReceiptIds.filter((id: string) => !proposalIds.includes(id));
+    this.expandedProposalIds = this.expandedProposalIds.filter((id: string) => !proposalIds.includes(id));
+    this.invalidatedProposalIds = this.invalidatedProposalIds.filter((id: string) => !proposalIds.includes(id));
+    if (proposalIds.includes(this.focusedProposalId)) { this.focusedProposalId = ''; }
+    this.actionsRevision++;
+    if (this.runState.snapshot?.session_id === sessionId || this.runState.request?.session_id === sessionId) {
+      this.runInteraction?.dispose(); this.runInteraction = null;
+      this.runState = { phase: 'idle', runId: '', request: null, snapshot: null, events: [], recent: [],
+        message: '', listMessage: '', listLoading: false, lastAppliedSeq: 0, canRetryStart: false, errorCode: '' };
+      this.loading = false; this.onChatBusyChange(false);
+    } else {
+      this.runState.recent = this.runState.recent.filter((run: RunSnapshot) => run.session_id !== sessionId);
+    }
+  }
+
+  private async saveRunHistory(run: RunSnapshot): Promise<void> {
+    if (this.cachedRunRequests.includes(run.run_id)) { return; }
+    const revision = this.conversationRevision;
     if (this.historyScope.length === 0) {
       this.cacheNotice = '本机保存暂不可用，此对话尚不能离线回看。';
       return;
     }
-    const summary: SessionSummary = {
-      session_id: this.sessionId, title: Array.from(this.savedMessages[0].content).slice(0, 80).join(''),
-      model_name: this.model, last_message: Array.from(answer).slice(0, 200).join(''),
-      message_count: this.savedMessages.length, created_at: this.conversationCreatedAt, updated_at: now
-    };
+    this.cachedRunRequests = this.cachedRunRequests.concat([run.run_id]);
+    const historyRevision = ++this.nextHistorySaveRevision;
+    this.historySaveGenerations = this.historySaveGenerations.filter((item: HistorySaveGeneration) => item.sessionId !== run.session_id)
+      .concat([{ sessionId: run.session_id, revision: historyRevision }]);
     try {
-      const saved = await localHistory.save(this.historyScope, summary, this.savedMessages);
+      const history = await new CampusFlowApi(this.baseUrl, this.token).history(run.session_id);
+      if (!this.canSaveRunHistory(run.session_id, revision, historyRevision)) { return; }
+      if (!Array.isArray(history) || history.length === 0 || !history.every((item: HistoryMessage) =>
+        item !== null && (item.role === 'user' || item.role === 'assistant') && typeof item.content === 'string' &&
+        typeof item.created_at === 'string' && Number.isFinite(Date.parse(item.created_at)))) {
+        throw localRequestFailure('INVALID_RESPONSE');
+      }
+      // The service commits the complete turn with the succeeded run. Always replace
+      // from that authoritative history; recovery must never append a duplicate pair.
+      const summary: SessionSummary = {
+        session_id: run.session_id, title: Array.from(history[0].content).slice(0, 80).join(''),
+        model_name: run.model, last_message: Array.from(history[history.length - 1].content).slice(0, 200).join(''),
+        message_count: history.length, created_at: history[0].created_at, updated_at: history[history.length - 1].created_at
+      };
+      const messages: HistoryMessage[] = history.map((item: HistoryMessage) =>
+        ({ role: item.role, content: item.content, created_at: item.created_at }));
+      const saved = await localHistory.save(this.historyScope, summary, messages);
+      if (!this.canSaveRunHistory(run.session_id, revision, historyRevision)) { return; }
+      if (run.session_id === this.sessionId) { this.savedMessages = messages; }
       this.cacheNotice = saved ? '对话已保存到本机，可在历史会话离线回看。' : '此会话未保存到本机，请联网回看历史。';
     } catch {
-      this.cacheNotice = '本机保存失败，回答仍可阅读；请联网回看历史后重试。';
+      if (this.canSaveRunHistory(run.session_id, revision, historyRevision)) {
+        this.cacheNotice = '完整会话保存失败，运行结果仍可阅读；可核对运行状态后重试保存，或联网回看历史。';
+      }
+    } finally {
+      this.cachedRunRequests = this.cachedRunRequests.filter((id: string) => id !== run.run_id);
     }
+  }
+
+  private canSaveRunHistory(sessionId: string, revision: number, historyRevision: number): boolean {
+    return this.pageActive && revision === this.conversationRevision && this.historySaveGenerations.some((item: HistorySaveGeneration) =>
+      item.sessionId === sessionId && item.revision === historyRevision);
   }
 
   private initialPromptChanged(): void {
@@ -361,6 +449,7 @@ export struct AgentPage {
       this.scrollForNewMessage = false;
       this.voiceInteraction?.suspend();
     }
+    this.runInteraction?.setActive(this.voiceActive);
   }
 
   private voiceController(): VoiceInteraction {
@@ -421,7 +510,7 @@ export struct AgentPage {
   }
 
   private async speakReply(message: ConversationEntry): Promise<void> {
-    if (!this.pageActive || !this.voiceActive || message.role !== 'assistant' || message.id === 'welcome' ||
+    if (!this.pageActive || !this.voiceActive || message.incomplete === true || message.role !== 'assistant' || message.id === 'welcome' ||
       !this.messages.some((item: ConversationEntry) => item.id === message.id && item.role === 'assistant')) { return; }
     if (this.speechPending() && this.voiceState.speakingMessageId === message.id) {
       this.cancelVoice();
@@ -434,52 +523,157 @@ export struct AgentPage {
 
   private async send(): Promise<void> {
     const text = this.prompt.trim();
-    if (!this.pageActive || text.length === 0 || this.inputLength(text) > 8000 || this.loading || this.deletionBusy ||
+    if (!this.pageActive || !this.voiceActive || text.length === 0 || this.inputLength(text) > 8000 || this.loading || this.deletionBusy ||
       this.decisionId.length > 0 || this.capturePending()) {
       return;
     }
     this.cancelVoice();
     this.optionsExpanded = false;
     this.followLatest = true;
-    this.appendMessage('user', text);
-    const revision = this.conversationRevision;
-    const sentAt = new Date().toISOString();
     this.prompt = '';
-    this.loading = true;
-    this.onChatBusyChange(true);
-    try {
-      const response = await new CampusFlowApi(this.baseUrl, this.token).chat(this.sessionId, this.model, text);
-      if (!this.pageActive || revision !== this.conversationRevision) {
-        return;
-      }
-      if (response === null || typeof response.session_id !== 'string' || response.session_id.length === 0 ||
-        typeof response.message !== 'string' || !Array.isArray(response.pending_actions)) {
-        throw localRequestFailure('INVALID_RESPONSE');
-      }
-      this.sessionId = response.session_id;
-      const messageId = this.appendMessage('assistant', response.message, displayToolTraces(response.tool_traces));
-      // A later turn without proposals must not erase an earlier pending decision.
-      const validActions = response.pending_actions.filter((action: PendingAction) => validActionPreview(action));
-      this.pendingActions = mergeActions(this.pendingActions, validActions);
-      this.linkProposals(messageId, validActions);
-      if (validActions.length !== response.pending_actions.length) {
-        this.appendMessage('feedback', '部分提案内容不完整，未开放执行。请根据最新安排重新生成预览。');
-      }
-      this.actionsRevision++;
-      await this.saveConversation(text, response.message, sentAt);
-    } catch (error) {
-      if (!this.pageActive || revision !== this.conversationRevision) {
-        return;
-      }
-      const failure = this.safeFailure(error);
-      this.prompt = restoreDraft(this.prompt, text);
-      this.appendMessage('feedback', failure.message, [], text, failure.code);
-    } finally {
-      if (revision === this.conversationRevision) {
-        this.loading = false;
-        if (this.pageActive) { this.onChatBusyChange(false); }
-      }
+    await this.runController().start(this.sessionId, this.model, text);
+  }
+
+  private newRunId(): string {
+    // Correlation/idempotency identifier only; this is not an authentication secret.
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (character: string) => {
+      const random = Math.floor(Math.random() * 16);
+      return (character === 'x' ? random : (random & 3) | 8).toString(16);
+    });
+  }
+
+  private runController(): AgentRunController {
+    if (this.runInteraction === null) {
+      const api = new CampusFlowApi(this.baseUrl, this.token);
+      this.runInteraction = new AgentRunController(api, (state: AgentRunState) => this.runChanged(state),
+        (run: RunSnapshot) => this.runSucceeded(run), () => this.newRunId());
+      this.runInteraction.configure(this.historyScope.length > 0 ? this.historyScope : `${this.baseUrl}|current-page`, api);
+      this.runInteraction.setActive(this.voiceActive);
     }
+    return this.runInteraction;
+  }
+
+  private upsertRunMessage(runId: string, role: string, content: string, tools: ToolDisplaySummary[] = [],
+    incomplete: boolean = false): string {
+    const id = `run-${runId}-${role}`;
+    const previous = this.messages.find((item: ConversationEntry) => item.id === id);
+    if (previous !== undefined && previous.content === content && previous.incomplete === incomplete &&
+      JSON.stringify(previous.tools) === JSON.stringify(tools)) { return id; }
+    const entry: ConversationEntry = { id: id, role: role, content: content, tools: tools,
+      failedPrompt: '', failureCode: '', runId: runId, incomplete: incomplete,
+      restored: this.restoredRunIds.includes(runId), revision: (previous?.revision ?? 0) + 1,
+      sessionId: this.runState.snapshot?.session_id ?? this.runState.request?.session_id ?? '' };
+    this.scrollForNewMessage = this.voiceActive && (role === 'user' || this.followLatest);
+    if (previous === undefined) {
+      if (role !== 'user' && !this.scrollForNewMessage) { this.unreadMessages++; }
+      this.messages = this.messages.concat([entry]);
+      if (role === 'assistant') { this.collapsedToolIds = this.collapsedToolIds.concat([id]); }
+    } else {
+      this.messages = this.messages.map((item: ConversationEntry) => item.id === id ? entry : item);
+    }
+    return id;
+  }
+
+  private runChanged(state: AgentRunState): void {
+    if (!this.pageActive) { return; }
+    state.recent = state.recent.filter((run: RunSnapshot) => !this.deletedRunSessionIds.includes(run.session_id));
+    this.runState = state;
+    if (state.errorCode === 'RUN_DELETED') {
+      state.recent = state.recent.filter((run: RunSnapshot) => run.run_id !== state.runId);
+      const sessionId = state.snapshot?.session_id ?? state.request?.session_id ?? '';
+      this.removeDeletedRunSession(sessionId);
+      if (sessionId === this.sessionId) {
+        this.conversationRevision++;
+        this.sessionId = `arkuix-${Date.now()}-${this.conversationRevision}`;
+        this.savedMessages = [];
+      }
+      this.loading = false; this.onChatBusyChange(false);
+      this.cacheNotice = '这次运行已随原会话删除，旧请求不会重试。当前输入草稿已保留。';
+      return;
+    }
+    const busy = this.runInteraction?.blocksNewRun() ?? false;
+    if (this.loading !== busy) { this.loading = busy; this.onChatBusyChange(busy); }
+    const run = state.snapshot;
+    if (run !== null) {
+      this.upsertRunMessage(run.run_id, 'user', run.message);
+      this.upsertRunMessage(run.run_id, 'assistant', run.status === 'succeeded' ? run.result?.message ?? '' : run.partial_answer,
+        run.status === 'succeeded' ? displayToolTraces(run.result?.tool_traces) : [], run.status !== 'succeeded');
+    } else if (state.request !== null) {
+      this.upsertRunMessage(state.request.run_id, 'user', state.request.message);
+    }
+    const stopped = state.phase === 'error' ||
+      (run !== null && ['failed', 'cancelled', 'timed_out', 'budget_exceeded', 'interrupted'].includes(run.status));
+    const original = state.request?.message ?? run?.message ?? '';
+    if (stopped && state.runId.length > 0 && !this.displayedRunFailures.includes(state.runId)) {
+      this.displayedRunFailures = this.displayedRunFailures.concat([state.runId]);
+      if (!this.restoredRunIds.includes(state.runId)) { this.prompt = restoreDraft(this.prompt, original); }
+      const messageId = this.appendMessage('feedback', state.message.length > 0 ? state.message : '这次运行未完成，已收到的片段保留供核对。',
+        [], this.restoredRunIds.includes(state.runId) ? '' : original, 'RUN_STATE');
+      this.messages = this.messages.map((item: ConversationEntry) => item.id === messageId ? {
+        id: item.id, role: item.role, content: item.content, tools: item.tools, failedPrompt: item.failedPrompt,
+        failureCode: item.failureCode, runId: state.runId, sessionId: state.snapshot?.session_id ?? state.request?.session_id ?? ''
+      } : item);
+    }
+  }
+
+  private runSucceeded(run: RunSnapshot): void {
+    if (!this.pageActive || run.result === null) { return; }
+    const messageId = this.upsertRunMessage(run.run_id, 'assistant', run.result.message, displayToolTraces(run.result.tool_traces));
+    const actions = run.result.pending_actions.filter((action: PendingAction) => validActionPreview(action));
+    this.pendingActions = mergeActions(this.pendingActions, actions);
+    this.linkProposals(messageId, actions);
+    if (actions.length !== run.result.pending_actions.length) {
+      this.appendMessage('feedback', '部分提案内容不完整，未开放执行。请根据最新安排重新生成预览。');
+    }
+    this.actionsRevision++;
+    this.saveRunHistory(run);
+  }
+
+  private runStatusLabel(run: RunSnapshot): string {
+    switch (run.status) {
+      case 'queued': return '等待开始';
+      case 'running': return '正在运行';
+      case 'succeeded': return '已完成';
+      case 'cancelled': return '已取消';
+      case 'timed_out': return '运行超时';
+      case 'budget_exceeded': return '达到本次运行上限';
+      case 'interrupted': return '服务重启，运行已中断';
+      default: return '运行失败';
+    }
+  }
+
+  private canCancelRun(): boolean {
+    return this.runState.snapshot !== null && ['queued', 'running'].includes(this.runState.snapshot.status) &&
+      !['creating', 'cancelling'].includes(this.runState.phase);
+  }
+
+  private async toggleRunRecords(): Promise<void> {
+    this.runRecordsExpanded = !this.runRecordsExpanded;
+    if (this.runRecordsExpanded) { await this.runController().loadRecent(); }
+  }
+
+  private async recoverRun(runId: string): Promise<void> {
+    if (!this.pageActive || this.loading || this.deletionBusy || this.decisionId.length > 0) { return; }
+    this.cancelVoice();
+    this.restoredRunIds = this.restoredRunIds.includes(runId) ? this.restoredRunIds : this.restoredRunIds.concat([runId]);
+    await this.runController().recover(runId);
+  }
+
+  private async refreshRun(): Promise<void> {
+    if (!this.pageActive || this.deletionBusy) { return; }
+    await this.runController().refresh();
+    const run = this.runState.snapshot;
+    if (this.pageActive && run !== null && run.status === 'succeeded') { await this.saveRunHistory(run); }
+  }
+
+  private async cancelRun(): Promise<void> {
+    if (!this.pageActive || this.deletionBusy || !this.canCancelRun()) { return; }
+    await this.runController().cancel();
+  }
+
+  private async retryRunStart(): Promise<void> {
+    if (!this.pageActive || this.deletionBusy || !this.runState.canRetryStart) { return; }
+    await this.runController().retryStart();
   }
 
   private feedbackFor(proposalId: string): DecisionFeedback | undefined {
@@ -614,7 +808,8 @@ export struct AgentPage {
     try {
       const api = new CampusFlowApi(this.baseUrl, this.token);
       const result = confirm ? await api.confirmAction(action.proposal_id) : await api.cancelAction(action.proposal_id);
-      if (!this.pageActive || revision !== this.conversationRevision) { return; }
+      if (!this.pageActive || revision !== this.conversationRevision ||
+        !this.pendingActions.some((item: PendingAction) => item.proposal_id === action.proposal_id)) { return; }
       const expectedStatus = confirm ? 'confirmed' : 'cancelled';
       if (result !== null && sameActionCandidate(current, result.action) &&
         decisionDisposition(result.action) === expectedStatus && result.applied === confirm &&
@@ -624,7 +819,8 @@ export struct AgentPage {
         this.setFeedback(action.proposal_id, '服务返回的状态与本次操作不一致。请核对状态和计划列表，暂不重复提交。', true);
       }
     } catch (error) {
-      if (!this.pageActive || revision !== this.conversationRevision) { return; }
+      if (!this.pageActive || revision !== this.conversationRevision ||
+        !this.pendingActions.some((item: PendingAction) => item.proposal_id === action.proposal_id)) { return; }
       const failure = this.safeFailure(error);
       const rejectedBeforeWrite = ['LOGIN_REQUIRED', 'ACTION_UNSUPPORTED', 'ACTION_EXPIRED', 'ACTION_LEGACY_UNVERIFIED',
         'ACTION_STALE', 'ACTION_CONFLICT', 'ACTION_INVALID', 'ACTION_NOT_FOUND'].includes(failure.code);
@@ -650,7 +846,8 @@ export struct AgentPage {
     try {
       const original = this.pendingActions.find((item: PendingAction) => item.proposal_id === action.proposal_id);
       const latest = await new CampusFlowApi(this.baseUrl, this.token).actionStatus(action.proposal_id);
-      if (!this.pageActive || revision !== this.conversationRevision) { return; }
+      if (!this.pageActive || revision !== this.conversationRevision ||
+        !this.pendingActions.some((item: PendingAction) => item.proposal_id === action.proposal_id)) { return; }
       if (original === undefined || !sameActionCandidate(original, latest) || !validReliableAction(latest)) {
         this.setFeedback(action.proposal_id, '未取得匹配原预览的可靠状态；旧提案不会重发，请核对计划列表或重新生成。', true);
         return;
@@ -670,7 +867,8 @@ export struct AgentPage {
         this.setFeedback(action.proposal_id, '服务端状态缺少有效执行回执，请继续核对，暂不重复提交。', true);
       }
     } catch (error) {
-      if (!this.pageActive || revision !== this.conversationRevision) { return; }
+      if (!this.pageActive || revision !== this.conversationRevision ||
+        !this.pendingActions.some((item: PendingAction) => item.proposal_id === action.proposal_id)) { return; }
       const failure = this.safeFailure(error);
       this.setFeedback(action.proposal_id, `暂时无法核对状态。${failure.message}`, true, failure.code);
     } finally {
@@ -1018,6 +1216,103 @@ export struct AgentPage {
   }
 
   @Builder
+  private RunPanel() {
+    Column({ space: 12 }) {
+      Row({ space: 8 }) {
+        Text(this.runState.errorCode === 'RUN_DELETED' ? '运行已删除' : this.runState.snapshot !== null ? this.runStatusLabel(this.runState.snapshot) :
+          (this.runState.phase === 'creating' ? '正在提交运行' : '核对本次运行'))
+          .fontSize(AppTheme.bodySize).fontWeight(FontWeight.Medium).fontColor(AppTheme.ink).layoutWeight(1)
+        if (['creating', 'polling', 'checking', 'cancelling'].includes(this.runState.phase)) {
+          LoadingProgress().width(20).height(20).color(AppTheme.actionBlue)
+        }
+      }.width('100%')
+      if (this.runState.message.length > 0) {
+        Text(this.runState.message).fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+          .wordBreak(WordBreak.BREAK_WORD)
+      }
+      if (this.runState.snapshot !== null) {
+        Text(`实际模型调用 ${this.runState.snapshot.model_calls} 次 · 工具调用 ${this.runState.snapshot.tool_calls} 次`)
+          .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+        if (this.restoredRunIds.includes(this.runState.runId)) {
+          Text('这是恢复查看的运行。下方新输入仍发到当前会话，未切换到旧历史会话。')
+            .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+        }
+        if (this.runState.snapshot.tool_progress.length > 0) {
+          Button(this.runProgressExpanded ? '收起实际工具进度' : `查看 ${this.runState.snapshot.tool_progress.length} 条实际工具进度`)
+            .width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
+            .fontColor(AppTheme.actionBlue).backgroundColor(Color.Transparent)
+            .onClick(() => this.runProgressExpanded = !this.runProgressExpanded)
+          if (this.runProgressExpanded) {
+            ForEach(this.runState.snapshot.tool_progress, (tool: RunToolProgress) => {
+              Column({ space: 4 }) {
+                Text(`${tool.label} · ${tool.state === 'running' ? '正在执行' : tool.state === 'success' ? '已返回' : '调用失败'}`)
+                  .fontSize(AppTheme.bodySize).fontColor(AppTheme.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
+                if (tool.summary.length > 0) {
+                  Text(tool.summary).fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%').wordBreak(WordBreak.BREAK_WORD)
+                }
+              }.width('100%').alignItems(HorizontalAlign.Start)
+            }, (tool: RunToolProgress) => `${this.runState.runId}-${tool.call_id}-${this.runState.lastAppliedSeq}`)
+          }
+        }
+      }
+      if (this.canCancelRun()) {
+        Button('取消本次运行').width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
+          .fontColor(AppTheme.red).backgroundColor(AppTheme.redSoft).borderRadius(AppTheme.controlRadius)
+          .enabled(!this.deletionBusy).onClick(() => this.cancelRun())
+      }
+      if (this.runState.canRetryStart) {
+        Text('尚不能确定首次提交是否到达。重试会沿用同一运行标识和原问题，不创建另一笔请求。')
+          .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+        Button('重试提交同一运行').width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
+          .fontColor(AppTheme.actionBlue).backgroundColor(AppTheme.blueSoft).borderRadius(AppTheme.controlRadius)
+          .enabled(!this.deletionBusy).onClick(() => this.retryRunStart())
+      }
+      if (this.runState.errorCode !== 'RUN_DELETED') {
+        Button('核对运行状态').width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
+          .fontColor(AppTheme.actionBlue).backgroundColor(Color.Transparent)
+          .enabled(!this.deletionBusy && !['creating', 'checking', 'cancelling', 'polling'].includes(this.runState.phase))
+          .onClick(() => this.refreshRun())
+      }
+      if (this.loading) {
+        Text('切换页面会暂停本机刷新，服务端可能继续运行；返回后将核对实际状态。')
+          .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+      }
+    }.width('100%').padding(AppTheme.cardInset).backgroundColor(AppTheme.canvas)
+      .alignItems(HorizontalAlign.Start).borderRadius(AppTheme.cardRadius)
+  }
+
+  @Builder
+  private RunRecords() {
+    Column({ space: 12 }) {
+      Text('最近运行 · 仅联网查看').fontSize(AppTheme.sectionTitle).fontWeight(FontWeight.Medium).fontColor(AppTheme.ink).width('100%')
+      Text('最多显示最近 20 次。恢复只查询原运行，不重新发送问题；重启后的中断运行需你明确发起新请求。')
+        .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+      if (this.runState.listMessage.length > 0) {
+        Text(this.runState.listMessage).fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+      }
+      if (this.runState.listLoading) { LoadingProgress().width(24).height(24).color(AppTheme.actionBlue) }
+      if (!this.runState.listLoading && this.runState.recent.length === 0) {
+        Text('暂无可展示的运行记录。').fontSize(AppTheme.bodySize).fontColor(AppTheme.quiet).width('100%')
+      }
+      ForEach(this.runState.recent, (run: RunSnapshot) => {
+        Column({ space: 8 }) {
+          Text(run.message).fontSize(AppTheme.bodySize).fontColor(AppTheme.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
+          Text(`${this.runStatusLabel(run)} · ${formatPlanDateTime(run.created_at)}（北京时间）`)
+            .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+          Button(this.runState.runId === run.run_id ? '核对当前运行' : '恢复查看这次运行').width('100%')
+            .constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize).fontColor(AppTheme.actionBlue)
+            .backgroundColor(AppTheme.blueSoft).borderRadius(AppTheme.controlRadius)
+            .enabled(!this.deletionBusy && (!this.loading || this.runState.runId === run.run_id))
+            .onClick(() => this.runState.runId === run.run_id ? this.refreshRun() : this.recoverRun(run.run_id))
+        }.width('100%').alignItems(HorizontalAlign.Start).padding(12).backgroundColor(AppTheme.surface).borderRadius(AppTheme.controlRadius)
+      }, (run: RunSnapshot) => `${run.run_id}-${run.seq}`)
+      Button('刷新运行记录').width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
+        .fontColor(AppTheme.actionBlue).backgroundColor(Color.Transparent).enabled(!this.runState.listLoading)
+        .onClick(() => this.runController().loadRecent())
+    }.width('100%').alignItems(HorizontalAlign.Start)
+  }
+
+  @Builder
   private ConversationMessage(message: ConversationEntry) {
     if (message.role === 'feedback') {
       this.RequestFailure(message)
@@ -1025,6 +1320,9 @@ export struct AgentPage {
       Row() {
         if (message.role === 'user') { Blank() }
         Column({ space: 12 }) {
+          if (message.restored === true && message.role === 'user') {
+            Text('恢复的运行 · 原问题').fontSize(AppTheme.metaSize).fontColor('#FFFFFF').width('100%')
+          }
           if (message.role === 'assistant') {
             Row({ space: 8 }) {
               AppIcon({ name: 'agent', iconSize: 20, color: AppTheme.actionBlue })
@@ -1040,10 +1338,14 @@ export struct AgentPage {
               }.constraintSize({ minHeight: 48, minWidth: 72 }).padding(8)
                 .backgroundColor(Color.Transparent).borderRadius(AppTheme.controlRadius)
                 .accessibilityText(this.voiceState.speakingMessageId === message.id ? '停止播报这条回答' : '播报这条回答正文')
-                .enabled(this.speechPending() && this.voiceState.speakingMessageId === message.id ||
-                  !this.loading && !this.deletionBusy && this.decisionId.length === 0 && !this.capturePending())
+                .enabled(message.incomplete !== true && (this.speechPending() && this.voiceState.speakingMessageId === message.id ||
+                  !this.loading && !this.deletionBusy && this.decisionId.length === 0 && !this.capturePending()))
                 .onClick(() => this.speakReply(message))
             }.width('100%')
+          }
+          if (message.incomplete === true) {
+            Text('已收到的回答片段 · 尚未形成完整结果').fontSize(AppTheme.metaSize)
+              .fontColor(AppTheme.orange).width('100%')
           }
           MessageContent({ content: message.content, isUser: message.role === 'user' })
           if (message.role === 'assistant') { this.ToolResults(message) }
@@ -1231,6 +1533,11 @@ export struct AgentPage {
       Scroll(this.chatScroller) {
         Column({ space: 24 }) {
           if (this.optionsExpanded) { this.ModelOptions() }
+          Button(this.runRecordsExpanded ? '收起最近运行' : '最近运行 · 恢复查看').width('100%')
+            .constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize).fontColor(AppTheme.actionBlue)
+            .backgroundColor(Color.Transparent).onClick(() => this.toggleRunRecords())
+          if (this.runRecordsExpanded) { this.RunRecords() }
+          if (this.runState.runId.length > 0) { this.RunPanel() }
           if (!this.hasConversation()) {
             Column({ space: 12 }) {
               Text('想安排什么？').fontSize(AppTheme.pageTitle).fontWeight(FontWeight.Bold)
@@ -1258,7 +1565,7 @@ export struct AgentPage {
               .onAreaChange((_oldArea: Area, newArea: Area) => {
                 this.rememberMessageAnchor(message.id, Number(newArea.position.y));
               })
-          }, (message: ConversationEntry) => message.id)
+          }, (message: ConversationEntry) => `${message.id}-${message.revision ?? 0}`)
           if (this.loading) {
             Row({ space: 10 }) {
               LoadingProgress().width(20).height(20).color(AppTheme.actionBlue)

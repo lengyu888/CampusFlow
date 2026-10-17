@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import sqlite3
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
@@ -38,10 +39,12 @@ from .hduhelp_access import HDUHelpAccess
 from .hduhelp_presenter import build_hduhelp_presentation
 from .key_vault import ApiKeyVault
 from .replanning import ReplanError, ReplanningService
+from .run_service import RunError, RunService
 from .schedule_subscription import ScheduleSubscriptionError, ScheduleSubscriptionService
 from .schemas import (
     ActionTaskRequest,
     AdminUserSummary,
+    AgentRunRequest,
     AuthResponse,
     CampusCorrection,
     CampusCorrectionCreate,
@@ -75,6 +78,8 @@ from .schemas import (
     PlanningTask,
     RegisterRequest,
     ReplanPreview,
+    RunEventsPage,
+    RunSnapshot,
     ScheduleSubscriptionPreview,
     ScheduleSubscriptionRequest,
     ScheduleSubscriptionStatus,
@@ -236,11 +241,25 @@ def create_app(
     vision_service = vision_service or VisionService(settings)
     schedule_subscription_service = schedule_subscription_service or ScheduleSubscriptionService()
 
+    run_service = RunService(store, agent_service, settings)
+
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI):
+        yield
+        await run_service.shutdown()
+
     app = FastAPI(
         title="CampusFlow Agent API",
         version="0.9.0",
         description="带校园路线图、版本化数据、课表订阅、规划执行与 Skills 的大学规划 Agent",
+        lifespan=lifespan,
     )
+    app.state.run_service = run_service
+
+    @app.exception_handler(RunError)
+    async def run_error_handler(request: Request, exc: RunError) -> JSONResponse:
+        return JSONResponse(status_code=exc.status_code,
+                            content={"detail": exc.detail, "code": exc.code})
 
     @app.exception_handler(CampusFlowError)
     async def campusflow_error_handler(request: Request, exc: CampusFlowError) -> JSONResponse:
@@ -1030,6 +1049,37 @@ def create_app(
             raise HTTPException(status_code=404, detail="Skill 尚未安装。") from exc
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
+    @app.post("/api/v1/agent-runs", response_model=RunSnapshot)
+    async def start_agent_run(payload: AgentRunRequest, user: CurrentUser) -> RunSnapshot:
+        if not user.onboarding_complete:
+            raise HTTPException(status_code=403, detail="请先完成首次配置。")
+        # An existing run remains queryable even after the user removes a model key.
+        existing = run_service.existing(user.user_id, payload)
+        if existing is not None:
+            return existing
+        load_user_context(user)
+        return run_service.start(user.user_id, payload, load_api_key(user))
+
+    @app.get("/api/v1/agent-runs", response_model=list[RunSnapshot])
+    async def recent_agent_runs(
+        user: CurrentUser, limit: int = Query(default=20, ge=1, le=50),
+    ) -> list[RunSnapshot]:
+        return run_service.recent(user.user_id, limit)
+
+    @app.get("/api/v1/agent-runs/{run_id}", response_model=RunSnapshot)
+    async def get_agent_run(run_id: UUID, user: CurrentUser) -> RunSnapshot:
+        return run_service.get(user.user_id, str(run_id))
+
+    @app.get("/api/v1/agent-runs/{run_id}/events", response_model=RunEventsPage)
+    async def agent_run_events(
+        run_id: UUID, user: CurrentUser, after_seq: int = Query(default=0, ge=0),
+    ) -> RunEventsPage:
+        return run_service.events(user.user_id, str(run_id), after_seq)
+
+    @app.post("/api/v1/agent-runs/{run_id}/cancel", response_model=RunSnapshot)
+    async def cancel_agent_run(run_id: UUID, user: CurrentUser) -> RunSnapshot:
+        return await run_service.cancel(user.user_id, str(run_id))
+
     @app.post("/api/v1/chat", response_model=ChatResponse)
     async def chat(request: ChatRequest, user: CurrentUser) -> ChatResponse:
         if not user.onboarding_complete:
@@ -1098,7 +1148,7 @@ def create_app(
     @app.delete("/api/v1/sessions/{session_id}", status_code=204)
     async def delete_session(session_id: str, user: CurrentUser) -> Response:
         try:
-            store.delete_session(user.user_id, session_id)
+            await run_service.delete_session(user.user_id, session_id)
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="会话不存在。") from exc
         return Response(status_code=status.HTTP_204_NO_CONTENT)
