@@ -1,8 +1,10 @@
-import { ChatMessage, PendingAction, PendingMilestonePreview } from '../model/ApiModels';
+import { ChatMessage, PendingAction, PendingMilestonePreview, PendingTaskPreview } from '../model/ApiModels';
 import { CampusFlowApi } from '../services/CampusFlowApi';
 import { plainMessage } from '../utils/MessageText';
 import { AppTheme } from '../theme/AppTheme';
 import { AppIcon } from '../components/AppIcon';
+import { TaskScheduleDetails } from '../components/TaskScheduleDetails';
+import { formatPlanDateTime } from '../utils/PlanPresentation';
 
 @Component
 export struct AgentPage {
@@ -19,10 +21,12 @@ export struct AgentPage {
     { role: 'assistant', content: '告诉我你的目标，我会结合课表、校园地点和待办，给出可执行的安排。' }
   ];
   @State private pendingActions: PendingAction[] = [];
+  @State private expandedProposalIds: string[] = [];
   @State private loading: boolean = false;
   @State private decisionId: string = '';
   private sessionId: string = `arkuix-${Date.now()}`;
   private chatScroller: Scroller = new Scroller();
+  private scrollForNewMessage: boolean = false;
 
   aboutToAppear(): void {
     if (this.initialPrompt.length > 0) {
@@ -41,14 +45,19 @@ export struct AgentPage {
     if (text.length === 0 || this.loading) {
       return;
     }
+    this.scrollForNewMessage = true;
     this.messages = this.messages.concat([{ role: 'user', content: text }]);
     this.prompt = '';
     this.loading = true;
     try {
       const response = await new CampusFlowApi(this.baseUrl, this.token).chat(this.sessionId, this.model, text);
+      this.scrollForNewMessage = true;
       this.messages = this.messages.concat([{ role: 'assistant', content: response.message }]);
       this.pendingActions = response.pending_actions;
+      this.expandedProposalIds = this.expandedProposalIds.filter((id: string) =>
+        this.pendingActions.some((action: PendingAction) => action.proposal_id === id));
     } catch (error) {
+      this.scrollForNewMessage = true;
       this.messages = this.messages.concat([{ role: 'assistant', content: `任务执行失败：${error}` }]);
     } finally {
       this.loading = false;
@@ -59,10 +68,15 @@ export struct AgentPage {
     this.decisionId = action.proposal_id;
     try {
       const result = await new CampusFlowApi(this.baseUrl, this.token).confirmAction(action.proposal_id);
+      this.scrollForNewMessage = true;
       this.messages = this.messages.concat([{ role: 'assistant', content: result.message }]);
-      this.pendingActions = this.pendingActions.filter((item) => item.proposal_id !== action.proposal_id);
-      this.onOpenPlan();
+      if (result.applied) {
+        this.pendingActions = this.pendingActions.filter((item) => item.proposal_id !== action.proposal_id);
+        this.expandedProposalIds = this.expandedProposalIds.filter((id: string) => id !== action.proposal_id);
+        this.onOpenPlan();
+      }
     } catch (error) {
+      this.scrollForNewMessage = true;
       this.messages = this.messages.concat([{ role: 'assistant', content: `确认失败：${error}` }]);
     } finally {
       this.decisionId = '';
@@ -73,9 +87,12 @@ export struct AgentPage {
     this.decisionId = action.proposal_id;
     try {
       const result = await new CampusFlowApi(this.baseUrl, this.token).cancelAction(action.proposal_id);
+      this.scrollForNewMessage = true;
       this.messages = this.messages.concat([{ role: 'assistant', content: result.message }]);
       this.pendingActions = this.pendingActions.filter((item) => item.proposal_id !== action.proposal_id);
+      this.expandedProposalIds = this.expandedProposalIds.filter((id: string) => id !== action.proposal_id);
     } catch (error) {
+      this.scrollForNewMessage = true;
       this.messages = this.messages.concat([{ role: 'assistant', content: `操作失败：${error}` }]);
     } finally {
       this.decisionId = '';
@@ -96,9 +113,51 @@ export struct AgentPage {
       return `${milestoneCount} 个里程碑 · ${this.proposalTaskCount(action)} 项任务 · ${target}`;
     }
     if (action.start_at !== null) {
-      return `执行时间 ${action.start_at.substring(0, 16).replace('T', ' ')}`;
+      return `执行时间 ${formatPlanDateTime(action.start_at)}`;
     }
     return '未设置执行时间';
+  }
+
+  private proposalExpanded(proposalId: string): boolean {
+    return this.expandedProposalIds.includes(proposalId);
+  }
+
+  private toggleProposal(proposalId: string): void {
+    // Expanding a long plan must not jump the reader to the bottom of the chat.
+    this.scrollForNewMessage = false;
+    this.expandedProposalIds = this.proposalExpanded(proposalId) ?
+      this.expandedProposalIds.filter((id: string) => id !== proposalId) :
+      this.expandedProposalIds.concat([proposalId]);
+  }
+
+  @Builder
+  private ProposalMilestones(action: PendingAction) {
+    Column({ space: 12 }) {
+      Text('以下时间均为北京时间').fontSize(12).fontColor(AppTheme.secondary).width('100%')
+      ForEach(action.payload.milestones ?? [], (milestone: PendingMilestonePreview, milestoneIndex: number) => {
+        Column({ space: 10 }) {
+          Text(`${milestoneIndex + 1}. ${milestone.title}`)
+            .fontSize(15).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink).width('100%')
+          Text(`截止：${formatPlanDateTime(milestone.due_at)} · ${milestone.tasks.length} 项任务`)
+            .fontSize(12).fontColor(AppTheme.secondary).width('100%')
+          if (milestone.tasks.length === 0) {
+            Text('这个里程碑尚无任务').fontSize(13).fontColor(AppTheme.secondary).width('100%')
+          }
+          ForEach(milestone.tasks, (task: PendingTaskPreview, taskIndex: number) => {
+            Column({ space: 6 }) {
+              Text(`${milestoneIndex + 1}.${taskIndex + 1} ${task.title}`)
+                .fontSize(14).fontWeight(FontWeight.Medium).fontColor(AppTheme.ink).width('100%')
+              TaskScheduleDetails({ startAt: task.start_at, endAt: task.end_at,
+                location: task.location, reminderMinutes: task.reminder_minutes })
+            }.width('100%').alignItems(HorizontalAlign.Start).padding(12)
+              .backgroundColor(AppTheme.field).borderRadius(12)
+          }, (_task: PendingTaskPreview, taskIndex: number) =>
+            `${action.proposal_id}-${milestoneIndex}-${taskIndex}`)
+        }.width('100%').alignItems(HorizontalAlign.Start).padding(12)
+          .backgroundColor(AppTheme.surface).borderRadius(14)
+      }, (_milestone: PendingMilestonePreview, milestoneIndex: number) =>
+        `${action.proposal_id}-${milestoneIndex}`)
+    }.width('100%').alignItems(HorizontalAlign.Start)
   }
 
   private choosePrompt(value: string): void {
@@ -204,15 +263,26 @@ export struct AgentPage {
                 Text(action.payload.summary ?? '').fontSize(14).lineHeight(22).fontColor(AppTheme.secondary).width('100%')
               }
               if (action.kind === 'plan') {
-                ForEach((action.payload.milestones ?? []).slice(0, 3), (milestone: PendingMilestonePreview) => {
-                  Row({ space: 8 }) {
-                    AppIcon({ name: 'calendar', iconSize: 16, color: AppTheme.blue })
-                    Text(milestone.title).fontSize(13).fontWeight(FontWeight.Medium).fontColor(AppTheme.ink)
-                      .layoutWeight(1)
-                    Text(`${milestone.tasks.length} 项`).fontSize(11).fontColor(AppTheme.muted)
-                  }.width('100%').padding({ top: 7, bottom: 7, left: 10, right: 10 })
+                if ((action.payload.milestones ?? []).length > 0) {
+                  Button({ type: ButtonType.Normal }) {
+                    Text(this.proposalExpanded(action.proposal_id) ? '收起完整计划' :
+                      `查看全部 ${action.payload.milestones?.length ?? 0} 个里程碑 · ${this.proposalTaskCount(action)} 项任务`)
+                      .fontSize(14).fontWeight(FontWeight.Medium).fontColor(AppTheme.blue)
+                      .width('100%').textAlign(TextAlign.Start)
+                  }.width('100%').constraintSize({ minHeight: 48 }).padding(12)
                     .backgroundColor(AppTheme.surface).borderRadius(12)
-                }, (milestone: PendingMilestonePreview) => milestone.title)
+                    .accessibilityText(`${action.title}，${this.proposalExpanded(action.proposal_id) ? '已展开，收起完整计划' : '已折叠，查看完整计划'}`)
+                    .onClick(() => this.toggleProposal(action.proposal_id))
+                  if (this.proposalExpanded(action.proposal_id)) {
+                    this.ProposalMilestones(action)
+                  }
+                } else {
+                  Text('提案中暂无里程碑，请补充计划后再确认。')
+                    .fontSize(13).fontColor(AppTheme.secondary).width('100%')
+                }
+              } else {
+                TaskScheduleDetails({ startAt: action.start_at, endAt: action.end_at,
+                  location: action.payload.location ?? null, reminderMinutes: action.reminder_minutes })
               }
               if (action.conflicts.length > 0) {
                 Text(`检测到冲突：${action.conflicts.join('；')}`).fontSize(13).fontColor(AppTheme.red).width('100%')
@@ -235,7 +305,8 @@ export struct AgentPage {
           }
         }.width('100%').padding({ left: 18, right: 18, top: 8, bottom: 24 })
           .onAreaChange(() => {
-            if (this.messages.length > 1) {
+            if (this.scrollForNewMessage && this.messages.length > 1) {
+              this.scrollForNewMessage = false;
               this.chatScroller.scrollEdge(Edge.Bottom);
             }
           })
