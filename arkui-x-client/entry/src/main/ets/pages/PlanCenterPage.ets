@@ -1,4 +1,6 @@
 import {
+  PlanMilestone,
+  PlanSummary,
   PlanningOverview,
   PlanningTask,
   TimetableEntry,
@@ -7,6 +9,8 @@ import {
 import { CampusFlowApi } from '../services/CampusFlowApi';
 import { AppTheme } from '../theme/AppTheme';
 import { AppIcon } from '../components/AppIcon';
+import { TaskScheduleDetails } from '../components/TaskScheduleDetails';
+import { formatPlanDateTime } from '../utils/PlanPresentation';
 
 interface CalendarDay {
   key: string;
@@ -33,6 +37,8 @@ export struct PlanCenterPage {
   @State private draftTaskDate: string = '';
   @State private draftTaskTime: string = '';
   @State private deletePendingId: string = '';
+  @State private expandedPlanIds: string[] = [];
+  @State private planningRevision: number = 0;
   private taskInputController: TextInputController = new TextInputController();
 
   aboutToAppear(): void {
@@ -59,18 +65,28 @@ export struct PlanCenterPage {
   }
 
   private taskDate(task: PlanningTask): string {
-    return task.start_at === null ? '' : task.start_at.substring(0, 10);
+    const start = formatPlanDateTime(task.start_at);
+    return start.length === 16 ? start.substring(0, 10) : '';
   }
 
   private taskTime(task: PlanningTask): string {
     if (task.start_at === null) {
       return '待安排';
     }
-    const start = task.start_at.substring(11, 16);
+    const startAt = formatPlanDateTime(task.start_at);
+    if (startAt.length !== 16) {
+      return '待安排';
+    }
+    const start = startAt.substring(11, 16);
     if (task.source === 'manual' && task.end_at === null) {
       return start === '23:59' ? '全天' : start;
     }
-    return task.end_at === null ? start : `${start}–${task.end_at.substring(11, 16)}`;
+    if (task.end_at === null) {
+      return start;
+    }
+    const endAt = formatPlanDateTime(task.end_at);
+    return startAt.substring(0, 10) === endAt.substring(0, 10) ?
+      `${start}–${endAt.substring(11, 16)}` : `${start}–${endAt}`;
   }
 
   private relativeDate(offset: number): string {
@@ -160,6 +176,29 @@ export struct PlanCenterPage {
     return this.overview.tasks.filter((task: PlanningTask) => task.start_at === null && task.status === 'pending').length;
   }
 
+  private milestoneTasks(planId: string, milestoneId: string): PlanningTask[] {
+    return this.overview.tasks.filter((task: PlanningTask) =>
+      task.plan_id === planId && task.milestone_id === milestoneId);
+  }
+
+  private ungroupedPlanTasks(plan: PlanSummary): PlanningTask[] {
+    return this.overview.tasks.filter((task: PlanningTask) => task.plan_id === plan.plan_id &&
+      !plan.milestones.some((milestone: PlanMilestone) => milestone.milestone_id === task.milestone_id));
+  }
+
+  private togglePlan(planId: string): void {
+    this.expandedPlanIds = this.expandedPlanIds.includes(planId)
+      ? this.expandedPlanIds.filter((id: string) => id !== planId)
+      : this.expandedPlanIds.concat([planId]);
+  }
+
+  private planStatus(plan: PlanSummary): string {
+    if (plan.status === 'completed') {
+      return '已完成';
+    }
+    return plan.status === 'overdue' ? '已逾期' : '进行中';
+  }
+
   private moveMonth(offset: number): void {
     const month = new Date(this.calendarMonth);
     const next = new Date(month.getFullYear(), month.getMonth() + offset, 1);
@@ -182,7 +221,11 @@ export struct PlanCenterPage {
     try {
       const overview = await new CampusFlowApi(this.baseUrl, this.token).planning();
       this.getUIContext().animateTo({ duration: AppTheme.motion(180), curve: Curve.EaseOut }, () => {
+        // 成功刷新后重建计划内容，避免 ForEach 复用旧对象；展开状态仍按计划 ID 保留。
+        this.planningRevision++;
         this.overview = overview;
+        this.expandedPlanIds = this.expandedPlanIds.filter((id: string) =>
+          overview.plans.some((plan: PlanSummary) => plan.plan_id === id));
       });
       this.errorText = '';
     } catch (error) {
@@ -299,6 +342,94 @@ export struct PlanCenterPage {
   }
 
   @Builder
+  private PlanTask(task: PlanningTask) {
+    Column({ space: 8 }) {
+      Row({ space: 5 }) {
+        this.TaskCheck(task)
+        Text(task.title).fontSize(15).lineHeight(22).fontWeight(FontWeight.Medium)
+          .fontColor(task.status === 'completed' ? AppTheme.muted : AppTheme.ink)
+          .decoration({ type: task.status === 'completed' ?
+            TextDecorationType.LineThrough : TextDecorationType.None })
+          .layoutWeight(1)
+      }.width('100%').alignItems(VerticalAlign.Top)
+      TaskScheduleDetails({ startAt: task.start_at, endAt: task.end_at,
+        location: task.location, reminderMinutes: task.reminder_minutes })
+      if (task.status === 'completed') {
+        Text('已完成').fontSize(12).fontColor(AppTheme.secondary).width('100%')
+      } else if (this.taskOverdue(task)) {
+        Text('已逾期').fontSize(12).fontColor(AppTheme.red).width('100%')
+      }
+    }.width('100%').alignItems(HorizontalAlign.Start).padding(12)
+      .backgroundColor(AppTheme.field).borderRadius(14)
+  }
+
+  @Builder
+  private ConfirmedPlans() {
+    Column({ space: 12 }) {
+      Text('已确认的计划').fontSize(20).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink).width('100%')
+      if (this.overview.plans.length === 0) {
+        Text('确认 Agent 的计划提案后，可以在这里按里程碑查看全部任务。')
+          .fontSize(14).lineHeight(22).fontColor(AppTheme.secondary).width('100%')
+          .padding(18).backgroundColor(AppTheme.surface).borderRadius(20)
+      }
+      ForEach(this.overview.plans, (plan: PlanSummary) => {
+        Column({ space: 12 }) {
+          Text(plan.title).fontSize(18).lineHeight(26).fontWeight(FontWeight.Bold)
+            .fontColor(AppTheme.ink).width('100%')
+          Text(`${this.planStatus(plan)} · ${plan.milestones.length} 个里程碑 · ${plan.completed_count}/${plan.task_count} 项已完成`)
+            .fontSize(12).lineHeight(19).fontColor(AppTheme.secondary).width('100%')
+          Text(plan.target_date === null ? '未设截止日' : `截止 ${plan.target_date}`)
+            .fontSize(12).fontColor(AppTheme.secondary).width('100%')
+          Button({ type: ButtonType.Normal }) {
+            Text(this.expandedPlanIds.includes(plan.plan_id) ? '收起计划详情' : '展开全部里程碑与任务')
+              .fontSize(14).fontColor(AppTheme.blue).width('100%').textAlign(TextAlign.Start)
+          }.width('100%').constraintSize({ minHeight: 48 }).padding(12)
+            .backgroundColor(AppTheme.blueSoft).borderRadius(12)
+            .accessibilityText(`${plan.title}，${this.expandedPlanIds.includes(plan.plan_id) ? '已展开，收起计划详情' : '已折叠，展开全部里程碑与任务'}`)
+            .onClick(() => this.togglePlan(plan.plan_id))
+          if (this.expandedPlanIds.includes(plan.plan_id)) {
+            Text('以下时间均为北京时间').fontSize(12).fontColor(AppTheme.secondary).width('100%')
+            if (plan.summary.length > 0) {
+              Text(plan.summary).fontSize(14).lineHeight(22).fontColor(AppTheme.secondary).width('100%')
+            }
+            if (plan.milestones.length === 0) {
+              Text('此计划尚未设置里程碑。').fontSize(13).fontColor(AppTheme.secondary).width('100%')
+            }
+            ForEach(plan.milestones, (milestone: PlanMilestone) => {
+              Column({ space: 10 }) {
+                Divider().color(AppTheme.separator)
+                Text(milestone.title).fontSize(16).lineHeight(24).fontWeight(FontWeight.Medium)
+                  .fontColor(AppTheme.ink).width('100%')
+                Text(`截止：${formatPlanDateTime(milestone.due_at)} · ${milestone.completed_count}/${milestone.task_count} 项已完成`)
+                  .fontSize(12).lineHeight(19).fontColor(AppTheme.secondary).width('100%')
+                if (this.milestoneTasks(plan.plan_id, milestone.milestone_id).length === 0) {
+                  Text('这个里程碑下暂无任务。').fontSize(13).fontColor(AppTheme.secondary).width('100%')
+                }
+                ForEach(this.milestoneTasks(plan.plan_id, milestone.milestone_id), (task: PlanningTask) => {
+                  this.PlanTask(task)
+                }, (task: PlanningTask) => `${task.task_id}-${task.status}-${task.completed_at ?? ''}`)
+              }.width('100%').alignItems(HorizontalAlign.Start)
+            }, (milestone: PlanMilestone) => `${plan.plan_id}-${milestone.milestone_id}`)
+            if (this.ungroupedPlanTasks(plan).length > 0) {
+              Column({ space: 10 }) {
+                Divider().color(AppTheme.separator)
+                Text('未归入里程碑的任务').fontSize(16).fontWeight(FontWeight.Medium)
+                  .fontColor(AppTheme.ink).width('100%')
+                ForEach(this.ungroupedPlanTasks(plan), (task: PlanningTask) => {
+                  this.PlanTask(task)
+                }, (task: PlanningTask) => `${task.task_id}-${task.status}-${task.completed_at ?? ''}`)
+              }.width('100%').alignItems(HorizontalAlign.Start)
+            } else if (plan.milestones.length === 0) {
+              Text('此计划暂无任务。').fontSize(13).fontColor(AppTheme.secondary).width('100%')
+            }
+          }
+        }.width('100%').alignItems(HorizontalAlign.Start).padding(18)
+          .backgroundColor(AppTheme.surface).borderRadius(20)
+      }, (plan: PlanSummary) => `${plan.plan_id}-${this.planningRevision}`)
+    }.width('100%').alignItems(HorizontalAlign.Start)
+  }
+
+  @Builder
   private DateChoice(label: string, value: string) {
     Button(label).height(44).fontSize(12).layoutWeight(1)
       .fontWeight(this.draftTaskDate === value ? FontWeight.Medium : FontWeight.Regular)
@@ -346,6 +477,8 @@ export struct PlanCenterPage {
           }.width('100%')
           Text('先预览计划，确认后再添加。').fontSize(12).fontColor(AppTheme.muted).width('100%')
         }.width('100%').padding(20).backgroundColor(AppTheme.surface).borderRadius(22)
+
+        this.ConfirmedPlans()
 
         Column({ space: 16 }) {
           Row() {
