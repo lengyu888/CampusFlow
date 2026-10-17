@@ -584,3 +584,22 @@ export interface AdminUserSummary {
   timetable_count: number;
   campus_place_count: number;
 }
+
+export interface ModelOption {
+  id: string; label: string; provider: string; supports_tools: boolean; supports_streaming: boolean;
+  supports_reasoning: boolean; available: boolean; unavailable_reason: string;
+}
+export interface ModelCatalog { models: ModelOption[]; default_model: string; }
+export interface LearningPreferenceValues {
+  enabled: boolean; session_minutes: number; break_minutes: number; preferred_period: string; daily_minutes: number;
+}
+export interface LearningPreferenceSnapshot extends LearningPreferenceValues { revision: number; updated_at: string | null; }
+export interface LearningPreferenceWrite extends LearningPreferenceValues { base_revision: number; operation_id: string; }
+export interface LearningPreferenceDelete { base_revision: number; operation_id: string; }
+export interface KnowledgeHit {
+  source_id: string; title: string; section: string; url: string; excerpt: string; summary: string;
+  reviewed_at: string; school: string; campus: string;
+}
+export interface KnowledgeSearch {
+  query: string; status: string; message: string; hits: KnowledgeHit[]; evidence: DataEvidence[];
+}

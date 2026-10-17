@@ -1,5 +1,23 @@
 # ArkUI-X 与 Agent 服务联调说明
 
+## 第十六阶段客户端使用的入口
+
+当前 ArkUI-X 客户端使用持久运行接口。下方 `/api/v1/chat` 示例保留为旧 Web 测试台兼容接口，不能代替运行恢复协议。
+
+| 用途 | 接口与说明 |
+| --- | --- |
+| 模型目录 | `GET /api/v1/models`；能力为服务配置声明，不代表实测质量 |
+| 发起/查询运行 | `POST /api/v1/agent-runs`（含 UUID `run_id`） / `GET /api/v1/agent-runs/{run_id}` |
+| 增量事件 | `GET /api/v1/agent-runs/{run_id}/events?after_seq=…`；按序号轮询，不伪造工具进度 |
+| 取消 | `POST /api/v1/agent-runs/{run_id}/cancel`；以服务端状态为准 |
+| 学习偏好 | `GET/PUT/DELETE /api/v1/learning-preferences`；写入带版本和 UUID，删除需确认 |
+| 校园参考资料 | `GET /api/v1/knowledge/search?q=…` / `GET /api/v1/knowledge/sources/{source_id}`；不调用模型 |
+| 确认提案 | `POST /api/v1/actions/{proposal_id}/confirm`；确认前重查，返回事务回执 |
+
+同一运行重试保持 UUID 与完整请求体。若结果未知，先查回原记录，不能回退旧 chat 接口重发。新会话的模型 ID 来自目录；已移除模型的旧历史仍可查看。完整运行状态、预算与保留边界见 [第十三阶段](stage-13-agent-runtime.md)。
+
+平台构建、Bridge、权限、语音与真实通知适配见 [第十五阶段](stage-15-native-capabilities.md)；本轮没有安装原生环境或执行设备验证。
+
 ## 参考的官方样例组织方式
 
 ArkUI-X 官方 Samples 将共享 ArkTS 页面放在 `entry/src/main/ets`，Android 和 iOS 平台工程放在 `.arkui-x/android` 与 `.arkui-x/ios`。本项目的文本 Agent 不需要原生 Bridge，ArkTS 可以直接调用 FastAPI；语音、原生日历和通知等能力再参考 `SuperFeature/PlatformBridge` 进行平台桥接。
@@ -55,7 +73,7 @@ ArkUI-X 官方 Samples 将共享 ArkTS 页面放在 `entry/src/main/ets`，Andro
 ```ts
 interface ChatRequest {
   session_id: string
-  model: 'deepseek-v4-pro' | 'deepseek-flash'
+  model: string // 由 GET /api/v1/models 返回的已配置 ID
   message: string
 }
 

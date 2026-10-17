@@ -41,6 +41,9 @@ from .hduhelp import HDUHelpError, HDUHelpService, TokenSet
 from .hduhelp_access import HDUHelpAccess
 from .hduhelp_presenter import build_hduhelp_presentation
 from .key_vault import ApiKeyVault
+from .knowledge import KnowledgeHit, KnowledgeSearchResponse, KnowledgeService
+from .learning_preferences import register_learning_preferences
+from .model_catalog import ModelCatalog
 from .replanning import ReplanError, ReplanningService
 from .run_service import RunError, RunService
 from .schedule_subscription import ScheduleSubscriptionError, ScheduleSubscriptionService
@@ -72,6 +75,7 @@ from .schemas import (
     HistoryMessage,
     ImageParseRequest,
     LoginRequest,
+    ModelCatalogResponse,
     OnboardingRequest,
     OnboardingResponse,
     PendingAction,
@@ -171,36 +175,36 @@ def _deepseek_exception(exc: Exception) -> HTTPException:
     if isinstance(exc, OpenAIAuthenticationError):
         return CampusFlowError(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="DeepSeek API Key 无效、已失效或没有当前模型权限。",
+            detail="所选模型的凭据无效、已失效或没有访问权限。",
             code="MODEL_AUTH_INVALID",
         )
     if isinstance(exc, OpenAIRateLimitError):
         return CampusFlowError(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="DeepSeek API 请求过于频繁或账户额度不足，请稍后重试并检查余额。",
+            detail="模型请求过于频繁或供应商额度不足，请稍后重试或联系服务维护者。",
             code="MODEL_RATE_LIMITED",
         )
     if isinstance(exc, BadRequestError):
         return CampusFlowError(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="DeepSeek 拒绝了请求，请检查模型参数、图片格式或输入内容。",
+            detail="模型服务拒绝了请求，请检查模型配置或输入内容。",
             code="MODEL_REQUEST_REJECTED",
         )
     if isinstance(exc, APIConnectionError):
         return CampusFlowError(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="无法连接 DeepSeek API，请检查本机网络、防火墙或代理设置。",
+            detail="暂时无法连接模型服务，请稍后重试或联系服务维护者。",
             code="MODEL_UNAVAILABLE",
         )
     if isinstance(exc, APIStatusError):
         return CampusFlowError(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"DeepSeek API 返回 HTTP {exc.status_code}。",
+            detail="模型服务暂时不可用，请稍后重试。",
             code="MODEL_UNAVAILABLE",
         )
     return CampusFlowError(
         status_code=status.HTTP_502_BAD_GATEWAY,
-        detail=f"Agent execution failed: {type(exc).__name__}",
+        detail="本次模型请求未完成，请核对配置后重试。",
         code="MODEL_UNAVAILABLE",
     )
 
@@ -223,6 +227,7 @@ def create_app(
     weather_service: WeatherService | None = None,
 ) -> FastAPI:
     settings = settings or get_settings()
+    model_catalog = ModelCatalog(settings)
     store = store or CampusStore(settings.database_path)
     account_store = account_store or AccountStore(settings.database_path)
     replanning_service = replanning_service or ReplanningService(account_store, store)
@@ -237,6 +242,7 @@ def create_app(
         hduhelp_service,
     )
     weather_service = weather_service or WeatherService(settings)
+    knowledge_service = KnowledgeService()
     agent_service = agent_service or AgentService(
         settings,
         store,
@@ -277,6 +283,14 @@ def create_app(
             headers=exc.headers,
         )
 
+    @app.exception_handler(AgentConfigurationError)
+    async def model_configuration_handler(
+        request: Request, exc: AgentConfigurationError
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=exc.status_code, content={"detail": exc.detail, "code": exc.code}
+        )
+
     @app.exception_handler(ReplanError)
     async def replan_error_handler(request: Request, exc: ReplanError) -> JSONResponse:
         return JSONResponse(
@@ -310,12 +324,15 @@ def create_app(
     app.state.settings = settings
     app.state.store = store
     app.state.account_store = account_store
+    app.state.model_catalog = model_catalog
+    register_learning_preferences(app, account_store, _require_user)
     app.state.agent_service = agent_service
     app.state.vision_service = vision_service
     app.state.api_key_vault = api_key_vault
     app.state.skill_store = skill_store
     app.state.schedule_subscription_service = schedule_subscription_service
     app.state.weather_service = weather_service
+    app.state.knowledge_service = knowledge_service
     app.state.hduhelp_service = hduhelp_service
     app.state.hduhelp_access = hduhelp_access
 
@@ -356,9 +373,34 @@ def create_app(
         except ValueError as exc:
             raise CampusFlowError(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail=str(exc),
+                detail="账户模型凭据暂时无法读取，请重新配置或联系服务维护者。",
                 code="MODEL_KEY_REQUIRED",
             ) from exc
+
+    def selected_model_key(user: UserRecord, model_id: str) -> str:
+        route = model_catalog.require_capabilities(model_id)
+        # Never decrypt a user's DeepSeek credential for an additional provider, even as fallback.
+        account_key = load_api_key(user) if route.uses_account_key else ""
+        return model_catalog.credentials(model_id, account_key)[1]
+
+    @app.get("/api/v1/models", response_model=ModelCatalogResponse)
+    async def available_models(user: CurrentUser) -> ModelCatalogResponse:
+        return model_catalog.public_catalog(user.api_key_configured)
+
+    @app.get("/api/v1/knowledge/search", response_model=KnowledgeSearchResponse)
+    async def search_knowledge(
+        user: CurrentUser, q: Annotated[str, Query(min_length=1, max_length=200)]
+    ) -> KnowledgeSearchResponse:
+        return knowledge_service.search(q, user.school, user.campus)
+
+    @app.get("/api/v1/knowledge/sources/{source_id}", response_model=KnowledgeHit)
+    async def knowledge_source(source_id: str, user: CurrentUser) -> KnowledgeHit:
+        source = knowledge_service.source(source_id, user.school, user.campus)
+        if source is None:
+            raise CampusFlowError(
+                404, "此参考来源不存在或不适用于当前校区。", "KNOWLEDGE_SOURCE_NOT_FOUND"
+            )
+        return source
 
     def subscription_status(user_id: str) -> ScheduleSubscriptionStatus:
         saved = account_store.get_schedule_subscription(user_id)
@@ -414,7 +456,7 @@ def create_app(
     @app.get("/health", response_model=HealthResponse)
     async def health() -> HealthResponse:
         return HealthResponse(
-            supported_models=["deepseek-v4-pro", "deepseek-flash"],
+            supported_models=list(model_catalog.routes),
         )
 
     @app.post("/api/v1/auth/register", response_model=AuthResponse, status_code=201)
@@ -1096,7 +1138,7 @@ def create_app(
         if existing is not None:
             return existing
         load_user_context(user)
-        return run_service.start(user.user_id, payload, load_api_key(user))
+        return run_service.start(user.user_id, payload, selected_model_key(user, payload.model))
 
     @app.get("/api/v1/agent-runs", response_model=list[RunSnapshot])
     async def recent_agent_runs(
@@ -1127,15 +1169,15 @@ def create_app(
             reply = await agent_service.chat(
                 user_id=user.user_id,
                 session_id=request.session_id,
-                api_key=load_api_key(user),
+                api_key=selected_model_key(user, request.model),
                 model_name=request.model,
                 message=request.message,
             )
         except AgentConfigurationError as exc:
             raise CampusFlowError(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail=str(exc),
-                code="MODEL_UNAVAILABLE",
+                status_code=exc.status_code,
+                detail=exc.detail,
+                code=exc.code,
             ) from exc
         except TimeoutError as exc:
             raise CampusFlowError(

@@ -24,6 +24,20 @@ function knownErrorMessage(code: string): string {
       return '模型服务凭据无效，请在个人设置中检查或更新 API Key。';
     case 'MODEL_KEY_REQUIRED':
       return '尚未配置模型 API Key，请在个人设置中完成配置。';
+    case 'MODEL_CONFIG_INVALID':
+      return '模型目录配置未通过检查，请联系服务维护者。';
+    case 'MODEL_NOT_FOUND':
+      return '该模型已移除或未配置，请刷新模型列表后选择。';
+    case 'MODEL_CAPABILITY_UNSUPPORTED':
+      return '该模型未声明支持本应用所需的工具与增量回答，请选择其他模型。';
+    case 'MODEL_PROVIDER_KEY_REQUIRED':
+      return '该供应商的服务端凭据尚未配置，请联系服务维护者或选择其他模型。';
+    case 'PREFERENCES_CHANGED':
+      return '学习偏好已被其他操作修改，当前草稿仍保留，请读取最新值再核对。';
+    case 'OPERATION_ID_REUSED':
+      return '该操作标识已用于其他内容，请先重新核对当前学习偏好。';
+    case 'OPERATION_RETIRED':
+      return '这次操作已因偏好清除而失效，请读取最新值后重新核对。';
     case 'MODEL_UNAVAILABLE':
       return '模型服务暂时不可用，请稍后再试。';
     case 'MODEL_RATE_LIMITED':

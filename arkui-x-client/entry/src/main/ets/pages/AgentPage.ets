@@ -1,9 +1,10 @@
-import { HistoryMessage, SessionSummary, PendingAction, PendingMilestonePreview, PendingTaskPreview, ToolDisplaySummary, PlanningTaskDraft, PlanningPlanDraft, RunSnapshot, RunToolProgress } from '../model/ApiModels';
+import { HistoryMessage, SessionSummary, PendingAction, PendingMilestonePreview, PendingTaskPreview, ToolDisplaySummary, PlanningTaskDraft, PlanningPlanDraft, RunSnapshot, RunToolProgress, ModelCatalog, ModelOption } from '../model/ApiModels';
 import { CampusFlowApi } from '../services/CampusFlowApi';
 import { localHistory } from '../services/LocalHistory';
 import { MessageContent } from '../components/MessageContent';
 import { AppTheme } from '../theme/AppTheme';
 import { EvidencePanel } from '../components/EvidencePanel';
+import { validModelCatalog, modelUnavailableReason, modelLabel } from '../utils/ModelCatalog';
 import { AppIcon } from '../components/AppIcon';
 import { TaskScheduleDetails } from '../components/TaskScheduleDetails';
 import { formatPlanDateTime } from '../utils/PlanPresentation';
@@ -52,8 +53,8 @@ interface HistorySaveGeneration {
 
 @Component
 export struct AgentPage {
-  @Prop baseUrl: string;
-  @Prop token: string;
+  @Watch('modelConnectionChanged') @Prop baseUrl: string;
+  @Watch('modelConnectionChanged') @Prop token: string;
   @Prop historyScope: string = '';
   @Prop deletedSessionId: string = '';
   @Prop deletionBusy: boolean = false;
@@ -72,6 +73,11 @@ export struct AgentPage {
   @State private prompt: string = '';
   @State private availableHeight: number = 600;
   @State private model: string = 'deepseek-v4-pro';
+  @State private modelCatalog: ModelCatalog | null = null;
+  @State private modelsLoading: boolean = false;
+  @State private modelsMessage: string = '';
+  private modelsRevision: number = 0;
+  @State private modelsDataRevision: number = 0;
   @State private optionsExpanded: boolean = false;
   @State private promptSuggestions: string[] = [];
   @State private suggestionNotice: string = '';
@@ -132,6 +138,7 @@ export struct AgentPage {
 
   aboutToAppear(): void {
     this.pageActive = true;
+    this.loadModels();
     if (this.receivedPromptRevision !== this.promptRevision) {
       this.initialPromptChanged();
     }
@@ -139,6 +146,8 @@ export struct AgentPage {
 
   aboutToDisappear(): void {
     this.pageActive = false;
+    this.modelsRevision++;
+    this.modelsLoading = false;
     this.conversationRevision++;
     this.voiceInteraction?.dispose();
     this.voiceInteraction = null;
@@ -309,9 +318,46 @@ export struct AgentPage {
     this.offerPrompt(value);
   }
 
+  private modelConnectionChanged(): void {
+    this.modelsRevision++; this.modelsLoading = false; this.modelCatalog = null; this.modelsMessage = '';
+    this.loadModels();
+  }
+  private async loadModels(): Promise<void> {
+    if (!this.pageActive || !this.voiceActive || this.modelsLoading) { return; }
+    const revision = ++this.modelsRevision; const token = this.token; const base = this.baseUrl;
+    this.modelsLoading = true;
+    try {
+      const catalog = await new CampusFlowApi(base, token).models();
+      if (!this.pageActive || !this.voiceActive || revision !== this.modelsRevision || token !== this.token || base !== this.baseUrl) { return; }
+      if (!validModelCatalog(catalog)) { throw new Error('INVALID_MODEL_CATALOG'); }
+      this.modelCatalog = catalog;
+      this.modelsDataRevision++;
+      this.modelsMessage = catalog.models.length === 0 ? '服务没有提供可选模型，请检查服务端配置。' : '';
+    } catch {
+      if (this.pageActive && this.voiceActive && revision === this.modelsRevision && token === this.token && base === this.baseUrl) {
+        this.modelsMessage = '模型列表暂未核实，原选择仍保留；发送时服务会再次检查可用性。请刷新重试。';
+      }
+    } finally { if (revision === this.modelsRevision) { this.modelsLoading = false; } }
+  }
+  private selectedModelBlocked(): boolean {
+    if (this.modelCatalog === null) { return false; } // Older servers may not expose a catalog; retain the existing explicit selection.
+    const option = this.modelCatalog.models.find((item: ModelOption) => item.id === this.model);
+    return option === undefined || modelUnavailableReason(option).length > 0;
+  }
+  private selectedModelReason(): string {
+    if (this.modelCatalog === null) { return this.modelsMessage; }
+    const option = this.modelCatalog.models.find((item: ModelOption) => item.id === this.model);
+    return option === undefined ? '当前选择已不在服务模型列表中，请重新选择。' : modelUnavailableReason(option);
+  }
+  private showModelOptions(): void {
+    if (!this.optionsExpanded) { this.toggleOptions(); }
+    else { this.chatScroller.scrollTo({ xOffset: 0, yOffset: 0, animation: false }); }
+  }
+  private selectedModelLabel(): string { return modelLabel(this.model, this.modelCatalog?.models ?? []); }
   private selectModel(value: string): void {
-    if (this.loading || this.decisionId.length > 0 || this.deletionBusy ||
-      !['deepseek-v4-pro', 'deepseek-flash'].includes(value)) { return; }
+    if (this.loading || this.decisionId.length > 0 || this.deletionBusy || this.modelCatalog === null) { return; }
+    const option = this.modelCatalog.models.find((item: ModelOption) => item.id === value);
+    if (option === undefined || modelUnavailableReason(option).length > 0) { return; }
     this.model = value;
   }
 
@@ -320,6 +366,7 @@ export struct AgentPage {
     if (!this.optionsExpanded) {
       this.optionsReturnOffset = this.scrollOffset;
       this.optionsExpanded = true;
+      this.loadModels();
       this.chatScroller.scrollTo({ xOffset: 0, yOffset: 0, animation: false });
     } else {
       this.optionsExpanded = false;
@@ -458,7 +505,8 @@ export struct AgentPage {
       this.voiceInteraction?.suspend();
       this.voiceProbeRevision++;
       this.voiceProbeBusy = false;
-    }
+      this.modelsRevision++; this.modelsLoading = false;
+    } else { this.loadModels(); }
     this.runInteraction?.setActive(this.voiceActive);
   }
 
@@ -568,6 +616,7 @@ export struct AgentPage {
       this.decisionId.length > 0 || this.capturePending()) {
       return;
     }
+    if (this.selectedModelBlocked()) { this.optionsExpanded = true; this.modelsMessage = '当前模型不可用，请选择已就绪并支持工具与增量回答的模型。'; return; }
     this.cancelVoice();
     this.optionsExpanded = false;
     this.followLatest = true;
@@ -1207,21 +1256,29 @@ export struct AgentPage {
     Column({ space: 12 }) {
       Text('后续消息使用的模型').fontSize(AppTheme.bodySize).fontWeight(FontWeight.Medium)
         .fontColor(AppTheme.ink).width('100%')
-      Row({ space: 8 }) {
-        Button(this.model === 'deepseek-v4-pro' ? 'V4 Pro · 已选' : 'V4 Pro')
-          .layoutWeight(1).constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
-          .fontColor(this.model === 'deepseek-v4-pro' ? '#FFFFFF' : AppTheme.actionBlue)
-          .backgroundColor(this.model === 'deepseek-v4-pro' ? AppTheme.actionBlue : AppTheme.blueSoft)
-          .borderRadius(AppTheme.controlRadius).enabled(!this.loading && this.decisionId.length === 0 && !this.deletionBusy)
-          .onClick(() => this.selectModel('deepseek-v4-pro'))
-        Button(this.model === 'deepseek-flash' ? 'Flash · 已选' : 'Flash')
-          .layoutWeight(1).constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
-          .fontColor(this.model === 'deepseek-flash' ? '#FFFFFF' : AppTheme.actionBlue)
-          .backgroundColor(this.model === 'deepseek-flash' ? AppTheme.actionBlue : AppTheme.blueSoft)
-          .borderRadius(AppTheme.controlRadius).enabled(!this.loading && this.decisionId.length === 0 && !this.deletionBusy)
-          .onClick(() => this.selectModel('deepseek-flash'))
-      }.width('100%')
-      Text('模型是否可用取决于服务配置。切换不会改写已有回答。')
+      Text(`当前：${this.selectedModelLabel()}`).fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+      if (this.modelsLoading) { Text('正在核对模型配置…').fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%') }
+      if (this.modelsMessage.length > 0) { Text(this.modelsMessage).fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%') }
+      if (this.modelCatalog !== null) {
+        ForEach(this.modelCatalog.models, (option: ModelOption) => {
+          Column({ space: 4 }) {
+            Button(`${option.label}${this.model === option.id ? ' · 已选' : ''}${this.modelCatalog?.default_model === option.id ? ' · 服务推荐' : ''}`).width('100%')
+              .constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
+              .fontColor(this.model === option.id ? '#FFFFFF' : AppTheme.actionBlue)
+              .backgroundColor(this.model === option.id ? AppTheme.actionBlue : AppTheme.blueSoft)
+              .borderRadius(AppTheme.controlRadius).enabled(!this.loading && this.decisionId.length === 0 && !this.deletionBusy && modelUnavailableReason(option).length === 0)
+              .onClick(() => this.selectModel(option.id))
+            Text(`${option.provider} · 工具${option.supports_tools ? '支持' : '未声明'} · 增量回答${option.supports_streaming ? '支持' : '未声明'} · 推理${option.supports_reasoning ? '已声明' : '未声明'}`)
+              .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%').wordBreak(WordBreak.BREAK_WORD)
+            if (modelUnavailableReason(option).length > 0) {
+              Text(modelUnavailableReason(option)).fontSize(AppTheme.metaSize).fontColor(AppTheme.red).width('100%').wordBreak(WordBreak.BREAK_WORD)
+            }
+          }.width('100%').alignItems(HorizontalAlign.Start)
+        }, (option: ModelOption) => `${option.id}-${this.modelsDataRevision}`)
+      }
+      Button('刷新模型列表').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize).fontColor(AppTheme.actionBlue)
+        .backgroundColor(AppTheme.surface).enabled(!this.modelsLoading).onClick(() => this.loadModels())
+      Text('能力来自服务配置声明，可用表示配置已就绪，不代表已完成真实模型评测。切换只影响后续消息，历史模型仍按原记录展示。')
         .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
       Button('个人与模型凭据').width('100%').constraintSize({ minHeight: 48 })
         .fontSize(AppTheme.bodySize).fontColor(AppTheme.actionBlue).backgroundColor(AppTheme.surface)
@@ -1636,6 +1693,13 @@ export struct AgentPage {
         Text('正在删除会话，完成后可继续发送。').fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
           .padding({ left: 18, right: 18, top: 6, bottom: 4 })
       }
+      if (this.selectedModelBlocked()) {
+        Column({ space: 4 }) {
+          Text(this.selectedModelReason()).fontSize(AppTheme.metaSize).fontColor(AppTheme.red).width('100%').wordBreak(WordBreak.BREAK_WORD)
+          Button('选择可用模型').constraintSize({ minHeight: 48 }).fontColor(AppTheme.actionBlue).backgroundColor(AppTheme.blueSoft)
+            .onClick(() => this.showModelOptions())
+        }.width('100%').padding({ left: 20, right: 20, top: 8, bottom: 8 })
+      }
       if (this.inputLength(this.prompt) > 8000) {
         Text(`当前 ${this.inputLength(this.prompt)} 字，超过 8000 字上限，请精简后发送。原文仍保留在输入框中。`)
           .fontSize(AppTheme.metaSize).fontColor(AppTheme.red).width('100%')
@@ -1684,7 +1748,7 @@ export struct AgentPage {
             .fontColor(this.inputLength(this.prompt) > 0 && this.inputLength(this.prompt) <= 8000 ? '#FFFFFF' : AppTheme.muted)
             .backgroundColor(this.inputLength(this.prompt) > 0 && this.inputLength(this.prompt) <= 8000 ? AppTheme.actionBlue : AppTheme.field)
             .borderRadius(AppTheme.controlRadius)
-            .enabled(!this.capturePending() && !this.loading && !this.deletionBusy && this.decisionId.length === 0 && this.inputLength(this.prompt) > 0 && this.inputLength(this.prompt) <= 8000).onClick(() => this.send())
+            .enabled(!this.selectedModelBlocked() && !this.capturePending() && !this.loading && !this.deletionBusy && this.decisionId.length === 0 && this.inputLength(this.prompt) > 0 && this.inputLength(this.prompt) <= 8000).onClick(() => this.send())
         }.width('100%').alignItems(VerticalAlign.Bottom)
       }.width('100%').padding({ left: 20, right: 20, top: 12, bottom: 12 }).backgroundColor(AppTheme.surface)
         .border({ width: { top: 0.5 }, color: AppTheme.line })

@@ -13,6 +13,7 @@ import { AppTheme } from '../theme/AppTheme';
 import { AppIcon } from '../components/AppIcon';
 import { FeedbackPanel } from '../components/FeedbackPanel';
 import { CampusFlowRequestError } from '../utils/AgentFeedback';
+import { LearningPreferencesPanel } from '../components/LearningPreferencesPanel';
 import { ReminderState } from '../utils/ReminderCoordinator';
 
 @Component
@@ -602,8 +603,7 @@ export struct ProfilePage {
   }
 
   build() {
-    if (this.showHduHelpData) { this.hduHelpDataView() }
-    else {
+    Stack() {
       Scroll() {
         Column({ space: 16 }) {
           Row({ space: 12 }) {
@@ -638,6 +638,7 @@ export struct ProfilePage {
                 .onClick(() => this.onOpenTimetable())
             }.width('100%').padding(AppTheme.cardInset).backgroundColor(AppTheme.surface).borderRadius(AppTheme.cardRadius)
           }
+          LearningPreferencesPanel({ baseUrl: this.baseUrl, token: this.token, userId: this.user.user_id, active: this.active && !this.showHduHelpData })
           this.groupHeader('reminders', '本机系统提醒', this.reminderState.message)
           if (this.expandedGroups.includes('reminders')) {
             Column({ space: 12 }) {
@@ -844,6 +845,8 @@ export struct ProfilePage {
         }.width('100%').alignItems(HorizontalAlign.Start)
           .padding({ left: AppTheme.pageInset, right: AppTheme.pageInset, top: 16, bottom: 24 })
       }.width('100%').height('100%').backgroundColor(AppTheme.canvas)
-    }
+        .visibility(this.showHduHelpData ? Visibility.Hidden : Visibility.Visible)
+      if (this.showHduHelpData) { this.hduHelpDataView() }
+    }.width('100%').height('100%')
   }
 }

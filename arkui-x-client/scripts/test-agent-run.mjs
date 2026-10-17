@@ -189,7 +189,8 @@ test('retry GET backoff is bounded, preserves partials, and manual recovery work
 
 test('known rejected creation remains an error, cannot be silently retried and keeps its request for review', async () => {
   for (const [status, code] of [[409, 'RUN_SESSION_BUSY'], [409, 'RUN_ID_REUSED'], [422, 'RUN_INVALID'],
-    [400, 'MODEL_KEY_REQUIRED'], [401, 'LOGIN_REQUIRED'], [401, 'HTTP_ERROR'], [403, 'HTTP_ERROR'],
+    [400, 'MODEL_KEY_REQUIRED'], [400, 'MODEL_NOT_FOUND'], [409, 'MODEL_CAPABILITY_UNSUPPORTED'],
+    [503, 'MODEL_PROVIDER_KEY_REQUIRED'], [503, 'MODEL_CONFIG_INVALID'], [401, 'LOGIN_REQUIRED'], [401, 'HTTP_ERROR'], [403, 'HTTP_ERROR'],
     [422, 'HTTP_ERROR'], [429, 'RUN_LIMIT'], [503, 'RUN_WORKER_BUSY']]) {
     const f = fixture({ start: () => { throw new CampusFlowRequestError(status, code, '已映射的安全提示'); } });
     await f.controller.start('session-a', 'deepseek-flash', '安排复习'); await f.controller.retryStart();

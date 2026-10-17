@@ -9,12 +9,21 @@ from typing import Any
 from pydantic import ValidationError
 
 from .evidence import data_evidence, safe_source_url
+from .knowledge import (
+    CAMPUS,
+    SCHOOL,
+    KnowledgeSearchResponse,
+    KnowledgeService,
+    coverage_evidence,
+    reference_evidence,
+)
 from .schemas import CampusRoute, DataEvidence, PendingAction, ToolDisplaySummary, ToolTrace
 
 _LABELS = {
     "get_schedule": "课表与事务",
     "get_weather": "校园天气",
     "search_campus_notices": "校园通知",
+    "search_campus_knowledge": "官方参考资料",
     "find_campus_places": "校园地点",
     "plan_campus_route": "校园路线",
     "get_hduhelp_profile": "校园档案",
@@ -506,6 +515,36 @@ def present_tool_trace(
     trace: ToolTrace, pending_actions: list[PendingAction]
 ) -> ToolDisplaySummary:
     display = _present_content(trace, pending_actions)
+    if trace.tool_name == "search_campus_knowledge":
+        # Public corpus entries are checked against the shipped source, not arbitrary
+        # model/tool strings. Queries and raw result messages never enter the summary.
+        if trace.status == "error":
+            return display
+        try:
+            result = KnowledgeSearchResponse.model_validate(trace.result)
+            knowledge = KnowledgeService()
+            if any(hit != knowledge.source(hit.source_id, SCHOOL, CAMPUS) for hit in result.hits):
+                return _unverified(display.label)
+            expected = (
+                [reference_evidence(hit) for hit in result.hits]
+                if result.hits else [coverage_evidence()]
+            )
+            if result.evidence != expected:
+                return _unverified(display.label)
+        except (ValidationError, TypeError, ValueError):
+            return _unverified(display.label)
+        return ToolDisplaySummary(
+            label=display.label,
+            state="unverified" if result.hits else (
+                "unavailable" if result.status == "unsupported" else "empty"
+            ),
+            summary=(f"找到 {len(result.hits)} 条已核对的官方静态参考资料；不代表实时状态。"
+                     if result.hits else (
+                         "当前学校或校区尚无已核对的参考资料。" if result.status == "unsupported"
+                         else "已核对资料中未找到依据；不能据此推断学校没有相关规定。"
+                     )),
+            evidence=expected,
+        )
     if trace.tool_name.startswith("propose_"):
         return display
     evidence = _source_records(trace.result)

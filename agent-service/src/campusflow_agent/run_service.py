@@ -25,6 +25,7 @@ from openai import (
 
 from .agent import AgentBudgetExceeded, AgentConfigurationError, AgentService
 from .config import Settings
+from .model_catalog import ModelCatalog
 from .schemas import (
     AgentRunRequest,
     ChatResponse,
@@ -49,6 +50,7 @@ class RunError(RuntimeError):
 class RunService:
     def __init__(self, store: CampusStore, agent: AgentService, settings: Settings):
         self.store, self.agent, self.settings = store, agent, settings
+        self.model_catalog = ModelCatalog(settings)
         self.connection = store._connection or sqlite3.connect(":memory:", check_same_thread=False)
         self.connection.row_factory = sqlite3.Row
         self.owner = uuid4().hex
@@ -184,6 +186,8 @@ class RunService:
                     result = RunSnapshot.model_validate_json(row["snapshot"])
                     self.connection.commit()
                     return result
+                # Validate before saving a new run; duplicate receipts remain queryable above.
+                _, api_key = self.model_catalog.credentials(request.model, api_key)
                 self._claim_worker()
                 busy = self.connection.execute(
                     "SELECT 1 FROM agent_runs WHERE user_id=? AND session_id=? "
@@ -454,18 +458,13 @@ class RunService:
                 code="RUN_BUDGET_EXCEEDED",
                 message="已达到本轮调用或内容预算，保留已有片段，未继续启动步骤。",
             )
-        except AgentConfigurationError:
-            self._finish(
-                user_id,
-                run_id,
-                "failed",
-                code="MODEL_UNAVAILABLE",
-                message="模型配置不可用，请检查个人设置与服务配置。",
-            )
+        except AgentConfigurationError as exc:
+            self._finish(user_id, run_id, "failed", code=exc.code, message=exc.detail)
         except Exception as exc:
             code, message = "RUN_FAILED", "本次运行未完成，请核对服务与模型配置后再试。"
             if isinstance(exc, AuthenticationError):
-                code, message = "MODEL_AUTH_INVALID", "模型凭据无效，请在个人设置中检查或更新。"
+                code = "MODEL_AUTH_INVALID"
+                message = "模型凭据无效，请核对个人配置或联系服务维护者。"
             elif isinstance(exc, RateLimitError):
                 code, message = "MODEL_RATE_LIMITED", "模型请求过于频繁或额度不足，请稍后再试。"
             elif isinstance(exc, BadRequestError):

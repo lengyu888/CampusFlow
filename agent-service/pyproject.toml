@@ -30,6 +30,7 @@ dev = [
 [tool.hatch.build]
 include = [
   "src/campusflow_agent/**/*.py",
+  "src/campusflow_agent/knowledge_sources.json",
   "src/campusflow_agent/web/*",
 ]
 

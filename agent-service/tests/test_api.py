@@ -311,7 +311,8 @@ async def test_unsupported_model_is_rejected(client: AsyncClient) -> None:
             "message": "你好",
         },
     )
-    assert response.status_code == 422
+    assert response.status_code == 400
+    assert response.json()["code"] == "MODEL_NOT_FOUND"
 
 
 async def test_settings_context_and_admin_user_console(client: AsyncClient) -> None:
@@ -369,7 +370,7 @@ async def test_official_skill_install_control_and_audit(client: AsyncClient) -> 
     )
     assert installed.status_code == 200
     assert installed.json()["enabled"] is True
-    assert installed.json()["installed_version"] == "1.2.0"
+    assert installed.json()["installed_version"] == navigator["version"]
 
     disabled = await client.patch(
         "/api/v1/skills/campus-navigator",
