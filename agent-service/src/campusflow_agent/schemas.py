@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from datetime import date, datetime
 from typing import Any, Literal
 from uuid import UUID
@@ -38,6 +40,27 @@ class PendingAction(BaseModel):
     payload: dict[str, Any] = Field(default_factory=dict)
     conflicts: list[str] = Field(default_factory=list)
     status: Literal["pending", "confirmed", "cancelled"] = "pending"
+    contract_version: int = 1
+    created_at: datetime | None = None
+    expires_at: datetime | None = None
+    target_task_id: str | None = None
+    target_plan_id: str | None = None
+    before_task: PlanningTask | None = None
+    before_plan: PlanSummary | None = None
+    receipt: ActionReceipt | None = None
+    warnings: list[str] = Field(default_factory=list)
+
+
+class ActionReceipt(BaseModel):
+    receipt_id: str
+    proposal_id: str
+    action: Literal["create", "update", "delete"]
+    kind: Literal["task", "plan"]
+    applied_at: datetime
+    task_ids: list[str] = Field(default_factory=list)
+    plan_ids: list[str] = Field(default_factory=list)
+    milestone_ids: list[str] = Field(default_factory=list)
+    retained_task_ids: list[str] = Field(default_factory=list)
 
 
 class ChatResponse(BaseModel):
@@ -71,6 +94,7 @@ class ConfirmActionResponse(BaseModel):
     action: PendingAction
     applied: bool
     message: str
+    receipt: ActionReceipt | None = None
 
 
 class TaskCreateRequest(BaseModel):
@@ -79,6 +103,27 @@ class TaskCreateRequest(BaseModel):
     end_at: datetime | None = None
     reminder_minutes: int | None = Field(default=None, ge=0, le=10080)
     location: str | None = Field(default=None, max_length=120)
+
+
+class PlanEditRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    title: str = Field(min_length=1, max_length=120)
+    summary: str = Field(max_length=500)
+    target_date: date | None
+
+
+class ActionTaskRequest(TaskCreateRequest):
+    model_config = ConfigDict(extra="forbid")
+
+
+class PlanningActionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    operation: Literal["create_task", "update_task", "delete_task", "update_plan", "delete_plan"]
+    task_id: str | None = Field(default=None, min_length=1, max_length=128)
+    plan_id: str | None = Field(default=None, min_length=1, max_length=128)
+    task: ActionTaskRequest | None = None
+    plan: PlanEditRequest | None = None
+    reason: str | None = Field(default=None, max_length=500)
 
 
 class TaskStatusUpdate(BaseModel):

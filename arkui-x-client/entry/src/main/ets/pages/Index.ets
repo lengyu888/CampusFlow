@@ -261,9 +261,12 @@ struct Index {
         deletionRevision: this.deletionRevision,
         deletionBusy: this.historyDeleteBusy,
         onChatBusyChange: (busy) => this.agentChatBusy = busy,
+        onPlanningChanged: () => this.timetableChanged(),
         promptRevision: this.promptRevision,
         onOpenHistory: () => this.selectTab(5), onOpenRoute: () => this.selectTab(6),
-        onOpenPlan: () => this.openPlanList(), onOpenProfile: () => this.selectTab(4) })
+        onOpenPlan: () => this.openPlanList(),
+        onOpenTaskDetails: (id) => this.openPlanDetails(id, ''),
+        onOpenPlanDetails: (id) => this.openPlanDetails('', id), onOpenProfile: () => this.selectTab(4) })
         .visibility(this.activeTab === 1 ? Visibility.Visible : Visibility.Hidden)
       PlanCenterPage({ baseUrl: this.baseUrl, token: this.token,
         refreshKey: this.planRefresh, active: this.activeTab === 2 && this.voiceForeground,

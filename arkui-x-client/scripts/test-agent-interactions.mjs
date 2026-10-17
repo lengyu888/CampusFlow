@@ -6,6 +6,9 @@ import { test } from 'node:test';
 const helperSource = readFileSync(new URL('../entry/src/main/ets/utils/AgentFeedback.ets', import.meta.url), 'utf8')
   .replace(/^import \{[^\n]+\} from '\.\.\/model\/ApiModels';\r?\n/, '');
 const helper = await import(`data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(helperSource)).toString('base64')}`);
+const reliabilitySource = readFileSync(new URL('../entry/src/main/ets/utils/ActionReliability.ets', import.meta.url), 'utf8')
+  .replace(/^import \{[\s\S]*?\} from '[^']+';\r?\n/gm, '');
+const reliability = await import(`data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(reliabilitySource)).toString('base64')}`);
 const source = readFileSync(new URL('../entry/src/main/ets/pages/AgentPage.ets', import.meta.url), 'utf8');
 const firstBuilder = source.indexOf('\n  @Builder');
 assert.ok(firstBuilder > 0, 'the non-UI method boundary must exist');
@@ -17,11 +20,20 @@ const controllerSource = source.slice(0, firstBuilder)
   .replace('export struct AgentPage', 'class AgentPage') + '\n}\n';
 const createController = new Function('CampusFlowApi', 'Scroller', 'CampusFlowRequestError',
   'displayToolTraces', 'mergeActions', 'restoreDraft', 'localRequestFailure', 'AppTheme', 'localHistory',
-  stripTypeScriptTypes(controllerSource) + '\nreturn AgentPage;');
+  ...Object.keys(reliability), stripTypeScriptTypes(controllerSource) + '\nreturn AgentPage;');
 
-function pending(id = 'proposal-1') {
-  return { proposal_id: id, action: 'create', kind: 'task', title: '复习', start_at: null,
-    end_at: null, reminder_minutes: null, reason: null, payload: {}, conflicts: [], status: 'pending' };
+function pending(id = 'proposal-1', title = '复习') {
+  return { proposal_id: id, action: 'create', kind: 'task', title, start_at: null, end_at: null,
+    reminder_minutes: null, reason: null, payload: { task: { title, start_at: null, end_at: null, reminder_minutes: null, location: null } },
+    conflicts: [], warnings: [], status: 'pending', contract_version: 2,
+    created_at: new Date().toISOString(), expires_at: new Date(Date.now() + 900000).toISOString(),
+    target_task_id: null, target_plan_id: null, before_task: null, before_plan: null, receipt: null };
+}
+function confirmed(action) {
+  const receipt = { receipt_id: `receipt-${action.proposal_id}`, proposal_id: action.proposal_id, action: action.action,
+    kind: action.kind, applied_at: new Date().toISOString(), task_ids: [`task-${action.proposal_id}`],
+    plan_ids: [], milestone_ids: [], retained_task_ids: [] };
+  return { applied: true, message: '', action: { ...action, status: 'confirmed', receipt }, receipt };
 }
 
 function deferred() {
@@ -45,7 +57,7 @@ function harness(handlers = {}, localHistory = {}) {
     actionStatus(...args) { return this.invoke('actionStatus', args); }
   }
   const Controller = createController(Api, class Scroller {}, helper.CampusFlowRequestError,
-    helper.displayToolTraces, helper.mergeActions, helper.restoreDraft, helper.localRequestFailure, {}, localHistory);
+    helper.displayToolTraces, helper.mergeActions, helper.restoreDraft, helper.localRequestFailure, {}, localHistory, ...Object.values(reliability));
   const page = new Controller();
   page.baseUrl = 'http://fixture.invalid';
   page.token = 'test-only';
@@ -221,7 +233,7 @@ test('rapid confirm taps issue exactly one POST and block simultaneous chat send
   page.prompt = '执行时写下的问题';
   await page.send();
   assert.deepEqual(calls.map((item) => item.method), ['confirmAction']);
-  response.resolve({ applied: true, message: 'ignored', action: { ...action, status: 'confirmed' } });
+  response.resolve(confirmed(action));
   await first;
   assert.equal(page.pendingActions[0].status, 'confirmed');
   assert.equal(page.needsReview(action.proposal_id), false);
@@ -231,7 +243,7 @@ test('rapid confirm taps issue exactly one POST and block simultaneous chat send
 test('a false applied flag or a mismatched proposal ID never reports successful confirmation', async () => {
   for (const change of [{ applied: false }, { action: { ...pending('another'), status: 'confirmed' } }]) {
     const action = pending();
-    const result = { applied: true, message: 'DO_NOT_TRUST_ME', action: { ...action, status: 'confirmed' }, ...change };
+    const result = { ...confirmed(action), message: 'DO_NOT_TRUST_ME', ...change };
     const { page } = harness({ confirmAction: async () => result });
     page.pendingActions = [action];
     await page.decide(action, true);
@@ -241,7 +253,7 @@ test('a false applied flag or a mismatched proposal ID never reports successful 
   }
 });
 
-test('after an ambiguous write failure, recovery reads status and never retries the write', async () => {
+test('after an ambiguous write failure, an unreceipted confirmed label cannot authorize another write', async () => {
   const action = pending();
   const { page, calls } = harness({
     confirmAction: async () => { throw helper.localRequestFailure('NETWORK_ERROR'); },
@@ -254,14 +266,14 @@ test('after an ambiguous write failure, recovery reads status and never retries 
   await page.checkDecision(action);
   await page.decide(action, true);
   assert.deepEqual(calls.map((item) => item.method), ['confirmAction', 'actionStatus']);
-  assert.equal(page.pendingActions[0].status, 'confirmed');
+  assert.equal(page.pendingActions[0].status, 'pending');
   assert.equal(page.needsReview(action.proposal_id), true);
 });
 
 test('a valid cancellation is terminal and cannot subsequently trigger confirmation', async () => {
   const action = pending();
   const { page, calls } = harness({ cancelAction: async () => ({ applied: false,
-    message: 'cancelled', action: { ...action, status: 'cancelled' } }) });
+    message: 'cancelled', action: { ...action, status: 'cancelled' }, receipt: null }) });
   page.pendingActions = [action];
   await page.decide(action, false);
   await page.decide(action, true);
@@ -314,4 +326,183 @@ test('the input limit counts Unicode characters consistently with the API, not U
   await page.send();
   assert.equal(calls.length, 1);
   assert.equal(Array.from(page.prompt).length, 8001);
+});
+
+test('an unknown confirm resolves only through a matching durable receipt, refreshes once and opens its exact task', async () => {
+  const action = pending();
+  const result = confirmed(action);
+  const { page, calls } = harness({
+    confirmAction: async () => { throw helper.localRequestFailure('NETWORK_ERROR'); },
+    actionStatus: async () => result.action
+  });
+  let refreshes = 0;
+  const opened = [];
+  page.onPlanningChanged = () => refreshes++;
+  page.onOpenTaskDetails = id => opened.push(id);
+  page.pendingActions = [action];
+  await page.decide(action, true);
+  page.openReceipt(result.action);
+  assert.deepEqual(opened, [], 'caller-supplied receipt is not the current verified state');
+  await page.checkDecision(action);
+  await page.checkDecision(action);
+  page.openReceipt(action);
+  assert.equal(refreshes, 1);
+  assert.equal(page.pendingActions[0].status, 'confirmed');
+  assert.equal(page.needsReview(action.proposal_id), false);
+  assert.deepEqual(opened, [result.receipt.task_ids[0]]);
+  assert.deepEqual(calls.map(c => c.method), ['confirmAction', 'actionStatus', 'actionStatus']);
+});
+
+test('v2 pending after an unknown result enables only an explicit same-ID retry, never an automatic write', async () => {
+  const action = pending(); let writes = 0;
+  const { page, calls } = harness({
+    confirmAction: async id => { assert.equal(id, action.proposal_id); if (++writes === 1) throw helper.localRequestFailure('NETWORK_ERROR'); return confirmed(action); },
+    actionStatus: async () => ({ ...action })
+  });
+  page.pendingActions = [action];
+  await page.decide(action, true);
+  await page.decide(action, true);
+  assert.equal(writes, 1);
+  await page.checkDecision(action);
+  assert.equal(writes, 1, 'GET does not silently resubmit');
+  assert.equal(page.needsReview(action.proposal_id), false);
+  await page.decide(action, true);
+  assert.equal(writes, 2);
+  assert.equal(page.pendingActions[0].status, 'confirmed');
+  assert.deepEqual(calls.map(c => c.method), ['confirmAction', 'actionStatus', 'confirmAction']);
+});
+
+test('a known stale rejection remains blocked after repeated handlers, failed reads and a later pending status', async () => {
+  const action = pending(); let reads = 0;
+  const { page, calls } = harness({
+    confirmAction: async () => { throw new helper.CampusFlowRequestError(409, 'ACTION_STALE', '安排已变化'); },
+    actionStatus: async () => { if (++reads === 1) throw helper.localRequestFailure('NETWORK_ERROR'); return { ...action }; },
+    cancelAction: async () => ({ applied: false, action: { ...action, status: 'cancelled' }, receipt: null })
+  });
+  page.pendingActions = [action];
+  await page.decide(action, true);
+  await page.decide(action, true);
+  await page.decide(action, true);
+  assert.equal(page.requiresNewPreview(action), true);
+  await page.checkDecision(action);
+  await page.checkDecision(action);
+  await page.decide(action, true);
+  assert.equal(calls.filter(c => c.method === 'confirmAction').length, 1);
+  assert.equal(page.requiresNewPreview(action), true);
+  await page.decide(action, false);
+  assert.equal(page.pendingActions[0].status, 'cancelled', 'an invalidated v2 preview can still be explicitly cancelled');
+});
+
+test('legacy proposals remain readable but neither raw terminal labels nor same-ID reads authorize execution', async () => {
+  const action = pending(); delete action.contract_version;
+  const { page, calls } = harness({ actionStatus: async () => ({ ...action, status: 'confirmed' }) });
+  page.pendingActions = [action];
+  await page.decide(action, true);
+  await page.checkDecision(action);
+  await page.decide(action, true);
+  assert.deepEqual(calls.map(c => c.method), ['actionStatus']);
+  assert.equal(page.pendingActions[0].status, 'pending');
+  assert.equal(page.needsReview(action.proposal_id), true);
+});
+
+test('a changed payload, before snapshot or receipt envelope cannot replace the reviewed candidate', async () => {
+  for (const mutate of [r => { r.action.payload.task.location = '未经预览的新地点'; },
+    r => { r.action.before_task = { title: 'bad snapshot' }; },
+    r => { r.receipt = { ...r.receipt, receipt_id: 'different-envelope' }; }]) {
+    const action = pending(); const result = confirmed(action); result.action = structuredClone(result.action); mutate(result);
+    const { page } = harness({ confirmAction: async () => result });
+    page.pendingActions = [action];
+    await page.decide(action, true);
+    assert.equal(page.pendingActions[0], action);
+    assert.equal(page.needsReview(action.proposal_id), true);
+  }
+});
+
+test('a cancel/confirm race is resolved to the actual receipt instead of reporting a false cancellation', async () => {
+  const action = pending(); const result = confirmed(action);
+  const { page, calls } = harness({ cancelAction: async () => result, actionStatus: async () => result.action });
+  page.pendingActions = [action];
+  await page.decide(action, false);
+  assert.equal(page.pendingActions[0].status, 'pending');
+  assert.equal(page.needsReview(action.proposal_id), true);
+  await page.checkDecision(action);
+  assert.equal(page.pendingActions[0].status, 'confirmed');
+  assert.match(page.feedbackFor(action.proposal_id).message, /已创建/);
+  assert.deepEqual(calls.map(c => c.method), ['cancelAction', 'actionStatus']);
+});
+
+test('update/delete preserve complete before/after data and deletion never links to a removed entity', async () => {
+  for (const operation of ['update', 'delete']) {
+    const action = pending();
+    action.action = operation;
+    action.target_task_id = 'existing-task';
+    action.before_task = { ...action.payload.task, task_id: 'existing-task', plan_id: 'owner-plan', milestone_id: 'owner-milestone',
+      status: 'pending', source: 'agent', created_at: action.created_at, completed_at: null };
+    if (operation === 'delete') action.payload = {};
+    else action.payload.task.location = '新的教室';
+    const result = confirmed(action); result.receipt.task_ids = ['existing-task'];
+    const { page } = harness({ confirmAction: async () => result });
+    const opened = []; page.onOpenTaskDetails = id => opened.push(id);
+    page.pendingActions = [action];
+    assert.equal(page.beforeTasks(action)[0], action.before_task);
+    assert.equal(page.afterTasks(action).length, operation === 'delete' ? 0 : 1);
+    await page.decide(action, true);
+    assert.equal(page.pendingActions[0].status, 'confirmed');
+    page.openReceipt(action);
+    assert.deepEqual(opened, operation === 'delete' ? [] : ['existing-task']);
+  }
+});
+
+test('new preview suggestions preserve an existing draft and are never sent automatically', () => {
+  const { page, calls } = harness();
+  page.prompt = '尚未发送的原草稿';
+  page.regenerateProposal(pending());
+  assert.equal(page.prompt, '尚未发送的原草稿');
+  assert.equal(page.promptSuggestions.length, 1);
+  assert.match(page.promptSuggestions[0], /读取最新课表/);
+  assert.equal(calls.length, 0);
+});
+
+test('malformed proposals are excluded without dropping the assistant answer or other valid proposals', async () => {
+  const action = pending();
+  const { page } = harness({ chat: async () => ({ session_id: 'session-1', message: '仍可阅读的完整回答',
+    pending_actions: [null, { ...action, proposal_id: 'bad', warnings: [null] }, action] }) });
+  page.prompt = '帮我规划'; await page.send();
+  assert.deepEqual(page.pendingActions.map(a => a.proposal_id), [action.proposal_id]);
+  assert.ok(page.messages.some(m => m.content === '仍可阅读的完整回答'));
+  assert.ok(page.messages.some(m => /部分提案内容不完整/.test(m.content)));
+});
+
+test('late confirmation after session removal does not publish a receipt or refresh the next conversation', async () => {
+  const action = pending(); const request = deferred();
+  const { page } = harness({ confirmAction: () => request.promise });
+  let refreshes = 0; page.onPlanningChanged = () => refreshes++;
+  page.pendingActions = [action]; const confirming = page.decide(action, true);
+  page.deletedSessionId = page.sessionId; page.sessionDeleted();
+  request.resolve(confirmed(action)); await confirming;
+  assert.deepEqual(page.pendingActions, []);
+  assert.equal(refreshes, 0);
+});
+
+test('one unknown proposal pauses other confirmations but permits chat, status reads and explicit cancellation', async () => {
+  const first = pending('first'); const second = pending('second'); const third = pending('third');
+  const { page, calls } = harness({
+    confirmAction: async id => { if (id === first.proposal_id) throw helper.localRequestFailure('NETWORK_ERROR'); return confirmed(third); },
+    chat: async () => ({ session_id: 'session-1', message: '只读说明', pending_actions: [] }),
+    cancelAction: async () => ({ applied: false, action: { ...second, status: 'cancelled' }, receipt: null }),
+    actionStatus: async () => confirmed(first).action
+  });
+  page.pendingActions = [first, second, third];
+  await page.decide(first, true);
+  await page.decide(second, true);
+  await page.decide(third, true);
+  assert.equal(calls.filter(c => c.method === 'confirmAction').length, 1);
+  page.prompt = '说明当前安排，不要写入'; await page.send();
+  assert.equal(calls.filter(c => c.method === 'chat').length, 1);
+  await page.decide(second, false);
+  assert.equal(page.pendingActions.find(a => a.proposal_id === second.proposal_id).status, 'cancelled');
+  await page.checkDecision(first);
+  await page.decide(third, true);
+  assert.equal(page.pendingActions.find(a => a.proposal_id === third.proposal_id).status, 'confirmed');
+  assert.deepEqual(calls.map(c => c.method), ['confirmAction', 'chat', 'cancelAction', 'actionStatus', 'confirmAction']);
 });

@@ -1,5 +1,8 @@
 from datetime import datetime
 
+import pytest
+
+from campusflow_agent.action_service import ActionError
 from campusflow_agent.store import CampusStore
 from campusflow_agent.tools import CURRENT_USER_ID, build_tools
 
@@ -155,8 +158,8 @@ def test_proposal_cannot_be_confirmed_by_another_user() -> None:
 
     try:
         store.confirm_proposal(proposal.proposal_id, "student-002")
-    except KeyError as exc:
-        assert str(exc) == "'proposal_not_found'"
+    except ActionError as exc:
+        assert exc.code == "ACTION_NOT_FOUND"
     else:
         raise AssertionError("a proposal must only be confirmed by its owner")
 
@@ -179,8 +182,8 @@ def test_cancelled_proposal_cannot_be_applied() -> None:
     assert store.planning_overview("student-001").total_tasks == 0
     try:
         store.confirm_proposal(proposal.proposal_id, "student-001")
-    except ValueError as exc:
-        assert str(exc) == "proposal_already_resolved"
+    except ActionError as exc:
+        assert exc.code == "ACTION_RESOLVED"
     else:
         raise AssertionError("a cancelled proposal must not be applied")
 
@@ -234,11 +237,12 @@ def test_plan_proposal_creates_milestones_tasks_and_reports_conflict() -> None:
 
     assert proposal["kind"] == "plan"
     assert "操作系统" in proposal["conflicts"][0]
-    store.confirm_proposal(proposal["proposal_id"], "student-001")
+    with pytest.raises(ActionError) as caught:
+        store.confirm_proposal(proposal["proposal_id"], "student-001")
+    assert caught.value.code == "ACTION_CONFLICT"
     overview = store.planning_overview("student-001")
-    assert overview.plans[0].title == "操作系统复习周"
-    assert overview.plans[0].milestones[0].task_count == 2
-    assert overview.total_tasks == 2
+    assert overview.plans == []
+    assert overview.total_tasks == 0
 
 
 def test_plan_tool_exposes_typed_nested_task_schema() -> None:

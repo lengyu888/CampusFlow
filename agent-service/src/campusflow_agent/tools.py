@@ -19,13 +19,14 @@ from .campus_services import (
 from .hduhelp import HDUHelpError
 from .hduhelp_access import HDUHelpAccess
 from .key_vault import ApiKeyVault
+from .schemas import PlanEditRequest, PlanningActionRequest
 from .store import CampusStore
 
 CURRENT_USER_ID: ContextVar[str] = ContextVar("campusflow_user_id", default="demo-student")
 
 
 class PlanTaskInput(BaseModel):
-    title: str = Field(description="待办标题")
+    title: str = Field(min_length=1, max_length=120, description="待办标题")
     start_at: datetime | None = Field(
         default=None,
         description="开始时间，ISO 8601 格式，例如 2026-10-05T10:00:00+08:00",
@@ -40,17 +41,18 @@ class PlanTaskInput(BaseModel):
         le=10080,
         description="提前提醒的分钟数，例如提前 10 分钟填写 10",
     )
-    location: str | None = Field(default=None, description="执行地点")
+    location: str | None = Field(default=None, max_length=120, description="执行地点")
 
 
 class PlanMilestoneInput(BaseModel):
-    title: str = Field(description="里程碑标题")
+    title: str = Field(min_length=1, max_length=120, description="里程碑标题")
     due_at: datetime | None = Field(
         default=None,
         description="里程碑截止时间，ISO 8601 格式",
     )
     tasks: list[PlanTaskInput] = Field(
         min_length=1,
+        max_length=12,
         description="该里程碑下的待办列表",
     )
 
@@ -262,15 +264,9 @@ def build_tools(
         user_id = CURRENT_USER_ID.get()
         try:
             binding, balance, history = await asyncio.gather(
-                hduhelp_access.get(
-                    user_id, "/hduhelp-neo/campuslife/electric/binding"
-                ),
-                hduhelp_access.get(
-                    user_id, "/hduhelp-neo/campuslife/electric/balance"
-                ),
-                hduhelp_access.get(
-                    user_id, "/hduhelp-neo/campuslife/electric/history"
-                ),
+                hduhelp_access.get(user_id, "/hduhelp-neo/campuslife/electric/binding"),
+                hduhelp_access.get(user_id, "/hduhelp-neo/campuslife/electric/balance"),
+                hduhelp_access.get(user_id, "/hduhelp-neo/campuslife/electric/history"),
             )
         except HDUHelpError as exc:
             return {"available": False, "message": str(exc)}
@@ -281,6 +277,11 @@ def build_tools(
         return {"available": True, **overview}
 
     @tool
+    def get_planning() -> dict:
+        """读取本人计划、里程碑和待办的准确 ID 与当前字段，修改删除前必须先核对。"""
+        return store.planning_overview(CURRENT_USER_ID.get()).model_dump(mode="json")
+
+    @tool
     def propose_task_change(
         action: str,
         title: str,
@@ -289,14 +290,51 @@ def build_tools(
         reminder_minutes: int | None = None,
         location: str | None = None,
         reason: str | None = None,
+        task_id: str | None = None,
+        clear_fields: list[str] | None = None,
     ) -> dict:
-        """生成事务变更提案，但不执行写入。action 只能为 create、update 或 delete。"""
+        """生成待确认提案。update/delete 必须提供 get_planning 返回的 task_id。
+
+        update 未填写的时间、地点、提醒保持原值；显式清空须在 clear_fields 列出字段名。
+        不按相同标题猜测 ID，不直接执行。
+        """
         if action not in {"create", "update", "delete"}:
             raise ValueError("action must be create, update, or delete")
-        if start_at and end_at and start_at >= end_at:
+        if start_at and end_at and store._campus_local(start_at) >= store._campus_local(end_at):
             raise ValueError("end_at must be later than start_at")
         if reminder_minutes is not None and not 0 <= reminder_minutes <= 10080:
             raise ValueError("reminder_minutes must be between 0 and 10080")
+        if action == "update":
+            before = next(
+                (t for t in store.list_tasks(CURRENT_USER_ID.get()) if t.task_id == task_id), None
+            )
+            if before is None:
+                raise ValueError("必须先查询并提供当前账号的准确 task_id")
+            clear = set(clear_fields or [])
+            if not clear <= {"start_at", "end_at", "reminder_minutes", "location"}:
+                raise ValueError("clear_fields 包含不支持的字段")
+            start_at = (
+                None
+                if "start_at" in clear
+                else start_at
+                if start_at is not None
+                else before.start_at
+            )
+            end_at = None if "end_at" in clear else end_at if end_at is not None else before.end_at
+            reminder_minutes = (
+                None
+                if "reminder_minutes" in clear
+                else reminder_minutes
+                if reminder_minutes is not None
+                else before.reminder_minutes
+            )
+            location = (
+                None
+                if "location" in clear
+                else location
+                if location is not None
+                else before.location
+            )
 
         proposal = store.create_proposal(
             user_id=CURRENT_USER_ID.get(),
@@ -307,8 +345,58 @@ def build_tools(
             reminder_minutes=reminder_minutes,
             reason=reason,
             payload={"location": location} if location else {},
+            target_task_id=task_id,
         )
         return proposal.model_dump(mode="json")
+
+    @tool
+    def propose_plan_change(
+        action: str,
+        plan_id: str,
+        title: str | None = None,
+        summary: str | None = None,
+        target_date: str | None = None,
+        clear_target_date: bool = False,
+        reason: str | None = None,
+    ) -> dict:
+        """按准确 plan_id 生成 update/delete 提案。更新仅改计划信息；删除保留子任务为独立待办。
+
+        未填写的字段保留，清空截止日期须显式 clear_target_date=true。不会替换子任务。
+        """
+        before = next(
+            (
+                p
+                for p in store.planning_overview(CURRENT_USER_ID.get()).plans
+                if p.plan_id == plan_id
+            ),
+            None,
+        )
+        if before is None or action not in {"update", "delete"}:
+            raise ValueError("必须提供当前账号的准确 plan_id，action 为 update 或 delete")
+        plan = (
+            None
+            if action == "delete"
+            else PlanEditRequest(
+                title=title if title is not None else before.title,
+                summary=summary if summary is not None else before.summary,
+                target_date=None
+                if clear_target_date
+                else target_date
+                if target_date is not None
+                else before.target_date,
+            )
+        )
+        return (
+            store.action_service()
+            .preview(
+                CURRENT_USER_ID.get(),
+                PlanningActionRequest(
+                    operation=f"{action}_plan", plan_id=plan_id, plan=plan, reason=reason
+                ),
+                source="agent",
+            )
+            .model_dump(mode="json")
+        )
 
     @tool
     def propose_plan(
@@ -338,6 +426,7 @@ def build_tools(
         return proposal.model_dump(mode="json")
 
     available = [
+        get_planning,
         get_schedule,
         get_weather,
         search_campus_notices,
@@ -351,6 +440,7 @@ def build_tools(
         get_electricity_balance,
         propose_task_change,
         propose_plan,
+        propose_plan_change,
     ]
     if allowed_tool_names is None:
         return available

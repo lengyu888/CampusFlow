@@ -244,3 +244,13 @@ test('compact conflict summary uses the same controller and preserves query-only
   f.page.active = false; f.page.activityChanged(); f.page.openDetails();
   assert.equal(opened, 2, 'hidden summary cannot navigate');
 });
+
+test('another unresolved planning write prevents replan preview/confirmation while result reads remain available', async () => {
+  const f = panelFixture(); const writeStates = []; f.page.onWriteStateChanged = value => writeStates.push(value);
+  f.page.aboutToAppear(); await tick(); f.page.writeBlocked = true;
+  f.page.previewRequested(); await tick(); assert.deepEqual(f.calls, ['report']);
+  f.page.writeBlocked = false; f.page.previewRequested(); await tick(); assert.equal(f.page.state.phase, 'review');
+  f.page.writeBlocked = true; f.page.confirmRequested(); await tick(); assert.equal(f.calls.some(x => x.startsWith('confirm:')), false);
+  f.page.writeBlocked = false; f.page.confirmRequested(); await tick();
+  assert.equal(f.applied.length, 1); assert.equal(writeStates.includes(true), true); assert.equal(writeStates.at(-1), false);
+});

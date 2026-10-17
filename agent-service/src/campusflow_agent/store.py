@@ -39,6 +39,8 @@ class CampusStore:
     _user_places: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
     _campus_data: CampusDataStore = field(init=False, repr=False)
     _connection: sqlite3.Connection | None = field(default=None, init=False, repr=False)
+    _action_service: Any = field(default=None, init=False, repr=False)
+    _action_snapshots: dict[str, str] = field(default_factory=dict, init=False, repr=False)
 
     def __post_init__(self) -> None:
         self._campus_data = CampusDataStore(self.database_path)
@@ -264,6 +266,15 @@ class CampusStore:
     def list_campus_corrections(self, user_id: str):
         return self._campus_data.list_corrections(user_id)
 
+    def action_service(self):
+        # Standalone stores are also used by offline tests. The API installs a
+        # service with AccountStore before any tools can create proposals.
+        if self._action_service is None:
+            from .action_service import ActionService
+
+            ActionService(None, self)
+        return self._action_service
+
     def create_proposal(
         self,
         *,
@@ -276,48 +287,32 @@ class CampusStore:
         reason: str | None,
         kind: str = "task",
         payload: dict[str, Any] | None = None,
+        target_task_id: str | None = None,
     ) -> PendingAction:
+        from .action_service import ActionError
+        from .schemas import ActionTaskRequest, PlanningActionRequest
+
+        if kind != "task" or action not in {"create", "update", "delete"}:
+            raise ActionError(422, "ACTION_INVALID", "请使用与目标类型匹配的提案接口。")
         payload = payload or {}
-        conflicts = self.find_conflicts(
+        task = (
+            None
+            if action == "delete"
+            else ActionTaskRequest(
+                title=title,
+                start_at=start_at,
+                end_at=end_at,
+                reminder_minutes=reminder_minutes,
+                location=payload.get("location"),
+            )
+        )
+        return self.action_service().preview(
             user_id,
-            start_at=start_at,
-            end_at=end_at,
-            location=payload.get("location"),
+            PlanningActionRequest(
+                operation=f"{action}_task", task_id=target_task_id, task=task, reason=reason
+            ),
+            source="agent",
         )
-        proposal = PendingAction(
-            proposal_id=uuid4().hex,
-            action=action,
-            kind=kind,
-            title=title,
-            start_at=start_at,
-            end_at=end_at,
-            reminder_minutes=reminder_minutes,
-            reason=reason,
-            payload=payload,
-            conflicts=conflicts,
-        )
-        if self._connection is not None:
-            with self._lock, self._connection:
-                self._connection.execute(
-                    """
-                    INSERT INTO action_proposals (
-                        proposal_id, user_id, payload_json, status, created_at
-                    ) VALUES (?, ?, ?, ?, ?)
-                    """,
-                    (
-                        proposal.proposal_id,
-                        user_id,
-                        json.dumps(proposal.model_dump(mode="json"), ensure_ascii=False),
-                        proposal.status,
-                        datetime.now(UTC).isoformat(),
-                    ),
-                )
-            return proposal
-        with self._lock:
-            self._proposals[proposal.proposal_id] = proposal
-            self._proposal_owners[proposal.proposal_id] = user_id
-            self._tasks.setdefault(user_id, [])
-        return proposal
 
     def create_plan_proposal(
         self,
@@ -329,62 +324,14 @@ class CampusStore:
         milestones: list[dict[str, Any]],
         reason: str | None,
     ) -> PendingAction:
-        normalized_milestones: list[dict[str, Any]] = []
-        conflicts: list[str] = []
-        for milestone in milestones[:8]:
-            tasks = []
-            for task in milestone.get("tasks", [])[:12]:
-                start_at = self._parse_datetime(task.get("start_at"))
-                end_at = self._parse_datetime(task.get("end_at"))
-                item = {
-                    "title": str(task.get("title", "")).strip()[:120],
-                    "start_at": start_at.isoformat() if start_at else None,
-                    "end_at": end_at.isoformat() if end_at else None,
-                    "reminder_minutes": task.get("reminder_minutes"),
-                    "location": str(task.get("location", "")).strip()[:120] or None,
-                }
-                if not item["title"]:
-                    continue
-                tasks.append(item)
-                conflicts.extend(
-                    self.find_conflicts(
-                        user_id,
-                        start_at=start_at,
-                        end_at=end_at,
-                        location=item["location"],
-                    )
-                )
-            milestone_title = str(milestone.get("title", "")).strip()[:120]
-            if milestone_title and tasks:
-                normalized_milestones.append(
-                    {
-                        "title": milestone_title,
-                        "due_at": milestone.get("due_at"),
-                        "tasks": tasks,
-                    }
-                )
-        if not normalized_milestones:
-            raise ValueError("计划至少需要一个包含具体任务的里程碑。")
-
-        proposal = self.create_proposal(
-            user_id=user_id,
-            action="create",
-            kind="plan",
+        return self.action_service().preview_plan(
+            user_id,
             title=title,
-            start_at=None,
-            end_at=None,
-            reminder_minutes=None,
+            summary=summary,
+            target_date=target_date,
+            milestones=milestones,
             reason=reason,
-            payload={
-                "summary": summary[:500],
-                "target_date": target_date,
-                "milestones": normalized_milestones,
-            },
         )
-        if conflicts:
-            proposal = proposal.model_copy(update={"conflicts": list(dict.fromkeys(conflicts))})
-            self._replace_proposal(proposal, user_id)
-        return proposal
 
     @staticmethod
     def _parse_datetime(value: Any) -> datetime | None:
@@ -445,9 +392,7 @@ class CampusStore:
                 places = list(self._user_places.get(user_id, []))
             for place in places:
                 names = [place.get("name", ""), *place.get("aliases", [])]
-                matches_location = any(
-                    name and name.lower() in normalized for name in names
-                )
+                matches_location = any(name and name.lower() in normalized for name in names)
                 if matches_location and not place.get("open", True):
                     conflicts.append(f"地点「{place.get('name')}」当前标记为不开放")
         return list(dict.fromkeys(conflicts))
@@ -480,60 +425,10 @@ class CampusStore:
             self._proposal_owners[proposal.proposal_id] = user_id
 
     def confirm_proposal(self, proposal_id: str, user_id: str) -> PendingAction:
-        if self._connection is not None:
-            proposal = self.get_proposal(proposal_id, user_id)
-            if proposal is None:
-                raise KeyError("proposal_not_found")
-            if proposal.status != "pending":
-                raise ValueError("proposal_already_resolved")
-            confirmed = proposal.model_copy(update={"status": "confirmed"})
-            if confirmed.kind == "plan":
-                self._apply_plan_proposal(user_id, confirmed)
-            elif confirmed.action == "create":
-                self.create_task(
-                    user_id,
-                    title=confirmed.title,
-                    start_at=confirmed.start_at,
-                    end_at=confirmed.end_at,
-                    reminder_minutes=confirmed.reminder_minutes,
-                    location=confirmed.payload.get("location"),
-                    source="agent",
-                )
-            self._replace_proposal(confirmed, user_id)
-            return confirmed
-        with self._lock:
-            proposal = self._proposals.get(proposal_id)
-            owner = self._proposal_owners.get(proposal_id)
-            if proposal is None or owner != user_id:
-                raise KeyError("proposal_not_found")
-            if proposal.status != "pending":
-                raise ValueError("proposal_already_resolved")
-
-            confirmed = proposal.model_copy(update={"status": "confirmed"})
-            self._proposals[proposal_id] = confirmed
-            if confirmed.kind == "plan":
-                self._apply_plan_proposal(user_id, confirmed)
-            elif confirmed.action == "create":
-                self.create_task(
-                    user_id,
-                    title=confirmed.title,
-                    start_at=confirmed.start_at,
-                    end_at=confirmed.end_at,
-                    reminder_minutes=confirmed.reminder_minutes,
-                    location=confirmed.payload.get("location"),
-                    source="agent",
-                )
-            return confirmed
+        return self.action_service().confirm(user_id, proposal_id)
 
     def cancel_proposal(self, proposal_id: str, user_id: str) -> PendingAction:
-        proposal = self.get_proposal(proposal_id, user_id)
-        if proposal is None:
-            raise KeyError("proposal_not_found")
-        if proposal.status != "pending":
-            raise ValueError("proposal_already_resolved")
-        cancelled = proposal.model_copy(update={"status": "cancelled"})
-        self._replace_proposal(cancelled, user_id)
-        return cancelled
+        return self.action_service().cancel(user_id, proposal_id)
 
     def get_proposal(self, proposal_id: str, user_id: str | None = None) -> PendingAction | None:
         if self._connection is not None:
@@ -912,91 +807,12 @@ class CampusStore:
                 raise KeyError("plan_not_found")
             self._plans[user_id] = remaining_plans
             self._milestones[user_id] = [
-                item
-                for item in self._milestones.get(user_id, [])
-                if item.get("plan_id") != plan_id
+                item for item in self._milestones.get(user_id, []) if item.get("plan_id") != plan_id
             ]
             for task in self._tasks.get(user_id, []):
                 if task.get("plan_id") == plan_id:
                     task["plan_id"] = None
                     task["milestone_id"] = None
-
-    def _apply_plan_proposal(self, user_id: str, proposal: PendingAction) -> None:
-        milestones = [
-            milestone
-            for milestone in proposal.payload.get("milestones", [])
-            if milestone.get("tasks")
-        ]
-        if not milestones:
-            raise ValueError("plan_has_no_tasks")
-        plan_id = uuid4().hex
-        now = datetime.now(UTC)
-        target_date = proposal.payload.get("target_date") or None
-        summary = str(proposal.payload.get("summary", ""))
-        if self._connection is not None:
-            with self._lock, self._connection:
-                self._connection.execute(
-                    """
-                    INSERT INTO plans (
-                        plan_id, user_id, title, summary, target_date, status, created_at
-                    )
-                    VALUES (?, ?, ?, ?, ?, 'active', ?)
-                    """,
-                    (plan_id, user_id, proposal.title, summary, target_date, now.isoformat()),
-                )
-        else:
-            with self._lock:
-                self._plans.setdefault(user_id, []).append(
-                    {
-                        "plan_id": plan_id,
-                        "title": proposal.title,
-                        "summary": summary,
-                        "target_date": target_date,
-                        "status": "active",
-                        "created_at": now.isoformat(),
-                    }
-                )
-        for order, milestone in enumerate(milestones):
-            milestone_id = uuid4().hex
-            milestone_record = {
-                "milestone_id": milestone_id,
-                "plan_id": plan_id,
-                "title": milestone.get("title", "里程碑"),
-                "due_at": milestone.get("due_at"),
-                "sort_order": order,
-            }
-            if self._connection is not None:
-                with self._lock, self._connection:
-                    self._connection.execute(
-                        """
-                        INSERT INTO plan_milestones (
-                            milestone_id, plan_id, user_id, title, due_at, sort_order
-                        ) VALUES (?, ?, ?, ?, ?, ?)
-                        """,
-                        (
-                            milestone_id,
-                            plan_id,
-                            user_id,
-                            milestone_record["title"],
-                            milestone_record["due_at"],
-                            order,
-                        ),
-                    )
-            else:
-                with self._lock:
-                    self._milestones.setdefault(user_id, []).append(milestone_record)
-            for task in milestone.get("tasks", []):
-                self.create_task(
-                    user_id,
-                    title=task.get("title", "待办"),
-                    start_at=self._parse_datetime(task.get("start_at")),
-                    end_at=self._parse_datetime(task.get("end_at")),
-                    reminder_minutes=task.get("reminder_minutes"),
-                    location=task.get("location"),
-                    source="agent",
-                    plan_id=plan_id,
-                    milestone_id=milestone_id,
-                )
 
     def planning_overview(self, user_id: str) -> PlanningOverview:
         tasks = self.list_tasks(user_id)

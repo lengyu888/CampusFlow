@@ -6,6 +6,9 @@ import { test } from 'node:test';
 const helperSource = readFileSync(new URL('../entry/src/main/ets/utils/AgentFeedback.ets', import.meta.url), 'utf8')
   .replace(/^import \{[^\n]+\} from '\.\.\/model\/ApiModels';\r?\n/, '');
 const helper = await import(`data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(helperSource)).toString('base64')}`);
+const reliabilitySource = readFileSync(new URL('../entry/src/main/ets/utils/ActionReliability.ets', import.meta.url), 'utf8')
+  .replace(/^import \{[\s\S]*?\} from '[^']+';\r?\n/gm, '');
+const reliability = await import(`data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(reliabilitySource)).toString('base64')}`);
 const source = readFileSync(new URL('../entry/src/main/ets/pages/AgentPage.ets', import.meta.url), 'utf8');
 const boundary = source.indexOf('\n  @Builder');
 assert.ok(boundary > 0);
@@ -18,11 +21,20 @@ const controllerSource = source.slice(0, boundary)
   .replace('export struct AgentPage', 'class AgentPage') + '\n}\n';
 const create = new Function('CampusFlowApi', 'Scroller', 'CampusFlowRequestError', 'displayToolTraces',
   'mergeActions', 'restoreDraft', 'localRequestFailure', 'AppTheme', 'localHistory', 'Edge',
-  stripTypeScriptTypes(controllerSource) + '\nreturn AgentPage;');
+  ...Object.keys(reliability), stripTypeScriptTypes(controllerSource) + '\nreturn AgentPage;');
 
 function pending(id, title = '相同标题') {
   return { proposal_id: id, action: 'create', kind: 'task', title, start_at: null, end_at: null,
-    reminder_minutes: null, reason: null, payload: {}, conflicts: [], status: 'pending' };
+    reminder_minutes: null, reason: null, payload: { task: { title, start_at: null, end_at: null, reminder_minutes: null, location: null } },
+    conflicts: [], warnings: [], status: 'pending', contract_version: 2,
+    created_at: new Date().toISOString(), expires_at: new Date(Date.now() + 900000).toISOString(),
+    target_task_id: null, target_plan_id: null, before_task: null, before_plan: null, receipt: null };
+}
+function confirmed(action) {
+  const receipt = { receipt_id: `receipt-${action.proposal_id}`, proposal_id: action.proposal_id, action: action.action,
+    kind: action.kind, applied_at: new Date().toISOString(), task_ids: [`task-${action.proposal_id}`],
+    plan_ids: [], milestone_ids: [], retained_task_ids: [] };
+  return { applied: true, message: '', action: { ...action, status: 'confirmed', receipt }, receipt };
 }
 
 function deferred() {
@@ -45,7 +57,7 @@ function harness(handlers = {}) {
     scrollEdge(edge) { scroll.push({ kind: 'edge', edge }); }
   }
   const Page = create(Api, Scroller, helper.CampusFlowRequestError, helper.displayToolTraces,
-    helper.mergeActions, helper.restoreDraft, helper.localRequestFailure, {}, {}, { Bottom: 'bottom' });
+    helper.mergeActions, helper.restoreDraft, helper.localRequestFailure, {}, {}, { Bottom: 'bottom' }, ...Object.values(reliability));
   const page = new Page();
   page.baseUrl = 'http://fixture.invalid';
   page.token = 'fixture-token';
@@ -227,8 +239,7 @@ test('late confirmation and status responses cannot recreate feedback after tear
       const request = method === 'confirmAction' ? page.decide(action, true) : page.checkDecision(action);
       if (teardown === 'dispose') page.aboutToDisappear();
       else { page.deletedSessionId = page.sessionId; page.sessionDeleted(); }
-      response.resolve(method === 'confirmAction' ? { applied: true, action: { ...action, status: 'confirmed' } }
-        : { ...action, status: 'confirmed' });
+      response.resolve(method === 'confirmAction' ? confirmed(action) : confirmed(action).action);
       await request;
       assert.deepEqual(page.decisionFeedback, []);
       assert.ok(!page.pendingActions.some(a => a.status === 'confirmed'));

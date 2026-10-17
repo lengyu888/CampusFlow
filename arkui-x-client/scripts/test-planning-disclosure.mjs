@@ -1,3 +1,4 @@
+import { PlanningActionController, candidate, applied } from './helpers/planning-action-fixture.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { stripTypeScriptTypes } from 'node:module';
@@ -16,7 +17,7 @@ const controllerSource = source.slice(0, firstBuilder)
   .replace(/^@Component\r?\n/m, '')
   .replace(/@(Prop|State)\s+|@Watch\('[^']+'\)\s*/g, '')
   .replace('export struct PlanCenterPage', 'class PlanCenterPage') + '\n}\n';
-const createController = new Function('TextInputController', 'AppTheme', 'Curve', 'CampusFlowApi', 'Scroller', 'shanghaiDate', 'buildDailyAgenda',
+const createController = new Function('TextInputController', 'AppTheme', 'Curve', 'CampusFlowApi', 'Scroller', 'shanghaiDate', 'buildDailyAgenda', 'PlanningActionController',
   stripTypeScriptTypes(controllerSource) + '\nreturn PlanCenterPage;');
 
 function page({ createError = null } = {}) {
@@ -28,10 +29,16 @@ function page({ createError = null } = {}) {
     stopCount = 0;
     stopEditing() { this.stopCount++; }
   }
+  let pending;
   class Api {
-    async createTask(title, startAt) {
-      calls.push(['createTask', title, startAt]);
+    async previewPlanningAction(request) {
+      calls.push(['preview', request]);
       if (createError) throw createError;
+      pending = candidate(request); return pending;
+    }
+    async confirmAction(id) {
+      calls.push(['confirm', id]); const result = applied(pending);
+      return { applied: true, action: result, receipt: result.receipt, message: '' };
     }
     async planning() {
       calls.push(['planning']);
@@ -40,7 +47,7 @@ function page({ createError = null } = {}) {
     async updateTask(id, completed) { calls.push(['updateTask', id, completed]); }
     async deleteTask(id) { calls.push(['deleteTask', id]); }
   }
-  const Controller = createController(InputController, { motion: () => 0 }, { EaseOut: 'ease-out' }, Api, class {}, agenda.shanghaiDate, agenda.buildDailyAgenda);
+  const Controller = createController(InputController, { motion: () => 0 }, { EaseOut: 'ease-out' }, Api, class {}, agenda.shanghaiDate, agenda.buildDailyAgenda, PlanningActionController);
   const instance = new Controller();
   instance.getUIContext = () => ({ animateTo: (_options, update) => update() });
   return { instance, calls, overview };
@@ -127,9 +134,12 @@ test('reopened draft creates the original title and schedule, then retains discl
   instance.toggleTaskForm();
   await instance.addTask();
   assert.deepEqual(calls, [
-    ['createTask', '完成课程总结', '2026-10-22T18:45:00+08:00'], ['planning']
+    ['preview', { operation: 'create_task', task: { title: '完成课程总结', start_at: '2026-10-22T18:45:00+08:00', end_at: null, reminder_minutes: null, location: null } }]
   ]);
+  assert.equal(instance.title, '  完成课程总结  ', 'preview preserves draft');
+  await instance.confirmPlanningAction();
   assert.equal(instance.title, '');
+  assert.deepEqual(calls.slice(1), [['confirm', 'proposal-a'], ['planning']]);
   assert.equal(instance.draftTaskDate, '2026-10-22');
   assert.equal(instance.draftTaskTime, '18:45');
   assert.equal(instance.selectedDate, '2026-11-01');
@@ -148,7 +158,7 @@ test('no-date and all-day API parameters remain intact after form collapse', asy
     instance.toggleTaskForm();
     instance.toggleTaskForm();
     await instance.addTask();
-    assert.deepEqual(calls[0], ['createTask', '整理笔记', expected]);
+    assert.deepEqual(calls[0], ['preview', { operation: 'create_task', task: { title: '整理笔记', start_at: expected, end_at: null, reminder_minutes: null, location: null } }]);
   }
 });
 
@@ -163,11 +173,14 @@ test('failed create retains the draft through collapse and reopening for correct
   instance.toggleTaskForm();
   instance.toggleTaskForm();
   assert.deepEqual(draftSnapshot(instance), before);
-  assert.match(instance.errorText, /^创建失败：/);
-  assert.deepEqual(calls, [['createTask', '失败后保留的草稿', '2026-10-22T18:45:00+08:00']]);
+  assert.equal(instance.actionState.phase, 'error');
+  assert.match(instance.actionState.message, /草稿已保留/);
+  assert.deepEqual(calls.map(item => item[0]), ['preview']);
+  assert.equal(calls[0][1].task.title, '失败后保留的草稿');
+  assert.equal(calls[0][1].task.start_at, '2026-10-22T18:45:00+08:00');
 });
 
-test('task completion and two-step deletion still use the same API while disclosures remain open', async () => {
+test('task completion stays idempotent and deletion requires preview then explicit confirmation', async () => {
   const { instance, calls } = page();
   const task = { task_id: 'task-1', status: 'pending' };
   instance.toggleCalendar();
@@ -176,10 +189,11 @@ test('task completion and two-step deletion still use the same API while disclos
   assert.deepEqual(calls, [['updateTask', 'task-1', true], ['planning']]);
   calls.length = 0;
   await instance.requestDelete(task);
-  assert.equal(instance.deletePendingId, 'task-1');
-  assert.deepEqual(calls, [], 'first click only requests confirmation');
+  assert.deepEqual(calls, [['preview', { operation: 'delete_task', task_id: 'task-1' }]], 'first click only builds a preview');
   await instance.requestDelete(task);
-  assert.deepEqual(calls, [['deleteTask', 'task-1'], ['planning']]);
+  assert.equal(calls.length, 1, 'pending preview prevents another delete request');
+  await instance.confirmPlanningAction();
+  assert.deepEqual(calls.slice(1), [['confirm', 'proposal-a'], ['planning']]);
   assert.equal(instance.deletePendingId, '');
   assert.equal(instance.calendarExpanded, true);
   assert.equal(instance.taskFormExpanded, true);
