@@ -99,7 +99,7 @@ struct Index {
       AgentPage({ baseUrl: this.baseUrl, token: this.token, initialPrompt: this.agentPrompt,
         promptRevision: this.promptRevision,
         onOpenHistory: () => this.selectTab(5), onOpenRoute: () => this.selectTab(6),
-        onOpenPlan: () => this.selectTab(2) })
+        onOpenPlan: () => this.selectTab(2), onOpenProfile: () => this.selectTab(4) })
         .visibility(this.activeTab === 1 ? Visibility.Visible : Visibility.Hidden)
       PlanCenterPage({ baseUrl: this.baseUrl, token: this.token,
         refreshKey: this.planRefresh,
