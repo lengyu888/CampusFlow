@@ -16,7 +16,7 @@ const controllerSource = source.slice(0, firstBuilder)
   .replace(/@(Prop|State)\s+|@Watch\('[^']+'\)\s*/g, '')
   .replace('export struct AgentPage', 'class AgentPage') + '\n}\n';
 const createController = new Function('CampusFlowApi', 'Scroller', 'CampusFlowRequestError',
-  'displayToolTraces', 'mergeActions', 'restoreDraft', 'localRequestFailure', 'AppTheme',
+  'displayToolTraces', 'mergeActions', 'restoreDraft', 'localRequestFailure', 'AppTheme', 'localHistory',
   stripTypeScriptTypes(controllerSource) + '\nreturn AgentPage;');
 
 function pending(id = 'proposal-1') {
@@ -31,7 +31,7 @@ function deferred() {
   return { promise, resolve, reject };
 }
 
-function harness(handlers = {}) {
+function harness(handlers = {}, localHistory = {}) {
   const calls = [];
   class Api {
     invoke(method, args) {
@@ -45,12 +45,79 @@ function harness(handlers = {}) {
     actionStatus(...args) { return this.invoke('actionStatus', args); }
   }
   const Controller = createController(Api, class Scroller {}, helper.CampusFlowRequestError,
-    helper.displayToolTraces, helper.mergeActions, helper.restoreDraft, helper.localRequestFailure, {});
+    helper.displayToolTraces, helper.mergeActions, helper.restoreDraft, helper.localRequestFailure, {}, localHistory);
   const page = new Controller();
   page.baseUrl = 'http://fixture.invalid';
   page.token = 'test-only';
   return { page, calls };
 }
+
+test('completed turns persist only user/assistant text without tools, credentials or proposals', async () => {
+  const saved = [];
+  const { page } = harness({ chat: async () => ({ session_id: 'local-session', message: '完整回答',
+    pending_actions: [pending()], tool_traces: [] }) }, {
+    save: async (...args) => { saved.push(args); return true; }
+  });
+  page.historyScope = 'account-scope';
+  const busy = [];
+  page.onChatBusyChange = (value) => busy.push(value);
+  page.prompt = '问题';
+  await page.send();
+  assert.equal(saved.length, 1);
+  assert.equal(saved[0][0], 'account-scope');
+  assert.deepEqual(saved[0][2].map(({ role, content }) => ({ role, content })),
+    [{ role: 'user', content: '问题' }, { role: 'assistant', content: '完整回答' }]);
+  assert.doesNotMatch(JSON.stringify(saved), /test-only|proposal-1|tool_traces|access_token/);
+  assert.match(page.cacheNotice, /已保存/);
+  assert.deepEqual(busy, [true, false]);
+});
+
+test('local persistence failure does not turn a successful chat into a failed send', async () => {
+  const { page, calls } = harness({ chat: async () => ({ session_id: 'local-session', message: '真实回答',
+    pending_actions: [] }) }, { save: async () => { throw new Error('disk failure'); } });
+  page.historyScope = 'account-scope';
+  page.prompt = '问题';
+  await page.send();
+  assert.equal(calls.length, 1);
+  assert.equal(page.messages.at(-1).role, 'assistant');
+  assert.equal(page.messages.at(-1).content, '真实回答');
+  assert.equal(page.prompt, '');
+  assert.match(page.cacheNotice, /保存失败/);
+});
+
+test('logout/disposal blocks a late answer from recreating local history', async () => {
+  const response = deferred();
+  const saved = [];
+  const { page } = harness({ chat: () => response.promise }, { save: async (...args) => { saved.push(args); return true; } });
+  page.historyScope = 'account-scope';
+  page.prompt = '问题';
+  const sending = page.send();
+  page.aboutToDisappear();
+  response.resolve({ session_id: 'late', message: '旧账号回答', pending_actions: [] });
+  await sending;
+  assert.equal(saved.length, 0);
+  assert.ok(!page.messages.some((message) => message.content === '旧账号回答'));
+});
+
+test('deleting the active session starts a new ID and prevents late response resurrection', async () => {
+  const response = deferred();
+  const saved = [];
+  const { page } = harness({ chat: () => response.promise }, { save: async (...args) => { saved.push(args); return true; } });
+  page.historyScope = 'account-scope';
+  page.prompt = '问题';
+  page.pendingActions = [pending()];
+  const oldId = page.sessionId;
+  const sending = page.send();
+  page.deletedSessionId = oldId;
+  page.sessionDeleted();
+  response.resolve({ session_id: oldId, message: '已删除会话的旧回答', pending_actions: [pending()] });
+  await sending;
+  assert.notEqual(page.sessionId, oldId);
+  assert.deepEqual(page.messages, []);
+  assert.deepEqual(page.savedMessages, []);
+  assert.deepEqual(page.pendingActions, []);
+  assert.equal(saved.length, 0);
+});
 
 test('a slow failed send preserves a newer draft and keeps the original message available', async () => {
   const response = deferred();

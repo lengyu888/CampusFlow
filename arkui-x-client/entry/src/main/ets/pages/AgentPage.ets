@@ -1,5 +1,6 @@
-import { PendingAction, PendingMilestonePreview, PendingTaskPreview, ToolDisplaySummary } from '../model/ApiModels';
+import { HistoryMessage, SessionSummary, PendingAction, PendingMilestonePreview, PendingTaskPreview, ToolDisplaySummary } from '../model/ApiModels';
 import { CampusFlowApi } from '../services/CampusFlowApi';
+import { localHistory } from '../services/LocalHistory';
 import { MessageContent } from '../components/MessageContent';
 import { AppTheme } from '../theme/AppTheme';
 import { AppIcon } from '../components/AppIcon';
@@ -27,12 +28,17 @@ interface DecisionFeedback {
 export struct AgentPage {
   @Prop baseUrl: string;
   @Prop token: string;
+  @Prop historyScope: string = '';
+  @Prop deletedSessionId: string = '';
+  @Prop deletionBusy: boolean = false;
+  @Prop @Watch('sessionDeleted') deletionRevision: number = 0;
   @Prop initialPrompt: string = '';
   @Prop @Watch('initialPromptChanged') promptRevision: number = 0;
   onOpenHistory: () => void = () => {};
   onOpenRoute: () => void = () => {};
   onOpenPlan: () => void = () => {};
   onOpenProfile: () => void = () => {};
+  onChatBusyChange: (busy: boolean) => void = () => {};
   @State private prompt: string = '';
   @State private availableHeight: number = 600;
   @State private model: string = 'deepseek-v4-pro';
@@ -48,13 +54,62 @@ export struct AgentPage {
   @State private actionsRevision: number = 0;
   @State private loading: boolean = false;
   @State private decisionId: string = '';
+  @State private cacheNotice: string = '';
+  private savedMessages: HistoryMessage[] = [];
+  private conversationCreatedAt: string = new Date().toISOString();
+  private conversationRevision: number = 0;
+  private pageActive: boolean = true;
   private sessionId: string = `arkuix-${Date.now()}`;
   private chatScroller: Scroller = new Scroller();
   private scrollForNewMessage: boolean = false;
 
   aboutToAppear(): void {
+    this.pageActive = true;
     if (this.initialPrompt.length > 0) {
       this.prompt = this.initialPrompt;
+    }
+  }
+
+  aboutToDisappear(): void {
+    this.pageActive = false;
+    this.conversationRevision++;
+  }
+
+  private sessionDeleted(): void {
+    if (this.deletedSessionId !== this.sessionId) {
+      return;
+    }
+    this.conversationRevision++;
+    this.sessionId = `arkuix-${Date.now()}-${this.conversationRevision}`;
+    this.savedMessages = [];
+    this.messages = [];
+    this.pendingActions = [];
+    this.decisionFeedback = [];
+    this.expandedProposalIds = [];
+    this.conversationCreatedAt = new Date().toISOString();
+    this.cacheNotice = '原会话已删除，下次发送将开始新会话。';
+  }
+
+  private async saveConversation(text: string, answer: string, sentAt: string): Promise<void> {
+    const now = new Date().toISOString();
+    this.savedMessages = this.savedMessages.concat([
+      { role: 'user', content: text, created_at: sentAt },
+      { role: 'assistant', content: answer, created_at: now }
+    ]);
+    if (this.historyScope.length === 0) {
+      this.cacheNotice = '本机保存暂不可用，此对话尚不能离线回看。';
+      return;
+    }
+    const summary: SessionSummary = {
+      session_id: this.sessionId, title: Array.from(this.savedMessages[0].content).slice(0, 80).join(''),
+      model_name: this.model, last_message: Array.from(answer).slice(0, 200).join(''),
+      message_count: this.savedMessages.length, created_at: this.conversationCreatedAt, updated_at: now
+    };
+    try {
+      const saved = await localHistory.save(this.historyScope, summary, this.savedMessages);
+      this.cacheNotice = saved ? '对话已保存到本机，可在历史会话离线回看。' : '此会话未保存到本机，请联网回看历史。';
+    } catch {
+      this.cacheNotice = '本机保存失败，回答仍可阅读；请联网回看历史后重试。';
     }
   }
 
@@ -87,14 +142,20 @@ export struct AgentPage {
 
   private async send(): Promise<void> {
     const text = this.prompt.trim();
-    if (text.length === 0 || this.inputLength(text) > 8000 || this.loading || this.decisionId.length > 0) {
+    if (text.length === 0 || this.inputLength(text) > 8000 || this.loading || this.deletionBusy || this.decisionId.length > 0) {
       return;
     }
     this.appendMessage('user', text);
+    const revision = this.conversationRevision;
+    const sentAt = new Date().toISOString();
     this.prompt = '';
     this.loading = true;
+    this.onChatBusyChange(true);
     try {
       const response = await new CampusFlowApi(this.baseUrl, this.token).chat(this.sessionId, this.model, text);
+      if (!this.pageActive || revision !== this.conversationRevision) {
+        return;
+      }
       if (response === null || typeof response.session_id !== 'string' || response.session_id.length === 0 ||
         typeof response.message !== 'string' || !Array.isArray(response.pending_actions)) {
         throw localRequestFailure('INVALID_RESPONSE');
@@ -104,12 +165,17 @@ export struct AgentPage {
       // A later turn without proposals must not erase an earlier pending decision.
       this.pendingActions = mergeActions(this.pendingActions, response.pending_actions);
       this.actionsRevision++;
+      await this.saveConversation(text, response.message, sentAt);
     } catch (error) {
+      if (!this.pageActive || revision !== this.conversationRevision) {
+        return;
+      }
       const failure = this.safeFailure(error);
       this.prompt = restoreDraft(this.prompt, text);
       this.appendMessage('feedback', failure.message, [], text, failure.code);
     } finally {
       this.loading = false;
+      if (this.pageActive) { this.onChatBusyChange(false); }
     }
   }
 
@@ -527,6 +593,14 @@ export struct AgentPage {
           })
       }.layoutWeight(1).width('100%').clip(true).scrollBar(BarState.Off).align(Alignment.TopStart)
 
+      if (this.cacheNotice.length > 0) {
+        Text(this.cacheNotice).fontSize(12).fontColor(AppTheme.secondary).width('100%')
+          .padding({ left: 18, right: 18, top: 6, bottom: 4 })
+      }
+      if (this.deletionBusy) {
+        Text('正在删除会话，完成后可继续发送。').fontSize(12).fontColor(AppTheme.secondary).width('100%')
+          .padding({ left: 18, right: 18, top: 6, bottom: 4 })
+      }
       if (this.inputLength(this.prompt) > 8000) {
         Text(`当前 ${this.inputLength(this.prompt)} 字，超过 8000 字上限，请精简后发送。原文仍保留在输入框中。`)
           .fontSize(12).fontColor(AppTheme.red).width('100%')
@@ -544,7 +618,7 @@ export struct AgentPage {
         Button('发送').constraintSize({ minWidth: 64, minHeight: 48 }).fontSize(14).fontWeight(FontWeight.Medium)
           .fontColor(this.inputLength(this.prompt) > 0 && this.inputLength(this.prompt) <= 8000 ? '#FFFFFF' : AppTheme.muted)
           .backgroundColor(this.inputLength(this.prompt) > 0 && this.inputLength(this.prompt) <= 8000 ? AppTheme.blue : AppTheme.field).borderRadius(22)
-          .enabled(!this.loading && this.decisionId.length === 0 && this.inputLength(this.prompt) > 0 && this.inputLength(this.prompt) <= 8000).onClick(() => this.send())
+          .enabled(!this.loading && !this.deletionBusy && this.decisionId.length === 0 && this.inputLength(this.prompt) > 0 && this.inputLength(this.prompt) <= 8000).onClick(() => this.send())
       }.width('100%').alignItems(VerticalAlign.Bottom)
         .padding({ left: 16, right: 16, top: 10, bottom: 10 }).backgroundColor(AppTheme.surface)
         .border({ width: { top: 0.5 }, color: AppTheme.separator })
