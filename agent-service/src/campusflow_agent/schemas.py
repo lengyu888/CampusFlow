@@ -10,11 +10,19 @@ class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=8000)
 
 
+class ToolDisplaySummary(BaseModel):
+    label: str
+    state: Literal["success", "empty", "error", "unavailable", "pending", "unverified", "demo"]
+    summary: str
+
+
 class ToolTrace(BaseModel):
     tool_call_id: str
     tool_name: str
     arguments: dict[str, Any] = Field(default_factory=dict)
     result: Any | None = None
+    status: Literal["success", "error"] | None = None
+    display: ToolDisplaySummary | None = None
 
 
 class PendingAction(BaseModel):

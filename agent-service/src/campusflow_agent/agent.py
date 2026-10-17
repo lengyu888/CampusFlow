@@ -283,6 +283,7 @@ class AgentService:
             tool_name="plan_campus_route",
             arguments={"origin": origin, "destination": destination},
             result=route_data,
+            status="success",
         )
         if self.skill_store is not None:
             self.skill_store.record_tool_run(user_id, trace.tool_name)
@@ -333,8 +334,11 @@ class AgentService:
                     )
                     calls[item.tool_call_id] = trace
                 trace.result = result
-                if trace.tool_name in {"propose_task_change", "propose_plan"} and isinstance(
-                    result, dict
+                trace.status = item.status
+                if (
+                    trace.status != "error"
+                    and trace.tool_name in {"propose_task_change", "propose_plan"}
+                    and isinstance(result, dict)
                 ):
                     try:
                         pending.append(PendingAction.model_validate(result))
