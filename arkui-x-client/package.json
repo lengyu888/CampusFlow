@@ -2,6 +2,7 @@
   "name": "campusflow-arkui-x-static-check",
   "private": true,
   "scripts": {
+    "test": "node scripts/test.mjs",
     "check": "node scripts/static-check.mjs",
     "check:native": "node scripts/check-native-env.mjs",
     "build:hap": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-hap.ps1",

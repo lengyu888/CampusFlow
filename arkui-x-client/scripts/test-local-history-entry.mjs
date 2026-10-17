@@ -5,13 +5,16 @@ import { test } from 'node:test';
 
 // Execute real entry/auth controller methods with synthetic storage and HTTP.
 // This does not emulate ArkUI lifecycle scheduling or native file APIs.
+const navigationSource = readFileSync(new URL('../entry/src/main/ets/utils/AppNavigation.ets', import.meta.url), 'utf8');
+const navigation = await import(`data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(navigationSource)).toString('base64')}`);
+const navNames = ['createNavigation', 'currentRoute', 'selectRoot', 'openSecondary', 'backNavigation', 'isRootRoute', 'hasBack'];
 const source = readFileSync(new URL('../entry/src/main/ets/pages/Index.ets', import.meta.url), 'utf8');
 const controller = source.slice(0, source.indexOf('\n  @Builder'))
   .replace(/^import [^\n]+;\r?\n/gm, '')
   .replace(/^@(Entry|Component)\r?\n/gm, '')
   .replace(/@(State|Prop)\s+|@StorageLink\('[^']+'\)\s*/g, '')
   .replace('struct Index', 'class Index') + '\n}\n';
-const create = new Function('localHistory', 'historyScope', 'CampusFlowApi', 'AppStorage',
+const create = new Function('localHistory', 'historyScope', 'CampusFlowApi', 'AppStorage', 'AppTheme', 'Curve', ...navNames,
   stripTypeScriptTypes(controller) + '\nreturn Index;');
 const auth = (name = 'a') => ({ access_token: `${name}-token`, user: { user_id: name, display_name: name } });
 const deferred = () => {
@@ -30,8 +33,10 @@ function setup(overrides = {}) {
     constructor(base, token) { this.token = token; }
     async logout() { calls.push(['logout', this.token]); }
   }
-  const Index = create(store, (base, id) => `${base}|${id}`, Api, { setOrCreate: () => {} });
+  const Index = create(store, (base, id) => `${base}|${id}`, Api, { setOrCreate: () => {} },
+    { motion: () => 0 }, { EaseOut: 0 }, ...navNames.map(name => navigation[name]));
   const page = new Index();
+  page.getUIContext = () => ({ animateTo: (_options, update) => update() });
   return { page, calls, store };
 }
 
@@ -111,4 +116,81 @@ test('a cancelled old login cannot reopen the app after logout', async () => {
   await login;
   assert.equal(page.token, '');
   assert.equal(page.localHistoryCount, 0);
+});
+
+
+test('nested routes return to their actual origin while each main tab retains its stack', () => {
+  const { page } = setup();
+  page.selectTab(8);
+  page.selectTab(3);
+  page.selectTab(4);
+  assert.equal(page.activeTab, 4);
+  assert.equal(page.onBackPress(), true);
+  assert.equal(page.activeTab, 3);
+  page.selectTab(1);
+  page.selectTab(5);
+  page.selectTab(8);
+  assert.equal(page.activeTab, 3);
+  page.goBack();
+  assert.equal(page.activeTab, 8);
+  page.selectTab(1);
+  assert.equal(page.activeTab, 5);
+  page.goBack();
+  assert.equal(page.activeTab, 1);
+});
+
+test('external exact-ID details return to the source stack without guessing by title', () => {
+  const { page } = setup();
+  page.selectTab(8);page.selectTab(7);
+  page.openPlanDetails('task-exact', '');
+  assert.equal(page.activeTab, 2);
+  assert.equal(page.focusTaskId, 'task-exact');
+  assert.equal(page.focusPlanId, '');
+  page.closePlanFocus();
+  assert.equal(page.activeTab, 7);
+  assert.equal(page.focusTaskId, '');
+  page.goBack();
+  assert.equal(page.activeTab, 8);
+  const revision = page.focusRevision;
+  page.openPlanDetails('task', 'plan');
+  assert.equal(page.focusRevision, revision, 'ambiguous targets are rejected');
+  page.openPlanDetails('', 'plan-exact');
+  assert.equal(page.focusPlanId, 'plan-exact');
+});
+
+test('explicit plan links select a requested view while ordinary tab switching preserves it', () => {
+  const { page } = setup();
+  page.openPlanList('tasks');
+  assert.equal(page.planRequestedView, 'tasks');
+  const revision = page.planViewRevision;
+  page.selectTab(0);page.selectTab(2);
+  assert.equal(page.planViewRevision, revision);
+  page.openPlanList('agenda');
+  assert.equal(page.planRequestedView, 'agenda');
+  assert.equal(page.planViewRevision, revision + 1);
+});
+
+test('explicit Agent suggestion reaches its composer instead of a retained history/settings page', () => {
+  const { page } = setup();
+  page.selectTab(1);page.selectTab(5);page.selectTab(8);
+  page.openAgentWithPrompt('帮我安排复习');
+  assert.equal(page.activeTab, 1);
+  assert.equal(page.agentPrompt, '帮我安排复习');
+  assert.equal(page.promptRevision, 1);
+});
+
+test('system back delegates a plan detail to its own close path and auth resets all navigation', () => {
+  const { page } = setup();
+  page.openPlanDetails('', 'plan-exact');
+  page.planInnerActive = true;
+  assert.equal(page.onBackPress(), true);
+  assert.equal(page.planBackRevision, 1);
+  assert.equal(page.focusPlanId, 'plan-exact', 'detail owns the actual close and source restoration');
+  page.resetNavigation();
+  assert.equal(page.activeTab, 0);
+  assert.equal(page.planInnerActive, false);
+  assert.equal(page.focusPlanId, '');
+  assert.equal(page.focusTaskId, '');
+  assert.equal(page.focusOrigin, null);
+  assert.deepEqual(page.navigation, navigation.createNavigation());
 });

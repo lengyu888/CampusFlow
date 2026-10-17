@@ -19,14 +19,18 @@ const controllerSource = source.slice(0, buildStart)
   .replace('export struct HistoryPage', 'class HistoryPage') + '\n}\n';
 const createController = new Function('CampusFlowApi', 'localHistory', 'CampusFlowRequestError', 'AppTheme', 'Curve',
   stripTypeScriptTypes(controllerSource) + '\nreturn HistoryPage;');
+const navigationSource = readFileSync(new URL('../entry/src/main/ets/utils/AppNavigation.ets', import.meta.url), 'utf8');
+const navigation = await import(`data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(navigationSource)).toString('base64')}`);
+const navNames = ['createNavigation', 'currentRoute', 'selectRoot', 'openSecondary', 'backNavigation', 'isRootRoute', 'hasBack'];
 const indexSource = readFileSync(new URL('../entry/src/main/ets/pages/Index.ets', import.meta.url), 'utf8');
 const indexController = indexSource.slice(0, indexSource.indexOf('\n  @Builder'))
   .replace(/^import [^\n]+;\r?\n/gm, '')
   .replace(/^@(Entry|Component)\r?\n/gm, '')
   .replace(/@(State|Prop)\s+|@StorageLink\('[^']+'\)\s*/g, '')
   .replace('struct Index', 'class Index') + '\n}\n';
-const createIndex = new Function('localHistory', 'historyScope', 'CampusFlowApi', 'AppStorage',
+const createIndexFactory = new Function('localHistory', 'historyScope', 'CampusFlowApi', 'AppStorage', ...navNames,
   stripTypeScriptTypes(indexController) + '\nreturn Index;');
+const createIndex = (...args) => createIndexFactory(...args, ...navNames.map(name => navigation[name]));
 const storeSource = readFileSync(new URL('../entry/src/main/ets/utils/LocalHistoryStore.ets', import.meta.url), 'utf8')
   .replace(/^import .* from '\.\.\/model\/ApiModels';\r?\n/m, '');
 const { LocalHistoryStore, historyScope } =

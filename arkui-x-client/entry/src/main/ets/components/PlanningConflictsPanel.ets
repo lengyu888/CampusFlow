@@ -10,7 +10,9 @@ export struct PlanningConflictsPanel {
   @Prop token: string;
   @Watch('refreshRequested') @Prop refreshKey: number = 0;
   @Watch('activityChanged') @Prop active: boolean = true;
+  @Prop compact: boolean = false;
   onApplied: () => void = () => {};
+  onOpenDetails: () => void = () => {};
   @State private state: ReplanViewState = {
     phase: 'idle', report: null, preview: null, message: '', notice: ''
   };
@@ -73,6 +75,27 @@ export struct PlanningConflictsPanel {
 
   private needsResultCheck(): boolean {
     return ['confirming', 'uncertain', 'checking'].includes(this.state.phase);
+  }
+
+  private summaryTitle(): string {
+    if (this.needsResultCheck()) { return '有一笔改期需要核对结果'; }
+    if (this.state.phase === 'previewing') { return '正在生成改期预览'; }
+    if (this.state.phase === 'review') { return '改期预览待你确认'; }
+    if (this.state.report === null) { return this.busy() ? '正在核对课表与任务' : '课表与任务冲突核对'; }
+    const count = this.state.report.conflicts.length;
+    return count > 0 ? `${count} 项任务与课程冲突` : '本次未发现明确时段的课程冲突';
+  }
+
+  private summaryDetail(): string {
+    if (this.needsResultCheck()) { return '打开详情查询结果，请勿重复提交。'; }
+    if (this.state.phase === 'review') { return '查看旧/新时间与未能安排的任务，再确认。'; }
+    if (this.state.message.length > 0) { return this.state.message; }
+    const count = this.state.report?.unchecked.length ?? 0;
+    return count > 0 ? `另有 ${count} 项待办需要人工核对 · 查看详情` : '仅核对有明确起止时间的未完成任务 · 查看详情';
+  }
+
+  private openDetails(): void {
+    if (this.active) { this.onOpenDetails(); }
   }
 
   private busyText(): string {
@@ -216,7 +239,8 @@ export struct PlanningConflictsPanel {
     }.width('100%').alignItems(HorizontalAlign.Start)
   }
 
-  build() {
+  @Builder
+  private FullContent() {
     Column({ space: 12 }) {
       Text('课表与任务冲突').fontSize(AppTheme.sectionTitle).fontWeight(FontWeight.Bold)
         .fontColor(AppTheme.ink).width('100%')
@@ -274,5 +298,26 @@ export struct PlanningConflictsPanel {
       if (this.state.preview !== null) { this.Preview() }
     }.width('100%').alignItems(HorizontalAlign.Start).padding(AppTheme.cardInset)
       .backgroundColor(AppTheme.surface).borderRadius(AppTheme.cardRadius)
+  }
+
+  build() {
+    if (this.compact) {
+      Button({ type: ButtonType.Normal }) {
+        Column({ space: 8 }) {
+          Text(this.summaryTitle()).fontSize(16).fontWeight(FontWeight.Medium)
+            .fontColor(this.needsResultCheck() || (this.state.report?.conflicts.length ?? 0) > 0 ? AppTheme.orange : AppTheme.ink)
+            .width('100%').wordBreak(WordBreak.BREAK_WORD)
+          Text(this.summaryDetail()).fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet)
+            .width('100%').wordBreak(WordBreak.BREAK_WORD)
+        }.width('100%').alignItems(HorizontalAlign.Start)
+      }.width('100%').constraintSize({ minHeight: 48 }).padding(AppTheme.cardInset)
+        .backgroundColor(AppTheme.surface).borderRadius(AppTheme.cardRadius).enabled(this.active)
+        .accessibilityText(`${this.summaryTitle()}，${this.summaryDetail()}`)
+        .onClick(() => this.openDetails())
+    } else {
+      Scroll() {
+        this.FullContent()
+      }.width('100%').height('100%')
+    }
   }
 }
