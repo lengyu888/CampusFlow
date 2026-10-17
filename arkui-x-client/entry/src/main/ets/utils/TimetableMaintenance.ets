@@ -1,4 +1,4 @@
-import { TimetableEntry, TimetableSnapshot, TimetableSaveReceipt } from '../model/ApiModels';
+import { TimetableEntry, TimetableSnapshot, TimetableSaveReceipt, DataEvidence } from '../model/ApiModels';
 import { CampusFlowRequestError } from './AgentFeedback';
 import { normalizeTimetableEntry, validateTimetableList, TimetableIssue } from './OnboardingTimetable';
 
@@ -16,6 +16,7 @@ export interface TimetableMaintenanceState {
   warnings: TimetableIssue[];
   message: string;
   notice: string;
+  evidence?: DataEvidence[];
 }
 
 interface TimetableOperation {
@@ -78,6 +79,7 @@ export class TimetableMaintenance {
   snapshot(): TimetableMaintenanceState {
     return { phase: this.state.phase, entries: entriesCopy(this.state.entries), revision: this.state.revision,
       dirty: this.state.dirty, message: this.state.message, notice: this.state.notice,
+      evidence: JSON.parse(JSON.stringify(this.state.evidence ?? [])) as DataEvidence[],
       warnings: this.state.warnings.map((issue: TimetableIssue): TimetableIssue => ({ index: issue.index,
         relatedIndex: issue.relatedIndex, field: issue.field, message: issue.message })) };
   }
@@ -169,6 +171,8 @@ export class TimetableMaintenance {
       this.baseline = entriesCopy(checked.entries);
       this.state.entries = checked.entries;
       this.state.revision = snapshot.revision;
+      // Provenance belongs to the accepted server baseline, never to an unsaved draft or a rejected newer version.
+      this.state.evidence = Array.isArray(snapshot.evidence) ? JSON.parse(JSON.stringify(snapshot.evidence)) as DataEvidence[] : [];
       this.state.warnings = checked.warnings;
       this.editorPending = false;
       this.staleRevision = false;

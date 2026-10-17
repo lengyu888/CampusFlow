@@ -85,6 +85,8 @@ async def test_campus_data_package_places_notices_and_corrections(
     client: AsyncClient,
 ) -> None:
     await register(client)
+    onboarded = await client.put("/api/v1/onboarding", json=ONBOARDING_PAYLOAD)
+    assert onboarded.status_code == 200
 
     snapshot = await client.get("/api/v1/campus-data")
     assert snapshot.status_code == 200
@@ -103,7 +105,9 @@ async def test_campus_data_package_places_notices_and_corrections(
         params={"keyword": "教学"},
     )
     assert notices.status_code == 200
-    assert any(item["category"] == "教学安排" for item in notices.json())
+    assert notices.json() == []
+    assert snapshot.json()["package"]["notice_count"] == 0
+    assert places.json()[0]["open_now"] is None
 
     route = await client.get(
         "/api/v1/campus-data/route",
@@ -111,6 +115,8 @@ async def test_campus_data_package_places_notices_and_corrections(
     )
     assert route.status_code == 200
     assert route.json()["total_minutes"] == 10
+    assert route.json()["is_estimate"] is True
+    assert route.json()["evidence"][0]["status"] == "unverified"
     assert route.json()["estimated_distance_meters"] == 750
     assert route.json()["path"][0]["place_id"] == "teaching-6"
     assert route.json()["path"][-1]["place_id"] == "cainiao-station"

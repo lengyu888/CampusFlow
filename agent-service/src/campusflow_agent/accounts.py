@@ -148,6 +148,8 @@ class AccountStore:
                 "role": "ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'",
                 "api_key_encrypted": "ALTER TABLE users ADD COLUMN api_key_encrypted TEXT",
                 "api_key_hint": "ALTER TABLE users ADD COLUMN api_key_hint TEXT",
+                "timetable_updated_at": "ALTER TABLE users ADD COLUMN timetable_updated_at TEXT",
+                "timetable_source": "ALTER TABLE users ADD COLUMN timetable_source TEXT",
             }
             for column, statement in migrations.items():
                 if column not in columns:
@@ -364,7 +366,8 @@ class AccountStore:
                 """
                 UPDATE users
                 SET school = ?, campus = ?, semester = ?, timetable_json = ?,
-                    campus_map_json = ?, onboarding_complete = 1
+                    campus_map_json = ?, onboarding_complete = 1,
+                    timetable_updated_at = ?, timetable_source = 'user'
                 WHERE user_id = ?
                 """,
                 (
@@ -373,6 +376,7 @@ class AccountStore:
                     semester.strip(),
                     json.dumps(timetable, ensure_ascii=False),
                     json.dumps(campus_map, ensure_ascii=False),
+                    datetime.now(UTC).isoformat(),
                     user_id,
                 ),
             )
@@ -390,11 +394,22 @@ class AccountStore:
             raise KeyError("user_not_found")
         return json.loads(row["timetable_json"]), json.loads(row["campus_map_json"])
 
+    def get_timetable_metadata(self, user_id: str) -> dict[str, Any]:
+        with self._lock:
+            row = self._connection.execute(
+                "SELECT timetable_updated_at, timetable_source FROM users WHERE user_id=?",
+                (user_id,),
+            ).fetchone()
+            if row is None:
+                raise KeyError("user_not_found")
+            return {"updated_at": row["timetable_updated_at"], "source": row["timetable_source"]}
+
     def replace_timetable(self, user_id: str, timetable: list[dict[str, Any]]) -> None:
         with self._lock, self._connection:
             cursor = self._connection.execute(
-                "UPDATE users SET timetable_json = ? WHERE user_id = ?",
-                (json.dumps(timetable, ensure_ascii=False), user_id),
+                "UPDATE users SET timetable_json = ?,timetable_updated_at=?,"
+                "timetable_source='user' WHERE user_id = ?",
+                (json.dumps(timetable, ensure_ascii=False), datetime.now(UTC).isoformat(), user_id),
             )
         if cursor.rowcount != 1:
             raise KeyError("user_not_found")

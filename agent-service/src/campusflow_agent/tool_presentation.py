@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from math import isfinite
 from typing import Any
 
 from pydantic import ValidationError
 
-from .schemas import CampusRoute, PendingAction, ToolDisplaySummary, ToolTrace
+from .evidence import data_evidence, safe_source_url
+from .schemas import CampusRoute, DataEvidence, PendingAction, ToolDisplaySummary, ToolTrace
 
 _LABELS = {
     "get_schedule": "课表与事务",
@@ -221,6 +222,8 @@ def _snapshot_has_content(resource: str, data: dict | list) -> bool | None:
 
 
 def _list_summary(name: str, result: Any, label: str) -> ToolDisplaySummary:
+    if isinstance(result, dict):
+        result = result.get("items")
     if not isinstance(result, list):
         return _unverified(label)
     for item in result:
@@ -245,7 +248,7 @@ def _list_summary(name: str, result: Any, label: str) -> ToolDisplaySummary:
             valid = (
                 _nonempty_string(item.get("name"))
                 and isinstance(item.get("category"), str)
-                and type(item.get("open")) is bool
+                and (item.get("open") is None or type(item.get("open")) is bool)
             )
         if not valid:
             return _unverified(label)
@@ -276,6 +279,10 @@ def _snapshot_summary(name: str, result: dict, label: str) -> ToolDisplaySummary
     for key in fields:
         snapshot = result.get(key)
         if snapshot is None:
+            continue
+        if isinstance(snapshot, dict) and snapshot.get("needs_sync") is True:
+            if snapshot.get("data") is not None:
+                return _unverified(label)
             continue
         if (
             not isinstance(snapshot, dict)
@@ -379,9 +386,7 @@ def _proposal_summary(
     return ToolDisplaySummary(label=label, state="pending", summary=text)
 
 
-def present_tool_trace(
-    trace: ToolTrace, pending_actions: list[PendingAction]
-) -> ToolDisplaySummary:
+def _present_content(trace: ToolTrace, pending_actions: list[PendingAction]) -> ToolDisplaySummary:
     """Summarize known shapes; never copy arbitrary result, argument or error strings."""
     name = trace.tool_name
     label = _LABELS.get(name, "其他工具")
@@ -433,17 +438,110 @@ def present_tool_trace(
             summary=f"已生成参考路线，步行约 {route.total_minutes} 分钟；时间和距离为估算。",
         )
     if name == "get_weather":
-        temperature = result.get("temperature_c")
+        if result.get("available") is False:
+            return ToolDisplaySummary(
+                label=label, state="unavailable", summary="暂未取得可用的当前天气预报。"
+            )
+        low, high = result.get("temperature_min_c"), result.get("temperature_max_c")
+        probability = result.get("precipitation_probability")
         if (
-            not _date_string(result.get("date"))
+            result.get("available") is not True
+            or not _date_string(result.get("date"))
             or not _nonempty_string(result.get("condition"))
-            or not isinstance(temperature, dict)
-            or not _finite_number(temperature.get("min"))
-            or not _finite_number(temperature.get("max"))
-            or temperature["min"] > temperature["max"]
+            or not _nonempty_string(result.get("location_label"))
+            or not _finite_number(low)
+            or not _finite_number(high)
+            or low > high
+            or (
+                probability is not None
+                and (not _finite_number(probability) or not 0 <= probability <= 100)
+            )
         ):
             return _unverified(label)
         return ToolDisplaySummary(
-            label=label, state="demo", summary="当前返回演示天气，不能作为实时天气依据。"
+            label=label, state="success", summary="已取得城市级天气预报，不能视为校内实时实测。"
         )
     return _unverified(label)
+
+
+def _source_records(result: Any) -> list[DataEvidence]:
+    """Read only the explicit metadata envelope, never tool arguments/personal fields."""
+    if not isinstance(result, dict) or not isinstance(result.get("evidence"), list):
+        return []
+    records: dict[str, DataEvidence] = {}
+    for raw in result["evidence"][:20]:
+        if not isinstance(raw, dict):
+            continue
+        try:
+            item = DataEvidence.model_validate(raw)
+        except ValidationError:
+            continue
+        if (
+            not item.source_id.strip()
+            or len(item.source_id) > 128
+            or not item.label.strip()
+            or len(item.label) > 120
+            or len(item.note) > 1000
+        ):
+            continue
+        item.url = safe_source_url(item.url)
+        if item.expires_at is not None:
+            if item.expires_at.tzinfo is None:
+                item.status = "unverified"
+            elif item.expires_at <= datetime.now(UTC) and item.status == "fresh":
+                item.status = "stale"
+        if (
+            item.kind == "remote"
+            and item.status == "fresh"
+            and (item.updated_at is None or item.updated_at.tzinfo is None)
+        ):
+            item.status = "unverified"
+        if item.kind in {"reference", "demo"} and item.status == "fresh":
+            item.status = "unverified"
+        records[item.source_id] = item
+    return list(records.values())
+
+
+def present_tool_trace(
+    trace: ToolTrace, pending_actions: list[PendingAction]
+) -> ToolDisplaySummary:
+    display = _present_content(trace, pending_actions)
+    if trace.tool_name.startswith("propose_"):
+        return display
+    evidence = _source_records(trace.result)
+    display.evidence = evidence or [
+        data_evidence(
+            "tool:unverified",
+            "来源未核验",
+            "reference",
+            "unverified",
+            note="该结果没有提供可核验的来源和获取时间。",
+        )
+    ]
+    if trace.status == "error":
+        return display
+    if not evidence:
+        if display.state not in {"error", "unavailable"}:
+            display.state = "unverified"
+        display.summary += " 来源与获取时间未核验。"
+        return display
+    states = {item.status for item in evidence}
+    if any(item.kind == "demo" for item in evidence):
+        display.state = "demo"
+        display.summary = "包含演示数据，不能作为当前事实依据。"
+    elif states == {"error"}:
+        display.state = "error"
+        display.summary = "本次数据源查询失败，未获得可用的当前结果。"
+    elif states == {"missing"}:
+        display.state = "unavailable"
+        display.summary = "数据源尚未配置或接入，不能据空结果推断没有记录。"
+    elif "stale" in states:
+        display.state = "unverified"
+        display.summary = "包含已过期资料，请重新同步；不能作为当前事实。"
+    elif "missing" in states and display.state == "empty":
+        display.state = "unavailable"
+        display.summary = "部分数据源缺失，不能据空结果推断没有课程或记录。"
+    elif states != {"fresh"}:
+        display.state = "unverified"
+        display.summary += " 部分来源缺失或未经实时核验，请查看来源说明。"
+    return display

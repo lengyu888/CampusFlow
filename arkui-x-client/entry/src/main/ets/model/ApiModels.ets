@@ -1,3 +1,25 @@
+export interface DataEvidence {
+  source_id: string;
+  label: string;
+  kind: string;
+  status: string;
+  updated_at: string | null;
+  expires_at: string | null;
+  url: string | null;
+  note: string;
+}
+
+export interface WeatherForecast {
+  date: string;
+  location_label: string;
+  available: boolean;
+  condition: string | null;
+  temperature_min_c: number | null;
+  temperature_max_c: number | null;
+  precipitation_probability: number | null;
+  evidence: DataEvidence[];
+}
+
 export interface UserProfile {
   user_id: string;
   email: string;
@@ -29,6 +51,7 @@ export interface TimetableEntry {
 export interface TimetableSnapshot {
   entries: TimetableEntry[];
   revision: string;
+  evidence?: DataEvidence[];
 }
 
 export interface TimetableSaveReceipt {
@@ -151,6 +174,7 @@ export interface ToolDisplaySummary {
   label: string;
   state: string;
   summary: string;
+  evidence?: DataEvidence[];
 }
 
 // Only the server's display projection is consumed by the native interface.
@@ -261,8 +285,9 @@ export interface CampusDataPlace {
   category: string;
   zone: string;
   aliases: string[];
-  open_now: boolean;
+  open_now: boolean | null;
   open_hours: string;
+  evidence?: DataEvidence[];
 }
 
 export interface CampusDataPackage {
@@ -270,6 +295,7 @@ export interface CampusDataPackage {
   school: string;
   campus: string;
   version: string;
+  evidence?: DataEvidence[];
 }
 
 export interface CampusDataSnapshot {
@@ -300,6 +326,8 @@ export interface CampusRoute {
   path: CampusRoutePoint[];
   steps: CampusRouteStep[];
   note: string;
+  is_estimate?: boolean;
+  evidence?: DataEvidence[];
 }
 
 export interface PlanningTask {
@@ -470,6 +498,7 @@ export interface HDUHelpDisplaySection {
   title: string;
   summary: string;
   items: HDUHelpDisplayItem[];
+  evidence?: DataEvidence[];
 }
 
 export interface HDUHelpSuggestedPrompt {
@@ -503,6 +532,7 @@ export interface ClassroomSearchResponse {
   items: ClassroomItem[];
   total: number;
   has_more: boolean;
+  evidence?: DataEvidence[];
 }
 
 export interface ClassroomUsageItem {
@@ -518,6 +548,7 @@ export interface ClassroomUsageItem {
 export interface ClassroomUsageResponse {
   location_id: string;
   items: ClassroomUsageItem[];
+  evidence?: DataEvidence[];
 }
 
 export interface ElectricityHistoryItem {
@@ -537,6 +568,7 @@ export interface ElectricityOverview {
   balance_updated_at: string | null;
   daily_average: string;
   history: ElectricityHistoryItem[];
+  evidence?: DataEvidence[];
 }
 
 export interface AdminUserSummary {

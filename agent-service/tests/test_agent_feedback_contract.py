@@ -149,7 +149,8 @@ async def test_chat_attaches_display_without_changing_raw_result(feedback_api) -
     trace = response.json()["tool_traces"][0]
     assert trace["result"] == []
     assert trace["status"] == "success"
-    assert trace["display"]["state"] == "empty"
+    assert trace["display"]["state"] == "unverified"
+    assert trace["display"]["evidence"][0]["status"] == "unverified"
     assert trace["display"]["label"] and trace["display"]["summary"]
 
 

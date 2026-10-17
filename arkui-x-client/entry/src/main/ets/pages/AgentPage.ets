@@ -3,6 +3,7 @@ import { CampusFlowApi } from '../services/CampusFlowApi';
 import { localHistory } from '../services/LocalHistory';
 import { MessageContent } from '../components/MessageContent';
 import { AppTheme } from '../theme/AppTheme';
+import { EvidencePanel } from '../components/EvidencePanel';
 import { AppIcon } from '../components/AppIcon';
 import { TaskScheduleDetails } from '../components/TaskScheduleDetails';
 import { formatPlanDateTime } from '../utils/PlanPresentation';
@@ -927,6 +928,7 @@ export struct AgentPage {
                 Text(this.toolStateLabel(item.state)).fontSize(AppTheme.metaSize).fontColor(this.toolStateColor(item.state))
               }.width('100%')
               Text(item.summary).fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
+              EvidencePanel({ evidence: item.evidence ?? [], active: this.voiceActive })
             }.width('100%').alignItems(HorizontalAlign.Start).padding(10)
               .backgroundColor(AppTheme.field).borderRadius(10)
           }, (_item: ToolDisplaySummary, index: number) => `${message.id}-tool-${index}`)

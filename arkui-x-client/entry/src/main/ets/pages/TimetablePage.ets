@@ -4,6 +4,7 @@ import { TimetableMaintenance, TimetableMaintenanceState } from '../utils/Timeta
 import { TimetableFieldErrors, TimetableIssue, normalizeTimetableEntry, validateTimetableEntry, validateTimetableList, parseTimetablePreview, expandWeeklyEntry } from '../utils/OnboardingTimetable';
 import { shanghaiDate } from '../utils/DailyAgenda';
 import { AppTheme } from '../theme/AppTheme';
+import { EvidencePanel } from '../components/EvidencePanel';
 import { AppIcon } from '../components/AppIcon';
 import { FeedbackPanel } from '../components/FeedbackPanel';
 
@@ -523,6 +524,9 @@ export struct TimetablePage {
           if (this.message.length > 0) { FeedbackPanel({ kind: 'error', title: '请先核对', message: this.message }) }
           if (this.notice.length > 0 && !this.reviewOpen) { Text(this.notice).fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%') }
           if (this.view.revision.length > 0) {
+            Text(this.view.dirty ? '以下来源对应已载入版本；当前未保存修改仅为本页草稿。' : '已载入课表的来源')
+              .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%').wordBreak(WordBreak.BREAK_WORD)
+            EvidencePanel({ evidence: this.view.evidence ?? [], active: this.active })
             if (this.reviewOpen) {
               FeedbackPanel({ kind: 'info', title: this.entries.length === 0 ? '即将清空账号课表' : `即将保存 ${this.entries.length} 次课程`,
                 message: '只更新课表，不修改校园资料、地图或订阅连接。保存前会核对版本；不会再次抓取导入链接。' })

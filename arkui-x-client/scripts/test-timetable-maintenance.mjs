@@ -52,6 +52,18 @@ test('dirty refresh preserves draft and blocks stale writes until explicit succe
   await store.refresh(true); assert.equal(store.snapshot().entries[0].title, '其他设备'); assert.equal(store.snapshot().dirty, false);
 });
 
+test('source metadata belongs to accepted baseline, stays isolated, and never labels an unsaved or rejected draft as newly synced', async () => {
+  const evidence = [{ source_id: 'timetable:user', label: '已确认课表', kind: 'user', status: 'fresh',
+    updated_at: '2026-10-18T03:00:00Z', expires_at: null, url: null, note: '保存时间' }];
+  const f = fixture(); f.setCurrent({ revision: a, entries: [row()], evidence }); f.store.setActive(true); await tick();
+  const state = f.store.snapshot(); state.evidence[0].label = 'tampered';
+  assert.equal(f.store.snapshot().evidence[0].label, '已确认课表'); f.store.replaceDraft([row('本地修改')]);
+  f.setCurrent({ revision: c, entries: [row('远端')], evidence: [{ ...evidence[0], label: '新版本' }] });
+  await f.store.refresh(); assert.equal(f.store.snapshot().evidence[0].label, '已确认课表');
+  assert.equal(f.store.snapshot().entries[0].title, '本地修改');
+  await f.store.refresh(true); assert.equal(f.store.snapshot().evidence[0].label, '新版本');
+});
+
 test('pending editor prevents auto refresh replacing the current draft and prevents save', async () => {
   const { store, calls, setCurrent } = await loaded(); store.setEditorPending(true);
   setCurrent({ revision: c, entries: [row('远端')] }); await store.refresh(); await store.save();

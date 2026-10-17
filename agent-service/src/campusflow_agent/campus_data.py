@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from datetime import UTC, datetime, time, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 from heapq import heappop, heappush
 from pathlib import Path
 from threading import RLock
 from uuid import uuid4
 
+from .evidence import data_evidence
 from .schemas import (
     CampusCorrection,
     CampusDataPackage,
@@ -17,6 +18,7 @@ from .schemas import (
     CampusRoute,
     CampusRoutePoint,
     CampusRouteStep,
+    DataEvidence,
 )
 
 CAMPUS_TIMEZONE = timezone(timedelta(hours=8), name="Asia/Shanghai")
@@ -30,8 +32,8 @@ PACKAGE = {
     "version": "2026.10.7",
     "published_at": "2026-10-07T13:00:00+08:00",
     "description": (
-        "基于用户确认地图整理的 CampusFlow 校园数据包，"
-        "提供建筑别名、开放时间与步行关系。"
+        "根据项目内杭电下沙校区地图整理的静态参考数据；"
+        "地点与开放时段未实时核验，步行关系为人工估算。"
     ),
 }
 
@@ -173,58 +175,107 @@ MAP_POINTS: dict[str, tuple[float, float]] = {
 
 ROUTE_GEOMETRIES: dict[frozenset[str], list[tuple[float, float]]] = {
     frozenset(("library", "teaching-3")): [
-        (45.1, 28.8), (45.1, 47.8), (54.7, 47.8),
+        (45.1, 28.8),
+        (45.1, 47.8),
+        (54.7, 47.8),
     ],
     frozenset(("library", "teaching-4")): [
-        (45.1, 28.8), (45.1, 38.0), (40.0, 42.7), (34.2, 42.7),
+        (45.1, 28.8),
+        (45.1, 38.0),
+        (40.0, 42.7),
+        (34.2, 42.7),
     ],
     frozenset(("library", "teaching-6")): [
-        (45.1, 28.8), (40.0, 28.8), (35.2, 31.5),
+        (45.1, 28.8),
+        (40.0, 28.8),
+        (35.2, 31.5),
     ],
     frozenset(("library", "teaching-7")): [
-        (45.1, 28.8), (54.8, 28.8), (54.8, 33.4),
+        (45.1, 28.8),
+        (54.8, 28.8),
+        (54.8, 33.4),
     ],
     frozenset(("library", "teaching-12")): [
-        (45.1, 28.8), (60.0, 28.8), (60.0, 41.4), (68.0, 41.4),
+        (45.1, 28.8),
+        (60.0, 28.8),
+        (60.0, 41.4),
+        (68.0, 41.4),
     ],
     frozenset(("library", "student-center")): [
-        (45.1, 28.8), (60.0, 28.8), (68.4, 27.3),
+        (45.1, 28.8),
+        (60.0, 28.8),
+        (68.4, 27.3),
     ],
     frozenset(("library", "south-gate")): [
-        (45.1, 28.8), (45.1, 54.0), (50.0, 60.0), (44.7, 68.4),
+        (45.1, 28.8),
+        (45.1, 54.0),
+        (50.0, 60.0),
+        (44.7, 68.4),
     ],
     frozenset(("library", "east-gate")): [
-        (45.1, 28.8), (60.0, 28.8), (60.0, 41.4), (80.0, 41.4), (88.2, 43.3),
+        (45.1, 28.8),
+        (60.0, 28.8),
+        (60.0, 41.4),
+        (80.0, 41.4),
+        (88.2, 43.3),
     ],
     frozenset(("teaching-3", "teaching-6")): [
-        (54.7, 47.8), (45.1, 47.8), (45.1, 31.5), (35.2, 31.5),
+        (54.7, 47.8),
+        (45.1, 47.8),
+        (45.1, 31.5),
+        (35.2, 31.5),
     ],
     frozenset(("teaching-6", "teaching-7")): [
-        (35.2, 31.5), (45.1, 31.5), (54.8, 33.4),
+        (35.2, 31.5),
+        (45.1, 31.5),
+        (54.8, 33.4),
     ],
     frozenset(("teaching-7", "teaching-12")): [
-        (54.8, 33.4), (60.0, 33.4), (60.0, 41.4), (68.0, 41.4),
+        (54.8, 33.4),
+        (60.0, 33.4),
+        (60.0, 41.4),
+        (68.0, 41.4),
     ],
     frozenset(("student-center", "east-track")): [
-        (68.4, 27.3), (77.0, 27.3), (83.1, 29.6),
+        (68.4, 27.3),
+        (77.0, 27.3),
+        (83.1, 29.6),
     ],
     frozenset(("student-center", "south-gate")): [
-        (68.4, 27.3), (60.0, 28.8), (60.0, 53.0), (50.0, 62.0), (44.7, 68.4),
+        (68.4, 27.3),
+        (60.0, 28.8),
+        (60.0, 53.0),
+        (50.0, 62.0),
+        (44.7, 68.4),
     ],
     frozenset(("canteen-1", "west-track")): [
-        (53.7, 15.5), (45.0, 15.5), (30.0, 15.5), (23.5, 12.3),
+        (53.7, 15.5),
+        (45.0, 15.5),
+        (30.0, 15.5),
+        (23.5, 12.3),
     ],
     frozenset(("canteen-1", "north-2-gate")): [
-        (53.7, 15.5), (45.0, 15.5), (25.2, 15.5), (25.2, 22.8),
+        (53.7, 15.5),
+        (45.0, 15.5),
+        (25.2, 15.5),
+        (25.2, 22.8),
     ],
     frozenset(("campus-clinic", "canteen-1")): [
-        (29.8, 3.9), (35.0, 3.9), (35.0, 15.5), (53.7, 15.5),
+        (29.8, 3.9),
+        (35.0, 3.9),
+        (35.0, 15.5),
+        (53.7, 15.5),
     ],
     frozenset(("canteen-5", "teaching-6")): [
-        (54.1, 10.9), (45.0, 10.9), (35.2, 10.9), (35.2, 31.5),
+        (54.1, 10.9),
+        (45.0, 10.9),
+        (35.2, 10.9),
+        (35.2, 31.5),
     ],
     frozenset(("gym", "teaching-4")): [
-        (25.2, 30.4), (25.2, 42.7), (34.2, 42.7),
+        (25.2, 30.4),
+        (25.2, 42.7),
+        (34.2, 42.7),
     ],
     frozenset(("teaching-6", "north-2-gate")): [
         (35.2, 31.5),
@@ -444,13 +495,18 @@ class CampusDataStore:
         return datetime.fromisoformat(value) if value else None
 
     @staticmethod
-    def _open_now(row: sqlite3.Row, at: datetime) -> bool:
-        if bool(row["always_open"]):
-            return True
-        local = at.astimezone(CAMPUS_TIMEZONE).time().replace(tzinfo=None)
-        opens = time.fromisoformat(row["open_time"])
-        closes = time.fromisoformat(row["close_time"])
-        return opens <= local <= closes
+    def reference_evidence() -> list[DataEvidence]:
+        return [
+            data_evidence(
+                "campus:hdu-xiasha-reference",
+                "杭电下沙静态校园参考图",
+                "reference",
+                "unverified",
+                updated_at=PACKAGE["published_at"],
+                note="时间为数据包声明的版本时间，非现场核验时间。开放时段仅供参考，"
+                "当前开放情况未知；线段为示意，步行时间与距离为人工估算，不含实时路况。",
+            )
+        ]
 
     def _package_row(self) -> sqlite3.Row:
         row = self._connection.execute(
@@ -468,10 +524,7 @@ class CampusDataStore:
                 "SELECT COUNT(*) FROM campus_data_places WHERE package_id = ?",
                 (row["package_id"],),
             ).fetchone()[0]
-            notice_count = self._connection.execute(
-                "SELECT COUNT(*) FROM campus_notices WHERE package_id = ?",
-                (row["package_id"],),
-            ).fetchone()[0]
+            notice_count = len(self.search_notices())
         return CampusDataPackage(
             package_id=row["package_id"],
             school=row["school"],
@@ -481,6 +534,7 @@ class CampusDataStore:
             description=row["description"],
             place_count=place_count,
             notice_count=notice_count,
+            evidence=self.reference_evidence(),
         )
 
     def _resolve_place_id(self, value: str) -> str | None:
@@ -563,14 +617,15 @@ class CampusDataStore:
             category=row["category"],
             zone=row["zone"],
             aliases=aliases,
-            open_now=self._open_now(row, at),
+            open_now=None,
             open_hours=(
                 "全天开放"
                 if bool(row["always_open"])
                 else f"{row['open_time']}–{row['close_time']}"
             ),
             walk_minutes=walk_minutes,
-            source="CampusFlow 校园数据包",
+            source="CampusFlow 静态参考数据包",
+            evidence=self.reference_evidence(),
         )
 
     def find_places(
@@ -658,8 +713,7 @@ class CampusDataStore:
                     CampusRouteStep(
                         index=index,
                         instruction=(
-                            f"从{node_rows[start_id]['name']}步行至"
-                            f"{node_rows[end_id]['name']}"
+                            f"从{node_rows[start_id]['name']}步行至{node_rows[end_id]['name']}"
                         ),
                         minutes=minutes,
                     )
@@ -689,7 +743,9 @@ class CampusDataStore:
                 estimated_distance_meters=total_minutes * 75,
                 path=path,
                 steps=steps,
-                note="依据用户确认的杭电下沙校区地图生成，路线与步行时间为校园内参考估算。",
+                note="静态地图路线示意；步行时间与距离为人工估算，未核验实时道路或开放情况。",
+                is_estimate=True,
+                evidence=self.reference_evidence(),
             )
 
     def search_notices(
@@ -698,6 +754,7 @@ class CampusDataStore:
         *,
         active_only: bool = False,
         at: datetime | None = None,
+        demo: bool = False,
     ) -> list[CampusNotice]:
         current = (at or datetime.now(UTC)).astimezone(CAMPUS_TIMEZONE)
         needle = self._normalized(keyword)
@@ -710,7 +767,10 @@ class CampusDataStore:
                 (DEFAULT_PACKAGE_ID,),
             ).fetchall()
         notices = []
+        demo_ids = {item[0] for item in NOTICES}
         for row in rows:
+            if row["notice_id"] in demo_ids and not demo:
+                continue
             start = self._parse_datetime(row["effective_from"])
             end = self._parse_datetime(row["effective_to"])
             if active_only and ((start and current < start) or (end and current > end)):
@@ -729,6 +789,17 @@ class CampusDataStore:
                     effective_from=start,
                     effective_to=end,
                     source=row["source"],
+                    evidence=[
+                        data_evidence(
+                            "campus:demo-notices"
+                            if row["notice_id"] in demo_ids
+                            else "campus:reference-notices",
+                            "通知演示样例" if row["notice_id"] in demo_ids else "校园参考通知",
+                            "demo" if row["notice_id"] in demo_ids else "reference",
+                            "unverified",
+                            note="未接入学校官方通知源，不能作为当前学校公告。",
+                        )
+                    ],
                 )
             )
         return notices

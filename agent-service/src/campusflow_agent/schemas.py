@@ -13,10 +13,34 @@ class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=8000)
 
 
+class DataEvidence(BaseModel):
+    source_id: str
+    label: str
+    kind: Literal["user", "remote", "reference", "demo"]
+    status: Literal["fresh", "stale", "unverified", "missing", "error"]
+    updated_at: datetime | None = None
+    expires_at: datetime | None = None
+    url: str | None = None
+    note: str = ""
+
+
+class WeatherForecast(BaseModel):
+    date: str
+    location_label: str
+    available: bool = False
+    condition: str | None = None
+    temperature_min_c: float | None = None
+    temperature_max_c: float | None = None
+    precipitation_probability: float | None = None
+    evidence: list[DataEvidence] = Field(default_factory=list)
+
+
 class ToolDisplaySummary(BaseModel):
     label: str
     state: Literal["success", "empty", "error", "unavailable", "pending", "unverified", "demo"]
     summary: str
+
+    evidence: list[DataEvidence] = Field(default_factory=list)
 
 
 class ToolTrace(BaseModel):
@@ -319,6 +343,8 @@ class TimetableSnapshot(BaseModel):
     entries: list[TimetableEntry]
     revision: str
 
+    evidence: list[DataEvidence] = Field(default_factory=list)
+
 
 class TimetableSaveRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -434,6 +460,8 @@ class HDUHelpResourceSnapshot(BaseModel):
     data: Any
     synced_at: datetime
 
+    evidence: list[DataEvidence] = Field(default_factory=list)
+
 
 class HDUHelpDisplayItem(BaseModel):
     label: str
@@ -446,6 +474,8 @@ class HDUHelpDisplaySection(BaseModel):
     title: str
     summary: str
     items: list[HDUHelpDisplayItem] = Field(default_factory=list)
+
+    evidence: list[DataEvidence] = Field(default_factory=list)
 
 
 class HDUHelpSuggestedPrompt(BaseModel):
@@ -487,6 +517,8 @@ class ClassroomSearchResponse(BaseModel):
     total: int = 0
     has_more: bool = False
 
+    evidence: list[DataEvidence] = Field(default_factory=list)
+
 
 class ClassroomUsageItem(BaseModel):
     week: int
@@ -501,6 +533,8 @@ class ClassroomUsageItem(BaseModel):
 class ClassroomUsageResponse(BaseModel):
     location_id: str
     items: list[ClassroomUsageItem] = Field(default_factory=list)
+
+    evidence: list[DataEvidence] = Field(default_factory=list)
 
 
 class ElectricityHistoryItem(BaseModel):
@@ -520,6 +554,8 @@ class ElectricityOverview(BaseModel):
     balance_updated_at: datetime | None = None
     daily_average: str = ""
     history: list[ElectricityHistoryItem] = Field(default_factory=list)
+
+    evidence: list[DataEvidence] = Field(default_factory=list)
 
 
 class TimetableParseResult(BaseModel):
@@ -553,6 +589,8 @@ class CampusDataPackage(BaseModel):
     place_count: int = Field(ge=0)
     notice_count: int = Field(ge=0)
 
+    evidence: list[DataEvidence] = Field(default_factory=list)
+
 
 class CampusDataPlace(BaseModel):
     place_id: str
@@ -560,10 +598,12 @@ class CampusDataPlace(BaseModel):
     category: str
     zone: str = ""
     aliases: list[str] = Field(default_factory=list)
-    open_now: bool
+    open_now: bool | None
     open_hours: str
     walk_minutes: int | None = Field(default=None, ge=0)
     source: str
+
+    evidence: list[DataEvidence] = Field(default_factory=list)
 
 
 class CampusRoutePoint(BaseModel):
@@ -580,6 +620,7 @@ class CampusRouteStep(BaseModel):
 
 
 class CampusRoute(BaseModel):
+    is_estimate: bool = True
     package_id: str
     package_version: str
     origin: CampusDataPlace
@@ -589,6 +630,8 @@ class CampusRoute(BaseModel):
     path: list[CampusRoutePoint] = Field(min_length=1)
     steps: list[CampusRouteStep] = Field(default_factory=list)
     note: str
+
+    evidence: list[DataEvidence] = Field(default_factory=list)
 
 
 class CampusNotice(BaseModel):
@@ -600,6 +643,8 @@ class CampusNotice(BaseModel):
     effective_from: datetime | None = None
     effective_to: datetime | None = None
     source: str
+
+    evidence: list[DataEvidence] = Field(default_factory=list)
 
 
 class CampusCorrectionCreate(BaseModel):

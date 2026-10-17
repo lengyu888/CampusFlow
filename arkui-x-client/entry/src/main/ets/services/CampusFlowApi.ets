@@ -34,7 +34,8 @@ import {
   TimetableSnapshot,
   TimetableSaveReceipt,
   UserContextResponse,
-  UserProfile
+  UserProfile,
+  WeatherForecast
 } from '../model/ApiModels';
 import { CampusFlowRequestError, localRequestFailure, requestFailure } from '../utils/AgentFeedback';
 
@@ -114,7 +115,7 @@ export class CampusFlowApi {
       if (response.responseCode < 200 || response.responseCode >= 300) {
         if (path === '/api/v1/chat' || path.startsWith('/api/v1/agent-runs') || path.startsWith('/api/v1/actions/') || path.startsWith('/api/v1/planning/') ||
           path === '/api/v1/tasks' || path.startsWith('/api/v1/tasks/') ||
-          path === '/api/v1/me/timetable' || path.startsWith('/api/v1/me/timetable/')) {
+          path === '/api/v1/me/timetable' || path.startsWith('/api/v1/me/timetable/') || path.startsWith('/api/v1/weather?')) {
           throw requestFailure(response.responseCode, text);
         }
         throw new CampusFlowRequestError(response.responseCode, 'HTTP_ERROR', this.formatError(response.responseCode, text));
@@ -142,6 +143,10 @@ export class CampusFlowApi {
     // Use an empty JSON object for body-less API actions so the request reliably
     // reaches the service (most importantly, so logout revokes the server token).
     await this.request<void>('/api/v1/auth/logout', http.RequestMethod.POST, '{}');
+  }
+
+  async weather(date: string): Promise<WeatherForecast> {
+    return this.request<WeatherForecast>(`/api/v1/weather?date=${encodeURIComponent(date)}`, http.RequestMethod.GET);
   }
 
   async register(email: string, password: string, displayName: string, apiKey: string): Promise<AuthResponse> {
