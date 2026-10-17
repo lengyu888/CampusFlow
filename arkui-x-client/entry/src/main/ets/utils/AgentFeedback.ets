@@ -44,6 +44,18 @@ function knownErrorMessage(code: string): string {
       return '无法连接 CampusFlow 服务，请检查网络和服务地址。';
     case 'INVALID_RESPONSE':
       return '服务返回了无法识别的结果，请稍后刷新核对。';
+    case 'TIMETABLE_STALE':
+      return '课表已被其他操作更新。当前草稿仍保留，请读取最新课表后重新核对。';
+    case 'TIMETABLE_OPERATION_CONFLICT':
+      return '这次保存标识已用于另一份课表，请先核对保存回执。';
+    case 'TIMETABLE_CLEAR_CONFIRMATION_REQUIRED':
+      return '清空课表需要再次明确确认。';
+    case 'TIMETABLE_INVALID':
+      return '课表内容未通过检查，请核对日期、时间、课程名称和重复课程。';
+    case 'TIMETABLE_OPERATION_NOT_FOUND':
+      return '未找到这次保存的回执，可使用原内容和原操作标识重试。';
+    case 'TIMETABLE_SAVE_FAILED':
+      return '未能确认课表保存结果，请先核对回执，不要重复新建保存操作。';
     default:
       return '';
   }

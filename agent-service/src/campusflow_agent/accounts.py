@@ -93,6 +93,14 @@ class AccountStore:
                     updated_at TEXT NOT NULL
                 );
 
+                CREATE TABLE IF NOT EXISTS timetable_operations (
+                    user_id TEXT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+                    operation_id TEXT NOT NULL,
+                    request_hash TEXT NOT NULL,
+                    receipt_json TEXT NOT NULL,
+                    PRIMARY KEY (user_id, operation_id)
+                );
+
                 CREATE TABLE IF NOT EXISTS hduhelp_oauth_states (
                     state_hash TEXT PRIMARY KEY,
                     user_id TEXT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,

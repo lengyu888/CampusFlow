@@ -76,6 +76,17 @@ export struct AppIcon {
         break;
       case 'chevron': this.line([[9, 5], [16, 12], [9, 19]]); break;
       case 'back': this.line([[15, 4], [7, 12], [15, 20]]); break;
+      case 'info':
+        this.context.moveTo(22, 12);
+        this.context.arc(12, 12, 10, 0, Math.PI * 2);
+        this.line([[12, 11], [12, 17]]);
+        this.line([[12, 7], [12, 7.4]]);
+        break;
+      case 'warning':
+        this.line([[12, 3], [22, 21], [2, 21], [12, 3]]);
+        this.line([[12, 9], [12, 14]]);
+        this.line([[12, 17], [12, 17.4]]);
+        break;
       case 'plus':
         this.line([[12, 4], [12, 20]]);
         this.line([[4, 12], [20, 12]]);

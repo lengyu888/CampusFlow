@@ -6,6 +6,7 @@ import { AppTheme } from '../theme/AppTheme';
 @Component
 export struct CampusPage {
   @Prop user: UserProfile;
+  onOpenTimetable: () => void = () => {};
   onOpenRoute: () => void = () => {};
   onOpenServices: () => void = () => {};
   onOpenSkills: () => void = () => {};
@@ -47,6 +48,7 @@ export struct CampusPage {
             .accessibilityText('打开个人设置').onClick(() => this.onOpenProfile())
         }.width('100%')
         Column({ space: 12 }) {
+          this.Entry('calendar', '我的课表', '手动维护、预览导入与检查变更', () => this.onOpenTimetable())
           this.Entry('route', '校园导航', '选择地点，查看路线和步行估算', () => this.onOpenRoute())
           this.Entry('classroom', '校园服务', '教室、借阅与个人校园信息', () => this.onOpenServices())
           this.Entry('skills', '能力管理', '查看权限，按需要启用或停用', () => this.onOpenSkills())

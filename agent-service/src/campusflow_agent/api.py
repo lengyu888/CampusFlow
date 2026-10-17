@@ -6,6 +6,7 @@ import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -84,12 +85,16 @@ from .schemas import (
     TaskCreateRequest,
     TaskStatusUpdate,
     TimetableParseResult,
+    TimetableSaveReceipt,
+    TimetableSaveRequest,
+    TimetableSnapshot,
     UserContextResponse,
     UserProfile,
     UserSettingsUpdate,
 )
 from .skills import SkillStore
 from .store import CampusStore
+from .timetable_service import TimetableError, TimetableService
 from .tool_presentation import present_tool_trace
 from .vision import ImageValidationError, VisionService
 
@@ -200,11 +205,13 @@ def create_app(
     hduhelp_service: HDUHelpService | None = None,
     hduhelp_access: HDUHelpAccess | None = None,
     replanning_service: ReplanningService | None = None,
+    timetable_service: TimetableService | None = None,
 ) -> FastAPI:
     settings = settings or get_settings()
     store = store or CampusStore(settings.database_path)
     account_store = account_store or AccountStore(settings.database_path)
     replanning_service = replanning_service or ReplanningService(account_store, store)
+    timetable_service = timetable_service or TimetableService(account_store, store)
     skill_store = skill_store or SkillStore(settings.database_path)
     api_key_vault = api_key_vault or ApiKeyVault(settings)
     hduhelp_service = hduhelp_service or HDUHelpService(settings)
@@ -247,7 +254,14 @@ def create_app(
             content={"detail": exc.detail, "code": exc.code},
         )
 
+    @app.exception_handler(TimetableError)
+    async def timetable_error_handler(request: Request, exc: TimetableError) -> JSONResponse:
+        return JSONResponse(
+            status_code=exc.status_code, content={"detail": exc.detail, "code": exc.code}
+        )
+
     app.state.replanning_service = replanning_service
+    app.state.timetable_service = timetable_service
 
     app.add_middleware(
         CORSMiddleware,
@@ -355,16 +369,6 @@ def create_app(
         except HDUHelpError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
 
-    def apply_subscribed_timetable(
-        user_id: str,
-        preview: ScheduleSubscriptionPreview,
-    ) -> list[dict]:
-        timetable = [item.model_dump(mode="json") for item in preview.entries]
-        account_store.replace_timetable(user_id, timetable)
-        _, campus_map = account_store.get_context(user_id)
-        store.set_user_context(user_id, timetable=timetable, campus_map=campus_map)
-        return timetable
-
     @app.get("/", include_in_schema=False)
     async def frontend() -> FileResponse:
         return FileResponse(web_dir / "index.html")
@@ -442,6 +446,27 @@ def create_app(
     async def user_context(user: CurrentUser) -> UserContextResponse:
         timetable, campus_map = account_store.get_context(user.user_id)
         return UserContextResponse(timetable=timetable, campus_map=campus_map)
+
+    @app.get("/api/v1/me/timetable", response_model=TimetableSnapshot)
+    async def timetable_snapshot(user: CurrentUser) -> TimetableSnapshot:
+        return timetable_service.snapshot(user.user_id)
+
+    @app.put("/api/v1/me/timetable", response_model=TimetableSaveReceipt)
+    async def save_timetable(
+        payload: TimetableSaveRequest, user: CurrentUser
+    ) -> TimetableSaveReceipt:
+        try:
+            return timetable_service.save(user.user_id, payload)
+        except sqlite3.Error as exc:
+            raise CampusFlowError(
+                500, "未能核实课表保存结果，请保留本次操作编号并核对回执。", "TIMETABLE_SAVE_FAILED"
+            ) from exc
+
+    @app.get(
+        "/api/v1/me/timetable/operations/{operation_id}", response_model=TimetableSaveReceipt
+    )
+    async def timetable_receipt(operation_id: UUID, user: CurrentUser) -> TimetableSaveReceipt:
+        return timetable_service.receipt(user.user_id, operation_id)
 
     @app.get("/api/v1/hduhelp/status", response_model=HDUHelpConnectionStatus)
     async def get_hduhelp_status(user: CurrentUser) -> HDUHelpConnectionStatus:
@@ -729,19 +754,26 @@ def create_app(
         user: CurrentUser,
     ) -> ScheduleSubscriptionSyncResponse:
         raw_url = payload.url.get_secret_value()
+        expected_revision = timetable_service.snapshot(user.user_id).revision
+        expected_subscription = account_store.get_schedule_subscription_secret(user.user_id)
         try:
             preview = await schedule_subscription_service.fetch(raw_url)
-            timetable = apply_subscribed_timetable(user.user_id, preview)
-            account_store.save_schedule_subscription(
-                user_id=user.user_id,
+            imported_count = timetable_service.replace_subscription(
+                user.user_id, entries=preview.entries, expected_revision=expected_revision,
+                expected_subscription=expected_subscription,
                 encrypted_url=api_key_vault.encrypt(raw_url),
-                event_count=len(timetable),
             )
         except ScheduleSubscriptionError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
+        except sqlite3.Error as exc:
+            raise CampusFlowError(
+                500,
+                "未能核实订阅保存结果，请读取当前课表和订阅状态后再操作。",
+                "TIMETABLE_SAVE_FAILED",
+            ) from exc
         return ScheduleSubscriptionSyncResponse(
             status=subscription_status(user.user_id),
-            imported_count=len(timetable),
+            imported_count=imported_count,
             warnings=preview.warnings,
         )
 
@@ -755,14 +787,14 @@ def create_app(
         encrypted = account_store.get_schedule_subscription_secret(user.user_id)
         if not encrypted:
             raise HTTPException(status_code=404, detail="尚未配置课表订阅。")
+        expected_revision = timetable_service.snapshot(user.user_id).revision
         try:
             raw_url = api_key_vault.decrypt(encrypted)
             preview = await schedule_subscription_service.fetch(raw_url)
-            timetable = apply_subscribed_timetable(user.user_id, preview)
-            account_store.save_schedule_subscription(
-                user_id=user.user_id,
+            imported_count = timetable_service.replace_subscription(
+                user.user_id, entries=preview.entries, expected_revision=expected_revision,
+                expected_subscription=encrypted,
                 encrypted_url=encrypted,
-                event_count=len(timetable),
             )
         except ScheduleSubscriptionError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -771,9 +803,13 @@ def create_app(
                 status_code=503,
                 detail="已保存的课表订阅凭据无法解密，请重新连接。",
             ) from exc
+        except sqlite3.Error as exc:
+            raise CampusFlowError(
+                500, "未能核实同步结果，请读取当前课表和订阅状态后再操作。", "TIMETABLE_SAVE_FAILED"
+            ) from exc
         return ScheduleSubscriptionSyncResponse(
             status=subscription_status(user.user_id),
-            imported_count=len(timetable),
+            imported_count=imported_count,
             warnings=preview.warnings,
         )
 

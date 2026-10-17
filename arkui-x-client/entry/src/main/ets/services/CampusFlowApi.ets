@@ -27,6 +27,8 @@ import {
   SessionSummary,
   SyncResponse,
   TimetableEntry,
+  TimetableSnapshot,
+  TimetableSaveReceipt,
   UserContextResponse,
   UserProfile
 } from '../model/ApiModels';
@@ -106,7 +108,8 @@ export class CampusFlowApi {
       }
       const text = response.result as string;
       if (response.responseCode < 200 || response.responseCode >= 300) {
-        if (path === '/api/v1/chat' || path.startsWith('/api/v1/actions/') || path.startsWith('/api/v1/planning/')) {
+        if (path === '/api/v1/chat' || path.startsWith('/api/v1/actions/') || path.startsWith('/api/v1/planning/') ||
+          path === '/api/v1/me/timetable' || path.startsWith('/api/v1/me/timetable/')) {
           throw requestFailure(response.responseCode, text);
         }
         throw new CampusFlowRequestError(response.responseCode, 'HTTP_ERROR', this.formatError(response.responseCode, text));
@@ -154,6 +157,22 @@ export class CampusFlowApi {
 
   async context(): Promise<UserContextResponse> {
     return this.request<UserContextResponse>('/api/v1/me/context', http.RequestMethod.GET);
+  }
+
+  async timetable(): Promise<TimetableSnapshot> {
+    return this.request<TimetableSnapshot>('/api/v1/me/timetable', http.RequestMethod.GET);
+  }
+
+  async saveTimetable(entries: TimetableEntry[], expectedRevision: string,
+    operationId: string, confirmClear: boolean = false): Promise<TimetableSaveReceipt> {
+    return this.request<TimetableSaveReceipt>('/api/v1/me/timetable', http.RequestMethod.PUT,
+      JSON.stringify({ entries: entries, expected_revision: expectedRevision,
+        operation_id: operationId, confirm_clear: confirmClear }));
+  }
+
+  async timetableOperation(operationId: string): Promise<TimetableSaveReceipt> {
+    return this.request<TimetableSaveReceipt>(`/api/v1/me/timetable/operations/${encodeURIComponent(operationId)}`,
+      http.RequestMethod.GET);
   }
 
   async chat(sessionId: string, model: string, message: string): Promise<ChatResponse> {

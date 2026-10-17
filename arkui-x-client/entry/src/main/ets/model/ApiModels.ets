@@ -26,6 +26,20 @@ export interface TimetableEntry {
   teacher: string;
 }
 
+export interface TimetableSnapshot {
+  entries: TimetableEntry[];
+  revision: string;
+}
+
+export interface TimetableSaveReceipt {
+  operation_id: string;
+  status: string;
+  previous_revision: string;
+  revision: string;
+  entry_count: number;
+  applied_at: string;
+}
+
 export interface ScheduleSubscriptionPreview {
   provider: string;
   calendar_name: string;
