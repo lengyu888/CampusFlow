@@ -15,6 +15,8 @@ import { RoutePage } from './RoutePage';
 import { SkillsPage } from './SkillsPage';
 import { AppIcon } from '../components/AppIcon';
 import { AppTheme } from '../theme/AppTheme';
+import { CampusPage } from './CampusPage';
+import { AppNavigationState, createNavigation, currentRoute, selectRoot, openSecondary, backNavigation, isRootRoute, hasBack } from '../utils/AppNavigation';
 
 @Entry
 @Component
@@ -38,7 +40,15 @@ struct Index {
   @State private promptRevision: number = 0;
   @State private homeRefresh: number = 0;
   @State private planRefresh: number = 0;
-  @State private returnTab: number = 0;
+  @State private navigation: AppNavigationState = createNavigation();
+  @State private focusTaskId: string = '';
+  @State private focusPlanId: string = '';
+  @State private focusRevision: number = 0;
+  @State private planRequestedView: string = '';
+  @State private planViewRevision: number = 0;
+  @State private planBackRevision: number = 0;
+  @State private planInnerActive: boolean = false;
+  private focusOrigin: AppNavigationState | null = null;
   @State private contentOpacity: number = 1;
   @State private contentOffset: number = 0;
   @State private user: UserProfile = {
@@ -61,8 +71,12 @@ struct Index {
       this.refreshLocalHistory();
       return true;
     }
-    if (this.activeTab > 4) {
-      this.selectTab(this.returnTab);
+    if (this.activeTab === 2 && this.planInnerActive) {
+      this.planBackRevision++;
+      return true;
+    }
+    if (hasBack(this.navigation)) {
+      this.goBack();
       return true;
     }
     return false;
@@ -90,7 +104,7 @@ struct Index {
       this.cacheNotice = '本机保存暂不可用，当前可联网使用；新的对话尚不能离线回看。';
     }
     this.user = auth.user;
-    this.activeTab = 0;
+    this.resetNavigation();
     this.agentPrompt = '';
     this.token = auth.access_token;
     this.agentChatBusy = false;
@@ -117,7 +131,7 @@ struct Index {
     this.cacheScope = '';
     this.localHistoryCount = 0;
     this.offlineHistory = false;
-    this.activeTab = 0;
+    this.resetNavigation();
     this.agentPrompt = '';
     this.agentChatBusy = false;
     this.historyDeleteBusy = false;
@@ -140,32 +154,74 @@ struct Index {
     }
   }
 
-  private selectTab(tab: number): void {
-    if (tab === this.activeTab) {
-      return;
-    }
-    if (tab > 4 && this.activeTab <= 4) {
-      this.returnTab = this.activeTab;
-    }
-    this.activeTab = tab;
-    if (tab === 0) {
-      this.homeRefresh++;
-    } else if (tab === 2) {
-      this.planRefresh++;
-    }
-    const duration = AppTheme.motion(220);
-    this.contentOpacity = duration === 0 ? 1 : 0.6;
-    this.contentOffset = duration === 0 ? 0 : 5;
+  private resetNavigation(): void {
+    this.navigation = createNavigation();
+    this.activeTab = 0;
+    this.focusTaskId = '';
+    this.focusPlanId = '';
+    this.focusRevision++;
+    this.focusOrigin = null;
+    this.planRequestedView = '';
+    this.planViewRevision++;
+    this.planInnerActive = false;
+  }
+
+  private applyNavigation(next: AppNavigationState): void {
+    const previous = this.activeTab;
+    this.navigation = next;
+    this.activeTab = currentRoute(next);
+    if (this.activeTab === previous) { return; }
+    if (this.activeTab === 0) { this.homeRefresh++; }
+    else if (this.activeTab === 2) { this.planRefresh++; }
+    const duration = AppTheme.motion(180);
+    this.contentOpacity = duration === 0 ? 1 : 0.65;
+    this.contentOffset = duration === 0 ? 0 : 4;
     this.getUIContext().animateTo({ duration: duration, curve: Curve.EaseOut }, () => {
       this.contentOpacity = 1;
       this.contentOffset = 0;
     });
   }
 
+  private selectTab(tab: number): void {
+    this.applyNavigation(isRootRoute(tab) ? selectRoot(this.navigation, tab) : openSecondary(this.navigation, tab));
+  }
+
+  private goBack(): void {
+    this.applyNavigation(backNavigation(this.navigation));
+  }
+
   private openAgentWithPrompt(prompt: string): void {
     this.agentPrompt = prompt;
     this.promptRevision++;
-    this.selectTab(1);
+    this.applyNavigation(selectRoot(this.navigation, 1, true));
+  }
+
+  private openPlanList(view: string = 'goals'): void {
+    this.planRequestedView = view;
+    this.planViewRevision++;
+    this.focusTaskId = '';
+    this.focusPlanId = '';
+    this.focusOrigin = null;
+    this.focusRevision++;
+    this.applyNavigation(selectRoot(this.navigation, 2, true));
+  }
+
+  private openPlanDetails(taskId: string, planId: string): void {
+    if ((taskId.length === 0) === (planId.length === 0)) { return; }
+    this.focusOrigin = this.navigation;
+    this.focusTaskId = taskId;
+    this.focusPlanId = planId;
+    this.focusRevision++;
+    this.applyNavigation(selectRoot(this.navigation, 2, true));
+  }
+
+  private closePlanFocus(): void {
+    const origin = this.focusOrigin;
+    this.focusTaskId = '';
+    this.focusPlanId = '';
+    this.focusOrigin = null;
+    this.focusRevision++;
+    if (origin !== null) { this.applyNavigation(origin); }
   }
 
   private timetableChanged(): void {
@@ -190,8 +246,11 @@ struct Index {
   private pageContent() {
     Stack({ alignContent: Alignment.TopStart }) {
       HomePage({ baseUrl: this.baseUrl, token: this.token, user: this.user,
-        refreshKey: this.homeRefresh,
-        onOpenAgent: () => this.selectTab(1), onOpenPlan: () => this.selectTab(2),
+        refreshKey: this.homeRefresh, active: this.activeTab === 0 && this.voiceForeground,
+        onOpenAgent: () => this.applyNavigation(selectRoot(this.navigation, 1, true)),
+        onOpenPlan: (view) => this.openPlanList(view),
+        onOpenTaskDetails: (id) => this.openPlanDetails(id, ''),
+        onOpenPlanDetails: (id) => this.openPlanDetails('', id),
         onOpenRoute: () => this.selectTab(6),
         onOpenServices: () => this.selectTab(7), onOpenProfile: () => this.selectTab(4) })
         .visibility(this.activeTab === 0 ? Visibility.Visible : Visibility.Hidden)
@@ -203,20 +262,34 @@ struct Index {
         onChatBusyChange: (busy) => this.agentChatBusy = busy,
         promptRevision: this.promptRevision,
         onOpenHistory: () => this.selectTab(5), onOpenRoute: () => this.selectTab(6),
-        onOpenPlan: () => this.selectTab(2), onOpenProfile: () => this.selectTab(4) })
+        onOpenPlan: () => this.openPlanList(), onOpenProfile: () => this.selectTab(4) })
         .visibility(this.activeTab === 1 ? Visibility.Visible : Visibility.Hidden)
       PlanCenterPage({ baseUrl: this.baseUrl, token: this.token,
-        refreshKey: this.planRefresh, active: this.activeTab === 2,
+        refreshKey: this.planRefresh, active: this.activeTab === 2 && this.voiceForeground,
+        focusTaskId: this.focusTaskId, focusPlanId: this.focusPlanId, focusRevision: this.focusRevision,
+        requestedView: this.planRequestedView, viewRevision: this.planViewRevision,
+        backRevision: this.planBackRevision, onInnerNavigationChanged: (active) => this.planInnerActive = active,
+        onCloseFocus: () => this.closePlanFocus(),
         onPlanningChanged: () => this.homeRefresh++,
         onOpenAgent: (prompt) => this.openAgentWithPrompt(prompt) })
         .visibility(this.activeTab === 2 ? Visibility.Visible : Visibility.Hidden)
-      SkillsPage({ baseUrl: this.baseUrl, token: this.token })
-        .visibility(this.activeTab === 3 ? Visibility.Visible : Visibility.Hidden)
-      ProfilePage({ baseUrl: this.baseUrl, token: this.token, user: this.user,
-        onUserChanged: (updated) => this.user = updated, onLogout: () => this.logout(),
-        onTimetableChanged: () => this.timetableChanged(), onOpenPlan: () => this.selectTab(2),
-        onOpenAgent: (prompt) => this.openAgentWithPrompt(prompt) })
-        .visibility(this.activeTab === 4 ? Visibility.Visible : Visibility.Hidden)
+      CampusPage({ user: this.user, onOpenRoute: () => this.selectTab(6),
+        onOpenServices: () => this.selectTab(7), onOpenSkills: () => this.selectTab(3),
+        onOpenProfile: () => this.selectTab(4), onOpenAgent: (prompt) => this.openAgentWithPrompt(prompt) })
+        .visibility(this.activeTab === 8 ? Visibility.Visible : Visibility.Hidden)
+      Column() {
+        this.SecondaryHeader('能力管理')
+        Column() { SkillsPage({ baseUrl: this.baseUrl, token: this.token }) }.layoutWeight(1).width('100%')
+      }.width('100%').height('100%').visibility(this.activeTab === 3 ? Visibility.Visible : Visibility.Hidden)
+      Column() {
+        this.SecondaryHeader('个人设置')
+        Column() {
+          ProfilePage({ baseUrl: this.baseUrl, token: this.token, user: this.user,
+            onUserChanged: (updated) => this.user = updated, onLogout: () => this.logout(),
+            onTimetableChanged: () => this.timetableChanged(), onOpenPlan: () => this.openPlanList(),
+            onOpenAgent: (prompt) => this.openAgentWithPrompt(prompt) })
+        }.layoutWeight(1).width('100%')
+      }.width('100%').height('100%').visibility(this.activeTab === 4 ? Visibility.Visible : Visibility.Hidden)
       if (this.activeTab === 5) {
         HistoryPage({ baseUrl: this.baseUrl, token: this.token, historyScope: this.cacheScope,
           chatBusy: this.agentChatBusy,
@@ -224,14 +297,26 @@ struct Index {
           accountRevision: this.authRevision,
           onSessionDeleted: (id, revision) => this.sessionDeleted(id, revision),
           onDeleteBusyChange: (busy, revision) => this.deletionBusyChanged(busy, revision),
-          onBack: () => this.selectTab(this.returnTab) })
+          onBack: () => this.goBack() })
       } else if (this.activeTab === 6) {
-        RoutePage({ baseUrl: this.baseUrl, token: this.token, onBack: () => this.selectTab(this.returnTab) })
+        RoutePage({ baseUrl: this.baseUrl, token: this.token, onBack: () => this.goBack() })
       } else if (this.activeTab === 7) {
-        CampusServicesPage({ baseUrl: this.baseUrl, token: this.token, onBack: () => this.selectTab(this.returnTab),
+        CampusServicesPage({ baseUrl: this.baseUrl, token: this.token, onBack: () => this.goBack(),
           onOpenAgent: (prompt) => this.openAgentWithPrompt(prompt) })
       }
     }.width('100%').height('100%')
+  }
+
+  @Builder
+  private SecondaryHeader(title: string) {
+    Row({ space: 8 }) {
+      Button({ type: ButtonType.Normal }) {
+        AppIcon({ name: 'back', iconSize: 22, color: AppTheme.actionBlue })
+      }.width(48).height(48).backgroundColor(Color.Transparent).borderRadius(AppTheme.controlRadius)
+        .accessibilityText('返回上一页').onClick(() => this.goBack())
+      Text(title).fontSize(18).fontWeight(FontWeight.Medium).fontColor(AppTheme.ink).layoutWeight(1)
+    }.width('100%').padding({ left: 8, right: 20, top: 4, bottom: 4 }).backgroundColor(AppTheme.surface)
+      .border({ width: { bottom: 1 }, color: AppTheme.line })
   }
 
   @Builder
@@ -240,7 +325,7 @@ struct Index {
       Column({ space: 4 }) {
         AppIcon({ name: icon, iconSize: 23,
           color: this.selectedTab() === tab ? AppTheme.blue : AppTheme.secondary })
-        Text(label).fontSize(10).fontWeight(this.selectedTab() === tab ? FontWeight.Medium : FontWeight.Regular)
+        Text(label).fontSize(12).fontWeight(this.selectedTab() === tab ? FontWeight.Medium : FontWeight.Regular)
           .fontColor(this.selectedTab() === tab ? AppTheme.blue : AppTheme.secondary)
       }.height(52).justifyContent(FlexAlign.Center)
     }.layoutWeight(1).height(56).backgroundColor(Color.Transparent).borderRadius(16)
@@ -249,7 +334,7 @@ struct Index {
   }
 
   private selectedTab(): number {
-    return this.activeTab <= 4 ? this.activeTab : this.returnTab;
+    return this.navigation.root;
   }
 
   build() {
@@ -275,17 +360,16 @@ struct Index {
           this.pageContent()
         }.layoutWeight(1).width('100%').clip(true)
           .opacity(this.contentOpacity).translate({ y: this.contentOffset })
-        Row() {
-          this.navItem(0, 'home', '今日')
-          this.navItem(1, 'agent', 'Agent')
-          this.navItem(2, 'calendar', '规划')
-          this.navItem(3, 'skills', 'Skills')
-          this.navItem(4, 'person', '我的')
+        if (isRootRoute(this.activeTab) && !(this.activeTab === 2 && this.planInnerActive)) {
+          Row() {
+            this.navItem(0, 'home', '今日')
+            this.navItem(1, 'agent', 'Agent')
+            this.navItem(2, 'calendar', '计划')
+            this.navItem(8, 'classroom', '校园')
+          }.width('100%').constraintSize({ minHeight: 64 })
+            .padding({ left: 10, right: 10, bottom: 4 }).backgroundColor(AppTheme.surface)
+            .border({ width: { top: 1 }, color: AppTheme.line })
         }
-        .width('100%').height(64)
-        .padding({ left: 10, right: 10, bottom: 4 })
-        .backgroundColor('#F9FFFFFF').backgroundBlurStyle(BlurStyle.Thin)
-        .border({ width: { top: 0.5 }, color: AppTheme.separator })
       }.width('100%').height('100%').backgroundColor(AppTheme.bg)
     }
   }

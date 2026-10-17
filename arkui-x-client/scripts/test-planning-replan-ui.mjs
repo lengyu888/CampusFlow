@@ -11,6 +11,7 @@ async function utility(name) {
 }
 const { CampusFlowRequestError } = await utility('AgentFeedback');
 const { validateTimetableEntry } = await utility('OnboardingTimetable');
+const agenda = await utility('DailyAgenda');
 const replanSource = withoutImports(read('utils/PlanningReplan.ets')).replace(/^export /gm, '');
 const Replan = new Function('CampusFlowRequestError', 'validateTimetableEntry',
   stripTypeScriptTypes(replanSource) + '\nreturn PlanningReplanController;')(CampusFlowRequestError, validateTimetableEntry);
@@ -178,7 +179,8 @@ function planFixture(context, planning) {
     async planning() { calls.push('planning'); return planning(); }
   }
   const Plan = component('pages/PlanCenterPage.ets', 'PlanCenterPage',
-    ['CampusFlowApi', 'TextInputController', 'AppTheme', 'Curve'], [Api, class {}, { motion: () => 0 }, { EaseOut: '' }]);
+    ['CampusFlowApi', 'TextInputController', 'AppTheme', 'Curve', 'Scroller', 'shanghaiDate', 'buildDailyAgenda'],
+    [Api, class {}, { motion: () => 0 }, { EaseOut: '' }, class {}, agenda.shanghaiDate, agenda.buildDailyAgenda]);
   const page = new Plan(); page.getUIContext = () => ({ animateTo: (_options, update) => update() });
   return { page, calls };
 }
@@ -217,3 +219,28 @@ test('PlanCenter hidden or destroyed during refresh discards late data without a
 
 // These tests execute production non-Builder methods and the real controller with mocked I/O.
 // They do not compile ArkTS builders or prove native rendering, keyboard or accessibility behavior.
+
+
+test('compact conflict summary uses the same controller and preserves query-only state after folding', async () => {
+  const f = panelFixture({ confirm: async () => { throw new Error('timeout'); } });
+  f.page.compact = true;
+  let opened = 0; f.page.onOpenDetails = () => opened++;
+  f.page.aboutToAppear(); await tick();
+  const controller = f.page.replanner();
+  assert.match(f.page.summaryTitle(), /1 项任务/);
+  f.page.openDetails(); assert.equal(opened, 1);
+  f.page.compact = false;
+  await controller.preview(); await controller.confirm();
+  assert.equal(f.page.state.phase, 'uncertain');
+  const before = f.calls.length;
+  f.page.compact = true;
+  assert.equal(f.page.replanner(), controller);
+  assert.match(f.page.summaryTitle(), /核对结果/);
+  assert.match(f.page.summaryDetail(), /勿重复提交/);
+  f.page.openDetails(); f.page.compact = false;
+  assert.equal(opened, 2); assert.equal(f.calls.length, before);
+  await controller.confirm(); await controller.preview(); controller.dismiss();
+  assert.equal(f.calls.length, before, 'folding cannot revive a second POST');
+  f.page.active = false; f.page.activityChanged(); f.page.openDetails();
+  assert.equal(opened, 2, 'hidden summary cannot navigate');
+});

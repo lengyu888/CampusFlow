@@ -3,6 +3,9 @@ import { readFileSync } from 'node:fs';
 import { stripTypeScriptTypes } from 'node:module';
 import { test } from 'node:test';
 
+const agendaSource = readFileSync(new URL('../entry/src/main/ets/utils/DailyAgenda.ets', import.meta.url), 'utf8').replace(/^import [^\n]+;\r?\n/gm, '');
+const agenda = await import(`data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(agendaSource)).toString('base64')}`);
+
 const source = readFileSync(new URL('../entry/src/main/ets/pages/PlanCenterPage.ets', import.meta.url), 'utf8');
 const firstBuilder = source.indexOf('\n  @Builder');
 assert.ok(firstBuilder > 0, 'the non-UI method boundary must exist');
@@ -13,11 +16,11 @@ const controllerSource = source.slice(0, firstBuilder)
   .replace(/^@Component\r?\n/m, '')
   .replace(/@(Prop|State)\s+|@Watch\('[^']+'\)\s*/g, '')
   .replace('export struct PlanCenterPage', 'class PlanCenterPage') + '\n}\n';
-const createController = new Function('TextInputController', 'AppTheme', 'Curve',
+const createController = new Function('TextInputController', 'AppTheme', 'Curve', 'Scroller', 'shanghaiDate', 'buildDailyAgenda',
   stripTypeScriptTypes(controllerSource) + '\nreturn PlanCenterPage;');
 
 function page() {
-  const Controller = createController(class TextInputController {}, { motion: () => 0 }, { EaseOut: 'ease-out' });
+  const Controller = createController(class TextInputController {}, { motion: () => 0 }, { EaseOut: 'ease-out' }, class {}, agenda.shanghaiDate, agenda.buildDailyAgenda);
   const instance = new Controller();
   instance.getUIContext = () => ({ animateTo: (_options, update) => update() });
   return instance;
