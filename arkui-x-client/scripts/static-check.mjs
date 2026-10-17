@@ -47,14 +47,19 @@ for (const path of configFiles) {
   }
 }
 
-const importPattern = /from\s+['"](\.\.?\/[^'"]+)['"]/g;
+const importPattern = /from\s+['"](\.\.?\/[^'"]+)['"]|import\(\s*['"](\.\.?\/[^'"]+)['"]\s*\)/g;
 for (const path of arkFiles) {
   const source = readFileSync(path, 'utf8');
   for (const match of source.matchAll(importPattern)) {
-    const target = normalize(resolve(dirname(path), match[1]));
+    const imported = match[1] ?? match[2];
+    const target = normalize(resolve(dirname(path), imported));
     if (!existsSync(`${target}.ets`) && !existsSync(`${target}.ts`) && !existsSync(target)) {
-      failures.push(`无法解析导入：${path.replace(root, '')} -> ${match[1]}`);
+      failures.push(`无法解析导入：${path.replace(root, '')} -> ${imported}`);
     }
+  }
+  if (source.includes('@kit.CoreSpeechKit') &&
+      path !== join(root, 'entry/src/main/ets/services/HarmonyVoiceDriver.ets')) {
+    failures.push(`鸿蒙语音 API 必须隔离在 HarmonyVoiceDriver，不能直接载入共享页面：${path.replace(root, '')}`);
   }
 }
 

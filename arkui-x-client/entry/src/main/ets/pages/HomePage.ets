@@ -55,6 +55,7 @@ export struct HomePage {
   }
 
   private async loadToday(): Promise<void> {
+    this.loading = true;
     try {
       const api = new CampusFlowApi(this.baseUrl, this.token);
       const context: UserContextResponse = await api.context();
@@ -123,187 +124,249 @@ export struct HomePage {
 
   @Builder
   private PlanProgressCard(plan: PlanSummary) {
-    Column({ space: 10 }) {
-      Row() {
-        Column({ space: 3 }) {
-          Text(plan.title).fontSize(16).fontWeight(FontWeight.Medium).fontColor(AppTheme.ink)
+    Column({ space: 12 }) {
+      Row({ space: 12 }) {
+        Column({ space: 4 }) {
+          Text(plan.title).fontSize(AppTheme.bodySize).fontWeight(FontWeight.Medium)
+            .fontColor(AppTheme.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
           Text(plan.target_date === null ? '持续计划' : `目标 ${plan.target_date}`)
-            .fontSize(12).fontColor(AppTheme.secondary)
+            .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
         }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-        Column({ space: 3 }) {
-          Text(`${plan.progress}%`).fontSize(22).fontWeight(FontWeight.Bold).fontColor(AppTheme.blue)
-          Text(plan.status === 'overdue' ? '已逾期' : '进行中').fontSize(12)
-            .fontColor(plan.status === 'overdue' ? AppTheme.red : AppTheme.secondary)
+        Column({ space: 4 }) {
+          Text(`${plan.progress}%`).fontSize(24).fontWeight(FontWeight.Bold).fontColor(AppTheme.actionBlue)
+          Text(plan.status === 'overdue' ? '已逾期' : '进行中').fontSize(AppTheme.metaSize)
+            .fontColor(plan.status === 'overdue' ? AppTheme.red : AppTheme.quiet)
         }.alignItems(HorizontalAlign.End)
-      }.width('100%')
+      }.width('100%').alignItems(VerticalAlign.Top)
       if (plan.summary.length > 0) {
-        Text(plan.summary).fontSize(14).lineHeight(21).fontColor(AppTheme.secondary).maxLines(3)
-          .textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
+        Text(plan.summary).fontSize(AppTheme.bodySize).fontColor(AppTheme.quiet)
+          .maxLines(3).textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
+          .wordBreak(WordBreak.BREAK_WORD)
       }
       Row() {
-        Row().height(5).width(`${plan.progress}%`).backgroundColor(AppTheme.blue).borderRadius(3)
-      }.width('100%').height(5).backgroundColor(AppTheme.field).borderRadius(3)
-      Row() {
-        Text(`${plan.completed_count}/${plan.task_count} 项完成`).fontSize(12).fontColor(AppTheme.secondary)
-        Blank()
-        if (plan.status === 'overdue') {
-          Button(this.planDeletePendingId === plan.plan_id ? '确认删除' : '删除逾期计划')
-            .height(44).fontSize(12)
-            .fontColor(this.planDeletePendingId === plan.plan_id ? AppTheme.surface : AppTheme.red)
-            .backgroundColor(this.planDeletePendingId === plan.plan_id ? AppTheme.red : '#FFF0EE')
-            .borderRadius(10).onClick(() => this.requestDeletePlan(plan))
-        }
+        Row().height(4).width(`${plan.progress}%`).backgroundColor(AppTheme.actionBlue).borderRadius(2)
+      }.width('100%').height(4).backgroundColor(AppTheme.line).borderRadius(2)
+      Row({ space: 12 }) {
+        Text(`${plan.completed_count}/${plan.task_count} 项完成`)
+          .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).layoutWeight(1)
+        Button({ type: ButtonType.Normal }) {
+          Text('查看计划').fontSize(14).fontColor(AppTheme.actionBlue).wordBreak(WordBreak.BREAK_WORD)
+        }.constraintSize({ minHeight: 48, minWidth: 80 }).padding({ left: 8, right: 8, top: 8, bottom: 8 })
+          .backgroundColor(Color.Transparent).borderRadius(AppTheme.controlRadius)
+          .onClick(() => this.onOpenPlan())
       }.width('100%')
-    }.width('100%').padding(18).backgroundColor(AppTheme.surface).borderRadius(18)
+      if (plan.status === 'overdue') {
+        Button({ type: ButtonType.Normal }) {
+          Text(this.planDeletePendingId === plan.plan_id ? '确认删除' : '删除逾期计划')
+            .fontSize(14).width('100%').textAlign(TextAlign.Center).wordBreak(WordBreak.BREAK_WORD)
+            .fontColor(this.planDeletePendingId === plan.plan_id ? AppTheme.surface : AppTheme.red)
+        }.width('100%').constraintSize({ minHeight: 48 }).padding(12)
+          .backgroundColor(this.planDeletePendingId === plan.plan_id ? AppTheme.red : AppTheme.redSoft)
+          .borderRadius(AppTheme.controlRadius).onClick(() => this.requestDeletePlan(plan))
+      }
+    }.width('100%').alignItems(HorizontalAlign.Start).padding(AppTheme.cardInset)
+      .backgroundColor(AppTheme.surface).borderRadius(AppTheme.cardRadius)
   }
 
   @Builder
   private TodayTaskCard(task: PlanningTask) {
-    Row({ space: 12 }) {
+    Row({ space: 8 }) {
       Button({ type: ButtonType.Circle }) {
-        Circle().width(24).height(24).fill(Color.Transparent).stroke('#AEAEB2').strokeWidth(1.5)
-      }.width(44).height(44).backgroundColor(Color.Transparent)
+        Circle().width(24).height(24).fill(Color.Transparent).stroke(AppTheme.quiet).strokeWidth(1.5)
+      }.width(48).height(48).backgroundColor(Color.Transparent)
         .accessibilityText(`完成${task.title}`).onClick(() => this.toggleTask(task))
       Column({ space: 4 }) {
-        Text(task.title).fontSize(15).fontWeight(FontWeight.Medium).fontColor(AppTheme.ink)
-        Text(this.taskSchedule(task)).fontSize(12).fontColor(AppTheme.secondary)
+        Text(task.title).fontSize(AppTheme.bodySize).fontWeight(FontWeight.Medium).fontColor(AppTheme.ink)
+          .width('100%').wordBreak(WordBreak.BREAK_WORD)
+        Text(`${task.source === 'agent' ? '计划' : '待办'} · ${this.taskSchedule(task)}`)
+          .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+          .wordBreak(WordBreak.BREAK_WORD)
       }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-      Text(task.source === 'agent' ? '计划' : '待办').fontSize(11).fontColor(AppTheme.blue)
-        .padding({ left: 7, right: 7, top: 3, bottom: 3 }).backgroundColor(AppTheme.blueSoft).borderRadius(8)
-    }.width('100%').padding(12).backgroundColor(AppTheme.surface).borderRadius(18)
+    }.width('100%').alignItems(VerticalAlign.Center)
+      .padding({ left: 8, right: AppTheme.cardInset, top: 8, bottom: 8 })
+  }
+
+  @Builder
+  private DailyShortcuts() {
+    Column({ space: 12 }) {
+      Button({ type: ButtonType.Normal }) {
+        Row({ space: 12 }) {
+          AppIcon({ name: 'agent', iconSize: 24, color: AppTheme.actionBlue })
+          Column({ space: 4 }) {
+            Text('让 Agent 帮我安排').fontSize(AppTheme.bodySize).fontWeight(FontWeight.Medium)
+              .fontColor(AppTheme.actionBlue).width('100%').wordBreak(WordBreak.BREAK_WORD)
+            Text('结合课表和待办，先预览再确认').fontSize(AppTheme.metaSize)
+              .fontColor(AppTheme.quiet).width('100%').wordBreak(WordBreak.BREAK_WORD)
+          }.alignItems(HorizontalAlign.Start).layoutWeight(1)
+          AppIcon({ name: 'chevron', iconSize: 16, color: AppTheme.actionBlue })
+        }.width('100%')
+      }.width('100%').constraintSize({ minHeight: 64 }).padding(AppTheme.cardInset)
+        .backgroundColor(AppTheme.blueSoft).borderRadius(AppTheme.cardRadius)
+        .onClick(() => this.onOpenAgent())
+      Row({ space: 12 }) {
+        Button({ type: ButtonType.Normal }) {
+          Row({ space: 8 }) {
+            AppIcon({ name: 'route', iconSize: 20, color: AppTheme.actionBlue })
+            Text('校园导航').fontSize(14).fontWeight(FontWeight.Medium).fontColor(AppTheme.ink)
+              .layoutWeight(1).wordBreak(WordBreak.BREAK_WORD)
+          }.width('100%')
+        }.layoutWeight(1).constraintSize({ minHeight: 56 }).padding(12)
+          .backgroundColor(AppTheme.surface).borderRadius(AppTheme.controlRadius)
+          .accessibilityText('校园导航，查看路线').onClick(() => this.onOpenRoute())
+        Button({ type: ButtonType.Normal }) {
+          Row({ space: 8 }) {
+            AppIcon({ name: 'classroom', iconSize: 20, color: AppTheme.quiet })
+            Text('校园服务').fontSize(14).fontWeight(FontWeight.Medium).fontColor(AppTheme.ink)
+              .layoutWeight(1).wordBreak(WordBreak.BREAK_WORD)
+          }.width('100%')
+        }.layoutWeight(1).constraintSize({ minHeight: 56 }).padding(12)
+          .backgroundColor(AppTheme.surface).borderRadius(AppTheme.controlRadius)
+          .accessibilityText('校园服务，查询教室与生活信息').onClick(() => this.onOpenServices())
+      }.width('100%')
+    }.width('100%')
   }
 
   build() {
     Scroll() {
-      Column({ space: 24 }) {
-        Row() {
+      Column({ space: AppTheme.sectionGap }) {
+        Row({ space: 12 }) {
           Column({ space: 4 }) {
-            Text(this.dateLabel()).fontSize(13).fontWeight(FontWeight.Medium).fontColor(AppTheme.secondary)
-            Text('今日').fontSize(34).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
+            Text('今日').fontSize(AppTheme.pageTitle).fontWeight(FontWeight.Bold)
+              .fontColor(AppTheme.ink).width('100%')
+            Text(`${this.dateLabel()} · ${this.greeting()}`).fontSize(AppTheme.metaSize)
+              .fontColor(AppTheme.quiet).width('100%').wordBreak(WordBreak.BREAK_WORD)
           }.alignItems(HorizontalAlign.Start).layoutWeight(1)
           Button({ type: ButtonType.Circle }) {
-            Text(this.user.display_name.slice(0, 1)).fontSize(20).fontWeight(FontWeight.Medium)
-              .fontColor(AppTheme.blue)
-          }.width(46).height(46).backgroundColor(AppTheme.blueSoft)
+            Text(this.user.display_name.slice(0, 1)).fontSize(18).fontWeight(FontWeight.Medium)
+              .fontColor(AppTheme.actionBlue)
+          }.width(48).height(48).backgroundColor(AppTheme.blueSoft)
             .accessibilityText('打开我的账户').onClick(() => this.onOpenProfile())
-        }.width('100%')
+        }.width('100%').alignItems(VerticalAlign.Center)
 
-        Column({ space: 16 }) {
-          Row({ space: 12 }) {
-            AppIcon({ name: 'agent', iconSize: 28 })
-            Column({ space: 4 }) {
-              Text(this.greeting()).fontSize(13).fontColor(AppTheme.secondary)
-              Text('把想法变成安排').fontSize(21).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
-            }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-          }.width('100%')
-          Text('结合课表和待办，为重要的事留出时间。').fontSize(14).lineHeight(21)
-            .fontColor(AppTheme.secondary).width('100%')
-          Button('让 Agent 帮我规划').height(46).width('100%').fontSize(15)
-            .fontWeight(FontWeight.Medium).fontColor(AppTheme.surface).backgroundColor(AppTheme.blue)
-            .borderRadius(14).onClick(() => this.onOpenAgent())
-        }.width('100%').padding(20).backgroundColor(AppTheme.surface).borderRadius(22)
-
-        Row({ space: 1 }) {
-          Button({ type: ButtonType.Normal }) {
-            Row({ space: 10 }) {
-              AppIcon({ name: 'route', iconSize: 23 })
-              Column({ space: 3 }) {
-                Text('校园导航').fontSize(14).fontWeight(FontWeight.Medium).fontColor(AppTheme.ink)
-                Text('沿路找到目的地').fontSize(11).fontColor(AppTheme.secondary)
-              }.alignItems(HorizontalAlign.Start)
-            }
-          }.layoutWeight(1).height(78).backgroundColor(AppTheme.surface).borderRadius({ topLeft: 18, bottomLeft: 18 })
-            .onClick(() => this.onOpenRoute())
-          Divider().vertical(true).height(34).color(AppTheme.separator)
-          Button({ type: ButtonType.Normal }) {
-            Row({ space: 10 }) {
-              AppIcon({ name: 'classroom', iconSize: 23, color: AppTheme.green })
-              Column({ space: 3 }) {
-                Text('校园服务').fontSize(14).fontWeight(FontWeight.Medium).fontColor(AppTheme.ink)
-                Text('教室与生活查询').fontSize(11).fontColor(AppTheme.secondary)
-              }.alignItems(HorizontalAlign.Start)
-            }
-          }.layoutWeight(1).height(78).backgroundColor(AppTheme.surface).borderRadius({ topRight: 18, bottomRight: 18 })
-            .onClick(() => this.onOpenServices())
-        }.width('100%').backgroundColor(AppTheme.surface).borderRadius(18)
+        if (this.errorText.length > 0) {
+          Column({ space: 8 }) {
+            Text(this.errorText).fontSize(AppTheme.metaSize).fontColor(AppTheme.red)
+              .width('100%').wordBreak(WordBreak.BREAK_WORD)
+            Button({ type: ButtonType.Normal }) {
+              Text(this.loading ? '正在更新…' : '重新加载今日数据').fontSize(14)
+                .fontColor(AppTheme.red).width('100%').wordBreak(WordBreak.BREAK_WORD)
+            }.width('100%').constraintSize({ minHeight: 48 }).padding({ top: 8, bottom: 8 })
+              .backgroundColor(Color.Transparent).borderRadius(AppTheme.controlRadius)
+              .enabled(!this.loading).onClick(() => this.loadToday())
+          }.width('100%').alignItems(HorizontalAlign.Start).padding(AppTheme.cardInset)
+            .backgroundColor(AppTheme.redSoft).borderRadius(AppTheme.cardRadius)
+        }
 
         Column({ space: 12 }) {
-          Row() {
-            Text('今日课程').fontSize(21).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink).layoutWeight(1)
-            Text(`${this.courses.length} 节课`).fontSize(12).fontColor(AppTheme.secondary)
+          Row({ space: 12 }) {
+            Text('今日课程').fontSize(AppTheme.sectionTitle).fontWeight(FontWeight.Bold)
+              .fontColor(AppTheme.ink).layoutWeight(1)
+            Text(this.loading ? '读取中' :
+              (this.errorText.length > 0 && this.courses.length === 0 ? '待更新' : `${this.courses.length} 节课`))
+              .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet)
           }.width('100%')
-          if (this.loading) {
-            Row({ space: 10 }) {
-              LoadingProgress().width(22).height(22).color(AppTheme.blue)
-              Text('正在同步课程…').fontSize(14).fontColor(AppTheme.secondary)
-            }.width('100%').padding(20).backgroundColor(AppTheme.surface).borderRadius(18)
-          } else if (this.errorText.length > 0) {
-            Text(this.errorText).fontSize(14).fontColor(AppTheme.red).width('100%')
+          if (this.loading && this.courses.length === 0) {
+            Row({ space: 12 }) {
+              LoadingProgress().width(20).height(20).color(AppTheme.actionBlue)
+              Text('正在读取课程…').fontSize(AppTheme.bodySize).fontColor(AppTheme.quiet).layoutWeight(1)
+            }.width('100%').padding(AppTheme.cardInset).backgroundColor(AppTheme.surface)
+              .borderRadius(AppTheme.cardRadius)
           } else if (this.courses.length === 0) {
-            Column({ space: 6 }) {
-              Text('今天没有课程').fontSize(16).fontWeight(FontWeight.Medium).fontColor(AppTheme.ink)
-              Text('留一段完整时间，做你想做的事。').fontSize(14).fontColor(AppTheme.secondary)
-            }.width('100%').alignItems(HorizontalAlign.Start).padding(20)
-              .backgroundColor(AppTheme.surface).borderRadius(18)
+            Text(this.errorText.length > 0 ? '课程暂未显示，请重试。' : '今天没有课程安排')
+              .fontSize(AppTheme.bodySize).fontColor(AppTheme.quiet).width('100%')
+              .padding(AppTheme.cardInset).backgroundColor(AppTheme.surface).borderRadius(AppTheme.cardRadius)
           } else {
             Column() {
               ForEach(this.courses, (course: TimetableEntry, index: number) => {
-                Row({ space: 14 }) {
-                  Column({ space: 4 }) {
-                    Text(course.start_time).fontSize(16).fontWeight(FontWeight.Medium).fontColor(AppTheme.blue)
-                    Text(course.end_time).fontSize(12).fontColor(AppTheme.secondary)
-                  }.width(52).alignItems(HorizontalAlign.Start)
-                  Column({ space: 5 }) {
-                    Text(course.title).fontSize(16).fontWeight(FontWeight.Medium).fontColor(AppTheme.ink)
-                    Text(`${course.location}${course.teacher.length > 0 ? ` · ${course.teacher}` : ''}`)
-                      .fontSize(12).fontColor(AppTheme.secondary)
-                  }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-                }.width('100%').padding(18)
+                Column({ space: 4 }) {
+                  Text(`${course.start_time} — ${course.end_time}`).fontSize(AppTheme.metaSize)
+                    .fontWeight(FontWeight.Medium).fontColor(AppTheme.actionBlue).width('100%')
+                  Text(course.title).fontSize(AppTheme.bodySize).fontWeight(FontWeight.Medium)
+                    .fontColor(AppTheme.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
+                  Text(`${course.location}${course.teacher.length > 0 ? ` · ${course.teacher}` : ''}`)
+                    .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+                    .wordBreak(WordBreak.BREAK_WORD)
+                }.width('100%').alignItems(HorizontalAlign.Start).padding(AppTheme.cardInset)
                 if (index < this.courses.length - 1) {
-                  Divider().color(AppTheme.separator).margin({ left: 84 })
+                  Divider().color(AppTheme.line).margin({ left: AppTheme.cardInset, right: AppTheme.cardInset })
                 }
               }, (course: TimetableEntry) => `${course.date}-${course.start_time}-${course.title}`)
-            }.width('100%').backgroundColor(AppTheme.surface).borderRadius(18).clip(true)
+            }.width('100%').backgroundColor(AppTheme.surface).borderRadius(AppTheme.cardRadius).clip(true)
           }
         }.width('100%')
 
         Column({ space: 12 }) {
-          Row() {
-            Text('待办事项').fontSize(21).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink).layoutWeight(1)
-            Button('添加').height(44).fontSize(14).fontColor(AppTheme.blue)
-              .backgroundColor(Color.Transparent).onClick(() => this.onOpenPlan())
+          Row({ space: 12 }) {
+            Column({ space: 4 }) {
+              Text('待办事项').fontSize(AppTheme.sectionTitle).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
+                .width('100%')
+              Text('今日与未安排日期').fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+            }.alignItems(HorizontalAlign.Start).layoutWeight(1)
+            Button({ type: ButtonType.Normal }) {
+              Text('添加').fontSize(14).fontWeight(FontWeight.Medium).fontColor(AppTheme.actionBlue)
+            }.constraintSize({ minHeight: 48, minWidth: 64 }).padding(8)
+              .backgroundColor(Color.Transparent).borderRadius(AppTheme.controlRadius)
+              .onClick(() => this.onOpenPlan())
           }.width('100%')
-          if (this.todayTasks().length === 0) {
+          if (this.loading && this.todayTasks().length === 0) {
+            Text('正在读取待办…').fontSize(AppTheme.bodySize).fontColor(AppTheme.quiet).width('100%')
+              .padding(AppTheme.cardInset).backgroundColor(AppTheme.surface).borderRadius(AppTheme.cardRadius)
+          } else if (this.todayTasks().length === 0) {
             Row({ space: 12 }) {
-              AppIcon({ name: 'check', iconSize: 24, color: AppTheme.green })
-              Column({ space: 4 }) {
-                Text('今天没有待执行事项').fontSize(15).fontWeight(FontWeight.Medium).fontColor(AppTheme.ink)
-                Text('新的想法，随时记下来。').fontSize(13).fontColor(AppTheme.secondary)
-              }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-            }.width('100%').padding(20).backgroundColor(AppTheme.surface).borderRadius(18)
+              AppIcon({ name: this.errorText.length > 0 ? 'calendar' : 'check', iconSize: 20,
+                color: this.errorText.length > 0 ? AppTheme.quiet : AppTheme.green })
+              Text(this.errorText.length > 0 ? '待办暂未显示，请重试。' : '今天没有待执行事项')
+                .fontSize(AppTheme.bodySize).fontColor(AppTheme.quiet).layoutWeight(1)
+                .wordBreak(WordBreak.BREAK_WORD)
+            }.width('100%').padding(AppTheme.cardInset).backgroundColor(AppTheme.surface)
+              .borderRadius(AppTheme.cardRadius)
           } else {
-            ForEach(this.todayTasks(), (task: PlanningTask) => {
-              this.TodayTaskCard(task)
-            }, (task: PlanningTask) => `${task.task_id}-${task.status}-${task.completed_at ?? ''}`)
+            Column() {
+              ForEach(this.todayTasks(), (task: PlanningTask, index: number) => {
+                this.TodayTaskCard(task)
+                if (index < this.todayTasks().length - 1) {
+                  Divider().color(AppTheme.line).margin({ left: 64, right: AppTheme.cardInset })
+                }
+              }, (task: PlanningTask, index: number) =>
+                `${task.task_id}-${task.status}-${task.completed_at ?? ''}-${index}-${this.todayTasks().length}`)
+              if (this.todayTasks().length === 5) {
+                Button({ type: ButtonType.Normal }) {
+                  Text('查看全部待办').fontSize(14).fontColor(AppTheme.actionBlue).width('100%')
+                }.width('100%').constraintSize({ minHeight: 48 }).padding(12)
+                  .backgroundColor(Color.Transparent).onClick(() => this.onOpenPlan())
+              }
+            }.width('100%').backgroundColor(AppTheme.surface).borderRadius(AppTheme.cardRadius).clip(true)
           }
         }.width('100%')
 
+        this.DailyShortcuts()
+
         Column({ space: 12 }) {
-          Row() {
-            Text('计划进展').fontSize(21).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink).layoutWeight(1)
-            Text(`${this.activePlans().length} 个计划`).fontSize(12).fontColor(AppTheme.secondary)
+          Row({ space: 12 }) {
+            Text('计划进展').fontSize(AppTheme.sectionTitle).fontWeight(FontWeight.Bold)
+              .fontColor(AppTheme.ink).layoutWeight(1)
+            Text(this.loading ? '读取中' :
+              (this.errorText.length > 0 && this.activePlans().length === 0 ? '待更新' : `${this.activePlans().length} 个计划`))
+              .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet)
           }.width('100%')
-          if (this.activePlans().length === 0) {
+          if (this.loading && this.activePlans().length === 0) {
+            Text('正在读取计划…').fontSize(AppTheme.bodySize).fontColor(AppTheme.quiet).width('100%')
+              .padding(AppTheme.cardInset).backgroundColor(AppTheme.surface).borderRadius(AppTheme.cardRadius)
+          } else if (this.activePlans().length === 0) {
             Button({ type: ButtonType.Normal }) {
               Row({ space: 12 }) {
-                AppIcon({ name: 'calendar', iconSize: 25 })
-                Column({ space: 5 }) {
-                  Text('开始一个小目标').fontSize(16).fontWeight(FontWeight.Medium).fontColor(AppTheme.ink)
-                  Text('去规划，把目标拆成下一步。').fontSize(13).fontColor(AppTheme.secondary)
+                AppIcon({ name: 'calendar', iconSize: 22, color: AppTheme.actionBlue })
+                Column({ space: 4 }) {
+                  Text(this.errorText.length > 0 ? '到规划查看安排' : '还没有进行中的计划')
+                    .fontSize(AppTheme.bodySize).fontWeight(FontWeight.Medium).fontColor(AppTheme.ink)
+                    .width('100%').wordBreak(WordBreak.BREAK_WORD)
+                  Text('查看任务，或添加一个目标').fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet)
+                    .width('100%').wordBreak(WordBreak.BREAK_WORD)
                 }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-                AppIcon({ name: 'chevron', iconSize: 16, color: AppTheme.muted })
+                AppIcon({ name: 'chevron', iconSize: 16, color: AppTheme.quiet })
               }.width('100%')
-            }.width('100%').padding(18).backgroundColor(AppTheme.surface).borderRadius(18)
+            }.width('100%').constraintSize({ minHeight: 64 }).padding(AppTheme.cardInset)
+              .backgroundColor(AppTheme.surface).borderRadius(AppTheme.cardRadius)
               .onClick(() => this.onOpenPlan())
           } else {
             ForEach(this.activePlans(), (plan: PlanSummary) => {
@@ -312,8 +375,7 @@ export struct HomePage {
           }
         }.width('100%')
       }.width('100%').alignItems(HorizontalAlign.Start)
-        .padding({ left: 20, right: 20, top: 16, bottom: 32 })
-    }.width('100%').height('100%').backgroundColor(AppTheme.bg).scrollBar(BarState.Off)
+        .padding({ left: AppTheme.pageInset, right: AppTheme.pageInset, top: 16, bottom: 32 })
+    }.width('100%').height('100%').backgroundColor(AppTheme.canvas).scrollBar(BarState.Off)
   }
-
 }

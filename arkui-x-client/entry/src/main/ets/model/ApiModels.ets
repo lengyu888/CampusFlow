@@ -26,6 +26,14 @@ export interface TimetableEntry {
   teacher: string;
 }
 
+export interface ScheduleSubscriptionPreview {
+  provider: string;
+  calendar_name: string;
+  event_count: number;
+  entries: TimetableEntry[];
+  warnings: string[];
+}
+
 export interface CampusMapSummary {
   campus_name: string;
   places: CampusPlaceImport[];
@@ -79,10 +87,25 @@ export interface PendingAction {
   status: string;
 }
 
+export interface ToolDisplaySummary {
+  label: string;
+  state: string;
+  summary: string;
+}
+
+// Only the server's display projection is consumed by the native interface.
+export interface ToolTrace {
+  tool_call_id: string;
+  tool_name: string;
+  display?: ToolDisplaySummary | null;
+  status?: string | null;
+}
+
 export interface ChatResponse {
   session_id: string;
   message: string;
   pending_actions: PendingAction[];
+  tool_traces?: ToolTrace[];
 }
 
 export interface ConfirmActionResponse {
@@ -122,7 +145,15 @@ export interface CampusDataPlace {
   open_hours: string;
 }
 
+export interface CampusDataPackage {
+  package_id: string;
+  school: string;
+  campus: string;
+  version: string;
+}
+
 export interface CampusDataSnapshot {
+  package: CampusDataPackage;
   places: CampusDataPlace[];
 }
 

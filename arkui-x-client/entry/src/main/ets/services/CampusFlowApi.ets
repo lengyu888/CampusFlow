@@ -16,9 +16,11 @@ import {
   HDUHelpSyncResponse,
   ElectricityOverview,
   OnboardingResponse,
+  PendingAction,
   PlanningOverview,
   PlanningTask,
   ScheduleSubscriptionStatus,
+  ScheduleSubscriptionPreview,
   SkillSummary,
   SessionSummary,
   SyncResponse,
@@ -26,6 +28,7 @@ import {
   UserContextResponse,
   UserProfile
 } from '../model/ApiModels';
+import { CampusFlowRequestError, localRequestFailure, requestFailure } from '../utils/AgentFeedback';
 
 interface SettingsPayload {
   display_name: string;
@@ -69,7 +72,7 @@ export class CampusFlowApi {
         const payload = JSON.parse(detail) as ApiErrorPayload;
         detail = payload.detail ?? payload.message ?? detail;
       } catch {
-        // Keep a non-JSON response as the diagnostic message.
+        // Preserve existing validation and campus-service messages outside Agent requests.
       }
     }
     if (detail.length === 0) {
@@ -97,16 +100,23 @@ export class CampusFlowApi {
           readTimeout: 90000
         });
       } catch {
-        throw new Error('无法连接 CampusFlow 服务，请检查服务地址和网络连接。');
+        throw localRequestFailure('NETWORK_ERROR');
       }
       const text = response.result as string;
       if (response.responseCode < 200 || response.responseCode >= 300) {
-        throw new Error(this.formatError(response.responseCode, text));
+        if (path === '/api/v1/chat' || path.startsWith('/api/v1/actions/')) {
+          throw requestFailure(response.responseCode, text);
+        }
+        throw new CampusFlowRequestError(response.responseCode, 'HTTP_ERROR', this.formatError(response.responseCode, text));
       }
-      if (response.responseCode === 204 || text.length === 0) {
+      if (response.responseCode === 204) {
         return undefined as T;
       }
-      return JSON.parse(text) as T;
+      try {
+        return JSON.parse(text) as T;
+      } catch {
+        throw localRequestFailure('INVALID_RESPONSE', response.responseCode);
+      }
     } finally {
       client.destroy();
     }
@@ -157,6 +167,11 @@ export class CampusFlowApi {
   async cancelAction(proposalId: string): Promise<ConfirmActionResponse> {
     return this.request<ConfirmActionResponse>(`/api/v1/actions/${encodeURIComponent(proposalId)}/cancel`,
       http.RequestMethod.POST, '{}');
+  }
+
+  async actionStatus(proposalId: string): Promise<PendingAction> {
+    return this.request<PendingAction>(`/api/v1/actions/${encodeURIComponent(proposalId)}`,
+      http.RequestMethod.GET);
   }
 
   async campusRoute(origin: string, destination: string): Promise<CampusRoute> {
@@ -247,6 +262,11 @@ export class CampusFlowApi {
 
   async subscriptionStatus(): Promise<ScheduleSubscriptionStatus> {
     return this.request<ScheduleSubscriptionStatus>('/api/v1/schedule-subscriptions', http.RequestMethod.GET);
+  }
+
+  async previewSubscription(url: string): Promise<ScheduleSubscriptionPreview> {
+    return this.request<ScheduleSubscriptionPreview>('/api/v1/schedule-subscriptions/preview', http.RequestMethod.POST,
+      JSON.stringify({ url: url }));
   }
 
   async saveSubscription(url: string): Promise<SyncResponse> {

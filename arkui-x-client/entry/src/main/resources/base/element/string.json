@@ -2,6 +2,7 @@
   "string": [
     { "name": "module_desc", "value": "CampusFlow 跨端 AI Agent" },
     { "name": "EntryAbility_desc", "value": "CampusFlow 主入口" },
-    { "name": "EntryAbility_label", "value": "CampusFlow" }
+    { "name": "EntryAbility_label", "value": "CampusFlow" },
+    { "name": "mic_permission_reason", "value": "点击语音输入后，将你说的话识别为文字；CampusFlow 不保存录音。" }
   ]
 }
