@@ -7,6 +7,9 @@ import { AppIcon } from '../components/AppIcon';
 import { TaskScheduleDetails } from '../components/TaskScheduleDetails';
 import { formatPlanDateTime } from '../utils/PlanPresentation';
 import { CampusFlowRequestError, displayToolTraces, mergeActions, restoreDraft, localRequestFailure } from '../utils/AgentFeedback';
+import common from '@ohos.app.ability.common';
+import { PlatformVoiceDriver } from '../services/PlatformVoiceDriver';
+import { VoiceInteraction, VoiceState } from '../utils/VoiceInteraction';
 
 interface ConversationEntry {
   id: string;
@@ -34,6 +37,7 @@ export struct AgentPage {
   @Prop @Watch('sessionDeleted') deletionRevision: number = 0;
   @Prop initialPrompt: string = '';
   @Prop @Watch('initialPromptChanged') promptRevision: number = 0;
+  @Prop @Watch('voiceActivityChanged') voiceActive: boolean = false;
   onOpenHistory: () => void = () => {};
   onOpenRoute: () => void = () => {};
   onOpenPlan: () => void = () => {};
@@ -55,6 +59,9 @@ export struct AgentPage {
   @State private loading: boolean = false;
   @State private decisionId: string = '';
   @State private cacheNotice: string = '';
+  @State private voiceState: VoiceState = { phase: 'idle', transcript: '', message: '', speakingMessageId: '' };
+  @State private voiceNotice: string = '';
+  private voiceInteraction: VoiceInteraction | null = null;
   private savedMessages: HistoryMessage[] = [];
   private conversationCreatedAt: string = new Date().toISOString();
   private conversationRevision: number = 0;
@@ -73,12 +80,15 @@ export struct AgentPage {
   aboutToDisappear(): void {
     this.pageActive = false;
     this.conversationRevision++;
+    this.voiceInteraction?.dispose();
+    this.voiceInteraction = null;
   }
 
   private sessionDeleted(): void {
     if (this.deletedSessionId !== this.sessionId) {
       return;
     }
+    this.cancelVoice();
     this.conversationRevision++;
     this.sessionId = `arkuix-${Date.now()}-${this.conversationRevision}`;
     this.savedMessages = [];
@@ -115,6 +125,7 @@ export struct AgentPage {
 
   private initialPromptChanged(): void {
     if (this.initialPrompt.length > 0) {
+      this.voiceInteraction?.suspend();
       this.prompt = this.initialPrompt;
     }
   }
@@ -140,11 +151,85 @@ export struct AgentPage {
     return Array.from(value.trim()).length;
   }
 
-  private async send(): Promise<void> {
-    const text = this.prompt.trim();
-    if (text.length === 0 || this.inputLength(text) > 8000 || this.loading || this.deletionBusy || this.decisionId.length > 0) {
+  private voiceActivityChanged(): void {
+    // Index keeps hidden tabs mounted. Also stop when the Ability enters background.
+    if (!this.voiceActive) { this.voiceInteraction?.suspend(); }
+  }
+
+  private voiceController(): VoiceInteraction {
+    if (this.voiceInteraction === null) {
+      const context = this.getUIContext().getHostContext() as common.UIAbilityContext | undefined;
+      this.voiceInteraction = new VoiceInteraction(new PlatformVoiceDriver(context), (state: VoiceState) => {
+        if (this.pageActive) {
+          if (state.phase !== this.voiceState.phase) { this.scrollForNewMessage = true; }
+          this.voiceState = state;
+        }
+      });
+    }
+    return this.voiceInteraction;
+  }
+
+  private capturePending(): boolean {
+    return this.voiceState.phase === 'starting' || this.voiceState.phase === 'listening' ||
+      this.voiceState.phase === 'recognizing' || this.voiceState.phase === 'review';
+  }
+
+  private speechPending(): boolean {
+    return this.voiceState.phase === 'preparingSpeech' || this.voiceState.phase === 'speaking';
+  }
+
+  private async startVoice(): Promise<void> {
+    if (!this.pageActive || !this.voiceActive || this.loading || this.deletionBusy ||
+      this.decisionId.length > 0 || this.capturePending()) { return; }
+    this.voiceNotice = '';
+    await this.voiceController().startListening();
+  }
+
+  private cancelVoice(): void {
+    this.voiceInteraction?.cancel();
+    this.voiceNotice = '';
+  }
+
+  private editVoiceTranscript(value: string): void {
+    this.voiceNotice = '';
+    this.voiceInteraction?.editTranscript(value);
+  }
+
+  private useVoiceTranscript(): void {
+    if (this.voiceState.phase !== 'review' || this.voiceInteraction === null) { return; }
+    const transcript = this.voiceState.transcript.trim();
+    if (transcript.length === 0) { this.voiceInteraction.takeTranscript(); return; }
+    const draft = this.prompt.trim();
+    const combined = draft.length === 0 ? transcript : `${draft}\n${transcript}`;
+    if (this.inputLength(combined) > 8000) {
+      this.voiceNotice = '合并后超过 8000 字，请缩短识别文字，或编辑下方原输入。两份文字均已保留。';
       return;
     }
+    const accepted = this.voiceInteraction.takeTranscript();
+    if (accepted.length === 0) { return; }
+    this.prompt = combined;
+    this.voiceNotice = '文字已填入，请检查后手动发送。';
+  }
+
+  private async speakReply(message: ConversationEntry): Promise<void> {
+    if (!this.pageActive || !this.voiceActive || message.role !== 'assistant' || message.id === 'welcome' ||
+      !this.messages.some((item: ConversationEntry) => item.id === message.id && item.role === 'assistant')) { return; }
+    if (this.speechPending() && this.voiceState.speakingMessageId === message.id) {
+      this.cancelVoice();
+      return;
+    }
+    if (this.loading || this.deletionBusy || this.decisionId.length > 0 || this.capturePending()) { return; }
+    this.voiceNotice = '';
+    await this.voiceController().speak(message.id, message.content);
+  }
+
+  private async send(): Promise<void> {
+    const text = this.prompt.trim();
+    if (text.length === 0 || this.inputLength(text) > 8000 || this.loading || this.deletionBusy ||
+      this.decisionId.length > 0 || this.capturePending()) {
+      return;
+    }
+    this.cancelVoice();
     this.appendMessage('user', text);
     const revision = this.conversationRevision;
     const sentAt = new Date().toISOString();
@@ -409,6 +494,7 @@ export struct AgentPage {
   }
 
   private choosePrompt(value: string): void {
+    this.voiceInteraction?.suspend();
     this.getUIContext().animateTo({ duration: AppTheme.motion(180), curve: Curve.EaseOut }, () => {
       this.prompt = value;
     });
@@ -434,6 +520,68 @@ export struct AgentPage {
       .backgroundColor(AppTheme.surface).borderRadius(AppTheme.cardRadius)
       .accessibilityText(`${title}，${detail}，填入输入框`)
       .onClick(() => this.choosePrompt(prompt))
+  }
+
+  @Builder
+  private VoicePanel() {
+    Column({ space: 12 }) {
+      Row({ space: 10 }) {
+        if (this.voiceState.phase === 'starting' || this.voiceState.phase === 'recognizing') {
+          LoadingProgress().width(20).height(20).color(AppTheme.actionBlue)
+        } else {
+          AppIcon({ name: 'microphone', iconSize: 20, color: AppTheme.actionBlue })
+        }
+        Text(this.voiceState.phase === 'review' ? '核对语音文字' :
+          (this.voiceState.phase === 'error' ? '语音提示' : '语音输入'))
+          .fontSize(15).fontWeight(FontWeight.Medium).fontColor(AppTheme.ink).layoutWeight(1)
+        if (this.voiceState.phase === 'listening') {
+          Text('录音中').fontSize(12).fontColor(AppTheme.actionBlue)
+        }
+      }.width('100%')
+      Text(this.voiceState.message).fontSize(13).lineHeight(21).fontColor(AppTheme.quiet).width('100%')
+      if (this.voiceState.phase === 'review') {
+        TextArea({ text: this.voiceState.transcript, placeholder: '识别文字，可在这里修改…' })
+          .width('100%').fontSize(16).fontColor(AppTheme.ink)
+          .constraintSize({ minHeight: 72, maxHeight: 140 })
+          .backgroundColor(AppTheme.surface).borderRadius(AppTheme.controlRadius).padding(12)
+          .accessibilityText('识别文字，可编辑，尚未发送')
+          .onChange((value: string) => this.editVoiceTranscript(value))
+        Row({ space: 10 }) {
+          Button('放弃文字').layoutWeight(1).constraintSize({ minHeight: 48 })
+            .fontSize(14).fontColor(AppTheme.quiet).backgroundColor(AppTheme.surface)
+            .onClick(() => this.cancelVoice())
+          Button('填入输入框').layoutWeight(1).constraintSize({ minHeight: 48 })
+            .fontSize(14).fontColor('#FFFFFF').backgroundColor(AppTheme.actionBlue)
+            .accessibilityText('将识别文字追加到输入框，不自动发送')
+            .onClick(() => this.useVoiceTranscript())
+        }.width('100%')
+        Text('识别文字将追加到原输入，检查后再手动发送。')
+          .fontSize(12).fontColor(AppTheme.quiet).width('100%')
+      } else if (this.capturePending()) {
+        if (this.voiceState.transcript.length > 0) {
+          Text(this.voiceState.transcript).fontSize(15).fontColor(AppTheme.ink).width('100%')
+            .maxLines(3).textOverflow({ overflow: TextOverflow.Ellipsis })
+        }
+        Row({ space: 10 }) {
+          Button('取消录音').layoutWeight(1).constraintSize({ minHeight: 48 })
+            .fontSize(14).fontColor(AppTheme.quiet).backgroundColor(AppTheme.surface)
+            .onClick(() => this.cancelVoice())
+          if (this.voiceState.phase === 'listening') {
+            Button('完成录音').layoutWeight(1).constraintSize({ minHeight: 48 })
+              .fontSize(14).fontColor('#FFFFFF').backgroundColor(AppTheme.actionBlue)
+              .onClick(() => this.voiceInteraction?.finishListening())
+          }
+        }.width('100%')
+        Text('录音最长 60 秒，说完后可编辑文字；CampusFlow 不保存录音。')
+          .fontSize(12).fontColor(AppTheme.quiet).width('100%')
+      } else {
+        Button('知道了').constraintSize({ minHeight: 48 }).fontSize(14)
+          .fontColor(AppTheme.actionBlue).backgroundColor(AppTheme.surface)
+          .onClick(() => this.cancelVoice())
+      }
+    }.width('100%').alignItems(HorizontalAlign.Start).padding(AppTheme.cardInset)
+      .backgroundColor(AppTheme.blueSoft).borderRadius(AppTheme.cardRadius)
+      .border({ width: 1, color: AppTheme.line })
   }
 
   build() {
@@ -500,8 +648,23 @@ export struct AgentPage {
                 }
                 Column({ space: 8 }) {
                   if (message.role === 'assistant' && message.id !== 'welcome') {
-                    Text('CampusFlow').fontSize(AppTheme.metaSize).fontWeight(FontWeight.Medium)
-                      .fontColor(AppTheme.quiet)
+                    Row() {
+                      Text('CampusFlow').fontSize(AppTheme.metaSize).fontWeight(FontWeight.Medium)
+                        .fontColor(AppTheme.quiet).layoutWeight(1)
+                      Button({ type: ButtonType.Normal }) {
+                        Row({ space: 6 }) {
+                          AppIcon({ name: this.voiceState.speakingMessageId === message.id ? 'stop' : 'speaker',
+                            iconSize: 18, color: AppTheme.actionBlue })
+                          Text(this.voiceState.speakingMessageId === message.id ? '停止' : '播报')
+                            .fontSize(13).fontColor(AppTheme.actionBlue)
+                        }
+                      }.constraintSize({ minHeight: 48, minWidth: 72 }).padding({ left: 8, right: 8 })
+                        .backgroundColor(Color.Transparent).borderRadius(AppTheme.controlRadius)
+                        .accessibilityText(this.voiceState.speakingMessageId === message.id ? '停止播报这条回答' : '播报这条回答正文')
+                        .enabled(this.speechPending() && this.voiceState.speakingMessageId === message.id ||
+                          !this.loading && !this.deletionBusy && this.decisionId.length === 0 && !this.capturePending())
+                        .onClick(() => this.speakReply(message))
+                    }.width('100%')
                   }
                   MessageContent({ content: message.content, isUser: message.role === 'user' })
                   if (message.role === 'assistant' && message.id !== 'welcome') {
@@ -607,9 +770,12 @@ export struct AgentPage {
               Text('正在处理请求…').fontSize(13).fontColor(AppTheme.secondary)
             }.width('100%').padding({ left: 5, top: 4, bottom: 4 })
           }
+          if (this.capturePending() || this.voiceState.phase === 'error') {
+            this.VoicePanel()
+          }
         }.width('100%').padding({ left: AppTheme.pageInset, right: AppTheme.pageInset, top: 8, bottom: 24 })
           .onAreaChange(() => {
-            if (this.scrollForNewMessage && this.hasConversation()) {
+            if (this.scrollForNewMessage) {
               this.scrollForNewMessage = false;
               this.chatScroller.scrollEdge(Edge.Bottom);
             }
@@ -631,11 +797,29 @@ export struct AgentPage {
       }
       Column({ space: 8 }) {
         Row() {
-          Text('你的目标').fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).layoutWeight(1)
-          if (this.cacheNotice === '对话已保存到本机，可在历史会话离线回看。') {
-            Text('对话已保存到本机').fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet)
+          Text(this.speechPending() ? this.voiceState.message :
+            (this.cacheNotice === '对话已保存到本机，可在历史会话离线回看。' ? '你的目标 · 对话已保存' : '你的目标'))
+            .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).layoutWeight(1)
+          if (this.capturePending() || this.speechPending()) {
+            Button(this.speechPending() ? '停止播报' : '取消语音')
+              .constraintSize({ minHeight: 48 }).fontSize(14).fontColor(AppTheme.actionBlue)
+              .backgroundColor(Color.Transparent).onClick(() => this.cancelVoice())
+          } else {
+            Button({ type: ButtonType.Normal }) {
+              Row({ space: 6 }) {
+                AppIcon({ name: 'microphone', iconSize: 19, color: AppTheme.actionBlue })
+                Text('语音输入').fontSize(14).fontColor(AppTheme.actionBlue)
+              }
+            }.constraintSize({ minHeight: 48 }).padding({ left: 10, right: 10 })
+              .backgroundColor(Color.Transparent).borderRadius(AppTheme.controlRadius)
+              .accessibilityText('开始语音输入，识别后可编辑，不自动发送')
+              .enabled(this.voiceActive && !this.loading && !this.deletionBusy && this.decisionId.length === 0)
+              .onClick(() => this.startVoice())
           }
         }.width('100%')
+        if (this.voiceNotice.length > 0) {
+          Text(this.voiceNotice).fontSize(12).fontColor(AppTheme.quiet).width('100%')
+        }
         Row({ space: 8 }) {
           TextArea({ text: this.prompt, placeholder: '描述你的目标或安排…' })
             .layoutWeight(1).fontSize(16)
@@ -649,7 +833,7 @@ export struct AgentPage {
             .fontColor(this.inputLength(this.prompt) > 0 && this.inputLength(this.prompt) <= 8000 ? '#FFFFFF' : AppTheme.muted)
             .backgroundColor(this.inputLength(this.prompt) > 0 && this.inputLength(this.prompt) <= 8000 ? AppTheme.actionBlue : AppTheme.field)
             .borderRadius(AppTheme.controlRadius)
-            .enabled(!this.loading && !this.deletionBusy && this.decisionId.length === 0 && this.inputLength(this.prompt) > 0 && this.inputLength(this.prompt) <= 8000).onClick(() => this.send())
+            .enabled(!this.capturePending() && !this.loading && !this.deletionBusy && this.decisionId.length === 0 && this.inputLength(this.prompt) > 0 && this.inputLength(this.prompt) <= 8000).onClick(() => this.send())
         }.width('100%').alignItems(VerticalAlign.Bottom)
       }.width('100%').padding({ left: 20, right: 20, top: 12, bottom: 12 }).backgroundColor(AppTheme.surface)
         .border({ width: { top: 0.5 }, color: AppTheme.line })

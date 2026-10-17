@@ -7,6 +7,19 @@ import { initializeLocalHistory } from '../services/LocalHistory';
 export default class EntryAbility extends UIAbility {
   onCreate(want: Want, launchParam: AbilityConstant.LaunchParam): void {
     AppStorage.setOrCreate<string>('apiBaseUrl', 'http://127.0.0.1:8000');
+    AppStorage.setOrCreate<boolean>('voiceForeground', false);
+  }
+
+  onForeground(): void {
+    AppStorage.setOrCreate<boolean>('voiceForeground', true);
+  }
+
+  onBackground(): void {
+    AppStorage.setOrCreate<boolean>('voiceForeground', false);
+  }
+
+  onDestroy(): void {
+    AppStorage.setOrCreate<boolean>('voiceForeground', false);
   }
 
   onWindowStageCreate(windowStage: window.WindowStage): void {

@@ -20,6 +20,7 @@ import { AppTheme } from '../theme/AppTheme';
 @Component
 struct Index {
   @StorageLink('apiBaseUrl') private baseUrl: string = 'http://127.0.0.1:8000';
+  @StorageLink('voiceForeground') private voiceForeground: boolean = true;
   @State private token: string = '';
   @State private cacheScope: string = '';
   @State private localHistoryCount: number = 0;
@@ -190,6 +191,7 @@ struct Index {
         onOpenServices: () => this.selectTab(7), onOpenProfile: () => this.selectTab(4) })
         .visibility(this.activeTab === 0 ? Visibility.Visible : Visibility.Hidden)
       AgentPage({ baseUrl: this.baseUrl, token: this.token, initialPrompt: this.agentPrompt,
+        voiceActive: this.activeTab === 1 && this.voiceForeground,
         historyScope: this.cacheScope, deletedSessionId: this.deletedSessionId,
         deletionRevision: this.deletionRevision,
         deletionBusy: this.historyDeleteBusy,
