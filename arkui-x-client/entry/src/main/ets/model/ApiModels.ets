@@ -229,6 +229,46 @@ export interface PlanningOverview {
   progress: number;
 }
 
+export interface PlanningCourseConflict {
+  task_id: string;
+  title: string;
+  start_at: string;
+  end_at: string;
+  courses: TimetableEntry[];
+}
+
+export interface ReplanUnresolved {
+  task_id: string;
+  title: string;
+  reason: string;
+}
+
+export interface PlanningConflictReport {
+  checked_at: string;
+  policy: string;
+  conflicts: PlanningCourseConflict[];
+  unchecked: ReplanUnresolved[];
+}
+
+export interface ReplanChange {
+  task_id: string;
+  title: string;
+  old_start_at: string;
+  old_end_at: string;
+  new_start_at: string;
+  new_end_at: string;
+}
+
+export interface ReplanPreview {
+  replan_id: string;
+  status: string;
+  created_at: string;
+  expires_at: string;
+  policy: string;
+  changes: ReplanChange[];
+  unresolved: ReplanUnresolved[];
+}
+
 export interface SkillPermission {
   code: string;
   label: string;

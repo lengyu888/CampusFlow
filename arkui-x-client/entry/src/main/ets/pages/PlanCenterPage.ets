@@ -10,6 +10,7 @@ import { CampusFlowApi } from '../services/CampusFlowApi';
 import { AppTheme } from '../theme/AppTheme';
 import { AppIcon } from '../components/AppIcon';
 import { TaskScheduleDetails } from '../components/TaskScheduleDetails';
+import { PlanningConflictsPanel } from '../components/PlanningConflictsPanel';
 import { formatPlanDateTime } from '../utils/PlanPresentation';
 
 interface CalendarDay {
@@ -25,7 +26,9 @@ export struct PlanCenterPage {
   @Prop baseUrl: string;
   @Prop token: string;
   @Watch('refreshPlanning') @Prop refreshKey: number = 0;
+  @Watch('activityChanged') @Prop active: boolean = true;
   onOpenAgent: (prompt: string) => void = () => {};
+  onPlanningChanged: () => void = () => {};
   @State private overview: PlanningOverview = {
     plans: [], tasks: [], total_tasks: 0, completed_tasks: 0, due_today: 0, overdue_tasks: 0, progress: 0
   };
@@ -42,19 +45,38 @@ export struct PlanCenterPage {
   @State private deletePendingId: string = '';
   @State private expandedPlanIds: string[] = [];
   @State private planningRevision: number = 0;
+  @State private conflictRefresh: number = 0;
+  private requestRevision: number = 0;
+  private pageActive: boolean = true;
+  private timetableNeedsRefresh: boolean = false;
   private taskInputController: TextInputController = new TextInputController();
 
   aboutToAppear(): void {
+    this.pageActive = true;
     this.selectedDate = this.dateKey(new Date());
     this.draftTaskDate = this.selectedDate;
     this.draftDateChoice = 'today';
-    this.reload();
-    this.loadTimetable();
+    this.refreshPlanning();
+  }
+
+  aboutToDisappear(): void {
+    this.pageActive = false;
+    this.requestRevision++;
+  }
+
+  private activityChanged(): void {
+    if (!this.active) { this.requestRevision++; return; }
+    this.refreshPlanning();
   }
 
   private refreshPlanning(): void {
-    this.reload();
-    this.loadTimetable();
+    this.conflictRefresh++;
+    if (this.active && this.pageActive) { this.reload(true); }
+  }
+
+  private replanApplied(): void {
+    this.reload(true);
+    this.onPlanningChanged();
   }
 
   private dateKey(date: Date): string {
@@ -219,28 +241,34 @@ export struct PlanCenterPage {
     });
   }
 
-  private async loadTimetable(): Promise<void> {
+  private async reload(includeTimetable: boolean = false): Promise<void> {
+    if (!this.pageActive || !this.active) { return; }
+    if (includeTimetable) { this.timetableNeedsRefresh = true; }
+    const revision = ++this.requestRevision;
     try {
-      const context: UserContextResponse = await new CampusFlowApi(this.baseUrl, this.token).context();
-      this.timetable = context.timetable;
-    } catch (error) {
-      this.errorText = `课表加载失败：${error}`;
-    }
-  }
-
-  private async reload(): Promise<void> {
-    try {
-      const overview = await new CampusFlowApi(this.baseUrl, this.token).planning();
+      const api = new CampusFlowApi(this.baseUrl, this.token);
+      // Apply a navigation refresh as one generation; a failed/older read keeps the previous snapshot.
+      const context: UserContextResponse | null = this.timetableNeedsRefresh ? await api.context() : null;
+      if (!this.pageActive || !this.active || revision !== this.requestRevision) { return; }
+      const overview = await api.planning();
+      if (!this.pageActive || !this.active || revision !== this.requestRevision) { return; }
       this.getUIContext().animateTo({ duration: AppTheme.motion(180), curve: Curve.EaseOut }, () => {
+        if (!this.pageActive || !this.active || revision !== this.requestRevision) { return; }
         // 成功刷新后重建计划内容，避免 ForEach 复用旧对象；展开状态仍按计划 ID 保留。
         this.planningRevision++;
         this.overview = overview;
+        if (context !== null) {
+          this.timetable = context.timetable;
+          this.timetableNeedsRefresh = false;
+        }
         this.expandedPlanIds = this.expandedPlanIds.filter((id: string) =>
           overview.plans.some((plan: PlanSummary) => plan.plan_id === id));
       });
       this.errorText = '';
     } catch (error) {
-      this.errorText = `规划加载失败：${error}`;
+      if (this.pageActive && this.active && revision === this.requestRevision) {
+        this.errorText = `规划加载失败：${error}`;
+      }
     }
   }
 
@@ -255,6 +283,7 @@ export struct PlanCenterPage {
       this.title = '';
       this.taskInputController.stopEditing();
       await this.reload();
+      this.conflictRefresh++;
     } catch (error) {
       this.errorText = `创建失败：${error}`;
     }
@@ -265,6 +294,7 @@ export struct PlanCenterPage {
       await new CampusFlowApi(this.baseUrl, this.token).updateTask(task.task_id, task.status !== 'completed');
       this.deletePendingId = '';
       await this.reload();
+      this.conflictRefresh++;
     } catch (error) {
       this.errorText = `更新失败：${error}`;
     }
@@ -279,6 +309,7 @@ export struct PlanCenterPage {
       await new CampusFlowApi(this.baseUrl, this.token).deleteTask(task.task_id);
       this.deletePendingId = '';
       await this.reload();
+      this.conflictRefresh++;
     } catch (error) {
       this.errorText = `删除失败：${error}`;
     }
@@ -726,6 +757,9 @@ export struct PlanCenterPage {
             .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
         }.width('100%').padding(AppTheme.cardInset).backgroundColor(AppTheme.surface).borderRadius(AppTheme.cardRadius)
 
+        PlanningConflictsPanel({ baseUrl: this.baseUrl, token: this.token,
+          refreshKey: this.conflictRefresh, active: this.active,
+          onApplied: () => this.replanApplied() })
         this.ConfirmedPlans()
         this.AllTasks()
       }.width('100%').padding({ left: AppTheme.pageInset, right: AppTheme.pageInset, top: 20, bottom: 32 })

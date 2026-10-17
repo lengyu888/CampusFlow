@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
@@ -34,6 +35,7 @@ from .hduhelp import HDUHelpError, HDUHelpService, TokenSet
 from .hduhelp_access import HDUHelpAccess
 from .hduhelp_presenter import build_hduhelp_presentation
 from .key_vault import ApiKeyVault
+from .replanning import ReplanError, ReplanningService
 from .schedule_subscription import ScheduleSubscriptionError, ScheduleSubscriptionService
 from .schemas import (
     AdminUserSummary,
@@ -64,9 +66,11 @@ from .schemas import (
     OnboardingRequest,
     OnboardingResponse,
     PendingAction,
+    PlanningConflictsResponse,
     PlanningOverview,
     PlanningTask,
     RegisterRequest,
+    ReplanPreview,
     ScheduleSubscriptionPreview,
     ScheduleSubscriptionRequest,
     ScheduleSubscriptionStatus,
@@ -195,10 +199,12 @@ def create_app(
     schedule_subscription_service: ScheduleSubscriptionService | None = None,
     hduhelp_service: HDUHelpService | None = None,
     hduhelp_access: HDUHelpAccess | None = None,
+    replanning_service: ReplanningService | None = None,
 ) -> FastAPI:
     settings = settings or get_settings()
     store = store or CampusStore(settings.database_path)
     account_store = account_store or AccountStore(settings.database_path)
+    replanning_service = replanning_service or ReplanningService(account_store, store)
     skill_store = skill_store or SkillStore(settings.database_path)
     api_key_vault = api_key_vault or ApiKeyVault(settings)
     hduhelp_service = hduhelp_service or HDUHelpService(settings)
@@ -233,6 +239,15 @@ def create_app(
             content={"detail": exc.detail, "code": exc.code},
             headers=exc.headers,
         )
+
+    @app.exception_handler(ReplanError)
+    async def replan_error_handler(request: Request, exc: ReplanError) -> JSONResponse:
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"detail": exc.detail, "code": exc.code},
+        )
+
+    app.state.replanning_service = replanning_service
 
     app.add_middleware(
         CORSMiddleware,
@@ -1054,6 +1069,27 @@ def create_app(
     async def planning(user: CurrentUser) -> PlanningOverview:
         load_user_context(user)
         return store.planning_overview(user.user_id)
+
+    @app.get("/api/v1/planning/conflicts", response_model=PlanningConflictsResponse)
+    async def planning_conflicts(user: CurrentUser) -> PlanningConflictsResponse:
+        return replanning_service.conflicts(user.user_id)
+
+    @app.post("/api/v1/planning/replans", response_model=ReplanPreview)
+    async def preview_replan(user: CurrentUser) -> ReplanPreview:
+        return replanning_service.preview(user.user_id)
+
+    @app.get("/api/v1/planning/replans/{replan_id}", response_model=ReplanPreview)
+    async def replan_state(replan_id: str, user: CurrentUser) -> ReplanPreview:
+        return replanning_service.get(user.user_id, replan_id)
+
+    @app.post("/api/v1/planning/replans/{replan_id}/confirm", response_model=ReplanPreview)
+    async def confirm_replan(replan_id: str, user: CurrentUser) -> ReplanPreview:
+        try:
+            return replanning_service.confirm(user.user_id, replan_id)
+        except sqlite3.Error as exc:
+            raise CampusFlowError(
+                500, "未能完成改期确认，请先核对本次改期状态再重试。", "REPLAN_FAILED"
+            ) from exc
 
     @app.post("/api/v1/tasks", response_model=PlanningTask, status_code=201)
     async def create_task(payload: TaskCreateRequest, user: CurrentUser) -> PlanningTask:

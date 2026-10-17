@@ -168,6 +168,11 @@ struct Index {
     this.selectTab(1);
   }
 
+  private timetableChanged(): void {
+    this.homeRefresh++;
+    this.planRefresh++;
+  }
+
   private sessionDeleted(id: string, revision: number): void {
     if (revision === this.authRevision && this.token.length > 0) {
       this.deletedSessionId = id;
@@ -201,13 +206,15 @@ struct Index {
         onOpenPlan: () => this.selectTab(2), onOpenProfile: () => this.selectTab(4) })
         .visibility(this.activeTab === 1 ? Visibility.Visible : Visibility.Hidden)
       PlanCenterPage({ baseUrl: this.baseUrl, token: this.token,
-        refreshKey: this.planRefresh,
+        refreshKey: this.planRefresh, active: this.activeTab === 2,
+        onPlanningChanged: () => this.homeRefresh++,
         onOpenAgent: (prompt) => this.openAgentWithPrompt(prompt) })
         .visibility(this.activeTab === 2 ? Visibility.Visible : Visibility.Hidden)
       SkillsPage({ baseUrl: this.baseUrl, token: this.token })
         .visibility(this.activeTab === 3 ? Visibility.Visible : Visibility.Hidden)
       ProfilePage({ baseUrl: this.baseUrl, token: this.token, user: this.user,
         onUserChanged: (updated) => this.user = updated, onLogout: () => this.logout(),
+        onTimetableChanged: () => this.timetableChanged(), onOpenPlan: () => this.selectTab(2),
         onOpenAgent: (prompt) => this.openAgentWithPrompt(prompt) })
         .visibility(this.activeTab === 4 ? Visibility.Visible : Visibility.Hidden)
       if (this.activeTab === 5) {

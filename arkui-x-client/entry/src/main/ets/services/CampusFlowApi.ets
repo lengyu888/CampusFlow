@@ -18,7 +18,9 @@ import {
   OnboardingResponse,
   PendingAction,
   PlanningOverview,
+  PlanningConflictReport,
   PlanningTask,
+  ReplanPreview,
   ScheduleSubscriptionStatus,
   ScheduleSubscriptionPreview,
   SkillSummary,
@@ -104,7 +106,7 @@ export class CampusFlowApi {
       }
       const text = response.result as string;
       if (response.responseCode < 200 || response.responseCode >= 300) {
-        if (path === '/api/v1/chat' || path.startsWith('/api/v1/actions/')) {
+        if (path === '/api/v1/chat' || path.startsWith('/api/v1/actions/') || path.startsWith('/api/v1/planning/')) {
           throw requestFailure(response.responseCode, text);
         }
         throw new CampusFlowRequestError(response.responseCode, 'HTTP_ERROR', this.formatError(response.responseCode, text));
@@ -205,6 +207,22 @@ export class CampusFlowApi {
 
   async planning(): Promise<PlanningOverview> {
     return this.request<PlanningOverview>('/api/v1/planning', http.RequestMethod.GET);
+  }
+
+  async planningConflicts(): Promise<PlanningConflictReport> {
+    return this.request<PlanningConflictReport>('/api/v1/planning/conflicts', http.RequestMethod.GET);
+  }
+
+  async previewReplan(): Promise<ReplanPreview> {
+    return this.request<ReplanPreview>('/api/v1/planning/replans', http.RequestMethod.POST, '{}');
+  }
+
+  async replanStatus(id: string): Promise<ReplanPreview> {
+    return this.request<ReplanPreview>(`/api/v1/planning/replans/${encodeURIComponent(id)}`, http.RequestMethod.GET);
+  }
+
+  async confirmReplan(id: string): Promise<ReplanPreview> {
+    return this.request<ReplanPreview>(`/api/v1/planning/replans/${encodeURIComponent(id)}/confirm`, http.RequestMethod.POST, '{}');
   }
 
   async createTask(title: string, startAt: string | null = null): Promise<PlanningTask> {

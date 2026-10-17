@@ -220,6 +220,46 @@ class TimetableEntry(BaseModel):
     teacher: str = Field(default="", max_length=80)
 
 
+class PlanningConflict(BaseModel):
+    task_id: str
+    title: str
+    start_at: datetime
+    end_at: datetime
+    courses: list[TimetableEntry] = Field(default_factory=list)
+
+
+class ReplanUnresolved(BaseModel):
+    task_id: str
+    title: str
+    reason: str
+
+
+class PlanningConflictsResponse(BaseModel):
+    checked_at: datetime
+    policy: str
+    conflicts: list[PlanningConflict] = Field(default_factory=list)
+    unchecked: list[ReplanUnresolved] = Field(default_factory=list)
+
+
+class ReplanChange(BaseModel):
+    task_id: str
+    title: str
+    old_start_at: datetime
+    old_end_at: datetime
+    new_start_at: datetime
+    new_end_at: datetime
+
+
+class ReplanPreview(BaseModel):
+    replan_id: str
+    status: Literal["pending", "confirmed"] = "pending"
+    created_at: datetime
+    expires_at: datetime
+    policy: str
+    changes: list[ReplanChange] = Field(default_factory=list)
+    unresolved: list[ReplanUnresolved] = Field(default_factory=list)
+
+
 class ScheduleSubscriptionRequest(BaseModel):
     url: SecretStr = Field(min_length=1, max_length=2048)
 

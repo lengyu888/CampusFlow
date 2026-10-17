@@ -11,6 +11,7 @@ import {
 import { CampusFlowApi } from '../services/CampusFlowApi';
 import { AppTheme } from '../theme/AppTheme';
 import { AppIcon } from '../components/AppIcon';
+import { CampusFlowRequestError } from '../utils/AgentFeedback';
 
 @Component
 export struct ProfilePage {
@@ -21,6 +22,8 @@ export struct ProfilePage {
   onUserChanged: (user: UserProfile) => void = () => {};
   onLogout: () => void = () => {};
   onOpenAgent: (prompt: string) => void = () => {};
+  onTimetableChanged: () => void = () => {};
+  onOpenPlan: () => void = () => {};
   @State private displayName: string = '';
   @State private school: string = '';
   @State private campus: string = '';
@@ -31,6 +34,11 @@ export struct ProfilePage {
     configured: false, provider: null, source_host: null, event_count: 0, last_synced_at: null
   };
   @State private message: string = '';
+  @State private timetableUpdated: boolean = false;
+  @State private subscriptionBusy: boolean = false;
+  @State private subscriptionNeedsCheck: boolean = false;
+  private pageActive: boolean = true;
+  private subscriptionRevision: number = 0;
   @State private adminUsers: AdminUserSummary[] = [];
   @State private hduHelp: HDUHelpConnectionStatus = {
     configured: false,
@@ -58,6 +66,7 @@ export struct ProfilePage {
   @State private hduHelpDataError: string = '';
 
   aboutToAppear(): void {
+    this.pageActive = true;
     this.displayName = this.user.display_name;
     this.school = this.user.school ?? '';
     this.campus = this.user.campus ?? '';
@@ -67,6 +76,11 @@ export struct ProfilePage {
     if (this.user.role === 'admin') {
       this.loadAdminUsers();
     }
+  }
+
+  aboutToDisappear(): void {
+    this.pageActive = false;
+    this.subscriptionRevision++;
   }
 
   private async loadAdminUsers(): Promise<void> {
@@ -205,27 +219,61 @@ export struct ProfilePage {
     }
   }
 
+  private subscriptionFailure(error: Error): string {
+    if (error instanceof CampusFlowRequestError) {
+      if (error.statusCode === 401 || error.statusCode === 403) {
+        return '当前登录或权限已失效，请重新登录后核对课表。';
+      }
+      if (error.statusCode === 422) {
+        return '订阅未通过服务校验，请检查链接是否有效，或稍后重试。';
+      }
+    }
+    this.subscriptionNeedsCheck = true;
+    return '暂时无法确认课表同步结果；请先到规划核对课表，再决定是否重试。';
+  }
+
   private async saveSubscription(): Promise<void> {
-    if (this.scheduleUrl.length === 0) {
+    if (!this.pageActive || this.subscriptionBusy || this.scheduleUrl.trim().length === 0) {
       return;
     }
+    const revision = ++this.subscriptionRevision;
+    this.subscriptionBusy = true;
+    this.timetableUpdated = false;
+    this.subscriptionNeedsCheck = false;
+    this.message = '';
     try {
       const result = await new CampusFlowApi(this.baseUrl, this.token).saveSubscription(this.scheduleUrl);
+      if (!this.pageActive || revision !== this.subscriptionRevision) { return; }
       this.subscription = result.status;
       this.scheduleUrl = '';
       this.message = `已导入 ${result.imported_count} 节课程。`;
+      this.timetableUpdated = true;
+      this.onTimetableChanged();
     } catch (error) {
-      this.message = `订阅失败：${error}`;
+      if (this.pageActive && revision === this.subscriptionRevision) { this.message = this.subscriptionFailure(error); }
+    } finally {
+      if (this.pageActive && revision === this.subscriptionRevision) { this.subscriptionBusy = false; }
     }
   }
 
   private async syncSubscription(): Promise<void> {
+    if (!this.pageActive || this.subscriptionBusy) { return; }
+    const revision = ++this.subscriptionRevision;
+    this.subscriptionBusy = true;
+    this.timetableUpdated = false;
+    this.subscriptionNeedsCheck = false;
+    this.message = '';
     try {
       const result = await new CampusFlowApi(this.baseUrl, this.token).syncSubscription();
+      if (!this.pageActive || revision !== this.subscriptionRevision) { return; }
       this.subscription = result.status;
       this.message = `课表已同步，共 ${result.imported_count} 节。`;
+      this.timetableUpdated = true;
+      this.onTimetableChanged();
     } catch (error) {
-      this.message = `同步失败：${error}`;
+      if (this.pageActive && revision === this.subscriptionRevision) { this.message = this.subscriptionFailure(error); }
+    } finally {
+      if (this.pageActive && revision === this.subscriptionRevision) { this.subscriptionBusy = false; }
     }
   }
 
@@ -445,15 +493,26 @@ export struct ProfilePage {
               .fontSize(13).fontColor(this.subscription.configured ? AppTheme.green : AppTheme.muted)
           }.width('100%')
           TextInput({ text: this.scheduleUrl, placeholder: '粘贴 HDUHelp 订阅链接' }).height(46)
-            .backgroundColor(AppTheme.field).borderRadius(13).onChange((value) => this.scheduleUrl = value)
+            .backgroundColor(AppTheme.field).borderRadius(13).enabled(!this.subscriptionBusy)
+            .onChange((value) => this.scheduleUrl = value)
           Row({ space: 9 }) {
-            Button('连接新课表').layoutWeight(1).height(44).fontColor(AppTheme.surface).backgroundColor(AppTheme.blue)
+            Button(this.subscriptionBusy ? '处理中…' : '连接新课表').layoutWeight(1).constraintSize({ minHeight: 48 })
+              .fontColor(AppTheme.surface).backgroundColor(AppTheme.blue).enabled(!this.subscriptionBusy)
               .borderRadius(13).onClick(() => this.saveSubscription())
             if (this.subscription.configured) {
-              Button('立即同步').layoutWeight(1).height(44).fontColor(AppTheme.blue).backgroundColor(AppTheme.blueSoft)
+              Button('立即同步').layoutWeight(1).constraintSize({ minHeight: 48 }).fontColor(AppTheme.blue)
+                .backgroundColor(AppTheme.blueSoft).enabled(!this.subscriptionBusy)
                 .borderRadius(13).onClick(() => this.syncSubscription())
             }
           }.width('100%')
+          if (this.timetableUpdated || this.subscriptionNeedsCheck) {
+            Text(this.subscriptionNeedsCheck ? '本次同步结果尚未确认，请先核对课表再重试。' :
+              '课表已更新，去规划核对冲突。已有任务的时间不会自动改变。')
+              .fontSize(13).fontColor(AppTheme.quiet).width('100%').wordBreak(WordBreak.BREAK_WORD)
+            Button('去规划核对冲突').width('100%').constraintSize({ minHeight: 48 })
+              .fontColor(AppTheme.actionBlue).backgroundColor(AppTheme.blueSoft)
+              .enabled(!this.subscriptionBusy).borderRadius(AppTheme.controlRadius).onClick(() => this.onOpenPlan())
+          }
         }.width('100%').padding(18).backgroundColor(AppTheme.surface).borderRadius(18)
 
         if (this.user.role === 'admin') {
