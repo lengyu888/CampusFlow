@@ -5,7 +5,13 @@ import { AppTheme } from '../theme/AppTheme';
 @Component
 export struct LoginPage {
   @Prop baseUrl: string;
-  onAuthenticated: (auth: AuthResponse) => void = () => {};
+  @Prop localHistoryCount: number = 0;
+  @Prop localDisplayName: string = '';
+  @Prop cacheNotice: string = '';
+  @Prop cleanupNeeded: boolean = false;
+  onClearLocalHistory: () => Promise<void> = async () => {};
+  onAuthenticated: (auth: AuthResponse) => Promise<void> = async () => {};
+  onOpenLocalHistory: () => void = () => {};
   onBaseUrlChange: (baseUrl: string) => void = () => {};
   @State private registerMode: boolean = false;
   @State private email: string = '';
@@ -14,8 +20,10 @@ export struct LoginPage {
   @State private apiKey: string = '';
   @State private loading: boolean = false;
   @State private errorText: string = '';
+  @State private confirmCleanup: boolean = false;
 
   private async submit(): Promise<void> {
+    if (this.loading) { return; }
     if (this.email.length < 5 || this.password.length < 8) {
       this.errorText = '请输入有效邮箱，密码至少 8 位。';
       return;
@@ -31,7 +39,7 @@ export struct LoginPage {
       const auth = this.registerMode
         ? await api.register(this.email, this.password, this.displayName, this.apiKey)
         : await api.login(this.email, this.password);
-      this.onAuthenticated(auth);
+      await this.onAuthenticated(auth);
     } catch (error) {
       this.errorText = `连接失败：${error}`;
     } finally {
@@ -51,6 +59,7 @@ export struct LoginPage {
         .backgroundColor(AppTheme.field)
         .borderRadius(16)
         .padding({ left: 16, right: 16 })
+        .enabled(!this.loading)
         .onChange(onChange)
     }
     .width('100%')
@@ -96,6 +105,7 @@ export struct LoginPage {
           Button(this.registerMode ? '已有账号，直接登录' : '第一次使用？创建账号')
             .width('100%').height(44).fontSize(14).fontColor(AppTheme.blue)
             .backgroundColor(Color.Transparent)
+            .enabled(!this.loading)
             .onClick(() => {
               this.getUIContext().animateTo({ duration: AppTheme.motion(200), curve: Curve.EaseOut }, () => {
                 this.registerMode = !this.registerMode;
@@ -108,6 +118,38 @@ export struct LoginPage {
         .backgroundColor(AppTheme.surface)
         .borderRadius(20)
 
+        if (this.localHistoryCount > 0) {
+          Column({ space: 8 }) {
+            Text(`${this.localDisplayName} · 本机已保存 ${this.localHistoryCount} 个会话`)
+              .fontSize(14).fontColor(AppTheme.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
+            Button('离线查看本机对话').constraintSize({ minHeight: 48 }).width('100%')
+              .fontSize(15).fontColor(AppTheme.blue).backgroundColor(AppTheme.blueSoft)
+              .enabled(!this.loading).onClick(() => this.onOpenLocalHistory())
+            Text('仅查看已保存的文字，不会登录或发送请求。解锁此设备的人可查看；退出账号会清除本机记录。')
+              .fontSize(12).fontColor(AppTheme.secondary).width('100%')
+          }.width('100%').alignItems(HorizontalAlign.Start)
+        }
+        if (this.cacheNotice.length > 0) {
+          Text(this.cacheNotice).fontSize(13).fontColor(AppTheme.secondary).width('100%')
+        }
+        if (this.cleanupNeeded) {
+          if (this.confirmCleanup) {
+            Text('清除本机记录不会删除服务端会话。清除后需联网重新保存。')
+              .fontSize(13).fontColor(AppTheme.secondary).width('100%')
+            Button('确认清除本机记录').constraintSize({ minHeight: 48 }).width('100%')
+              .fontColor(AppTheme.red).backgroundColor(AppTheme.surface).enabled(!this.loading)
+              .onClick(async () => {
+                this.loading = true;
+                try { await this.onClearLocalHistory(); } finally { this.loading = false; this.confirmCleanup = false; }
+              })
+            Button('保留').constraintSize({ minHeight: 44 }).enabled(!this.loading)
+              .onClick(() => this.confirmCleanup = false)
+          } else {
+            Button('清理本机记录后重试').constraintSize({ minHeight: 48 }).width('100%')
+              .fontColor(AppTheme.blue).backgroundColor(AppTheme.blueSoft).enabled(!this.loading)
+              .onClick(() => this.confirmCleanup = true)
+          }
+        }
         Text('登录后自动使用已保存的模型配置，无需重复填写 API Key。')
           .fontSize(13).fontColor(AppTheme.secondary).textAlign(TextAlign.Center)
       }
