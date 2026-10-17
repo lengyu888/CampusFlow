@@ -1,4 +1,5 @@
 import { KeyboardAvoidMode } from '@ohos.arkui.UIContext';
+import common from '@ohos.app.ability.common';
 import { AuthResponse, UserProfile } from '../model/ApiModels';
 import { CampusFlowApi } from '../services/CampusFlowApi';
 import { localHistory } from '../services/LocalHistory';
@@ -17,13 +18,21 @@ import { AppIcon } from '../components/AppIcon';
 import { AppTheme } from '../theme/AppTheme';
 import { TimetablePage } from './TimetablePage';
 import { CampusPage } from './CampusPage';
+import { FeedbackPanel } from '../components/FeedbackPanel';
+import { PlatformReminderDriver } from '../services/PlatformReminderDriver';
+import { ReminderCoordinator, ReminderState } from '../utils/ReminderCoordinator';
 import { AppNavigationState, createNavigation, currentRoute, selectRoot, openSecondary, backNavigation, isRootRoute, hasBack } from '../utils/AppNavigation';
 
 @Entry
 @Component
 struct Index {
-  @StorageLink('apiBaseUrl') private baseUrl: string = 'http://127.0.0.1:8000';
-  @StorageLink('voiceForeground') private voiceForeground: boolean = true;
+  @Watch('reminderAccountChanged') @StorageLink('apiBaseUrl') private baseUrl: string = 'http://127.0.0.1:8000';
+  @Watch('reminderActivityChanged') @StorageLink('voiceForeground') private voiceForeground: boolean = true;
+  @State private reminderState: ReminderState = { phase: 'disabled', message: '本机系统提醒尚未启用。', scheduled: 0, skipped: 0, limited: false, enabled: false };
+  @State private reminderCleanupNotice: string = '';
+  @State private reminderCleanupBusy: boolean = false;
+  private reminders: ReminderCoordinator | null = null;
+  private pageActive: boolean = true;
   @State private token: string = '';
   @State private cacheScope: string = '';
   @State private localHistoryCount: number = 0;
@@ -58,12 +67,62 @@ struct Index {
   };
 
   aboutToAppear(): void {
+    this.pageActive = true;
     PersistentStorage.persistProp('reduceMotion', false);
     // Resize the flex layout so the composer remains above the system keyboard.
     this.getUIContext().setKeyboardAvoidMode(KeyboardAvoidMode.RESIZE);
     this.refreshLocalHistory();
     this.cacheNotice = AppStorage.get<string>('localHistoryError') ?? '';
     this.cleanupNeeded = this.cacheNotice.length > 0;
+  }
+
+  aboutToDisappear(): void {
+    this.pageActive = false;
+    this.authRevision++;
+    this.reminders?.dispose();
+    this.reminders = null;
+  }
+
+  private reminderManager(): ReminderCoordinator {
+    if (this.reminders === null) {
+      const context = this.getUIContext().getHostContext() as common.UIAbilityContext;
+      this.reminders = new ReminderCoordinator(new PlatformReminderDriver(context), (state: ReminderState) => {
+        if (this.pageActive) { this.reminderState = state; }
+      });
+    }
+    return this.reminders;
+  }
+
+  private reminderAccountChanged(): void {
+    if (!this.pageActive || this.token.length === 0 || this.user.user_id.length === 0) { return; }
+    const token = this.token; const baseUrl = this.baseUrl; const revision = this.authRevision;
+    const manager = this.reminderManager();
+    manager.setActive(this.voiceForeground);
+    manager.configure(historyScope(baseUrl, this.user.user_id), async () => {
+      const overview = await new CampusFlowApi(baseUrl, token).planning();
+      if (!this.pageActive || revision !== this.authRevision || this.token !== token || this.baseUrl !== baseUrl) {
+        throw new Error('REMINDER_ACCOUNT_CHANGED');
+      }
+      return overview;
+    });
+  }
+
+  private reminderActivityChanged(): void { this.reminders?.setActive(this.voiceForeground); }
+
+  private async enableReminders(): Promise<void> {
+    if (!this.pageActive || this.token.length === 0) { return; }
+    await this.reminderManager().enable();
+  }
+
+  private async disableReminders(): Promise<void> {
+    if (!this.pageActive || this.reminderCleanupBusy) { return; }
+    this.reminderCleanupBusy = true;
+    try {
+      await this.reminderManager().disable();
+      if (this.pageActive) { this.reminderCleanupNotice = ''; }
+    } catch {
+      if (this.pageActive) { this.reminderCleanupNotice = '系统提醒尚未确认清理，旧提醒可能仍出现。请重试关闭或在系统设置中关闭通知。'; }
+    } finally { if (this.pageActive) { this.reminderCleanupBusy = false; } }
   }
 
   onBackPress(): boolean {
@@ -110,6 +169,7 @@ struct Index {
     this.token = auth.access_token;
     this.agentChatBusy = false;
     this.historyDeleteBusy = false;
+    this.reminderAccountChanged();
   }
 
   private async clearLocalHistory(): Promise<void> {
@@ -136,6 +196,15 @@ struct Index {
     this.agentPrompt = '';
     this.agentChatBusy = false;
     this.historyDeleteBusy = false;
+    // Invalidate reminder writes immediately; failed OS cleanup must never restore sign-in.
+    const reminderCleanup = this.reminders === null ? Promise.resolve() : this.reminders.logout();
+    const reminderResult = reminderCleanup.then(() => {
+      if (this.pageActive && revision === this.authRevision) { this.reminderCleanupNotice = ''; }
+    }).catch(() => {
+      if (this.pageActive && revision === this.authRevision) {
+        this.reminderCleanupNotice = '已退出，但系统提醒尚未确认清理，旧提醒可能仍出现。请重试关闭。';
+      }
+    });
     try {
       await localHistory.clear();
       if (revision === this.authRevision) {
@@ -153,6 +222,7 @@ struct Index {
     } catch {
       // Never restore a local sign-in when remote token revocation fails.
     }
+    await reminderResult;
   }
 
   private resetNavigation(): void {
@@ -228,6 +298,7 @@ struct Index {
   private timetableChanged(): void {
     this.homeRefresh++;
     this.planRefresh++;
+    this.reminders?.refresh();
   }
 
   private sessionDeleted(id: string, revision: number): void {
@@ -252,6 +323,7 @@ struct Index {
         onOpenPlan: (view) => this.openPlanList(view),
         onOpenTaskDetails: (id) => this.openPlanDetails(id, ''),
         onOpenPlanDetails: (id) => this.openPlanDetails('', id),
+        onPlanningChanged: () => this.timetableChanged(),
         onOpenRoute: () => this.selectTab(6),
         onOpenServices: () => this.selectTab(7), onOpenProfile: () => this.selectTab(4) })
         .visibility(this.activeTab === 0 ? Visibility.Visible : Visibility.Hidden)
@@ -274,7 +346,7 @@ struct Index {
         requestedView: this.planRequestedView, viewRevision: this.planViewRevision,
         backRevision: this.planBackRevision, onInnerNavigationChanged: (active) => this.planInnerActive = active,
         onCloseFocus: () => this.closePlanFocus(),
-        onPlanningChanged: () => this.homeRefresh++,
+        onPlanningChanged: () => this.timetableChanged(),
         onOpenAgent: (prompt) => this.openAgentWithPrompt(prompt) })
         .visibility(this.activeTab === 2 ? Visibility.Visible : Visibility.Hidden)
       CampusPage({ user: this.user, baseUrl: this.baseUrl, token: this.token, active: this.activeTab === 8 && this.voiceForeground,
@@ -290,6 +362,9 @@ struct Index {
         this.SecondaryHeader('个人设置')
         Column() {
           ProfilePage({ baseUrl: this.baseUrl, token: this.token, user: this.user,
+            reminderState: this.reminderState, reminderCleanupBusy: this.reminderCleanupBusy,
+            onEnableReminders: () => this.enableReminders(), onDisableReminders: () => this.disableReminders(),
+            onRefreshReminders: () => this.reminderAccountChanged(),
             active: this.activeTab === 4 && this.voiceForeground, onOpenTimetable: () => this.selectTab(9),
             onUserChanged: (updated) => this.user = updated, onLogout: () => this.logout(),
             onTimetableChanged: () => this.timetableChanged(), onOpenPlan: () => this.openPlanList(),
@@ -354,6 +429,12 @@ struct Index {
       HistoryPage({ baseUrl: '', token: '', historyScope: this.cacheScope, offlineOnly: true,
         onBack: () => { this.offlineHistory = false; this.refreshLocalHistory(); } })
     } else if (this.token.length === 0) {
+      Column() {
+      if (this.reminderCleanupNotice.length > 0) {
+        FeedbackPanel({ kind: 'error', title: '系统提醒待清理', message: this.reminderCleanupNotice,
+          actionLabel: '重试关闭提醒', busy: this.reminderCleanupBusy, onAction: () => this.disableReminders() })
+      }
+      Column() {
       LoginPage({
         baseUrl: this.baseUrl,
         localHistoryCount: this.localHistoryCount, localDisplayName: this.localDisplayName,
@@ -363,6 +444,8 @@ struct Index {
         onBaseUrlChange: (value) => this.baseUrl = value,
         onAuthenticated: (auth) => this.authenticated(auth)
       })
+      }.layoutWeight(1).width('100%')
+      }.width('100%').height('100%')
     } else if (!this.user.onboarding_complete) {
       OnboardingPage({ baseUrl: this.baseUrl, token: this.token,
         onCompleted: (updated) => this.user = updated, onReturnToLogin: () => this.logout() })

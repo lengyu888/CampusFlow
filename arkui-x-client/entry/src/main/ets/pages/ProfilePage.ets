@@ -13,6 +13,7 @@ import { AppTheme } from '../theme/AppTheme';
 import { AppIcon } from '../components/AppIcon';
 import { FeedbackPanel } from '../components/FeedbackPanel';
 import { CampusFlowRequestError } from '../utils/AgentFeedback';
+import { ReminderState } from '../utils/ReminderCoordinator';
 
 @Component
 export struct ProfilePage {
@@ -27,6 +28,11 @@ export struct ProfilePage {
   onTimetableChanged: () => void = () => {};
   onOpenPlan: () => void = () => {};
   onOpenTimetable: () => void = () => {};
+  @Prop reminderState: ReminderState = { phase: 'disabled', message: '本机系统提醒尚未启用。', scheduled: 0, skipped: 0, limited: false, enabled: false };
+  @Prop reminderCleanupBusy: boolean = false;
+  onEnableReminders: () => void = () => {};
+  onDisableReminders: () => void = () => {};
+  onRefreshReminders: () => void = () => {};
   @State private displayName: string = '';
   @State private school: string = '';
   @State private campus: string = '';
@@ -127,6 +133,9 @@ export struct ProfilePage {
   private toggleGroup(group: string): void {
     this.expandedGroups = this.expandedGroups.includes(group) ?
       this.expandedGroups.filter((item: string) => item !== group) : this.expandedGroups.concat([group]);
+  }
+  private reminderBusy(): boolean {
+    return this.reminderCleanupBusy || ['checking', 'requesting', 'clearing'].includes(this.reminderState.phase);
   }
   private safeFailure(error: Error, action: string): string {
     if (error instanceof CampusFlowRequestError && (error.statusCode === 401 || error.statusCode === 403)) {
@@ -627,6 +636,34 @@ export struct ProfilePage {
               Button('课表维护').width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
                 .fontColor(AppTheme.actionBlue).backgroundColor(AppTheme.blueSoft).borderRadius(AppTheme.controlRadius)
                 .onClick(() => this.onOpenTimetable())
+            }.width('100%').padding(AppTheme.cardInset).backgroundColor(AppTheme.surface).borderRadius(AppTheme.cardRadius)
+          }
+          this.groupHeader('reminders', '本机系统提醒', this.reminderState.message)
+          if (this.expandedGroups.includes('reminders')) {
+            Column({ space: 12 }) {
+              Text('仅对已确认、设置了具体时间和提前分钟数的未完成任务安排提醒。锁屏只显示通用提示，不显示任务内容。')
+                .fontSize(AppTheme.bodySize).fontColor(AppTheme.quiet).width('100%')
+              FeedbackPanel({ kind: this.reminderState.phase === 'error' ? 'error' : this.reminderBusy() ? 'loading' : 'info',
+                title: this.reminderState.enabled ? '本机提醒已启用' : '本机提醒状态', message: this.reminderState.message })
+              Text(`系统接受 ${this.reminderState.scheduled} 项；${this.reminderState.skipped} 项因无具体提醒时间、已过期或超出一年范围未安排。`)
+                .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+              if (this.reminderState.limited) {
+                Text('仅安排系统容量内的近期提醒，最多 60 项，部分系统上限更低。重新打开应用或刷新核对时更新后续提醒。')
+                  .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+              }
+              Text('系统接受不等于已送达；通知设置、省电和系统调度可能影响提醒。退出账号会尝试清理本机提醒，后台切换不会取消。')
+                .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+              if (!this.reminderState.enabled) {
+                Button('启用本机提醒').width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
+                  .fontColor('#FFFFFF').backgroundColor(AppTheme.actionBlue).borderRadius(AppTheme.controlRadius)
+                  .enabled(!this.reminderBusy()).onClick(() => this.onEnableReminders())
+              }
+              Button('刷新核对').width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
+                .fontColor(AppTheme.actionBlue).backgroundColor(AppTheme.blueSoft).borderRadius(AppTheme.controlRadius)
+                .enabled(!this.reminderBusy()).onClick(() => this.onRefreshReminders())
+              Button('关闭并清理本机提醒').width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
+                .fontColor(AppTheme.red).backgroundColor(AppTheme.redSoft).borderRadius(AppTheme.controlRadius)
+                .enabled(!this.reminderBusy()).onClick(() => this.onDisableReminders())
             }.width('100%').padding(AppTheme.cardInset).backgroundColor(AppTheme.surface).borderRadius(AppTheme.cardRadius)
           }
           this.groupHeader('model', '模型配置', `当前密钥 ${this.user.api_key_hint ?? '未配置'}`)

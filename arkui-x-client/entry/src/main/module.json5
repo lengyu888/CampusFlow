@@ -4,19 +4,28 @@
     "type": "entry",
     "description": "$string:module_desc",
     "mainElement": "EntryAbility",
-    "deviceTypes": ["phone"],
+    "deviceTypes": [
+      "phone"
+    ],
     "deliveryWithInstall": true,
     "installationFree": false,
     "pages": "$profile:main_pages",
     "requestPermissions": [
-      { "name": "ohos.permission.INTERNET" },
+      {
+        "name": "ohos.permission.INTERNET"
+      },
       {
         "name": "ohos.permission.MICROPHONE",
         "reason": "$string:mic_permission_reason",
         "usedScene": {
-          "abilities": ["EntryAbility"],
+          "abilities": [
+            "EntryAbility"
+          ],
           "when": "inuse"
         }
+      },
+      {
+        "name": "ohos.permission.PUBLISH_AGENT_REMINDER"
       }
     ],
     "abilities": [
@@ -31,8 +40,12 @@
         "exported": true,
         "skills": [
           {
-            "entities": ["entity.system.home"],
-            "actions": ["action.system.home"]
+            "entities": [
+              "entity.system.home"
+            ],
+            "actions": [
+              "action.system.home"
+            ]
           }
         ]
       }

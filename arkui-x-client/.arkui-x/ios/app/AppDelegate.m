@@ -38,7 +38,6 @@
 }
 
 - (BOOL)application:(UIApplication *)app openURL:(NSURL *)url options:(NSDictionary<NSString *,id> *)options {
-    NSLog(@"appdelegate openUrl callback, url : %@", url.absoluteString); // eg: (com.entry.arkui://entry?OtherAbility)
 
     NSString *bundleName = url.scheme;
     NSString *moduleName = url.host;
@@ -105,11 +104,16 @@
 }
 
 - (void)setNaviAppearance:(UINavigationController *)navi {
-    UINavigationBarAppearance *appearance = [UINavigationBarAppearance new];
-    [appearance configureWithOpaqueBackground];
-    appearance.backgroundColor = UIColor.whiteColor;
-    navi.navigationBar.standardAppearance = appearance;
-    navi.navigationBar.scrollEdgeAppearance = navi.navigationBar.standardAppearance;
+    if (@available(iOS 13.0, *)) {
+        UINavigationBarAppearance *appearance = [UINavigationBarAppearance new];
+        [appearance configureWithOpaqueBackground];
+        appearance.backgroundColor = UIColor.whiteColor;
+        navi.navigationBar.standardAppearance = appearance;
+        navi.navigationBar.scrollEdgeAppearance = appearance;
+    } else {
+        navi.navigationBar.barTintColor = UIColor.whiteColor;
+        navi.navigationBar.translucent = NO;
+    }
 }
 
 @end

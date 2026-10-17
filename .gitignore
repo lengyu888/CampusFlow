@@ -37,3 +37,6 @@ Thumbs.db
 *.xcuserstate
 .reference/
 
+
+# Local native build receipts contain machine paths, not shared verification evidence.
+.native-build-*.local.json

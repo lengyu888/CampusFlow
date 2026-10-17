@@ -10,7 +10,7 @@ import { formatPlanDateTime } from '../utils/PlanPresentation';
 import { CampusFlowRequestError, displayToolTraces, mergeActions, restoreDraft, localRequestFailure } from '../utils/AgentFeedback';
 import common from '@ohos.app.ability.common';
 import { PlatformVoiceDriver } from '../services/PlatformVoiceDriver';
-import { VoiceInteraction, VoiceState } from '../utils/VoiceInteraction';
+import { VoiceInteraction, VoiceState, VoiceCapabilities } from '../utils/VoiceInteraction';
 import { AgentRunController, AgentRunState } from '../utils/AgentRun';
 import { validActionPreview, validReliableAction, canConfirmAction, decisionDisposition, sameActionCandidate, validatedActionReceipt, sameActionReceipt, receiptTaskId, receiptPlanId } from '../utils/ActionReliability';
 
@@ -94,6 +94,10 @@ export struct AgentPage {
   @State private cacheNotice: string = '';
   @State private voiceState: VoiceState = { phase: 'idle', transcript: '', message: '', speakingMessageId: '' };
   @State private voiceNotice: string = '';
+  @State private voiceProbeBusy: boolean = false;
+  @State private voiceCapabilities: VoiceCapabilities = { recognition: false, synthesis: false };
+  private voiceDriver: PlatformVoiceDriver | null = null;
+  private voiceProbeRevision: number = 0;
   private voiceInteraction: VoiceInteraction | null = null;
   private savedMessages: HistoryMessage[] = [];
   private conversationCreatedAt: string = new Date().toISOString();
@@ -138,6 +142,9 @@ export struct AgentPage {
     this.conversationRevision++;
     this.voiceInteraction?.dispose();
     this.voiceInteraction = null;
+    this.voiceDriver = null;
+    this.voiceProbeRevision++;
+    this.voiceProbeBusy = false;
     this.runInteraction?.dispose();
     this.runInteraction = null;
   }
@@ -449,6 +456,8 @@ export struct AgentPage {
     if (!this.voiceActive) {
       this.scrollForNewMessage = false;
       this.voiceInteraction?.suspend();
+      this.voiceProbeRevision++;
+      this.voiceProbeBusy = false;
     }
     this.runInteraction?.setActive(this.voiceActive);
   }
@@ -456,7 +465,8 @@ export struct AgentPage {
   private voiceController(): VoiceInteraction {
     if (this.voiceInteraction === null) {
       const context = this.getUIContext().getHostContext() as common.UIAbilityContext | undefined;
-      this.voiceInteraction = new VoiceInteraction(new PlatformVoiceDriver(context), (state: VoiceState) => {
+      this.voiceDriver = new PlatformVoiceDriver(context);
+      this.voiceInteraction = new VoiceInteraction(this.voiceDriver, (state: VoiceState) => {
         if (this.pageActive) {
           if (this.voiceActive && this.followLatest && state.phase !== this.voiceState.phase) { this.scrollForNewMessage = true; }
           this.voiceState = state;
@@ -464,6 +474,30 @@ export struct AgentPage {
       });
     }
     return this.voiceInteraction;
+  }
+
+  private async probeVoice(): Promise<boolean> {
+    if (this.voiceProbeBusy || !this.pageActive || !this.voiceActive) { return false; }
+    const revision = ++this.voiceProbeRevision;
+    this.voiceProbeBusy = true;
+    try {
+      this.voiceController();
+      const driver = this.voiceDriver;
+      if (driver === null) { return false; }
+      const capabilities = await driver.probe();
+      if (!this.pageActive || !this.voiceActive || revision !== this.voiceProbeRevision) { return false; }
+      this.voiceCapabilities = capabilities;
+      this.voiceNotice = capabilities.recognition || capabilities.synthesis ? '' : '此设备未提供可用系统语音服务，文字输入仍可使用。';
+      return true;
+    } catch {
+      if (this.pageActive && this.voiceActive && revision === this.voiceProbeRevision) {
+        this.voiceCapabilities = { recognition: false, synthesis: false };
+        this.voiceNotice = '设备语音能力尚未核实，请稍后重试；文字输入仍可使用。';
+      }
+      return false;
+    } finally {
+      if (revision === this.voiceProbeRevision) { this.voiceProbeBusy = false; }
+    }
   }
 
   private capturePending(): boolean {
@@ -477,14 +511,18 @@ export struct AgentPage {
 
   private async startVoice(): Promise<void> {
     if (!this.pageActive || !this.voiceActive || this.loading || this.deletionBusy ||
-      this.decisionId.length > 0 || this.capturePending()) { return; }
+      this.decisionId.length > 0 || this.capturePending() || this.voiceProbeBusy) { return; }
     this.voiceNotice = '';
     this.followLatest = true;
     this.scrollForNewMessage = true;
-    await this.voiceController().startListening();
+    if (await this.probeVoice() && !this.loading && !this.deletionBusy && this.decisionId.length === 0 && !this.capturePending()) {
+      await this.voiceController().startListening();
+    }
   }
 
   private cancelVoice(): void {
+    this.voiceProbeRevision++;
+    this.voiceProbeBusy = false;
     this.voiceInteraction?.cancel();
     this.voiceNotice = '';
   }
@@ -517,9 +555,11 @@ export struct AgentPage {
       this.cancelVoice();
       return;
     }
-    if (this.loading || this.deletionBusy || this.decisionId.length > 0 || this.capturePending()) { return; }
+    if (this.loading || this.deletionBusy || this.decisionId.length > 0 || this.capturePending() || this.voiceProbeBusy) { return; }
     this.voiceNotice = '';
-    await this.voiceController().speak(message.id, message.content);
+    if (await this.probeVoice() && !this.loading && !this.deletionBusy && this.decisionId.length === 0 && !this.capturePending()) {
+      await this.voiceController().speak(message.id, message.content);
+    }
   }
 
   private async send(): Promise<void> {
@@ -1614,15 +1654,17 @@ export struct AgentPage {
             Button({ type: ButtonType.Normal }) {
               Row({ space: 6 }) {
                 AppIcon({ name: 'microphone', iconSize: 19, color: AppTheme.actionBlue })
-                Text('语音输入').fontSize(AppTheme.bodySize).fontColor(AppTheme.actionBlue)
+                Text(this.voiceProbeBusy ? '正在检测…' : '语音输入').fontSize(AppTheme.bodySize).fontColor(AppTheme.actionBlue)
               }
             }.constraintSize({ minHeight: 48 }).padding({ left: 10, right: 10 })
               .backgroundColor(Color.Transparent).borderRadius(AppTheme.controlRadius)
               .accessibilityText('开始语音输入，识别后可编辑，不自动发送')
-              .enabled(this.voiceActive && !this.loading && !this.deletionBusy && this.decisionId.length === 0)
+              .enabled(this.voiceActive && !this.voiceProbeBusy && !this.loading && !this.deletionBusy && this.decisionId.length === 0)
               .onClick(() => this.startVoice())
           }
         }.width('100%')
+        Text('语音由设备系统服务处理，部分系统可能联网。CampusFlow 不保存录音；识别文字确认后才会发送。')
+          .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%').wordBreak(WordBreak.BREAK_WORD)
         if (this.suggestionNotice.length > 0) {
           Text(this.suggestionNotice).fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
         }

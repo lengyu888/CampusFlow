@@ -12,7 +12,7 @@ const source = readFileSync(new URL('../entry/src/main/ets/pages/Index.ets', imp
 const controller = source.slice(0, source.indexOf('\n  @Builder'))
   .replace(/^import [^\n]+;\r?\n/gm, '')
   .replace(/^@(Entry|Component)\r?\n/gm, '')
-  .replace(/@(State|Prop)\s+|@StorageLink\('[^']+'\)\s*/g, '')
+  .replace(/@(State|Prop)\s+|@(StorageLink|Watch)\('[^']+'\)\s*/g, '')
   .replace('struct Index', 'class Index') + '\n}\n';
 const create = new Function('localHistory', 'historyScope', 'CampusFlowApi', 'AppStorage', 'AppTheme', 'Curve', ...navNames,
   stripTypeScriptTypes(controller) + '\nreturn Index;');
@@ -36,6 +36,7 @@ function setup(overrides = {}) {
   const Index = create(store, (base, id) => `${base}|${id}`, Api, { setOrCreate: () => {} },
     { motion: () => 0 }, { EaseOut: 0 }, ...navNames.map(name => navigation[name]));
   const page = new Index();
+  page.reminders = { configure() {}, setActive() {}, refresh() {}, async logout() {}, dispose() {} };
   page.getUIContext = () => ({ animateTo: (_options, update) => update() });
   return { page, calls, store };
 }

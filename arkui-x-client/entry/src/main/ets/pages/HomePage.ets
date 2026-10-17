@@ -19,6 +19,7 @@ export struct HomePage {
   onOpenRoute: () => void = () => {};
   onOpenServices: () => void = () => {};
   onOpenProfile: () => void = () => {};
+  onPlanningChanged: () => void = () => {};
   @State private courses: TimetableEntry[] = [];
   @State private overview: PlanningOverview = {
     plans: [], tasks: [], total_tasks: 0, completed_tasks: 0, due_today: 0, overdue_tasks: 0, progress: 0
@@ -130,6 +131,10 @@ export struct HomePage {
     try {
       const api = new CampusFlowApi(this.baseUrl, this.token);
       await api.updateTask(task.task_id, task.status !== 'completed');
+      // A tab change does not undo a confirmed write. Refresh system reminders even while hidden.
+      if (this.pageActive && operation === this.taskOperationRevision && this.token === token && this.baseUrl === baseUrl) {
+        this.onPlanningChanged();
+      }
       if (this.pageActive && this.active && operation === this.taskOperationRevision &&
         this.token === token && this.baseUrl === baseUrl) {
         // The successful mutation supersedes reads that started before it committed.

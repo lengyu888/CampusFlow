@@ -27,7 +27,7 @@ const createPage = new Function('CampusFlowApi', 'Scroller', 'CampusFlowRequestE
   'displayToolTraces', 'mergeActions', 'restoreDraft', 'localRequestFailure', 'AppTheme', 'localHistory',
   'PlatformVoiceDriver', 'VoiceInteraction', 'AgentRunController', ...Object.keys(reliability), stripTypeScriptTypes(pageSource) + '\nreturn AgentPage;');
 
-function fixture({ chat = null } = {}) {
+function fixture({ chat = null, probe = null } = {}) {
   const calls = [];
   const drivers = [];
   const context = { fixtureContext: true };
@@ -42,6 +42,7 @@ function fixture({ chat = null } = {}) {
     speech = [];
     constructor(receivedContext) { assert.equal(receivedContext, context); drivers.push(this); }
     capabilities() { return { recognition: true, synthesis: true }; }
+    async probe() { return probe ? probe() : this.capabilities(); }
     async startListening(id, events) { this.recognition.push({ id, events }); calls.push(['record', id]); }
     finishListening(id) { calls.push(['finish', id]); }
     cancelListening(id) { calls.push(['cancel-record', id]); }
@@ -315,4 +316,33 @@ test('page teardown disposes audio and rejects all late native callbacks without
     assert.equal(f.timers.size, 0);
     assert.deepEqual(f.apiCalls(), []);
   }
+});
+
+test('leaving during native capability probe prevents late microphone startup and permits a new explicit probe', async () => {
+  let resolve; let count = 0;
+  const waiting = new Promise(ok => resolve = ok);
+  const f = fixture({ probe: () => ++count === 1 ? waiting : Promise.resolve({ recognition: true, synthesis: true }) });
+  const starting = f.page.startVoice();
+  assert.equal(f.page.voiceProbeBusy, true);
+  f.page.voiceActive = false; f.page.voiceActivityChanged();
+  resolve({ recognition: true, synthesis: true }); await starting;
+  assert.equal(f.page.voiceProbeBusy, false); assert.equal(f.calls.some(([name]) => name === 'record'), false);
+  f.page.voiceActive = true; f.page.voiceActivityChanged(); await f.page.startVoice();
+  assert.equal(f.calls.filter(([name]) => name === 'record').length, 1);
+  f.page.cancelVoice();
+});
+test('sending while native capabilities are pending invalidates the old probe and preserves text as the only request', async () => {
+  let resolve; const waiting = new Promise(ok => resolve = ok);
+  const f = fixture({ probe: () => waiting });
+  f.page.prompt = '仅发送这条文字'; const starting = f.page.startVoice();
+  await f.page.send(); resolve({ recognition: true, synthesis: true }); await starting;
+  assert.equal(f.calls.some(([name]) => name === 'record'), false);
+  assert.equal(f.apiCalls().length, 1); assert.equal(f.apiCalls()[0][3], '仅发送这条文字');
+});
+test('capability probe failure keeps text usable and never exposes raw device diagnostics', async () => {
+  const f = fixture({ probe: async () => { throw Error('secret device path'); } });
+  await f.page.startVoice(); assert.equal(f.page.voiceProbeBusy, false);
+  assert.doesNotMatch(f.page.voiceNotice, /secret|path/);
+  assert.equal(f.calls.some(([name]) => name === 'record'), false);
+  f.page.prompt = '仍可发送'; await f.page.send(); assert.equal(f.apiCalls().length, 1);
 });
