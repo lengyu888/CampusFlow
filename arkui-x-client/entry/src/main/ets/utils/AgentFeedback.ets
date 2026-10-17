@@ -34,6 +34,28 @@ function knownErrorMessage(code: string): string {
       return '请求超时，结果尚未确认。请先核对记录，再决定是否重试。';
     case 'ACTION_NOT_FOUND':
       return '未找到此提案，请刷新核对。';
+    case 'RUN_NOT_FOUND':
+      return '未找到保留的运行记录，请核对账号和运行标识，不要重复发送。';
+    case 'RUN_DELETED':
+      return '这次运行所属会话已删除，不能重试或恢复原运行。';
+    case 'RUN_ID_REUSED':
+      return '运行标识已使用，请先核对这次运行的原始内容。';
+    case 'RUN_SESSION_BUSY':
+      return '此会话仍在运行，请先查回结果或取消。';
+    case 'RUN_WORKER_BUSY':
+      return '运行服务正在处理或恢复，请稍后查询已有记录。';
+    case 'RUN_LIMIT':
+      return '已有两次运行正在处理，请先完成或取消。';
+    case 'RUN_TIMEOUT':
+      return '已达到本轮总时长上限，已有片段保留，本次未自动重试。';
+    case 'RUN_BUDGET_EXCEEDED':
+      return '已达到本轮调用或内容预算，已有片段保留，未继续启动步骤。';
+    case 'RUN_INTERRUPTED':
+      return '运行服务已中断，已有片段保留，本次未自动重新执行。';
+    case 'RUN_CANCELLED':
+      return '运行已取消，未完成的内容仅供查看。';
+    case 'RUN_FAILED':
+      return '本次运行未完成，请核对服务与模型配置后再试。';
     case 'ACTION_RESOLVED':
       return '此提案已经处理，请核对当前状态。';
     case 'ACTION_FAILED':

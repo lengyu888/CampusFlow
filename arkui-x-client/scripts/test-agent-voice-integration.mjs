@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { stripTypeScriptTypes } from 'node:module';
 import { test } from 'node:test';
+import { makeRunController, runSnapshot, rememberHistory } from './helpers/agent-run-ui-fixture.mjs';
 
 const voiceSource = readFileSync(new URL('../entry/src/main/ets/utils/VoiceInteraction.ets', import.meta.url), 'utf8');
 const { VoiceInteraction } = await import(
@@ -24,7 +25,7 @@ const pageSource = source.slice(0, firstBuilder)
   .replace('export struct AgentPage', 'class AgentPage') + '\n}\n';
 const createPage = new Function('CampusFlowApi', 'Scroller', 'CampusFlowRequestError',
   'displayToolTraces', 'mergeActions', 'restoreDraft', 'localRequestFailure', 'AppTheme', 'localHistory',
-  'PlatformVoiceDriver', 'VoiceInteraction', ...Object.keys(reliability), stripTypeScriptTypes(pageSource) + '\nreturn AgentPage;');
+  'PlatformVoiceDriver', 'VoiceInteraction', 'AgentRunController', ...Object.keys(reliability), stripTypeScriptTypes(pageSource) + '\nreturn AgentPage;');
 
 function fixture({ chat = null } = {}) {
   const calls = [];
@@ -52,15 +53,17 @@ function fixture({ chat = null } = {}) {
     constructor(driver, onChange) { super(driver, onChange, clock); }
   }
   class Api {
-    async chat(...args) {
+    async startAgentRun(request) {
+      const args = [request.session_id, request.model, request.message];
       calls.push(['chat', ...args]);
-      return chat ? chat(...args) : { session_id: 'fixture-session', message: '文字回答', pending_actions: [] };
+      const response = chat ? await chat(...args) : { session_id: request.session_id, message: '文字回答', pending_actions: [] };
+      return runSnapshot(request, response);
     }
     async confirmAction(...args) { calls.push(['confirm', ...args]); throw new Error('unexpected confirm'); }
     async cancelAction(...args) { calls.push(['reject', ...args]); throw new Error('unexpected rejection'); }
   }
   const Page = createPage(Api, class Scroller {}, helper.CampusFlowRequestError, helper.displayToolTraces,
-    helper.mergeActions, helper.restoreDraft, helper.localRequestFailure, {}, {}, Driver, Controller, ...Object.values(reliability));
+    helper.mergeActions, helper.restoreDraft, helper.localRequestFailure, {}, {}, Driver, Controller, makeRunController(helper.CampusFlowRequestError, helper.localRequestFailure), ...Object.values(reliability));
   const page = new Page();
   page.baseUrl = 'http://fixture.invalid';
   page.token = 'test-only';

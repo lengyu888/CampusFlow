@@ -22,6 +22,9 @@ import {
   PlanningConflictReport,
   PlanningTask,
   ReplanPreview,
+  RunStartRequest,
+  RunSnapshot,
+  RunEventsPage,
   ScheduleSubscriptionStatus,
   ScheduleSubscriptionPreview,
   SkillSummary,
@@ -109,7 +112,7 @@ export class CampusFlowApi {
       }
       const text = response.result as string;
       if (response.responseCode < 200 || response.responseCode >= 300) {
-        if (path === '/api/v1/chat' || path.startsWith('/api/v1/actions/') || path.startsWith('/api/v1/planning/') ||
+        if (path === '/api/v1/chat' || path.startsWith('/api/v1/agent-runs') || path.startsWith('/api/v1/actions/') || path.startsWith('/api/v1/planning/') ||
           path === '/api/v1/tasks' || path.startsWith('/api/v1/tasks/') ||
           path === '/api/v1/me/timetable' || path.startsWith('/api/v1/me/timetable/')) {
           throw requestFailure(response.responseCode, text);
@@ -180,6 +183,27 @@ export class CampusFlowApi {
   async chat(sessionId: string, model: string, message: string): Promise<ChatResponse> {
     return this.request<ChatResponse>('/api/v1/chat', http.RequestMethod.POST,
       JSON.stringify({ session_id: sessionId, model: model, message: message }));
+  }
+
+  async startAgentRun(request: RunStartRequest): Promise<RunSnapshot> {
+    return this.request<RunSnapshot>('/api/v1/agent-runs', http.RequestMethod.POST, JSON.stringify(request));
+  }
+
+  async agentRun(runId: string): Promise<RunSnapshot> {
+    return this.request<RunSnapshot>(`/api/v1/agent-runs/${encodeURIComponent(runId)}`, http.RequestMethod.GET);
+  }
+
+  async agentRunEvents(runId: string, afterSeq: number): Promise<RunEventsPage> {
+    return this.request<RunEventsPage>(`/api/v1/agent-runs/${encodeURIComponent(runId)}/events?after_seq=${afterSeq}`,
+      http.RequestMethod.GET);
+  }
+
+  async cancelAgentRun(runId: string): Promise<RunSnapshot> {
+    return this.request<RunSnapshot>(`/api/v1/agent-runs/${encodeURIComponent(runId)}/cancel`, http.RequestMethod.POST, '{}');
+  }
+
+  async recentAgentRuns(limit: number = 20): Promise<RunSnapshot[]> {
+    return this.request<RunSnapshot[]>(`/api/v1/agent-runs?limit=${limit}`, http.RequestMethod.GET);
   }
 
   async previewPlanningAction(payload: PlanningActionRequest): Promise<PendingAction> {

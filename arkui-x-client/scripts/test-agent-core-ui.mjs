@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { stripTypeScriptTypes } from 'node:module';
 import { test } from 'node:test';
+import { makeRunController, runSnapshot, rememberHistory } from './helpers/agent-run-ui-fixture.mjs';
 
 const helperSource = readFileSync(new URL('../entry/src/main/ets/utils/AgentFeedback.ets', import.meta.url), 'utf8')
   .replace(/^import \{[^\n]+\} from '\.\.\/model\/ApiModels';\r?\n/, '');
@@ -21,7 +22,7 @@ const controllerSource = source.slice(0, boundary)
   .replace('export struct AgentPage', 'class AgentPage') + '\n}\n';
 const create = new Function('CampusFlowApi', 'Scroller', 'CampusFlowRequestError', 'displayToolTraces',
   'mergeActions', 'restoreDraft', 'localRequestFailure', 'AppTheme', 'localHistory', 'Edge',
-  ...Object.keys(reliability), stripTypeScriptTypes(controllerSource) + '\nreturn AgentPage;');
+  'AgentRunController', ...Object.keys(reliability), stripTypeScriptTypes(controllerSource) + '\nreturn AgentPage;');
 
 function pending(id, title = '相同标题') {
   return { proposal_id: id, action: 'create', kind: 'task', title, start_at: null, end_at: null,
@@ -47,7 +48,10 @@ function harness(handlers = {}) {
   const calls = [], scroll = [];
   class Api {
     call(method, args) { calls.push({ method, args }); assert.equal(typeof handlers[method], 'function'); return handlers[method](...args); }
-    chat(...args) { return this.call('chat', args); }
+    async startAgentRun(request) {
+      const response = await this.call('chat', [request.session_id, request.model, request.message]);
+      return runSnapshot(request, response);
+    }
     confirmAction(...args) { return this.call('confirmAction', args); }
     cancelAction(...args) { return this.call('cancelAction', args); }
     actionStatus(...args) { return this.call('actionStatus', args); }
@@ -57,7 +61,7 @@ function harness(handlers = {}) {
     scrollEdge(edge) { scroll.push({ kind: 'edge', edge }); }
   }
   const Page = create(Api, Scroller, helper.CampusFlowRequestError, helper.displayToolTraces,
-    helper.mergeActions, helper.restoreDraft, helper.localRequestFailure, {}, {}, { Bottom: 'bottom' }, ...Object.values(reliability));
+    helper.mergeActions, helper.restoreDraft, helper.localRequestFailure, {}, {}, { Bottom: 'bottom' }, makeRunController(helper.CampusFlowRequestError, helper.localRequestFailure), ...Object.values(reliability));
   const page = new Page();
   page.baseUrl = 'http://fixture.invalid';
   page.token = 'fixture-token';

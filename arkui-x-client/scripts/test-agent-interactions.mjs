@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { stripTypeScriptTypes } from 'node:module';
 import { test } from 'node:test';
+import { makeRunController, runSnapshot, rememberHistory } from './helpers/agent-run-ui-fixture.mjs';
 
 const helperSource = readFileSync(new URL('../entry/src/main/ets/utils/AgentFeedback.ets', import.meta.url), 'utf8')
   .replace(/^import \{[^\n]+\} from '\.\.\/model\/ApiModels';\r?\n/, '');
@@ -20,7 +21,7 @@ const controllerSource = source.slice(0, firstBuilder)
   .replace('export struct AgentPage', 'class AgentPage') + '\n}\n';
 const createController = new Function('CampusFlowApi', 'Scroller', 'CampusFlowRequestError',
   'displayToolTraces', 'mergeActions', 'restoreDraft', 'localRequestFailure', 'AppTheme', 'localHistory',
-  ...Object.keys(reliability), stripTypeScriptTypes(controllerSource) + '\nreturn AgentPage;');
+  'AgentRunController', ...Object.keys(reliability), stripTypeScriptTypes(controllerSource) + '\nreturn AgentPage;');
 
 function pending(id = 'proposal-1', title = '复习') {
   return { proposal_id: id, action: 'create', kind: 'task', title, start_at: null, end_at: null,
@@ -45,22 +46,29 @@ function deferred() {
 
 function harness(handlers = {}, localHistory = {}) {
   const calls = [];
+  const histories = new Map();
   class Api {
     invoke(method, args) {
       calls.push({ method, args });
       assert.equal(typeof handlers[method], 'function', `unexpected API call: ${method}`);
       return handlers[method](...args);
     }
-    chat(...args) { return this.invoke('chat', args); }
+    async startAgentRun(request) {
+      const response = await this.invoke('chat', [request.session_id, request.model, request.message]);
+      rememberHistory(histories, request, response);
+      return runSnapshot(request, response);
+    }
+    async history(sessionId) { return histories.get(sessionId) ?? []; }
     confirmAction(...args) { return this.invoke('confirmAction', args); }
     cancelAction(...args) { return this.invoke('cancelAction', args); }
     actionStatus(...args) { return this.invoke('actionStatus', args); }
   }
   const Controller = createController(Api, class Scroller {}, helper.CampusFlowRequestError,
-    helper.displayToolTraces, helper.mergeActions, helper.restoreDraft, helper.localRequestFailure, {}, localHistory, ...Object.values(reliability));
+    helper.displayToolTraces, helper.mergeActions, helper.restoreDraft, helper.localRequestFailure, {}, localHistory, makeRunController(helper.CampusFlowRequestError, helper.localRequestFailure), ...Object.values(reliability));
   const page = new Controller();
   page.baseUrl = 'http://fixture.invalid';
   page.token = 'test-only';
+  page.voiceActive = true;
   return { page, calls };
 }
 
@@ -175,25 +183,30 @@ test('a slow failed send preserves a newer draft and keeps the original message 
   page.prompt = '等待时新写的草稿';
   response.reject(helper.localRequestFailure('NETWORK_ERROR'));
   await sending;
-  assert.equal(page.loading, false);
+  assert.equal(page.loading, true, 'an unknown create result keeps new writes blocked until checked');
+  assert.equal(page.runState.phase, 'unknown');
   assert.equal(page.prompt, '等待时新写的草稿');
   assert.equal(page.messages.find((item) => item.role === 'user').content, '原来的规划请求');
-  assert.equal(page.messages.at(-1).failedPrompt, '原来的规划请求');
+  assert.equal(page.runState.request.message, '原来的规划请求');
+  assert.equal(page.messages.filter(item => item.role === 'feedback').length, 0, 'unknown is not a definitive failure');
   assert.equal(calls.length, 1);
 });
 
-test('failed sends restore an empty draft and conceal unknown exception diagnostics', async () => {
+test('unknown sends preserve their original request without refilling an empty draft or exposing diagnostics', async () => {
   const { page } = harness({ chat: async () => { throw new Error('PRIVATE_KEY_OR_URL'); } });
   page.prompt = '今晚复习';
   await page.send();
-  assert.equal(page.prompt, '今晚复习');
-  assert.equal(page.messages.at(-1).failureCode, 'UNKNOWN');
+  assert.equal(page.prompt, '');
+  assert.equal(page.runState.request.message, '今晚复习');
+  assert.equal(page.runState.phase, 'unknown');
   assert.doesNotMatch(page.messages.at(-1).content, /PRIVATE_KEY_OR_URL/);
+  assert.doesNotMatch(page.runState.message, /PRIVATE_KEY_OR_URL/);
 });
 
 test('a second send cannot run during an outstanding request', async () => {
   const response = deferred();
   const { page, calls } = harness({ chat: () => response.promise });
+  const sessionId = page.sessionId;
   page.prompt = '第一条';
   const first = page.send();
   page.prompt = '第二条草稿';
@@ -202,7 +215,7 @@ test('a second send cannot run during an outstanding request', async () => {
   response.resolve({ session_id: 'session-1', message: '完成', pending_actions: [] });
   await first;
   assert.equal(page.prompt, '第二条草稿');
-  assert.equal(page.sessionId, 'session-1');
+  assert.equal(page.sessionId, sessionId, 'the run is bound to its original requested session');
 });
 
 test('later turns keep unresolved proposals and cannot revive resolved ones', async () => {
@@ -298,8 +311,9 @@ test('a malformed chat envelope does not replace the session or append a broken 
     page.prompt = '保留这条问题';
     await page.send();
     assert.equal(page.sessionId, originalSession);
-    assert.equal(page.prompt, '保留这条问题');
-    assert.equal(page.messages.at(-1).failureCode, 'INVALID_RESPONSE');
+    assert.equal(page.prompt, '');
+    assert.equal(page.runState.request.message, '保留这条问题');
+    assert.equal(page.runState.phase, 'unknown', 'a broken run result must be queried instead of resubmitted');
     assert.equal(page.messages.filter((item) => item.role === 'assistant').length, 1);
   }
 });
