@@ -24,6 +24,8 @@ _LABELS = {
     "get_electricity_balance": "寝室电费",
     "propose_task_change": "待办提案",
     "propose_plan": "计划提案",
+    "propose_plan_change": "计划修改提案",
+    "get_planning": "计划与待办",
 }
 
 _SNAPSHOT_FIELDS = {
@@ -357,7 +359,7 @@ def _proposal_summary(
         proposal = PendingAction.model_validate(result)
     except ValidationError:
         return _unverified(label)
-    kind = "plan" if name == "propose_plan" else "task"
+    kind = "plan" if name in {"propose_plan", "propose_plan_change"} else "task"
     matched = next(
         (
             action
@@ -398,8 +400,26 @@ def present_tool_trace(
         return _snapshot_summary(name, result, label)
     if name in {"get_unused_classrooms", "get_classroom_usage", "get_electricity_balance"}:
         return _live_summary(name, result, label)
-    if name in {"propose_task_change", "propose_plan"}:
+    if name in {"propose_task_change", "propose_plan", "propose_plan_change"}:
         return _proposal_summary(name, result, pending_actions, label)
+    if name == "get_planning":
+        from .schemas import PlanningOverview
+
+        try:
+            if not isinstance(result.get("tasks"), list) or not isinstance(
+                result.get("plans"), list
+            ):
+                return _unverified(label)
+            overview = PlanningOverview.model_validate(result)
+        except ValidationError:
+            return _unverified(label)
+        return ToolDisplaySummary(
+            label=label,
+            state="success" if overview.tasks or overview.plans else "empty",
+            summary=(
+                f"返回 {len(overview.plans)} 项计划、{len(overview.tasks)} 项待办，可按 ID 核对。"
+            ),
+        )
     if name == "plan_campus_route":
         if type(result.get("total_minutes")) is not int:
             return _unverified(label)

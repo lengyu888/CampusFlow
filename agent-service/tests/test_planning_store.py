@@ -34,7 +34,7 @@ def test_planning_marks_overdue_tasks_and_plan(tmp_path) -> None:
         user_id="user-1",
         title="昨日复习计划",
         summary="检查逾期状态",
-        target_date=yesterday.date().isoformat(),
+        target_date=store._campus_local(yesterday).date().isoformat(),
         milestones=[
             {
                 "title": "完成复习",
@@ -116,7 +116,7 @@ def test_delete_plan_preserves_tasks_as_standalone_todos(tmp_path) -> None:
         user_id="user-1",
         title="可删除计划卡片",
         summary="任务需要保留",
-        target_date=tomorrow.date().isoformat(),
+        target_date=store._campus_local(tomorrow).date().isoformat(),
         milestones=[
             {
                 "title": "里程碑",

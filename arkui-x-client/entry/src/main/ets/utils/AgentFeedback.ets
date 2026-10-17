@@ -21,9 +21,9 @@ function knownErrorMessage(code: string): string {
     case 'LOGIN_REQUIRED':
       return '请重新登录 CampusFlow 后再试。';
     case 'MODEL_AUTH_INVALID':
-      return '模型服务凭据无效，请在“我的”中检查或更新 API Key。';
+      return '模型服务凭据无效，请在个人设置中检查或更新 API Key。';
     case 'MODEL_KEY_REQUIRED':
-      return '尚未配置模型 API Key，请在“我的”中完成配置。';
+      return '尚未配置模型 API Key，请在个人设置中完成配置。';
     case 'MODEL_UNAVAILABLE':
       return '模型服务暂时不可用，请稍后再试。';
     case 'MODEL_RATE_LIMITED':
@@ -38,6 +38,16 @@ function knownErrorMessage(code: string): string {
       return '此提案已经处理，请核对当前状态。';
     case 'ACTION_FAILED':
       return '提案执行失败，请核对当前状态后再操作。';
+    case 'ACTION_EXPIRED':
+      return '这份提案已过期，请根据最新日程重新预览后确认。';
+    case 'ACTION_LEGACY_UNVERIFIED':
+      return '旧版提案缺少可核验的版本记录，请重新生成预览。';
+    case 'ACTION_STALE':
+      return '课程或任务已变化，本次没有执行。请根据最新数据重新预览。';
+    case 'ACTION_CONFLICT':
+      return '候选安排与课程、已有任务或候选中的其他任务重叠，请调整后重新预览。';
+    case 'ACTION_INVALID':
+      return '变更内容未通过检查，请核对名称、时间与目标记录。';
     case 'ACTION_UNSUPPORTED':
       return '暂不支持执行此类提案。';
     case 'NETWORK_ERROR':

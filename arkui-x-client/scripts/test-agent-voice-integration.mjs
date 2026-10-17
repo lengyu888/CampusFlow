@@ -9,6 +9,9 @@ const { VoiceInteraction } = await import(
 const helperSource = readFileSync(new URL('../entry/src/main/ets/utils/AgentFeedback.ets', import.meta.url), 'utf8')
   .replace(/^import \{[^\n]+\} from '\.\.\/model\/ApiModels';\r?\n/, '');
 const helper = await import(`data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(helperSource)).toString('base64')}`);
+const reliabilitySource = readFileSync(new URL('../entry/src/main/ets/utils/ActionReliability.ets', import.meta.url), 'utf8')
+  .replace(/^import \{[\s\S]*?\} from '[^']+';\r?\n/gm, '');
+const reliability = await import(`data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(reliabilitySource)).toString('base64')}`);
 const source = readFileSync(new URL('../entry/src/main/ets/pages/AgentPage.ets', import.meta.url), 'utf8');
 const firstBuilder = source.indexOf('\n  @Builder');
 assert.ok(firstBuilder > 0, 'the non-UI method boundary must exist');
@@ -21,7 +24,7 @@ const pageSource = source.slice(0, firstBuilder)
   .replace('export struct AgentPage', 'class AgentPage') + '\n}\n';
 const createPage = new Function('CampusFlowApi', 'Scroller', 'CampusFlowRequestError',
   'displayToolTraces', 'mergeActions', 'restoreDraft', 'localRequestFailure', 'AppTheme', 'localHistory',
-  'PlatformVoiceDriver', 'VoiceInteraction', stripTypeScriptTypes(pageSource) + '\nreturn AgentPage;');
+  'PlatformVoiceDriver', 'VoiceInteraction', ...Object.keys(reliability), stripTypeScriptTypes(pageSource) + '\nreturn AgentPage;');
 
 function fixture({ chat = null } = {}) {
   const calls = [];
@@ -57,7 +60,7 @@ function fixture({ chat = null } = {}) {
     async cancelAction(...args) { calls.push(['reject', ...args]); throw new Error('unexpected rejection'); }
   }
   const Page = createPage(Api, class Scroller {}, helper.CampusFlowRequestError, helper.displayToolTraces,
-    helper.mergeActions, helper.restoreDraft, helper.localRequestFailure, {}, {}, Driver, Controller);
+    helper.mergeActions, helper.restoreDraft, helper.localRequestFailure, {}, {}, Driver, Controller, ...Object.values(reliability));
   const page = new Page();
   page.baseUrl = 'http://fixture.invalid';
   page.token = 'test-only';

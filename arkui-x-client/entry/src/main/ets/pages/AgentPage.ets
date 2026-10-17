@@ -1,4 +1,4 @@
-import { HistoryMessage, SessionSummary, PendingAction, PendingMilestonePreview, PendingTaskPreview, ToolDisplaySummary } from '../model/ApiModels';
+import { HistoryMessage, SessionSummary, PendingAction, PendingMilestonePreview, PendingTaskPreview, ToolDisplaySummary, PlanningTaskDraft, PlanningPlanDraft } from '../model/ApiModels';
 import { CampusFlowApi } from '../services/CampusFlowApi';
 import { localHistory } from '../services/LocalHistory';
 import { MessageContent } from '../components/MessageContent';
@@ -10,6 +10,7 @@ import { CampusFlowRequestError, displayToolTraces, mergeActions, restoreDraft, 
 import common from '@ohos.app.ability.common';
 import { PlatformVoiceDriver } from '../services/PlatformVoiceDriver';
 import { VoiceInteraction, VoiceState } from '../utils/VoiceInteraction';
+import { validActionPreview, validReliableAction, canConfirmAction, decisionDisposition, sameActionCandidate, validatedActionReceipt, sameActionReceipt, receiptTaskId, receiptPlanId } from '../utils/ActionReliability';
 
 interface ConversationEntry {
   id: string;
@@ -51,6 +52,9 @@ export struct AgentPage {
   onOpenHistory: () => void = () => {};
   onOpenRoute: () => void = () => {};
   onOpenPlan: () => void = () => {};
+  onOpenTaskDetails: (id: string) => void = () => {};
+  onOpenPlanDetails: (id: string) => void = () => {};
+  onPlanningChanged: () => void = () => {};
   onOpenProfile: () => void = () => {};
   onChatBusyChange: (busy: boolean) => void = () => {};
   @State private prompt: string = '';
@@ -96,6 +100,8 @@ export struct AgentPage {
   private pendingJumpId: string = '';
   private optionsReturnOffset: number = 0;
   private restoreOptionsOffset: number = -1;
+  private notifiedReceiptIds: string[] = [];
+  private invalidatedProposalIds: string[] = [];
 
   aboutToAppear(): void {
     this.pageActive = true;
@@ -121,6 +127,8 @@ export struct AgentPage {
     this.savedMessages = [];
     this.messages = [];
     this.pendingActions = [];
+    this.invalidatedProposalIds = [];
+    this.notifiedReceiptIds = [];
     this.proposalOrigins = [];
     this.expandedReceiptIds = [];
     this.messageAnchors = [];
@@ -262,7 +270,7 @@ export struct AgentPage {
   }
 
   private receiptCollapsed(action: PendingAction): boolean {
-    return !this.needsReview(action.proposal_id) && ['confirmed', 'cancelled'].includes(action.status) &&
+    return !this.needsReview(action.proposal_id) && ['confirmed', 'cancelled'].includes(decisionDisposition(action)) &&
       !this.expandedReceiptIds.includes(action.proposal_id);
   }
 
@@ -451,8 +459,12 @@ export struct AgentPage {
       this.sessionId = response.session_id;
       const messageId = this.appendMessage('assistant', response.message, displayToolTraces(response.tool_traces));
       // A later turn without proposals must not erase an earlier pending decision.
-      this.pendingActions = mergeActions(this.pendingActions, response.pending_actions);
-      this.linkProposals(messageId, response.pending_actions);
+      const validActions = response.pending_actions.filter((action: PendingAction) => validActionPreview(action));
+      this.pendingActions = mergeActions(this.pendingActions, validActions);
+      this.linkProposals(messageId, validActions);
+      if (validActions.length !== response.pending_actions.length) {
+        this.appendMessage('feedback', '部分提案内容不完整，未开放执行。请根据最新安排重新生成预览。');
+      }
       this.actionsRevision++;
       await this.saveConversation(text, response.message, sentAt);
     } catch (error) {
@@ -493,20 +505,108 @@ export struct AgentPage {
     if (this.needsReview(action.proposal_id)) {
       return '结果待核对';
     }
-    if (action.status === 'confirmed') {
-      return '已确认';
-    }
-    if (action.status === 'cancelled') {
-      return '已取消';
-    }
+    const disposition = decisionDisposition(action);
+    if (disposition === 'confirmed') { return '已完成执行'; }
+    if (disposition === 'cancelled') { return '已取消'; }
+    if (disposition === 'legacy') { return '旧提案 · 需重新生成'; }
+    if (disposition === 'invalid') { return '结果尚未核验'; }
+    if (this.requiresNewPreview(action)) { return '需要新的预览'; }
     return '等待你的确认';
+  }
+
+  private requiresNewPreview(action: PendingAction): boolean {
+    return this.invalidatedProposalIds.includes(action.proposal_id) ||
+      ['legacy', 'invalid', 'expired', 'conflict'].includes(decisionDisposition(action)) ||
+      ['ACTION_EXPIRED', 'ACTION_LEGACY_UNVERIFIED', 'ACTION_STALE', 'ACTION_CONFLICT', 'ACTION_INVALID', 'ACTION_NOT_FOUND']
+        .includes(this.feedbackFor(action.proposal_id)?.code ?? '');
+  }
+
+  private anotherDecisionUnknown(proposalId: string): boolean {
+    return this.decisionFeedback.some((item: DecisionFeedback) => item.proposalId !== proposalId && item.needsReview);
+  }
+
+  private proposalBlockMessage(action: PendingAction): string {
+    const disposition = decisionDisposition(action);
+    if (disposition === 'legacy') { return '这份旧提案缺少可核验快照，不能直接执行。请核对当前计划后重新生成预览。'; }
+    if (disposition === 'expired') { return '预览已过期，请读取最新课表和任务后重新生成；旧预览不会执行。'; }
+    if (disposition === 'conflict') { return '候选中存在阻断冲突，请调整安排并生成新的预览。'; }
+    if (disposition === 'invalid') { return '提案或执行回执不完整，暂不开放执行或具体结果跳转。'; }
+    return '当前预览对应的安排已变化，请重新生成并核对后再执行。';
+  }
+
+  private operationLabel(action: PendingAction): string {
+    const verb = action.action === 'delete' ? '删除' : action.action === 'update' ? '修改' : '创建';
+    return `${verb}${action.kind === 'plan' ? '计划' : '待办'}`;
+  }
+
+  private regenerateProposal(action: PendingAction): void {
+    this.offerPrompt(`请先读取最新课表、任务与计划，重新生成「${action.title}」的${this.operationLabel(action)}预览。` +
+      '请说明新安排与当前课程、已有任务和候选内部的冲突，等待我确认；不要执行旧提案。');
+  }
+
+  private completedMessage(action: PendingAction): string {
+    const receipt = validatedActionReceipt(action);
+    if (receipt === null) { return '执行结果尚未核验，请查询持久回执。'; }
+    if (action.action === 'delete') {
+      return action.kind === 'plan' ? `计划已删除，${receipt.retained_task_ids.length} 项原任务已保留为独立待办。` : '任务已删除。';
+    }
+    if (action.action === 'update') { return action.kind === 'plan' ? '计划资料已更新，下属任务未自动改动。' : '任务已更新。'; }
+    return action.kind === 'plan' ? `计划已创建，共 ${receipt.milestone_ids.length} 个里程碑、${receipt.task_ids.length} 项任务。` : '待办已创建。';
+  }
+
+  private acceptResolvedAction(action: PendingAction): void {
+    this.replaceAction(action);
+    this.setFeedback(action.proposal_id, action.status === 'cancelled' ? '服务端已记录取消，此提案不会再执行。' : this.completedMessage(action), false);
+    const receipt = validatedActionReceipt(action);
+    if (receipt !== null && !this.notifiedReceiptIds.includes(receipt.receipt_id)) {
+      this.notifiedReceiptIds = this.notifiedReceiptIds.concat([receipt.receipt_id]);
+      this.onPlanningChanged();
+    }
+  }
+
+  private openReceipt(action: PendingAction): void {
+    const current = this.pendingActions.find((item: PendingAction) => item.proposal_id === action.proposal_id);
+    if (current === undefined || this.needsReview(current.proposal_id)) { return; }
+    const taskId = receiptTaskId(current);
+    const planId = receiptPlanId(current);
+    if (taskId.length > 0) { this.onOpenTaskDetails(taskId); }
+    else if (planId.length > 0) { this.onOpenPlanDetails(planId); }
+  }
+
+  private beforeTasks(action: PendingAction): PlanningTaskDraft[] {
+    return validReliableAction(action) && action.before_task !== undefined && action.before_task !== null ? [action.before_task] : [];
+  }
+
+  private afterTasks(action: PendingAction): PlanningTaskDraft[] {
+    return validReliableAction(action) && action.action !== 'delete' && action.payload.task !== undefined ? [action.payload.task] : [];
+  }
+
+  private beforePlans(action: PendingAction): PlanningPlanDraft[] {
+    return validReliableAction(action) && action.before_plan !== undefined && action.before_plan !== null ? [action.before_plan] : [];
+  }
+
+  private afterPlans(action: PendingAction): PlanningPlanDraft[] {
+    return validReliableAction(action) && action.action === 'update' && action.payload.plan !== undefined ? [action.payload.plan] : [];
   }
 
   private async decide(action: PendingAction, confirm: boolean): Promise<void> {
     // Guard the handler as well as the buttons against rapid taps and stale callbacks.
     const current = this.pendingActions.find((item: PendingAction) => item.proposal_id === action.proposal_id);
     if (!this.pageActive || this.deletionBusy || this.loading || this.decisionId.length > 0 || current === undefined || current.status !== 'pending' ||
-      this.needsReview(action.proposal_id) || (confirm && current.action !== 'create')) {
+      this.needsReview(action.proposal_id)) {
+      return;
+    }
+    if (!sameActionCandidate(action, current)) {
+      this.invalidatedProposalIds = this.invalidatedProposalIds.concat([current.proposal_id]);
+      this.setFeedback(current.proposal_id, '提案内容已变化，请重新核对预览；本次未执行。', false, 'ACTION_STALE');
+      return;
+    }
+    if (confirm && this.anotherDecisionUnknown(current.proposal_id)) {
+      this.setFeedback(current.proposal_id, '请先核对另一份提案的执行结果，再确认这份提案。仍可取消预览或继续聊天。', false);
+      return;
+    }
+    if (!validReliableAction(current) || (confirm && (!canConfirmAction(current) || this.requiresNewPreview(current)))) {
+      this.setFeedback(current.proposal_id, this.proposalBlockMessage(current), false, this.feedbackFor(current.proposal_id)?.code ?? '');
       return;
     }
     this.decisionId = action.proposal_id;
@@ -516,17 +616,22 @@ export struct AgentPage {
       const result = confirm ? await api.confirmAction(action.proposal_id) : await api.cancelAction(action.proposal_id);
       if (!this.pageActive || revision !== this.conversationRevision) { return; }
       const expectedStatus = confirm ? 'confirmed' : 'cancelled';
-      if (result.action.proposal_id === action.proposal_id && result.action.status === expectedStatus &&
-        result.applied === confirm) {
-        this.replaceAction(result.action);
-        this.setFeedback(action.proposal_id, confirm ? '已确认，可到计划列表查看具体任务。' : '提案已取消。', false);
+      if (result !== null && sameActionCandidate(current, result.action) &&
+        decisionDisposition(result.action) === expectedStatus && result.applied === confirm &&
+        sameActionReceipt(result.action.receipt, result.receipt)) {
+        this.acceptResolvedAction(result.action);
       } else {
         this.setFeedback(action.proposal_id, '服务返回的状态与本次操作不一致。请核对状态和计划列表，暂不重复提交。', true);
       }
     } catch (error) {
       if (!this.pageActive || revision !== this.conversationRevision) { return; }
       const failure = this.safeFailure(error);
-      const rejectedBeforeWrite = failure.code === 'LOGIN_REQUIRED' || failure.code === 'ACTION_UNSUPPORTED';
+      const rejectedBeforeWrite = ['LOGIN_REQUIRED', 'ACTION_UNSUPPORTED', 'ACTION_EXPIRED', 'ACTION_LEGACY_UNVERIFIED',
+        'ACTION_STALE', 'ACTION_CONFLICT', 'ACTION_INVALID', 'ACTION_NOT_FOUND'].includes(failure.code);
+      if (['ACTION_EXPIRED', 'ACTION_LEGACY_UNVERIFIED', 'ACTION_STALE', 'ACTION_CONFLICT', 'ACTION_INVALID', 'ACTION_NOT_FOUND']
+        .includes(failure.code) && !this.invalidatedProposalIds.includes(action.proposal_id)) {
+        this.invalidatedProposalIds = this.invalidatedProposalIds.concat([action.proposal_id]);
+      }
       this.setFeedback(action.proposal_id,
         rejectedBeforeWrite ? failure.message : `${failure.message} 请核对状态和计划列表，暂不重复提交。`,
         !rejectedBeforeWrite, failure.code);
@@ -543,18 +648,27 @@ export struct AgentPage {
     this.decisionId = action.proposal_id;
     const revision = this.conversationRevision;
     try {
+      const original = this.pendingActions.find((item: PendingAction) => item.proposal_id === action.proposal_id);
       const latest = await new CampusFlowApi(this.baseUrl, this.token).actionStatus(action.proposal_id);
       if (!this.pageActive || revision !== this.conversationRevision) { return; }
-      if (latest.proposal_id !== action.proposal_id ||
-        !['pending', 'confirmed', 'cancelled'].includes(latest.status)) {
-        this.setFeedback(action.proposal_id, '未取得可核验的提案状态，请到计划列表核对。', true);
+      if (original === undefined || !sameActionCandidate(original, latest) || !validReliableAction(latest)) {
+        this.setFeedback(action.proposal_id, '未取得匹配原预览的可靠状态；旧提案不会重发，请核对计划列表或重新生成。', true);
         return;
       }
-      this.replaceAction(latest);
-      const state = latest.status === 'confirmed' ? '已确认' : latest.status === 'cancelled' ? '已取消' : '待确认';
-      // A status read cannot prove that a failed transaction left no partial tasks.
-      this.setFeedback(action.proposal_id,
-        `服务端记录为「${state}」。上次操作的实际写入仍需到计划列表核对，本会话不重复提交。`, true);
+      const disposition = decisionDisposition(latest);
+      if (disposition === 'confirmed' || disposition === 'cancelled') {
+        this.acceptResolvedAction(latest);
+      } else if (disposition === 'ready') {
+        this.replaceAction(latest);
+        this.setFeedback(action.proposal_id, this.invalidatedProposalIds.includes(action.proposal_id) ?
+          '服务仍记录为待确认，但这份预览已被判定失效。请重新生成，或取消这份预览。' :
+          '可靠服务当前记录为待确认。可再次核对后主动确认同一提案；重复请求会返回同一回执，不会重复写入。', false);
+      } else if (disposition === 'expired' || disposition === 'conflict') {
+        this.replaceAction(latest);
+        this.setFeedback(action.proposal_id, this.proposalBlockMessage(latest), false);
+      } else {
+        this.setFeedback(action.proposal_id, '服务端状态缺少有效执行回执，请继续核对，暂不重复提交。', true);
+      }
     } catch (error) {
       if (!this.pageActive || revision !== this.conversationRevision) { return; }
       const failure = this.safeFailure(error);
@@ -653,6 +767,9 @@ export struct AgentPage {
   }
 
   private proposalMeta(action: PendingAction): string {
+    if (action.action !== 'create') {
+      return action.action === 'delete' ? '请核对将移除的内容与保留范围' : '请完整核对修改前与修改后内容';
+    }
     if (action.kind === 'plan') {
       const milestoneCount = (action.payload.milestones ?? []).length;
       const target = action.payload.target_date ?? '未设截止日';
@@ -662,6 +779,61 @@ export struct AgentPage {
       return `执行时间 ${formatPlanDateTime(action.start_at)}`;
     }
     return '未设置执行时间';
+  }
+
+  @Builder
+  private TaskDraftDetails(task: PlanningTaskDraft) {
+    Column({ space: 8 }) {
+      Text(task.title).fontSize(AppTheme.bodySize).fontWeight(FontWeight.Medium).fontColor(AppTheme.ink)
+        .width('100%').wordBreak(WordBreak.BREAK_WORD)
+      TaskScheduleDetails({ startAt: task.start_at, endAt: task.end_at, location: task.location, reminderMinutes: task.reminder_minutes })
+    }.width('100%').alignItems(HorizontalAlign.Start)
+  }
+
+  @Builder
+  private PlanDraftDetails(plan: PlanningPlanDraft) {
+    Column({ space: 8 }) {
+      Text(plan.title).fontSize(AppTheme.bodySize).fontWeight(FontWeight.Medium).fontColor(AppTheme.ink)
+        .width('100%').wordBreak(WordBreak.BREAK_WORD)
+      Text(plan.summary.length > 0 ? plan.summary : '未填写计划说明').fontSize(AppTheme.bodySize)
+        .fontColor(AppTheme.quiet).width('100%').wordBreak(WordBreak.BREAK_WORD)
+      Text(plan.target_date === null ? '未设截止日' : `截止 ${plan.target_date}`).fontSize(AppTheme.metaSize)
+        .fontColor(AppTheme.quiet).width('100%')
+    }.width('100%').alignItems(HorizontalAlign.Start)
+  }
+
+  @Builder
+  private ProposalChanges(action: PendingAction) {
+    Column({ space: 12 }) {
+      Text(action.action === 'delete' ? '将删除的原内容' : '修改前').fontSize(AppTheme.bodySize)
+        .fontWeight(FontWeight.Medium).fontColor(AppTheme.ink).width('100%')
+      ForEach(this.beforeTasks(action), (task: PlanningTaskDraft) => {
+        this.TaskDraftDetails(task)
+      }, (_task: PlanningTaskDraft) => `${action.proposal_id}-before-task`)
+      ForEach(this.beforePlans(action), (plan: PlanningPlanDraft) => {
+        this.PlanDraftDetails(plan)
+      }, (_plan: PlanningPlanDraft) => `${action.proposal_id}-before-plan`)
+      Divider().color(AppTheme.line)
+      if (action.action === 'delete') {
+        Text(action.kind === 'plan' ?
+          `只移除计划与里程碑，${action.before_plan?.task_count ?? 0} 项现有任务将保留为独立待办。` :
+          '确认后移除此任务；如果它属于计划，计划的任务计数也会更新。')
+          .fontSize(AppTheme.bodySize).fontColor(AppTheme.red).width('100%').wordBreak(WordBreak.BREAK_WORD)
+      } else {
+        Text('修改后').fontSize(AppTheme.bodySize).fontWeight(FontWeight.Medium).fontColor(AppTheme.actionBlue).width('100%')
+        ForEach(this.afterTasks(action), (task: PlanningTaskDraft) => {
+          this.TaskDraftDetails(task)
+        }, (_task: PlanningTaskDraft) => `${action.proposal_id}-after-task`)
+        ForEach(this.afterPlans(action), (plan: PlanningPlanDraft) => {
+          this.PlanDraftDetails(plan)
+        }, (_plan: PlanningPlanDraft) => `${action.proposal_id}-after-plan`)
+        if (action.kind === 'plan') {
+          Text('本次只修改计划资料；原有里程碑与任务不会自动改期或删除。')
+            .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+        }
+      }
+    }.width('100%').alignItems(HorizontalAlign.Start).padding(12)
+      .backgroundColor(AppTheme.canvas).borderRadius(AppTheme.controlRadius)
   }
 
   private proposalExpanded(proposalId: string): boolean {
@@ -890,7 +1062,7 @@ export struct AgentPage {
   private ProposalCard(action: PendingAction) {
     Column({ space: 12 }) {
       Row({ space: 8 }) {
-        Text(action.kind === 'plan' ? '计划提案' : '待办提案')
+        Text(`${this.operationLabel(action)}提案`)
           .fontSize(AppTheme.metaSize).fontWeight(FontWeight.Medium).fontColor(AppTheme.actionBlue).layoutWeight(1)
         Text(this.decisionLabel(action)).fontSize(AppTheme.metaSize)
           .fontColor(this.needsReview(action.proposal_id) ? AppTheme.orange : AppTheme.quiet)
@@ -902,7 +1074,9 @@ export struct AgentPage {
         if ((action.payload.summary ?? '').length > 0) {
           Text(action.payload.summary ?? '').fontSize(AppTheme.bodySize).fontColor(AppTheme.quiet).width('100%')
         }
-        if (action.kind === 'plan') {
+        if (action.action !== 'create' && validReliableAction(action)) {
+          this.ProposalChanges(action)
+        } else if (action.kind === 'plan') {
           if ((action.payload.milestones ?? []).length > 0) {
             Button({ type: ButtonType.Normal }) {
               Text(this.proposalExpanded(action.proposal_id) ? '收起完整计划' :
@@ -920,12 +1094,35 @@ export struct AgentPage {
           }
         } else {
           TaskScheduleDetails({ startAt: action.start_at, endAt: action.end_at,
-            location: action.payload.location ?? null, reminderMinutes: action.reminder_minutes })
+            location: action.payload.task?.location ?? action.payload.location ?? null, reminderMinutes: action.reminder_minutes })
         }
         if (action.conflicts.length > 0) {
-          Text(`检测到冲突：${action.conflicts.join('；')}`)
-            .fontSize(AppTheme.metaSize).fontColor(AppTheme.red).width('100%')
+          Text('需要调整的冲突').fontSize(AppTheme.bodySize).fontWeight(FontWeight.Medium).fontColor(AppTheme.red).width('100%')
+          ForEach(action.conflicts, (conflict: string, index: number) => {
+            Text(`${index + 1}. ${conflict}`).fontSize(AppTheme.metaSize).fontColor(AppTheme.red).width('100%')
+              .wordBreak(WordBreak.BREAK_WORD)
+          }, (_conflict: string, index: number) => `${action.proposal_id}-conflict-${index}`)
         }
+        if ((action.warnings ?? []).length > 0) {
+          Text('仍需手动核对').fontSize(AppTheme.bodySize).fontWeight(FontWeight.Medium).fontColor(AppTheme.orange).width('100%')
+          ForEach(action.warnings ?? [], (warning: string, index: number) => {
+            Text(`${index + 1}. ${warning}`).fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+              .wordBreak(WordBreak.BREAK_WORD)
+          }, (_warning: string, index: number) => `${action.proposal_id}-warning-${index}`)
+        }
+        if (validReliableAction(action)) {
+          Text(action.status === 'pending' ? `预览有效至 ${formatPlanDateTime(action.expires_at ?? null)}（北京时间）` :
+            `原预览生成于 ${formatPlanDateTime(action.created_at ?? null)}（北京时间）`)
+            .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+        }
+        if ((action.reason ?? '').length > 0) {
+          Text(action.reason ?? '').fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%').wordBreak(WordBreak.BREAK_WORD)
+        }
+      }
+      if (validatedActionReceipt(action) !== null) {
+        Text(`执行回执 · ${formatPlanDateTime(action.receipt?.applied_at ?? null)}（北京时间）`)
+          .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+        Text(this.completedMessage(action)).fontSize(AppTheme.bodySize).fontColor(AppTheme.ink).width('100%')
       }
       if (this.feedbackFor(action.proposal_id) !== undefined) {
         Text(this.feedbackFor(action.proposal_id)?.message ?? '').fontSize(AppTheme.metaSize).width('100%')
@@ -944,29 +1141,50 @@ export struct AgentPage {
           .onClick(() => this.checkDecision(action))
         Button('查看计划列表').width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
           .fontColor(AppTheme.actionBlue).backgroundColor(Color.Transparent).onClick(() => this.onOpenPlan())
-      } else if (action.status === 'confirmed' || action.status === 'cancelled') {
+      } else if (decisionDisposition(action) === 'confirmed' || decisionDisposition(action) === 'cancelled') {
         Button(this.receiptCollapsed(action) ? '查看原提案' : '收起原提案')
           .width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
           .fontColor(AppTheme.actionBlue).backgroundColor(AppTheme.blueSoft).borderRadius(AppTheme.controlRadius)
           .onClick(() => this.toggleReceipt(action.proposal_id))
         if (action.status === 'confirmed') {
-          Button('查看计划列表').width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
-            .fontColor(AppTheme.actionBlue).backgroundColor(Color.Transparent).onClick(() => this.onOpenPlan())
+          if (receiptTaskId(action).length > 0 || receiptPlanId(action).length > 0) {
+            Button(action.kind === 'task' ? '查看这个任务' : '查看这个计划').width('100%').constraintSize({ minHeight: 48 })
+              .fontSize(AppTheme.bodySize).fontColor(AppTheme.actionBlue).backgroundColor(Color.Transparent)
+              .onClick(() => this.openReceipt(action))
+          } else {
+            Button('查看计划列表').width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
+              .fontColor(AppTheme.actionBlue).backgroundColor(Color.Transparent).onClick(() => this.onOpenPlan())
+          }
+        }
+      } else if (this.requiresNewPreview(action)) {
+        Text(this.proposalBlockMessage(action)).fontSize(AppTheme.metaSize).fontColor(AppTheme.orange).width('100%')
+        Button('填入重新规划建议').width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
+          .fontColor(AppTheme.actionBlue).backgroundColor(AppTheme.blueSoft).borderRadius(AppTheme.controlRadius)
+          .onClick(() => this.regenerateProposal(action))
+        if (action.status === 'confirmed' || action.status === 'cancelled') {
+          Button('核对持久状态').width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
+            .fontColor(AppTheme.actionBlue).backgroundColor(Color.Transparent)
+            .enabled(!this.loading && !this.deletionBusy && this.decisionId.length === 0).onClick(() => this.checkDecision(action))
+        } else if (action.status === 'pending' && validReliableAction(action)) {
+          Button('取消这份预览').width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
+            .fontColor(AppTheme.quiet).backgroundColor(Color.Transparent)
+            .enabled(!this.loading && !this.deletionBusy && this.decisionId.length === 0).onClick(() => this.decide(action, false))
         }
       } else if (action.status === 'pending') {
-        if (action.action !== 'create') {
-          Text('暂不支持通过提案修改或删除已有任务，请到计划页操作。')
-            .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+        if (this.anotherDecisionUnknown(action.proposal_id)) {
+          Text('先核对另一份提案的执行结果，再确认这份提案。仍可取消预览或继续聊天。')
+            .fontSize(AppTheme.metaSize).fontColor(AppTheme.orange).width('100%').wordBreak(WordBreak.BREAK_WORD)
         }
         Row({ space: 8 }) {
           Button('暂不执行').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize).fontColor(AppTheme.quiet)
             .backgroundColor(AppTheme.field).borderRadius(AppTheme.controlRadius).layoutWeight(1)
             .enabled(!this.loading && !this.deletionBusy && this.decisionId.length === 0)
             .onClick(() => this.decide(action, false))
-          Button(this.decisionId === action.proposal_id ? '处理中…' : '确认执行')
+          Button(this.decisionId === action.proposal_id ? '处理中…' : `确认${this.operationLabel(action)}`)
             .constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize).fontColor('#FFFFFF')
             .backgroundColor(AppTheme.actionBlue).borderRadius(AppTheme.controlRadius).layoutWeight(1)
-            .enabled(!this.loading && !this.deletionBusy && this.decisionId.length === 0 && action.action === 'create')
+            .enabled(!this.loading && !this.deletionBusy && this.decisionId.length === 0 && canConfirmAction(action) &&
+              !this.anotherDecisionUnknown(action.proposal_id))
             .onClick(() => this.decide(action, true))
         }.width('100%')
       }

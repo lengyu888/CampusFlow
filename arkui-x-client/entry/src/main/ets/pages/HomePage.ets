@@ -1,5 +1,6 @@
 import { PlanningOverview, PlanningTask, PlanSummary, TimetableEntry, UserProfile } from '../model/ApiModels';
 import { CampusFlowApi } from '../services/CampusFlowApi';
+import { CampusFlowRequestError } from '../utils/AgentFeedback';
 import { AppIcon } from '../components/AppIcon';
 import { AppTheme } from '../theme/AppTheme';
 import { AgendaRow, DailyAgenda, buildDailyAgenda, labelNext, shanghaiDate, shanghaiTime } from '../utils/DailyAgenda';
@@ -134,10 +135,12 @@ export struct HomePage {
         // The successful mutation supersedes reads that started before it committed.
         await this.loadToday();
       }
-    } catch {
+    } catch (error) {
       if (this.pageActive && this.active && operation === this.taskOperationRevision &&
         this.token === token && this.baseUrl === baseUrl) {
-        this.errorText = '未能核实待办状态，请重新加载后查看。';
+        this.errorText = error instanceof CampusFlowRequestError && error.code === 'ACTION_CONFLICT' ?
+          '恢复为未完成前发现时间冲突。请打开任务详情调整时间，再恢复任务。' :
+          '未能核实待办状态，请重新加载后查看。';
       }
     } finally {
       if (operation === this.taskOperationRevision) { this.busyTaskId = ''; }

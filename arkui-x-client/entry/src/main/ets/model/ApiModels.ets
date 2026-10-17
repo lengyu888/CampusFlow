@@ -80,7 +80,44 @@ export interface PendingMilestonePreview {
   tasks: PendingTaskPreview[];
 }
 
+export interface PlanningTaskDraft {
+  title: string;
+  start_at: string | null;
+  end_at: string | null;
+  reminder_minutes: number | null;
+  location: string | null;
+}
+
+export interface PlanningPlanDraft {
+  title: string;
+  summary: string;
+  target_date: string | null;
+}
+
+export interface PlanningActionRequest {
+  operation: string;
+  task_id?: string;
+  plan_id?: string;
+  task?: PlanningTaskDraft;
+  plan?: PlanningPlanDraft;
+  reason?: string;
+}
+
+export interface ActionReceipt {
+  receipt_id: string;
+  proposal_id: string;
+  action: string;
+  kind: string;
+  applied_at: string;
+  task_ids: string[];
+  plan_ids: string[];
+  milestone_ids: string[];
+  retained_task_ids: string[];
+}
+
 export interface PendingActionPayload {
+  task?: PlanningTaskDraft;
+  plan?: PlanningPlanDraft;
   summary?: string;
   target_date?: string | null;
   location?: string | null;
@@ -88,6 +125,15 @@ export interface PendingActionPayload {
 }
 
 export interface PendingAction {
+  warnings?: string[];
+  contract_version?: number;
+  created_at?: string;
+  expires_at?: string;
+  target_task_id?: string | null;
+  target_plan_id?: string | null;
+  before_task?: PlanningTask | null;
+  before_plan?: PlanSummary | null;
+  receipt?: ActionReceipt | null;
   proposal_id: string;
   action: string;
   kind: string;
@@ -123,6 +169,7 @@ export interface ChatResponse {
 }
 
 export interface ConfirmActionResponse {
+  receipt?: ActionReceipt | null;
   applied: boolean;
   message: string;
   action: PendingAction;

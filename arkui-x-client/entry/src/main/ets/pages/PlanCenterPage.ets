@@ -1,4 +1,7 @@
 import {
+  PendingAction,
+  PlanningTaskDraft,
+  PlanningActionRequest,
   PlanMilestone,
   PlanSummary,
   PlanningOverview,
@@ -10,7 +13,10 @@ import { CampusFlowApi } from '../services/CampusFlowApi';
 import { AppTheme } from '../theme/AppTheme';
 import { AppIcon } from '../components/AppIcon';
 import { TaskScheduleDetails } from '../components/TaskScheduleDetails';
+import { PlanningActionController, PlanningActionState, editedPlanningTime, validPlanningDate, planningTimestamp } from '../utils/PlanningAction';
+import { PlanningActionPanel } from '../components/PlanningActionPanel';
 import { PlanningConflictsPanel } from '../components/PlanningConflictsPanel';
+import { CampusFlowRequestError } from '../utils/AgentFeedback';
 import { formatPlanDateTime } from '../utils/PlanPresentation';
 import { AgendaRow, DailyAgenda, buildDailyAgenda, shanghaiDate } from '../utils/DailyAgenda';
 
@@ -82,6 +88,23 @@ export struct PlanCenterPage {
   @State private loaded: boolean = false;
   @State private mutationBusy: boolean = false;
   @State private pageWidth: number = 360;
+  @State private actionState: PlanningActionState = { phase: 'idle', action: null, message: '' };
+  @State private replanWriteBlocked: boolean = false;
+  @State private editTaskId: string = '';
+  @State private editTaskTitle: string = '';
+  @State private editTaskStart: string = '';
+  @State private editTaskEnd: string = '';
+  @State private editTaskLocation: string = '';
+  @State private editTaskReminder: string = '';
+  @State private editPlanId: string = '';
+  @State private editPlanTitle: string = '';
+  @State private editPlanSummary: string = '';
+  @State private editPlanDate: string = '';
+  private editTaskOriginal: PlanningTask | null = null;
+  private actionController: PlanningActionController | null = null;
+  private submittedCreate: string = '';
+  private submittedTaskEdit: string = '';
+  private submittedPlanEdit: string = '';
   private externalDetail: boolean = false;
   private appliedFocusRevision: number = -1;
   private appliedViewRevision: number = -1;
@@ -112,9 +135,12 @@ export struct PlanCenterPage {
     this.pageActive = false;
     this.lifecycleRevision++;
     this.requestRevision++;
+    this.actionController?.dispose();
+    this.actionController = null;
   }
 
   private activityChanged(): void {
+    this.actionController?.setActive(this.active);
     if (!this.active) { this.requestRevision++; return; }
     this.refreshPlanning();
   }
@@ -170,7 +196,7 @@ export struct PlanCenterPage {
   }
 
   private openDetails(kind: string, id: string = ''): void {
-    if (!['task', 'plan', 'draft', 'conflicts'].includes(kind)) { return; }
+    if (!['task', 'plan', 'draft', 'conflicts', 'action', 'task-edit', 'plan-edit'].includes(kind)) { return; }
     if (this.detailKind === kind && this.detailId === id) { return; }
     this.externalDetail = false;
     this.detailKind = kind;
@@ -230,6 +256,9 @@ export struct PlanCenterPage {
   }
 
   private detailTitle(): string {
+    if (this.detailKind === 'action') { return '变更预览与回执'; }
+    if (this.detailKind === 'task-edit') { return '编辑任务'; }
+    if (this.detailKind === 'plan-edit') { return '编辑计划'; }
     if (this.detailKind === 'plan') { return '目标计划'; }
     if (this.detailKind === 'draft') { return '添加待办'; }
     if (this.detailKind === 'conflicts') { return '课表冲突核对'; }
@@ -529,34 +558,164 @@ export struct PlanCenterPage {
     }
   }
 
-  private async addTask(): Promise<void> {
-    if (this.title.trim().length === 0 || this.mutationBusy || !this.active || !this.pageActive) {
-      return;
+  private actionManager(): PlanningActionController {
+    if (this.actionController === null) {
+      this.actionController = new PlanningActionController(new CampusFlowApi(this.baseUrl, this.token),
+        (state: PlanningActionState) => { if (this.pageActive) { this.actionState = state; } },
+        (action: PendingAction) => this.actionApplied(action));
+      this.actionController.setActive(this.active && this.pageActive);
     }
-    const originalTitle = this.title;
-    const revision = this.lifecycleRevision;
-    this.mutationBusy = true;
-    try {
-      const taskTime = this.draftTaskTime.length === 0 ? '23:59' : this.draftTaskTime;
-      const startAt = this.draftTaskDate.length === 0 ? null : `${this.draftTaskDate}T${taskTime}:00+08:00`;
-      await new CampusFlowApi(this.baseUrl, this.token).createTask(this.title.trim(), startAt);
-      if (!this.pageActive || revision !== this.lifecycleRevision) { return; }
-      if (this.title === originalTitle) { this.title = ''; }
+    return this.actionController;
+  }
+
+  private actionBlocksWrites(): boolean {
+    return ['previewing', 'confirming', 'cancelling', 'checking'].includes(this.actionState.phase) ||
+      (this.actionState.action !== null && !['resolved', 'cancelled', 'invalidated'].includes(this.actionState.phase));
+  }
+
+  private writesBlocked(): boolean {
+    return this.mutationBusy || this.replanWriteBlocked || this.actionBlocksWrites() || !this.active || !this.pageActive;
+  }
+
+  private createSnapshot(): string {
+    return JSON.stringify([this.title, this.draftTaskDate, this.draftTaskTime, this.draftDateChoice]);
+  }
+
+  private taskEditSnapshot(): string {
+    return JSON.stringify([this.editTaskId, this.editTaskTitle, this.editTaskStart, this.editTaskEnd, this.editTaskLocation, this.editTaskReminder]);
+  }
+
+  private planEditSnapshot(): string {
+    return JSON.stringify([this.editPlanId, this.editPlanTitle, this.editPlanSummary, this.editPlanDate]);
+  }
+
+  private actionApplied(action: PendingAction): void {
+    if (!this.pageActive || !this.active) { return; }
+    if (action.action === 'create' && action.kind === 'task' && this.createSnapshot() === this.submittedCreate) {
+      this.title = '';
       this.taskInputController.stopEditing();
-      await this.reload();
-      this.conflictRefresh++;
-      this.onPlanningChanged();
-    } catch (error) {
-      if (this.pageActive && revision === this.lifecycleRevision) {
-        this.errorText = '创建失败：提交结果尚未确认，请先核对全部待办；草稿已保留。';
-      }
-    } finally {
-      this.mutationBusy = false;
     }
+    if (action.action === 'update' && action.kind === 'task' && this.taskEditSnapshot() === this.submittedTaskEdit) {
+      this.editTaskId = ''; this.editTaskOriginal = null;
+    }
+    if (action.action === 'update' && action.kind === 'plan' && this.planEditSnapshot() === this.submittedPlanEdit) { this.editPlanId = ''; }
+    this.deletePendingId = '';
+    this.reload();
+    this.conflictRefresh++;
+    this.onPlanningChanged();
+  }
+
+  private async previewAction(request: PlanningActionRequest): Promise<void> {
+    if (this.writesBlocked()) { return; }
+    this.errorText = '';
+    this.openDetails('action');
+    await this.actionManager().preview(request);
+  }
+
+  private async confirmPlanningAction(): Promise<void> {
+    if (this.mutationBusy || this.replanWriteBlocked || !this.active || !this.pageActive) { return; }
+    await this.actionManager().confirm();
+  }
+
+  private dismissAction(): void {
+    if (this.actionBlocksWrites()) { return; }
+    this.actionManager().dismiss();
+    this.closeDetails();
+  }
+
+  private async addTask(): Promise<void> {
+    if (this.title.trim().length === 0 || this.writesBlocked()) { return; }
+    if (Array.from(this.title.trim()).length > 120) { this.errorText = '待办名称请控制在 120 字以内。'; return; }
+    const taskTime = this.draftTaskTime.length === 0 ? '23:59' : this.draftTaskTime;
+    const startAt = this.draftTaskDate.length === 0 ? null : `${this.draftTaskDate}T${taskTime}:00+08:00`;
+    this.submittedCreate = this.createSnapshot();
+    await this.previewAction({ operation: 'create_task', task: { title: this.title.trim(), start_at: startAt,
+      end_at: null, reminder_minutes: null, location: null } });
+  }
+
+  private beginTaskEdit(task: PlanningTask): void {
+    if (this.writesBlocked()) { return; }
+    if (this.editTaskId.length > 0 && this.editTaskId !== task.task_id) {
+      this.errorText = '还有另一条任务的编辑草稿。请先完成或明确放弃该草稿。';
+      this.openDetails('task-edit', this.editTaskId); return;
+    }
+    if (this.editTaskId.length === 0) {
+      this.editTaskId = task.task_id;
+      this.editTaskOriginal = JSON.parse(JSON.stringify(task)) as PlanningTask;
+      this.editTaskTitle = task.title;
+      this.editTaskStart = task.start_at === null ? '' : formatPlanDateTime(task.start_at);
+      this.editTaskEnd = task.end_at === null ? '' : formatPlanDateTime(task.end_at);
+      this.editTaskLocation = task.location ?? '';
+      this.editTaskReminder = task.reminder_minutes === null ? '' : `${task.reminder_minutes}`;
+    }
+    this.openDetails('task-edit', task.task_id);
+  }
+
+  private discardTaskEdit(): void {
+    if (this.actionBlocksWrites()) { return; }
+    this.editTaskId = ''; this.editTaskOriginal = null; this.closeDetails();
+  }
+
+  private async previewTaskEdit(): Promise<void> {
+    const original = this.editTaskOriginal;
+    if (original === null || this.writesBlocked()) { return; }
+    const start = editedPlanningTime(this.editTaskStart, original.start_at);
+    const end = editedPlanningTime(this.editTaskEnd, original.end_at);
+    const reminder = this.editTaskReminder.trim();
+    if (this.editTaskTitle.trim().length === 0 || Array.from(this.editTaskTitle.trim()).length > 120 ||
+      Array.from(this.editTaskLocation.trim()).length > 120) {
+      this.errorText = '请填写 1–120 字的任务名称，地点不超过 120 字。'; return;
+    }
+    if (start === 'invalid' || end === 'invalid' || (start === null && end !== null) ||
+      (start !== null && end !== null && planningTimestamp(end) <= planningTimestamp(start))) {
+      this.errorText = '请使用有效的“年-月-日 时:分”，结束必须晚于开始；未安排时可将两项留空。'; return;
+    }
+    if (reminder.length > 0 && (!/^\d+$/.test(reminder) || Number(reminder) > 10080)) {
+      this.errorText = '提醒请输入 0–10080 的整数分钟，留空表示不设置。'; return;
+    }
+    const task: PlanningTaskDraft = { title: this.editTaskTitle.trim(), start_at: start, end_at: end,
+      reminder_minutes: reminder.length === 0 ? null : Number(reminder),
+      location: this.editTaskLocation === (original.location ?? '') ? original.location : this.editTaskLocation.trim() || null };
+    this.submittedTaskEdit = this.taskEditSnapshot();
+    await this.previewAction({ operation: 'update_task', task_id: original.task_id, task: task });
+  }
+
+  private beginPlanEdit(plan: PlanSummary): void {
+    if (this.writesBlocked()) { return; }
+    if (this.editPlanId.length > 0 && this.editPlanId !== plan.plan_id) {
+      this.errorText = '还有另一个计划的编辑草稿。请先完成或明确放弃该草稿。';
+      this.openDetails('plan-edit', this.editPlanId); return;
+    }
+    if (this.editPlanId.length === 0) {
+      this.editPlanId = plan.plan_id; this.editPlanTitle = plan.title;
+      this.editPlanSummary = plan.summary; this.editPlanDate = plan.target_date ?? '';
+    }
+    this.openDetails('plan-edit', plan.plan_id);
+  }
+
+  private discardPlanEdit(): void {
+    if (this.actionBlocksWrites()) { return; }
+    this.editPlanId = ''; this.closeDetails();
+  }
+
+  private async previewPlanEdit(): Promise<void> {
+    if (this.editPlanId.length === 0 || this.writesBlocked()) { return; }
+    const date = this.editPlanDate.trim();
+    if (this.editPlanTitle.trim().length === 0 || Array.from(this.editPlanTitle.trim()).length > 120 ||
+      Array.from(this.editPlanSummary).length > 500 || (date.length > 0 && !validPlanningDate(date))) {
+      this.errorText = '名称需 1–120 字，说明不超过 500 字；截止日请填有效的 YYYY-MM-DD 或留空。'; return;
+    }
+    this.submittedPlanEdit = this.planEditSnapshot();
+    await this.previewAction({ operation: 'update_plan', plan_id: this.editPlanId,
+      plan: { title: this.editPlanTitle.trim(), summary: this.editPlanSummary, target_date: date.length > 0 ? date : null } });
+  }
+
+  private async requestPlanDelete(plan: PlanSummary): Promise<void> {
+    await this.previewAction({ operation: 'delete_plan', plan_id: plan.plan_id });
   }
 
   private async toggle(task: PlanningTask): Promise<void> {
-    if (this.mutationBusy || !this.active || !this.pageActive) { return; }
+    if (this.writesBlocked()) { return; }
     this.mutationBusy = true;
     const revision = this.lifecycleRevision;
     try {
@@ -568,7 +727,9 @@ export struct PlanCenterPage {
       this.onPlanningChanged();
     } catch (error) {
       if (this.pageActive && revision === this.lifecycleRevision) {
-        this.errorText = '更新失败：请刷新核对当前任务状态后再操作。';
+        this.errorText = error instanceof CampusFlowRequestError && error.statusCode === 409 && error.code === 'ACTION_CONFLICT' ?
+          '恢复为待完成会产生时间冲突。请打开这条任务详情，调整时间并确认后再恢复。' :
+          '更新失败：请刷新核对当前任务状态后再操作。';
       }
     } finally {
       this.mutationBusy = false;
@@ -576,27 +737,7 @@ export struct PlanCenterPage {
   }
 
   private async requestDelete(task: PlanningTask): Promise<void> {
-    if (this.mutationBusy || !this.active || !this.pageActive) { return; }
-    if (this.deletePendingId !== task.task_id) {
-      this.deletePendingId = task.task_id;
-      return;
-    }
-    this.mutationBusy = true;
-    const revision = this.lifecycleRevision;
-    try {
-      await new CampusFlowApi(this.baseUrl, this.token).deleteTask(task.task_id);
-      if (!this.pageActive || revision !== this.lifecycleRevision) { return; }
-      this.deletePendingId = '';
-      await this.reload();
-      this.conflictRefresh++;
-      this.onPlanningChanged();
-    } catch (error) {
-      if (this.pageActive && revision === this.lifecycleRevision) {
-        this.errorText = '删除失败：请刷新核对任务是否仍存在后再操作。';
-      }
-    } finally {
-      this.mutationBusy = false;
-    }
+    await this.previewAction({ operation: 'delete_task', task_id: task.task_id });
   }
 
   private planPrompt(): string {
@@ -688,7 +829,7 @@ export struct PlanCenterPage {
         }
       }
     }.width(48).height(48).backgroundColor(Color.Transparent)
-      .enabled(!this.mutationBusy).accessibilityText(task.status === 'completed' ? '标记为未完成' : '标记为完成')
+      .enabled(!this.writesBlocked()).accessibilityText(task.status === 'completed' ? '标记为未完成' : '标记为完成')
       .onClick(() => this.toggle(task))
   }
 
@@ -890,7 +1031,7 @@ export struct PlanCenterPage {
         Button({ type: ButtonType.Circle }) {
           AppIcon({ name: 'plus', iconSize: 22, color: AppTheme.surface })
         }.width(48).height(48).backgroundColor(AppTheme.actionBlue)
-          .accessibilityText('添加待办').enabled(this.title.trim().length > 0 && !this.mutationBusy).onClick(() => this.addTask())
+          .accessibilityText('预览添加待办').enabled(this.title.trim().length > 0 && !this.writesBlocked()).onClick(() => this.addTask())
       }.width('100%')
       Row() {
         Text('日期').fontSize(AppTheme.bodySize).fontColor(AppTheme.quiet)
@@ -926,6 +1067,64 @@ export struct PlanCenterPage {
           .backgroundColor(AppTheme.blueSoft).borderRadius(AppTheme.controlRadius).accessibilityText('自定义时间')
           .onClick(() => this.openTimePicker())
       }.width('100%')
+    }.width('100%').alignItems(HorizontalAlign.Start)
+  }
+
+  @Builder
+  private EditField(label: string, value: string, placeholder: string, change: (value: string) => void) {
+    Column({ space: 8 }) {
+      Text(label).fontSize(AppTheme.bodySize).fontColor(AppTheme.quiet).width('100%')
+      TextInput({ text: value, placeholder: placeholder }).height(48).width('100%').fontSize(AppTheme.bodySize)
+        .fontColor(AppTheme.ink).backgroundColor(AppTheme.surface).borderRadius(AppTheme.controlRadius).onChange(change)
+    }.width('100%')
+  }
+
+  @Builder
+  private TaskEditor() {
+    Column({ space: 16 }) {
+      if (this.editTaskId.length === 0) {
+        Text('这份编辑已完成或已放弃，返回任务详情可重新编辑。').fontSize(AppTheme.bodySize).fontColor(AppTheme.quiet).width('100%')
+      } else {
+        Text('返回会保留草稿。时间使用北京时间；修改前后内容会在下一步完整展示。')
+          .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+        this.EditField('任务名称', this.editTaskTitle, '1–120 字', (value: string) => this.editTaskTitle = value)
+        this.EditField('开始时间', this.editTaskStart, '例如 2026-10-20 18:30，留空待安排', (value: string) => this.editTaskStart = value)
+        this.EditField('结束时间', this.editTaskEnd, '例如 2026-10-20 19:30，可留空', (value: string) => this.editTaskEnd = value)
+        this.EditField('地点', this.editTaskLocation, '可留空', (value: string) => this.editTaskLocation = value)
+        this.EditField('提前提醒（分钟）', this.editTaskReminder, '0 表示开始时；留空不设置', (value: string) => this.editTaskReminder = value)
+        Text('这里保存提醒设置；系统通知实际送达仍取决于平台支持与通知权限。')
+          .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+        Button('预览任务更改').width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
+          .fontColor(AppTheme.surface).backgroundColor(AppTheme.actionBlue).borderRadius(AppTheme.controlRadius)
+          .enabled(!this.writesBlocked()).onClick(() => this.previewTaskEdit())
+        Button('放弃这份编辑草稿').width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
+          .fontColor(AppTheme.quiet).backgroundColor(AppTheme.surface).borderRadius(AppTheme.controlRadius)
+          .enabled(!this.actionBlocksWrites()).onClick(() => this.discardTaskEdit())
+      }
+    }.width('100%').alignItems(HorizontalAlign.Start)
+  }
+
+  @Builder
+  private PlanEditor() {
+    Column({ space: 16 }) {
+      if (this.editPlanId.length === 0) {
+        Text('这份编辑已完成或已放弃，返回计划详情可重新编辑。').fontSize(AppTheme.bodySize).fontColor(AppTheme.quiet).width('100%')
+      } else {
+        Text('仅编辑计划信息，现有阶段与子任务不变。返回会保留草稿。')
+          .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+        this.EditField('计划名称', this.editPlanTitle, '1–120 字', (value: string) => this.editPlanTitle = value)
+        Text('计划说明').fontSize(AppTheme.bodySize).fontColor(AppTheme.quiet).width('100%')
+        TextArea({ text: this.editPlanSummary, placeholder: '最多 500 字，可留空' }).width('100%').constraintSize({ minHeight: 120 })
+          .fontSize(AppTheme.bodySize).fontColor(AppTheme.ink).backgroundColor(AppTheme.surface).borderRadius(AppTheme.controlRadius)
+          .onChange((value: string) => this.editPlanSummary = value)
+        this.EditField('截止日期', this.editPlanDate, 'YYYY-MM-DD，留空不设截止日', (value: string) => this.editPlanDate = value)
+        Button('预览计划更改').width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
+          .fontColor(AppTheme.surface).backgroundColor(AppTheme.actionBlue).borderRadius(AppTheme.controlRadius)
+          .enabled(!this.writesBlocked()).onClick(() => this.previewPlanEdit())
+        Button('放弃这份编辑草稿').width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
+          .fontColor(AppTheme.quiet).backgroundColor(AppTheme.surface).borderRadius(AppTheme.controlRadius)
+          .enabled(!this.actionBlocksWrites()).onClick(() => this.discardPlanEdit())
+      }
     }.width('100%').alignItems(HorizontalAlign.Start)
   }
 
@@ -1047,9 +1246,19 @@ export struct PlanCenterPage {
   private DetailContent(frame: PlanningDetailFrame) {
     Column({ space: 16 }) {
       if (frame.kind === 'draft') {
-        Text('关闭编辑会保留本次草稿，保存后才加入任务列表。')
+        Text('返回会保留草稿。点击加号先预览，明确确认后才加入任务列表。')
           .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
         this.TaskForm()
+      } else if (frame.kind === 'action') {
+        PlanningActionPanel({ state: this.actionState, active: this.active && !this.mutationBusy && !this.replanWriteBlocked,
+          retryIntent: this.actionController?.retryIntent() ?? '', onConfirm: () => this.confirmPlanningAction(),
+          onCancel: () => this.actionManager().cancel(), onCheck: () => this.actionManager().check(),
+          onDismiss: () => this.dismissAction(), onOpenTask: (id: string) => this.openDetails('task', id),
+          onOpenPlan: (id: string) => this.openDetails('plan', id) })
+      } else if (frame.kind === 'task-edit') {
+        this.TaskEditor()
+      } else if (frame.kind === 'plan-edit') {
+        this.PlanEditor()
       } else if (frame.kind === 'task') {
         ForEach(this.tasksForId(frame.id), (task: PlanningTask) => {
           Column({ space: 12 }) {
@@ -1061,21 +1270,12 @@ export struct PlanCenterPage {
                 .fontColor(AppTheme.actionBlue).backgroundColor(AppTheme.blueSoft).borderRadius(AppTheme.controlRadius)
                 .onClick(() => this.openDetails('plan', task.plan_id ?? ''))
             }
-            if (this.deletePendingId === task.task_id) {
-              Text('删除这个任务？目标计划中的任务计数也会随之更新。')
-                .fontSize(AppTheme.bodySize).fontColor(AppTheme.red).width('100%')
-            }
-            Button(this.deletePendingId === task.task_id ? '确认删除任务' : '删除任务')
-              .width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
-              .fontColor(this.deletePendingId === task.task_id ? AppTheme.surface : AppTheme.red)
-              .backgroundColor(this.deletePendingId === task.task_id ? AppTheme.red : AppTheme.redSoft)
-              .borderRadius(AppTheme.controlRadius).enabled(!this.mutationBusy)
-              .onClick(() => this.requestDelete(task))
-            if (this.deletePendingId === task.task_id) {
-              Button('保留任务').width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
-                .fontColor(AppTheme.quiet).backgroundColor(AppTheme.surface).enabled(!this.mutationBusy)
-                .borderRadius(AppTheme.controlRadius).onClick(() => this.deletePendingId = '')
-            }
+            Button('编辑任务与时间').width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
+              .fontColor(AppTheme.actionBlue).backgroundColor(AppTheme.blueSoft).borderRadius(AppTheme.controlRadius)
+              .enabled(!this.writesBlocked()).onClick(() => this.beginTaskEdit(task))
+            Button('预览删除任务').width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
+              .fontColor(AppTheme.red).backgroundColor(AppTheme.redSoft).borderRadius(AppTheme.controlRadius)
+              .enabled(!this.writesBlocked()).onClick(() => this.requestDelete(task))
           }.width('100%')
         }, (task: PlanningTask) => `${task.task_id}-${this.planningRevision}`)
       } else if (frame.kind === 'plan') {
@@ -1088,6 +1288,12 @@ export struct PlanCenterPage {
             Text(plan.target_date === null ? '未设截止日' : `截止 ${plan.target_date}`)
               .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
             this.PlanBody(plan)
+            Button('编辑计划信息').width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
+              .fontColor(AppTheme.actionBlue).backgroundColor(AppTheme.blueSoft).borderRadius(AppTheme.controlRadius)
+              .enabled(!this.writesBlocked()).onClick(() => this.beginPlanEdit(plan))
+            Button('预览删除计划').width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
+              .fontColor(AppTheme.red).backgroundColor(AppTheme.redSoft).borderRadius(AppTheme.controlRadius)
+              .enabled(!this.writesBlocked()).onClick(() => this.requestPlanDelete(plan))
           }.width('100%').padding(AppTheme.cardInset).backgroundColor(AppTheme.surface).borderRadius(AppTheme.cardRadius)
         }, (plan: PlanSummary) => `${plan.plan_id}-${this.planningRevision}`)
       }
@@ -1146,9 +1352,17 @@ export struct PlanCenterPage {
         Text('正在保存任务更改…').fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
           .padding({ left: AppTheme.pageInset, right: AppTheme.pageInset })
       }
+      if (this.actionState.phase !== 'idle' && this.detailKind !== 'action') {
+        Button(this.actionBlocksWrites() ? '查看待处理变更 / 核对结果' : '查看上次变更结果').width('100%').constraintSize({ minHeight: 48 })
+          .fontSize(AppTheme.bodySize).fontColor(AppTheme.actionBlue).backgroundColor(AppTheme.blueSoft)
+          .borderRadius(AppTheme.controlRadius).onClick(() => this.openDetails('action'))
+          .padding({ left: AppTheme.pageInset, right: AppTheme.pageInset })
+      }
       PlanningConflictsPanel({ baseUrl: this.baseUrl, token: this.token,
         refreshKey: this.conflictRefresh, active: this.active && (this.detailKind.length === 0 || this.detailKind === 'conflicts'),
         compact: this.detailKind !== 'conflicts', onOpenDetails: () => this.openDetails('conflicts'),
+        writeBlocked: this.mutationBusy || this.actionBlocksWrites(),
+        onWriteStateChanged: (blocked: boolean) => this.replanWriteBlocked = blocked,
         onApplied: () => this.replanApplied() })
         .visibility(this.detailKind.length === 0 || this.detailKind === 'conflicts' ? Visibility.Visible : Visibility.None)
         .layoutWeight(this.detailKind === 'conflicts' ? 1 : 0)

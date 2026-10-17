@@ -24,6 +24,7 @@ from .accounts import (
 from .accounts import (
     AuthenticationError as AccountAuthenticationError,
 )
+from .action_service import ActionError, ActionService
 from .agent import AgentConfigurationError, AgentService
 from .campus_services import (
     building_name,
@@ -39,6 +40,7 @@ from .key_vault import ApiKeyVault
 from .replanning import ReplanError, ReplanningService
 from .schedule_subscription import ScheduleSubscriptionError, ScheduleSubscriptionService
 from .schemas import (
+    ActionTaskRequest,
     AdminUserSummary,
     AuthResponse,
     CampusCorrection,
@@ -67,6 +69,7 @@ from .schemas import (
     OnboardingRequest,
     OnboardingResponse,
     PendingAction,
+    PlanningActionRequest,
     PlanningConflictsResponse,
     PlanningOverview,
     PlanningTask,
@@ -206,12 +209,14 @@ def create_app(
     hduhelp_access: HDUHelpAccess | None = None,
     replanning_service: ReplanningService | None = None,
     timetable_service: TimetableService | None = None,
+    action_service: ActionService | None = None,
 ) -> FastAPI:
     settings = settings or get_settings()
     store = store or CampusStore(settings.database_path)
     account_store = account_store or AccountStore(settings.database_path)
     replanning_service = replanning_service or ReplanningService(account_store, store)
     timetable_service = timetable_service or TimetableService(account_store, store)
+    action_service = action_service or ActionService(account_store, store)
     skill_store = skill_store or SkillStore(settings.database_path)
     api_key_vault = api_key_vault or ApiKeyVault(settings)
     hduhelp_service = hduhelp_service or HDUHelpService(settings)
@@ -229,9 +234,7 @@ def create_app(
         hduhelp_access,
     )
     vision_service = vision_service or VisionService(settings)
-    schedule_subscription_service = (
-        schedule_subscription_service or ScheduleSubscriptionService()
-    )
+    schedule_subscription_service = schedule_subscription_service or ScheduleSubscriptionService()
 
     app = FastAPI(
         title="CampusFlow Agent API",
@@ -260,6 +263,13 @@ def create_app(
             status_code=exc.status_code, content={"detail": exc.detail, "code": exc.code}
         )
 
+    @app.exception_handler(ActionError)
+    async def action_error_handler(request: Request, exc: ActionError) -> JSONResponse:
+        return JSONResponse(
+            status_code=exc.status_code, content={"detail": exc.detail, "code": exc.code}
+        )
+
+    app.state.action_service = action_service
     app.state.replanning_service = replanning_service
     app.state.timetable_service = timetable_service
 
@@ -462,9 +472,7 @@ def create_app(
                 500, "未能核实课表保存结果，请保留本次操作编号并核对回执。", "TIMETABLE_SAVE_FAILED"
             ) from exc
 
-    @app.get(
-        "/api/v1/me/timetable/operations/{operation_id}", response_model=TimetableSaveReceipt
-    )
+    @app.get("/api/v1/me/timetable/operations/{operation_id}", response_model=TimetableSaveReceipt)
     async def timetable_receipt(operation_id: UUID, user: CurrentUser) -> TimetableSaveReceipt:
         return timetable_service.receipt(user.user_id, operation_id)
 
@@ -638,9 +646,7 @@ def create_app(
         pagination = envelope.get("pagination")
         if not isinstance(pagination, dict):
             pagination = {}
-        period = (
-            f"第 {min(section)}–{max(section)} 节" if section else "当前时段"
-        )
+        period = f"第 {min(section)}–{max(section)} 节" if section else "当前时段"
         location = building_name(building_id) if building_id else "全部教学楼"
         return ClassroomSearchResponse(
             query_label=f"{location} · {period}",
@@ -699,9 +705,7 @@ def create_app(
             )
         except HDUHelpError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
-        return ElectricityOverview.model_validate(
-            electricity_overview(binding, balance, history)
-        )
+        return ElectricityOverview.model_validate(electricity_overview(binding, balance, history))
 
     @app.delete("/api/v1/hduhelp/connection", status_code=204)
     async def disconnect_hduhelp(user: CurrentUser) -> Response:
@@ -739,9 +743,7 @@ def create_app(
     ) -> ScheduleSubscriptionPreview:
         del user
         try:
-            return await schedule_subscription_service.fetch(
-                payload.url.get_secret_value()
-            )
+            return await schedule_subscription_service.fetch(payload.url.get_secret_value())
         except ScheduleSubscriptionError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
@@ -759,7 +761,9 @@ def create_app(
         try:
             preview = await schedule_subscription_service.fetch(raw_url)
             imported_count = timetable_service.replace_subscription(
-                user.user_id, entries=preview.entries, expected_revision=expected_revision,
+                user.user_id,
+                entries=preview.entries,
+                expected_revision=expected_revision,
                 expected_subscription=expected_subscription,
                 encrypted_url=api_key_vault.encrypt(raw_url),
             )
@@ -792,7 +796,9 @@ def create_app(
             raw_url = api_key_vault.decrypt(encrypted)
             preview = await schedule_subscription_service.fetch(raw_url)
             imported_count = timetable_service.replace_subscription(
-                user.user_id, entries=preview.entries, expected_revision=expected_revision,
+                user.user_id,
+                entries=preview.entries,
+                expected_revision=expected_revision,
                 expected_subscription=encrypted,
                 encrypted_url=encrypted,
             )
@@ -1127,32 +1133,42 @@ def create_app(
                 500, "未能完成改期确认，请先核对本次改期状态再重试。", "REPLAN_FAILED"
             ) from exc
 
+    @app.post("/api/v1/planning/actions", response_model=PendingAction)
+    async def preview_planning_action(
+        payload: PlanningActionRequest, user: CurrentUser
+    ) -> PendingAction:
+        try:
+            return action_service.preview(user.user_id, payload)
+        except sqlite3.Error as exc:
+            raise CampusFlowError(500, "预览保存失败，请稍后重试。", "ACTION_FAILED") from exc
+
     @app.post("/api/v1/tasks", response_model=PlanningTask, status_code=201)
     async def create_task(payload: TaskCreateRequest, user: CurrentUser) -> PlanningTask:
-        load_user_context(user)
-        conflicts = store.find_conflicts(
-            user.user_id,
-            start_at=payload.start_at,
-            end_at=payload.end_at,
-            location=payload.location,
-        )
-        if conflicts:
-            raise HTTPException(
-                status_code=409,
-                detail={"message": "待办与现有安排冲突。", "conflicts": conflicts},
-            )
         try:
-            return store.create_task(
+            action = action_service.execute(
                 user.user_id,
-                title=payload.title,
-                start_at=payload.start_at,
-                end_at=payload.end_at,
-                reminder_minutes=payload.reminder_minutes,
-                location=payload.location,
-                source="manual",
+                PlanningActionRequest(
+                    operation="create_task", task=ActionTaskRequest(**payload.model_dump())
+                ),
             )
-        except ValueError as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
+            return PlanningTask(
+                task_id=action.receipt.task_ids[0],
+                created_at=action.receipt.applied_at,
+                source="manual",
+                **action.payload["task"],
+            )
+        except ActionError as exc:
+            if exc.code == "ACTION_CONFLICT":
+                # Preserve the existing direct endpoint's conflict projection;
+                # new preview/confirm endpoints use stable string detail + code.
+                raise HTTPException(
+                    409, detail={"message": exc.detail, "conflicts": [exc.detail]}
+                ) from exc
+            raise
+        except sqlite3.Error as exc:
+            raise CampusFlowError(
+                500, "保存结果暂时无法核实，请先读取规划核对。", "ACTION_FAILED"
+            ) from exc
 
     @app.patch("/api/v1/tasks/{task_id}", response_model=PlanningTask)
     async def update_task(
@@ -1161,96 +1177,86 @@ def create_app(
         user: CurrentUser,
     ) -> PlanningTask:
         try:
-            return store.update_task_status(user.user_id, task_id, payload.completed)
+            return action_service.set_completed(user.user_id, task_id, payload.completed)
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="待办不存在。") from exc
+        except sqlite3.Error as exc:
+            raise CampusFlowError(
+                500, "状态修改结果暂时无法核实，请读取规划核对。", "ACTION_FAILED"
+            ) from exc
 
     @app.delete("/api/v1/tasks/{task_id}", status_code=204)
     async def delete_task(task_id: str, user: CurrentUser) -> Response:
         try:
-            store.delete_task(user.user_id, task_id)
+            action_service.execute(
+                user.user_id, PlanningActionRequest(operation="delete_task", task_id=task_id)
+            )
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="待办不存在。") from exc
+        except sqlite3.Error as exc:
+            raise CampusFlowError(
+                500, "删除结果暂时无法核实，请读取规划核对。", "ACTION_FAILED"
+            ) from exc
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     @app.delete("/api/v1/plans/{plan_id}", status_code=204)
     async def delete_plan(plan_id: str, user: CurrentUser) -> Response:
         try:
-            store.delete_plan(user.user_id, plan_id)
+            action_service.execute(
+                user.user_id, PlanningActionRequest(operation="delete_plan", plan_id=plan_id)
+            )
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="计划不存在。") from exc
+        except sqlite3.Error as exc:
+            raise CampusFlowError(
+                500, "删除结果暂时无法核实，请读取规划核对。", "ACTION_FAILED"
+            ) from exc
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     @app.get("/api/v1/actions/{proposal_id}", response_model=PendingAction)
     async def action_state(proposal_id: str, user: CurrentUser) -> PendingAction:
-        action = store.get_proposal(proposal_id, user.user_id)
-        if action is None:
-            raise CampusFlowError(404, "提案不存在。", "ACTION_NOT_FOUND")
-        return action
+        return action_service.get(user.user_id, proposal_id)
 
-    @app.post(
-        "/api/v1/actions/{proposal_id}/confirm",
-        response_model=ConfirmActionResponse,
-    )
+    @app.post("/api/v1/actions/{proposal_id}/confirm", response_model=ConfirmActionResponse)
     async def confirm_action(proposal_id: str, user: CurrentUser) -> ConfirmActionResponse:
-        action = await action_state(proposal_id, user)
-        if action.status != "pending":
-            raise CampusFlowError(409, "提案已处理，请核对最新状态。", "ACTION_RESOLVED")
-        if action.action != "create":
-            raise CampusFlowError(
-                422, "当前暂不支持通过提案修改或删除待办。", "ACTION_UNSUPPORTED"
-            )
         try:
             action = store.confirm_proposal(proposal_id, user.user_id)
-        except KeyError as exc:
-            raise CampusFlowError(404, "提案不存在。", "ACTION_NOT_FOUND") from exc
-        except ValueError as exc:
-            if str(exc) == "proposal_already_resolved":
-                raise CampusFlowError(
-                    409, "提案已处理，请核对最新状态。", "ACTION_RESOLVED"
-                ) from exc
-            raise CampusFlowError(
-                422, "提案执行未完成，请先核对提案状态和规划。", "ACTION_FAILED"
-            ) from exc
+        except ActionError:
+            raise
         except Exception as exc:
             raise CampusFlowError(
-                500, "无法核实提案执行结果，请先核对提案状态和规划。", "ACTION_FAILED"
+                500, "无法核实提案执行结果，请用本提案 ID 核对回执。", "ACTION_FAILED"
             ) from exc
-        return ConfirmActionResponse(
-            action=action,
-            applied=True,
-            message=(
+        if action.action == "delete":
+            message = (
+                "计划已删除，子任务已保留为独立待办。" if action.kind == "plan" else "待办已删除。"
+            )
+        elif action.action == "update":
+            message = (
+                "计划信息已更新，子任务保持不变。" if action.kind == "plan" else "待办已更新。"
+            )
+        else:
+            message = (
                 "计划已确认并写入执行中心。"
                 if action.kind == "plan"
                 else "待办已确认并写入执行中心。"
-            ),
+            )
+        return ConfirmActionResponse(
+            action=action, applied=True, message=message, receipt=action.receipt
         )
 
-    @app.post(
-        "/api/v1/actions/{proposal_id}/cancel",
-        response_model=ConfirmActionResponse,
-    )
+    @app.post("/api/v1/actions/{proposal_id}/cancel", response_model=ConfirmActionResponse)
     async def cancel_action(proposal_id: str, user: CurrentUser) -> ConfirmActionResponse:
         try:
             action = store.cancel_proposal(proposal_id, user.user_id)
-        except KeyError as exc:
-            raise CampusFlowError(404, "提案不存在。", "ACTION_NOT_FOUND") from exc
-        except ValueError as exc:
-            if str(exc) == "proposal_already_resolved":
-                raise CampusFlowError(
-                    409, "提案已处理，请核对最新状态。", "ACTION_RESOLVED"
-                ) from exc
-            raise CampusFlowError(
-                422, "未能取消提案，请核对最新状态。", "ACTION_FAILED"
-            ) from exc
+        except ActionError:
+            raise
         except Exception as exc:
             raise CampusFlowError(
                 500, "无法核实取消结果，请核对最新状态。", "ACTION_FAILED"
             ) from exc
         return ConfirmActionResponse(
-            action=action,
-            applied=False,
-            message="提案已取消。",
+            action=action, applied=False, message="提案已取消。", receipt=action.receipt
         )
 
     return app

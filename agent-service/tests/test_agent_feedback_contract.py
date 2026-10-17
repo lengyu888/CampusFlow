@@ -177,9 +177,16 @@ def test_tool_status_is_preserved_and_error_cannot_create_confirmation(status: s
 
 
 async def test_action_state_is_owner_scoped(feedback_api) -> None:
-    client, store, _, _, user_id = feedback_api
+    client, store, accounts, _, user_id = feedback_api
     own = task_proposal(store, user_id)
-    other = task_proposal(store, "another-user")
+    other_user = accounts.register(
+        email="other-action@example.invalid",
+        password="synthetic-password",
+        display_name="另一测试账号",
+        api_key_encrypted="",
+        api_key_hint="",
+    )
+    other = task_proposal(store, other_user.user_id)
     response = await client.get(f"/api/v1/actions/{own.proposal_id}")
     assert response.status_code == 200
     assert response.json()["status"] == "pending"
@@ -207,13 +214,17 @@ async def test_cancel_and_repeated_confirmation_have_readable_states(feedback_ap
         response = await client.get(f"/api/v1/actions/{proposal.proposal_id}")
         assert response.json()["status"] == state
         response = await client.post(f"/api/v1/actions/{proposal.proposal_id}/confirm")
-        assert response.status_code == 409
-        assert response.json()["code"] == "ACTION_RESOLVED"
+        if state == "cancelled":
+            assert response.status_code == 409
+            assert response.json()["code"] == "ACTION_RESOLVED"
+        else:
+            assert response.status_code == 200
+            assert response.json()["receipt"] == response.json()["action"]["receipt"]
     assert len(store.list_tasks(user_id)) == 1
 
 
 @pytest.mark.parametrize(
-    ("error", "status"), [(ValueError("invalid"), 422), (RuntimeError("synthetic failure"), 500)]
+    ("error", "status"), [(ValueError("invalid"), 500), (RuntimeError("synthetic failure"), 500)]
 )
 async def test_failed_confirmation_keeps_state_available(feedback_api, monkeypatch, error, status):
     client, store, _, _, user_id = feedback_api
@@ -233,13 +244,14 @@ async def test_failed_confirmation_keeps_state_available(feedback_api, monkeypat
 
 
 @pytest.mark.parametrize("action", ["update", "delete"])
-async def test_unsupported_action_is_rejected_before_store_confirmation(feedback_api, action):
+async def test_update_delete_requires_exact_target_before_any_write(feedback_api, action):
     client, store, _, _, user_id = feedback_api
-    proposal = task_proposal(store, user_id, action=action)
-    response = await client.post(f"/api/v1/actions/{proposal.proposal_id}/confirm")
+    payload = {"operation": f"{action}_task"}
+    if action == "update":
+        payload["task"] = {"title": "没有目标的改名"}
+    response = await client.post("/api/v1/planning/actions", json=payload)
     assert response.status_code == 422
-    assert response.json()["code"] == "ACTION_UNSUPPORTED"
-    assert store.get_proposal(proposal.proposal_id, user_id).status == "pending"
+    assert response.json()["code"] == "ACTION_INVALID"
     assert store.list_tasks(user_id) == []
 
 

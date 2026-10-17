@@ -18,6 +18,7 @@ import {
   OnboardingResponse,
   PendingAction,
   PlanningOverview,
+  PlanningActionRequest,
   PlanningConflictReport,
   PlanningTask,
   ReplanPreview,
@@ -109,6 +110,7 @@ export class CampusFlowApi {
       const text = response.result as string;
       if (response.responseCode < 200 || response.responseCode >= 300) {
         if (path === '/api/v1/chat' || path.startsWith('/api/v1/actions/') || path.startsWith('/api/v1/planning/') ||
+          path === '/api/v1/tasks' || path.startsWith('/api/v1/tasks/') ||
           path === '/api/v1/me/timetable' || path.startsWith('/api/v1/me/timetable/')) {
           throw requestFailure(response.responseCode, text);
         }
@@ -178,6 +180,10 @@ export class CampusFlowApi {
   async chat(sessionId: string, model: string, message: string): Promise<ChatResponse> {
     return this.request<ChatResponse>('/api/v1/chat', http.RequestMethod.POST,
       JSON.stringify({ session_id: sessionId, model: model, message: message }));
+  }
+
+  async previewPlanningAction(payload: PlanningActionRequest): Promise<PendingAction> {
+    return this.request<PendingAction>('/api/v1/planning/actions', http.RequestMethod.POST, JSON.stringify(payload));
   }
 
   async confirmAction(proposalId: string): Promise<ConfirmActionResponse> {

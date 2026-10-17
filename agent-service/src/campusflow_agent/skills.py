@@ -28,8 +28,8 @@ OFFICIAL_SKILLS: tuple[dict[str, Any], ...] = (
             },
             {
                 "code": "tasks.write",
-                "label": "创建计划提案",
-                "description": "生成待你确认的计划与待办，不会自动执行。",
+                "label": "管理计划提案",
+                "description": "创建、修改或删除计划与待办前，每笔提案均需你确认，不会自动执行。",
                 "access": "write",
             },
         ],
@@ -68,8 +68,8 @@ OFFICIAL_SKILLS: tuple[dict[str, Any], ...] = (
             },
             {
                 "code": "reminders.write",
-                "label": "创建提醒提案",
-                "description": "生成提醒规则，仍需你确认后才能保存。",
+                "label": "管理待办与提醒提案",
+                "description": "生成创建、修改或删除待办及提醒设置的提案，每笔均需你确认后执行。",
                 "access": "write",
             },
         ],
@@ -140,6 +140,8 @@ OFFICIAL_SKILLS: tuple[dict[str, Any], ...] = (
 TOOL_SKILLS = {
     "get_schedule": "timetable-planner",
     "propose_plan": "timetable-planner",
+    "propose_plan_change": "timetable-planner",
+    "get_planning": "ddl-guardian",
     "find_campus_places": "campus-navigator",
     "plan_campus_route": "campus-navigator",
     "propose_task_change": "ddl-guardian",
@@ -239,9 +241,7 @@ class SkillStore:
             and (
                 not normalized
                 or normalized
-                in " ".join(
-                    [item["name"], item["description"], *item["capabilities"]]
-                ).lower()
+                in " ".join([item["name"], item["description"], *item["capabilities"]]).lower()
             )
         ]
 
@@ -355,6 +355,8 @@ class SkillStore:
             installation = self._installation(user_id, skill_id)
             if installation and installation.get("enabled"):
                 allowed.add(tool_name)
+        if "propose_plan" in allowed:
+            allowed.add("get_planning")
         return allowed
 
     def _record(

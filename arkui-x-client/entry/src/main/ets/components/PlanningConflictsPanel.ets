@@ -11,6 +11,8 @@ export struct PlanningConflictsPanel {
   @Watch('refreshRequested') @Prop refreshKey: number = 0;
   @Watch('activityChanged') @Prop active: boolean = true;
   @Prop compact: boolean = false;
+  @Prop writeBlocked: boolean = false;
+  onWriteStateChanged: (blocked: boolean) => void = () => {};
   onApplied: () => void = () => {};
   onOpenDetails: () => void = () => {};
   @State private state: ReplanViewState = {
@@ -50,6 +52,7 @@ export struct PlanningConflictsPanel {
             this.unresolvedPage = 0;
           }
           this.state = state;
+          this.onWriteStateChanged(this.needsResultCheck());
           this.conflictPage = this.validPage(this.conflictPage, state.report?.conflicts.length ?? 0);
           this.uncheckedPage = this.validPage(this.uncheckedPage, state.report?.unchecked.length ?? 0);
           this.changesPage = this.validPage(this.changesPage, state.preview?.changes.length ?? 0);
@@ -67,6 +70,14 @@ export struct PlanningConflictsPanel {
 
   private refreshRequested(): void {
     if (this.pageActive) { this.replanner().refresh(); }
+  }
+
+  private previewRequested(): void {
+    if (this.active && !this.writeBlocked) { this.replanner().preview(); }
+  }
+
+  private confirmRequested(): void {
+    if (this.active && !this.writeBlocked) { this.replanner().confirm(); }
   }
 
   private busy(): boolean {
@@ -228,8 +239,8 @@ export struct PlanningConflictsPanel {
         Button(`确认调整这 ${this.state.preview?.changes.length ?? 0} 项任务`).width('100%')
           .constraintSize({ minHeight: 48 }).fontSize(15).fontColor(AppTheme.surface)
           .backgroundColor(AppTheme.actionBlue).borderRadius(AppTheme.controlRadius)
-          .enabled(this.active && !this.busy() && (this.state.preview?.changes.length ?? 0) > 0)
-          .onClick(() => this.replanner().confirm())
+          .enabled(this.active && !this.writeBlocked && !this.busy() && (this.state.preview?.changes.length ?? 0) > 0)
+          .onClick(() => this.confirmRequested())
       }
       if (['review', 'error', 'stale'].includes(this.state.phase)) {
         Button('放弃这份预览').width('100%').constraintSize({ minHeight: 48 }).fontSize(14)
@@ -292,7 +303,7 @@ export struct PlanningConflictsPanel {
           Button(this.state.phase === 'stale' || this.state.phase === 'error' ? '重新生成改期预览' : '按课表寻找空档，生成预览')
             .width('100%').constraintSize({ minHeight: 48 }).fontSize(15).fontColor(AppTheme.surface)
             .backgroundColor(AppTheme.actionBlue).borderRadius(AppTheme.controlRadius)
-            .enabled(this.active && !this.busy()).onClick(() => this.replanner().preview())
+            .enabled(this.active && !this.writeBlocked && !this.busy()).onClick(() => this.previewRequested())
         }
       }
       if (this.state.preview !== null) { this.Preview() }

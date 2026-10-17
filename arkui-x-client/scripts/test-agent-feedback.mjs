@@ -44,6 +44,7 @@ function action(id, status = 'pending', title = '复习操作系统') {
 test('server error codes give actionable safe messages and retain typed identity', () => {
   const codes = ['LOGIN_REQUIRED', 'MODEL_AUTH_INVALID', 'MODEL_KEY_REQUIRED', 'MODEL_UNAVAILABLE',
     'MODEL_RATE_LIMITED', 'MODEL_REQUEST_REJECTED',
+    'ACTION_EXPIRED', 'ACTION_LEGACY_UNVERIFIED', 'ACTION_STALE', 'ACTION_CONFLICT', 'ACTION_INVALID',
     'REQUEST_TIMEOUT', 'ACTION_NOT_FOUND', 'ACTION_RESOLVED', 'ACTION_FAILED', 'ACTION_UNSUPPORTED'];
   for (const code of codes) {
     const error = requestFailure(503, JSON.stringify({ code, detail: 'private-provider-diagnostics' }));
@@ -207,4 +208,22 @@ test('actionStatus is an encoded read-only GET and uses the safe Agent error bou
   assert.equal(client.calls[0].url, 'http://fixture.invalid/api/v1/actions/proposal%2Fwith%20space');
   assert.equal(client.calls[0].options.method, 'GET');
   assert.equal(client.calls.length, 1);
+});
+
+test('planning action previews send exact task or plan IDs and full reviewed values without mutation', async () => {
+  const client = mockApi(async () => ({ responseCode: 200, result: '{"proposal_id":"preview-only"}' }));
+  const requests = [
+    { operation: 'create_task', task: { title: '新待办', start_at: null, end_at: null, reminder_minutes: null, location: null } },
+    { operation: 'update_task', task_id: 'task/a', task: { title: '同名任务', start_at: '2026-10-20T10:00:00+08:00', end_at: '2026-10-20T11:00:00+08:00', reminder_minutes: 15, location: '教室' } },
+    { operation: 'delete_task', task_id: 'task/a' },
+    { operation: 'update_plan', plan_id: 'plan/b', plan: { title: '同名计划', summary: '只改元信息', target_date: null } },
+    { operation: 'delete_plan', plan_id: 'plan/b' }
+  ];
+  for (const payload of requests) {
+    const before = JSON.stringify(payload); const result = await client.api.previewPlanningAction(payload);
+    assert.equal(result.proposal_id, 'preview-only'); assert.equal(JSON.stringify(payload), before);
+  }
+  assert.deepEqual(client.calls.map(call => JSON.parse(call.options.extraData)), requests);
+  assert.ok(client.calls.every(call => call.url === 'http://fixture.invalid/api/v1/planning/actions' && call.options.method === 'POST'));
+  assert.equal(client.destroyed(), 5);
 });

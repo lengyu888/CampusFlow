@@ -1,3 +1,4 @@
+import { PlanningActionController, candidate } from './helpers/planning-action-fixture.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { stripTypeScriptTypes } from 'node:module';
@@ -15,7 +16,7 @@ const controller = noImports(source.slice(0, boundary))
   .replace(/^@Component\r?\n/m, '').replace(/@(Prop|State)\s+|@Watch\('[^']+'\)\s*/g, '')
   .replace('export struct PlanCenterPage', 'class PlanCenterPage') + '\n}\n';
 const factory = new Function('CampusFlowApi', 'TextInputController', 'Scroller', 'AppTheme', 'Curve',
-  'shanghaiDate', 'buildDailyAgenda', 'formatPlanDateTime', 'Date', stripTypeScriptTypes(controller) + '\nreturn PlanCenterPage;');
+  'shanghaiDate', 'buildDailyAgenda', 'formatPlanDateTime', 'Date', 'PlanningActionController', stripTypeScriptTypes(controller) + '\nreturn PlanCenterPage;');
 const empty = () => ({ plans: [], tasks: [], total_tasks: 0, completed_tasks: 0, due_today: 0, overdue_tasks: 0, progress: 0 });
 const task = (id, extra = {}) => ({ task_id: id, title: '相同标题', plan_id: null, milestone_id: null,
   start_at: '2026-10-20T09:00:00+08:00', end_at: '2026-10-20T10:00:00+08:00',
@@ -27,7 +28,7 @@ function fixture(handlers = {}, now = Date.parse('2026-10-19T23:30:00Z')) {
   class Api {
     async context() { calls.push('context'); return handlers.context ? handlers.context() : { timetable: [] }; }
     async planning() { calls.push('planning'); return handlers.planning ? handlers.planning() : data; }
-    async createTask(title, at) { calls.push(['create', title, at]); return handlers.create?.(); }
+    async previewPlanningAction(request) { calls.push(['preview', request]); if (handlers.preview) await handlers.preview(); return candidate(request); }
     async updateTask(id, done) { calls.push(['update', id, done]); return handlers.update?.(); }
     async deleteTask(id) { calls.push(['delete', id]); return handlers.delete?.(); }
   }
@@ -35,7 +36,7 @@ function fixture(handlers = {}, now = Date.parse('2026-10-19T23:30:00Z')) {
   class Scroller { offset = 0; }
   class Clock extends Date { static now() { return now; } }
   const Page = factory(Api, Input, Scroller, { motion: () => 0, pageInset: 20 }, { EaseOut: '' },
-    agenda.shanghaiDate, agenda.buildDailyAgenda, presentation.formatPlanDateTime, Clock);
+    agenda.shanghaiDate, agenda.buildDailyAgenda, presentation.formatPlanDateTime, Clock, PlanningActionController);
   const page = new Page();
   page.getUIContext = () => ({ animateTo: (_options, update) => update() });
   page.onInnerNavigationChanged = active => navigation.push(active);
@@ -212,11 +213,11 @@ test('refresh cannot replace a newer focus and old hidden response cannot overwr
   assert.equal(page.detailId, 'new'); assert.deepEqual(page.timetable, []);
 });
 
-test('double tap creates one task and completion never erases a newly edited draft', async () => {
-  const pending = deferred(); const { page, calls } = fixture({ create: () => pending.promise });
+test('double tap creates one preview and preview completion never erases a newly edited draft', async () => {
+  const pending = deferred(); const { page, calls } = fixture({ preview: () => pending.promise });
   page.title = '原任务'; page.draftTaskDate = '2026-10-20';
   const first = page.addTask(); await page.addTask(); page.title = '后来编辑的草稿'; pending.resolve(); await first;
-  assert.equal(calls.filter(item => Array.isArray(item) && item[0] === 'create').length, 1);
+  assert.equal(calls.filter(item => Array.isArray(item) && item[0] === 'preview').length, 1);
   assert.equal(page.title, '后来编辑的草稿'); assert.equal(page.mutationBusy, false);
 });
 

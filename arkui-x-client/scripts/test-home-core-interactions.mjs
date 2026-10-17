@@ -13,7 +13,9 @@ const controller = source.slice(0, source.indexOf('\n  @Builder'))
 const helperSource = readFileSync(new URL('../entry/src/main/ets/utils/DailyAgenda.ets', import.meta.url), 'utf8')
   .replace(/^import [^\n]+;\r?\n/gm, '');
 const helpers = await import(`data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(helperSource)).toString('base64')}`);
-const create = new Function('CampusFlowApi', 'Scroller', 'Date', 'setInterval', 'clearInterval',
+const feedbackSource = readFileSync(new URL('../entry/src/main/ets/utils/AgentFeedback.ets', import.meta.url), 'utf8').replace(/^import [^\n]+;\r?\n/gm, '');
+const feedback = await import(`data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(feedbackSource)).toString('base64')}`);
+const create = new Function('CampusFlowRequestError', 'CampusFlowApi', 'Scroller', 'Date', 'setInterval', 'clearInterval',
   'buildDailyAgenda', 'shanghaiDate', 'shanghaiTime', stripTypeScriptTypes(controller) + '\nreturn HomePage;');
 
 function deferred() {
@@ -44,7 +46,7 @@ function setup(overrides = {}) {
   }
   const clock = { now: Date.parse('2026-10-19T09:00:00+08:00'), nextId: 1, intervals: new Map() };
   class ClockDate extends Date { static now() { return clock.now; } }
-  const HomePage = create(Api, class Scroller {}, ClockDate,
+  const HomePage = create(feedback.CampusFlowRequestError, Api, class Scroller {}, ClockDate,
     (callback) => { const id = clock.nextId++; clock.intervals.set(id, callback); return id; },
     (id) => clock.intervals.delete(id), helpers.buildDailyAgenda, helpers.shanghaiDate, helpers.shanghaiTime);
   const page = new HomePage();
@@ -242,4 +244,12 @@ test('unscheduled labels distinguish absent dates from malformed data and never 
   const invalidDate = '2026-02-30T08:00:00+08:00';
   assert.equal(page.taskUnscheduledLabel(task({ start_at: invalidDate })), `待核对时间 · ${invalidDate}`);
   assert.doesNotMatch(page.taskUnscheduledLabel(task({ start_at: invalidDate })), /03-02/);
+});
+
+test('a definite conflict on restore explains how to adjust it without inventing a successful completion state', async () => {
+  const { page } = setup({ updateTask: async () => { throw new feedback.CampusFlowRequestError(409, 'ACTION_CONFLICT', 'fixture'); } });
+  const before = page.overview;
+  await page.toggleTask(task({status: 'completed'}));
+  assert.equal(page.overview, before); assert.match(page.errorText, /时间冲突/); assert.match(page.errorText, /任务详情/);
+  assert.equal(page.busyTaskId, '');
 });
