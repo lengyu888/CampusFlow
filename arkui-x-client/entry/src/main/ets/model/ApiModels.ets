@@ -79,10 +79,25 @@ export interface PendingAction {
   status: string;
 }
 
+export interface ToolDisplaySummary {
+  label: string;
+  state: string;
+  summary: string;
+}
+
+// Only the server's display projection is consumed by the native interface.
+export interface ToolTrace {
+  tool_call_id: string;
+  tool_name: string;
+  display?: ToolDisplaySummary | null;
+  status?: string | null;
+}
+
 export interface ChatResponse {
   session_id: string;
   message: string;
   pending_actions: PendingAction[];
+  tool_traces?: ToolTrace[];
 }
 
 export interface ConfirmActionResponse {

@@ -14,6 +14,22 @@ export class AppTheme {
   static readonly separator: string = '#E5E5EA';
   static readonly field: string = '#F2F2F7';
 
+  // Core-page polish tokens; keep the existing palette for other screens.
+  static readonly canvas: string = '#F4F6FA';
+  static readonly actionBlue: string = '#0066DB';
+  static readonly quiet: string = '#526176';
+  static readonly line: string = '#DFE5EF';
+  static readonly redSoft: string = '#FFF0EE';
+  static readonly pageInset: number = 20;
+  static readonly sectionGap: number = 24;
+  static readonly cardInset: number = 16;
+  static readonly cardRadius: number = 20;
+  static readonly controlRadius: number = 14;
+  static readonly pageTitle: number = 30;
+  static readonly sectionTitle: number = 19;
+  static readonly bodySize: number = 15;
+  static readonly metaSize: number = 12;
+
   static motion(duration: number = 220): number {
     return AppStorage.get<boolean>('reduceMotion') === true ? 0 : duration;
   }

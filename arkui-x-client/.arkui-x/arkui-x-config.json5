@@ -1,4 +1,5 @@
 {
   "crossplatform": true,
+  "ignoreCrossPlatform": true,
   "modules": ["entry"]
 }
