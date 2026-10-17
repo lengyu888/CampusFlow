@@ -20,6 +20,7 @@ import {
   PlanningOverview,
   PlanningTask,
   ScheduleSubscriptionStatus,
+  ScheduleSubscriptionPreview,
   SkillSummary,
   SessionSummary,
   SyncResponse,
@@ -261,6 +262,11 @@ export class CampusFlowApi {
 
   async subscriptionStatus(): Promise<ScheduleSubscriptionStatus> {
     return this.request<ScheduleSubscriptionStatus>('/api/v1/schedule-subscriptions', http.RequestMethod.GET);
+  }
+
+  async previewSubscription(url: string): Promise<ScheduleSubscriptionPreview> {
+    return this.request<ScheduleSubscriptionPreview>('/api/v1/schedule-subscriptions/preview', http.RequestMethod.POST,
+      JSON.stringify({ url: url }));
   }
 
   async saveSubscription(url: string): Promise<SyncResponse> {

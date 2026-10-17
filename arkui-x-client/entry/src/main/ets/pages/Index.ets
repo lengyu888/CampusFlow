@@ -261,7 +261,7 @@ struct Index {
       })
     } else if (!this.user.onboarding_complete) {
       OnboardingPage({ baseUrl: this.baseUrl, token: this.token,
-        onCompleted: (updated) => this.user = updated })
+        onCompleted: (updated) => this.user = updated, onReturnToLogin: () => this.logout() })
     } else {
       Column() {
         Column() {

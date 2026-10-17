@@ -26,6 +26,14 @@ export interface TimetableEntry {
   teacher: string;
 }
 
+export interface ScheduleSubscriptionPreview {
+  provider: string;
+  calendar_name: string;
+  event_count: number;
+  entries: TimetableEntry[];
+  warnings: string[];
+}
+
 export interface CampusMapSummary {
   campus_name: string;
   places: CampusPlaceImport[];
@@ -137,7 +145,15 @@ export interface CampusDataPlace {
   open_hours: string;
 }
 
+export interface CampusDataPackage {
+  package_id: string;
+  school: string;
+  campus: string;
+  version: string;
+}
+
 export interface CampusDataSnapshot {
+  package: CampusDataPackage;
   places: CampusDataPlace[];
 }
 
