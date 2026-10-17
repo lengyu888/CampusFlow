@@ -10,11 +10,19 @@ class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=8000)
 
 
+class ToolDisplaySummary(BaseModel):
+    label: str
+    state: Literal["success", "empty", "error", "unavailable", "pending", "unverified", "demo"]
+    summary: str
+
+
 class ToolTrace(BaseModel):
     tool_call_id: str
     tool_name: str
     arguments: dict[str, Any] = Field(default_factory=dict)
     result: Any | None = None
+    status: Literal["success", "error"] | None = None
+    display: ToolDisplaySummary | None = None
 
 
 class PendingAction(BaseModel):
@@ -210,6 +218,46 @@ class TimetableEntry(BaseModel):
     end_time: str = Field(pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
     location: str = Field(default="", max_length=120)
     teacher: str = Field(default="", max_length=80)
+
+
+class PlanningConflict(BaseModel):
+    task_id: str
+    title: str
+    start_at: datetime
+    end_at: datetime
+    courses: list[TimetableEntry] = Field(default_factory=list)
+
+
+class ReplanUnresolved(BaseModel):
+    task_id: str
+    title: str
+    reason: str
+
+
+class PlanningConflictsResponse(BaseModel):
+    checked_at: datetime
+    policy: str
+    conflicts: list[PlanningConflict] = Field(default_factory=list)
+    unchecked: list[ReplanUnresolved] = Field(default_factory=list)
+
+
+class ReplanChange(BaseModel):
+    task_id: str
+    title: str
+    old_start_at: datetime
+    old_end_at: datetime
+    new_start_at: datetime
+    new_end_at: datetime
+
+
+class ReplanPreview(BaseModel):
+    replan_id: str
+    status: Literal["pending", "confirmed"] = "pending"
+    created_at: datetime
+    expires_at: datetime
+    policy: str
+    changes: list[ReplanChange] = Field(default_factory=list)
+    unresolved: list[ReplanUnresolved] = Field(default_factory=list)
 
 
 class ScheduleSubscriptionRequest(BaseModel):

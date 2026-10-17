@@ -1,5 +1,8 @@
+import { KeyboardAvoidMode } from '@ohos.arkui.UIContext';
 import { AuthResponse, UserProfile } from '../model/ApiModels';
 import { CampusFlowApi } from '../services/CampusFlowApi';
+import { localHistory } from '../services/LocalHistory';
+import { historyScope } from '../utils/LocalHistoryStore';
 import { AgentPage } from './AgentPage';
 import { CampusServicesPage } from './CampusServicesPage';
 import { HomePage } from './HomePage';
@@ -17,7 +20,19 @@ import { AppTheme } from '../theme/AppTheme';
 @Component
 struct Index {
   @StorageLink('apiBaseUrl') private baseUrl: string = 'http://127.0.0.1:8000';
+  @StorageLink('voiceForeground') private voiceForeground: boolean = true;
   @State private token: string = '';
+  @State private cacheScope: string = '';
+  @State private localHistoryCount: number = 0;
+  @State private localDisplayName: string = '';
+  @State private cacheNotice: string = '';
+  @State private offlineHistory: boolean = false;
+  @State private deletedSessionId: string = '';
+  @State private deletionRevision: number = 0;
+  @State private agentChatBusy: boolean = false;
+  @State private historyDeleteBusy: boolean = false;
+  @State private cleanupNeeded: boolean = false;
+  private authRevision: number = 0;
   @State private activeTab: number = 0;
   @State private agentPrompt: string = '';
   @State private promptRevision: number = 0;
@@ -33,9 +48,19 @@ struct Index {
 
   aboutToAppear(): void {
     PersistentStorage.persistProp('reduceMotion', false);
+    // Resize the flex layout so the composer remains above the system keyboard.
+    this.getUIContext().setKeyboardAvoidMode(KeyboardAvoidMode.RESIZE);
+    this.refreshLocalHistory();
+    this.cacheNotice = AppStorage.get<string>('localHistoryError') ?? '';
+    this.cleanupNeeded = this.cacheNotice.length > 0;
   }
 
   onBackPress(): boolean {
+    if (this.offlineHistory) {
+      this.offlineHistory = false;
+      this.refreshLocalHistory();
+      return true;
+    }
     if (this.activeTab > 4) {
       this.selectTab(this.returnTab);
       return true;
@@ -43,19 +68,75 @@ struct Index {
     return false;
   }
 
-  private authenticated(auth: AuthResponse): void {
-    this.token = auth.access_token;
+  private refreshLocalHistory(): void {
+    const info = localHistory.info();
+    this.cacheScope = info.scope;
+    this.localDisplayName = info.displayName;
+    this.localHistoryCount = info.count;
+  }
+
+  private async authenticated(auth: AuthResponse): Promise<void> {
+    const revision = ++this.authRevision;
+    this.offlineHistory = false;
+    this.cacheNotice = '';
+    try {
+      await localHistory.activate(historyScope(this.baseUrl, auth.user.user_id), auth.user.display_name);
+      if (revision !== this.authRevision) { return; }
+      this.refreshLocalHistory();
+    } catch {
+      if (revision !== this.authRevision) { return; }
+      this.cacheScope = '';
+      this.localHistoryCount = 0;
+      this.cacheNotice = '本机保存暂不可用，当前可联网使用；新的对话尚不能离线回看。';
+    }
     this.user = auth.user;
+    this.activeTab = 0;
+    this.agentPrompt = '';
+    this.token = auth.access_token;
+    this.agentChatBusy = false;
+    this.historyDeleteBusy = false;
+  }
+
+  private async clearLocalHistory(): Promise<void> {
+    try {
+      await localHistory.clear();
+      this.refreshLocalHistory();
+      this.cleanupNeeded = false;
+      this.cacheNotice = '本机保存的对话已清除。';
+      AppStorage.setOrCreate<string>('localHistoryError', '');
+    } catch {
+      this.cleanupNeeded = true;
+      this.cacheNotice = '本机对话清理失败，请重试。';
+    }
   }
 
   private async logout(): Promise<void> {
+    const revision = ++this.authRevision;
+    const api = new CampusFlowApi(this.baseUrl, this.token);
+    this.token = '';
+    this.cacheScope = '';
+    this.localHistoryCount = 0;
+    this.offlineHistory = false;
+    this.activeTab = 0;
+    this.agentPrompt = '';
+    this.agentChatBusy = false;
+    this.historyDeleteBusy = false;
     try {
-      await new CampusFlowApi(this.baseUrl, this.token).logout();
+      await localHistory.clear();
+      if (revision === this.authRevision) {
+        this.cleanupNeeded = false;
+        this.cacheNotice = '已退出，并清除本机保存的对话。';
+      }
     } catch {
-      // Local sign-out must remain available when the service is temporarily unreachable.
-    } finally {
-      this.token = '';
-      this.activeTab = 0;
+      if (revision === this.authRevision) {
+        this.cleanupNeeded = true;
+        this.cacheNotice = '已退出，但本机对话清理失败。请重试清理本机记录。';
+      }
+    }
+    try {
+      await api.logout();
+    } catch {
+      // Never restore a local sign-in when remote token revocation fails.
     }
   }
 
@@ -87,6 +168,24 @@ struct Index {
     this.selectTab(1);
   }
 
+  private timetableChanged(): void {
+    this.homeRefresh++;
+    this.planRefresh++;
+  }
+
+  private sessionDeleted(id: string, revision: number): void {
+    if (revision === this.authRevision && this.token.length > 0) {
+      this.deletedSessionId = id;
+      this.deletionRevision++;
+    }
+  }
+
+  private deletionBusyChanged(busy: boolean, revision: number): void {
+    if (revision === this.authRevision && this.token.length > 0) {
+      this.historyDeleteBusy = busy;
+    }
+  }
+
   @Builder
   private pageContent() {
     Stack({ alignContent: Alignment.TopStart }) {
@@ -97,22 +196,35 @@ struct Index {
         onOpenServices: () => this.selectTab(7), onOpenProfile: () => this.selectTab(4) })
         .visibility(this.activeTab === 0 ? Visibility.Visible : Visibility.Hidden)
       AgentPage({ baseUrl: this.baseUrl, token: this.token, initialPrompt: this.agentPrompt,
+        voiceActive: this.activeTab === 1 && this.voiceForeground,
+        historyScope: this.cacheScope, deletedSessionId: this.deletedSessionId,
+        deletionRevision: this.deletionRevision,
+        deletionBusy: this.historyDeleteBusy,
+        onChatBusyChange: (busy) => this.agentChatBusy = busy,
         promptRevision: this.promptRevision,
         onOpenHistory: () => this.selectTab(5), onOpenRoute: () => this.selectTab(6),
-        onOpenPlan: () => this.selectTab(2) })
+        onOpenPlan: () => this.selectTab(2), onOpenProfile: () => this.selectTab(4) })
         .visibility(this.activeTab === 1 ? Visibility.Visible : Visibility.Hidden)
       PlanCenterPage({ baseUrl: this.baseUrl, token: this.token,
-        refreshKey: this.planRefresh,
+        refreshKey: this.planRefresh, active: this.activeTab === 2,
+        onPlanningChanged: () => this.homeRefresh++,
         onOpenAgent: (prompt) => this.openAgentWithPrompt(prompt) })
         .visibility(this.activeTab === 2 ? Visibility.Visible : Visibility.Hidden)
       SkillsPage({ baseUrl: this.baseUrl, token: this.token })
         .visibility(this.activeTab === 3 ? Visibility.Visible : Visibility.Hidden)
       ProfilePage({ baseUrl: this.baseUrl, token: this.token, user: this.user,
         onUserChanged: (updated) => this.user = updated, onLogout: () => this.logout(),
+        onTimetableChanged: () => this.timetableChanged(), onOpenPlan: () => this.selectTab(2),
         onOpenAgent: (prompt) => this.openAgentWithPrompt(prompt) })
         .visibility(this.activeTab === 4 ? Visibility.Visible : Visibility.Hidden)
       if (this.activeTab === 5) {
-        HistoryPage({ baseUrl: this.baseUrl, token: this.token, onBack: () => this.selectTab(this.returnTab) })
+        HistoryPage({ baseUrl: this.baseUrl, token: this.token, historyScope: this.cacheScope,
+          chatBusy: this.agentChatBusy,
+          remoteDeleteBusy: this.historyDeleteBusy,
+          accountRevision: this.authRevision,
+          onSessionDeleted: (id, revision) => this.sessionDeleted(id, revision),
+          onDeleteBusyChange: (busy, revision) => this.deletionBusyChanged(busy, revision),
+          onBack: () => this.selectTab(this.returnTab) })
       } else if (this.activeTab === 6) {
         RoutePage({ baseUrl: this.baseUrl, token: this.token, onBack: () => this.selectTab(this.returnTab) })
       } else if (this.activeTab === 7) {
@@ -141,15 +253,22 @@ struct Index {
   }
 
   build() {
-    if (this.token.length === 0) {
+    if (this.token.length === 0 && this.offlineHistory) {
+      HistoryPage({ baseUrl: '', token: '', historyScope: this.cacheScope, offlineOnly: true,
+        onBack: () => { this.offlineHistory = false; this.refreshLocalHistory(); } })
+    } else if (this.token.length === 0) {
       LoginPage({
         baseUrl: this.baseUrl,
+        localHistoryCount: this.localHistoryCount, localDisplayName: this.localDisplayName,
+        cacheNotice: this.cacheNotice,
+        cleanupNeeded: this.cleanupNeeded, onClearLocalHistory: () => this.clearLocalHistory(),
+        onOpenLocalHistory: () => this.offlineHistory = true,
         onBaseUrlChange: (value) => this.baseUrl = value,
         onAuthenticated: (auth) => this.authenticated(auth)
       })
     } else if (!this.user.onboarding_complete) {
       OnboardingPage({ baseUrl: this.baseUrl, token: this.token,
-        onCompleted: (updated) => this.user = updated })
+        onCompleted: (updated) => this.user = updated, onReturnToLogin: () => this.logout() })
     } else {
       Column() {
         Column() {

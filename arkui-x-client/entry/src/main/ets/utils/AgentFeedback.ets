@@ -1,0 +1,128 @@
+import { PendingAction, ToolDisplaySummary, ToolTrace } from '../model/ApiModels';
+
+interface ErrorCodePayload {
+  code?: string | null;
+}
+
+export class CampusFlowRequestError extends Error {
+  statusCode: number;
+  code: string;
+
+  constructor(statusCode: number, code: string, message: string) {
+    super(message);
+    this.name = 'CampusFlowRequestError';
+    this.statusCode = statusCode;
+    this.code = code;
+  }
+}
+
+function knownErrorMessage(code: string): string {
+  switch (code) {
+    case 'LOGIN_REQUIRED':
+      return '请重新登录 CampusFlow 后再试。';
+    case 'MODEL_AUTH_INVALID':
+      return '模型服务凭据无效，请在“我的”中检查或更新 API Key。';
+    case 'MODEL_KEY_REQUIRED':
+      return '尚未配置模型 API Key，请在“我的”中完成配置。';
+    case 'MODEL_UNAVAILABLE':
+      return '模型服务暂时不可用，请稍后再试。';
+    case 'MODEL_RATE_LIMITED':
+      return '模型服务请求过于频繁或额度不足，请检查额度后稍后再试。';
+    case 'MODEL_REQUEST_REJECTED':
+      return '模型服务未接受本次请求，请检查模型配置或调整输入后再试。';
+    case 'REQUEST_TIMEOUT':
+      return '请求超时，结果尚未确认。请先核对记录，再决定是否重试。';
+    case 'ACTION_NOT_FOUND':
+      return '未找到此提案，请刷新核对。';
+    case 'ACTION_RESOLVED':
+      return '此提案已经处理，请核对当前状态。';
+    case 'ACTION_FAILED':
+      return '提案执行失败，请核对当前状态后再操作。';
+    case 'ACTION_UNSUPPORTED':
+      return '暂不支持执行此类提案。';
+    case 'NETWORK_ERROR':
+      return '无法连接 CampusFlow 服务，请检查网络和服务地址。';
+    case 'INVALID_RESPONSE':
+      return '服务返回了无法识别的结果，请稍后刷新核对。';
+    default:
+      return '';
+  }
+}
+
+function httpErrorMessage(statusCode: number): string {
+  switch (statusCode) {
+    case 401:
+      // Old servers may use 401 for model credentials; this alone must never trigger logout.
+      return '请求未获授权，请检查账户或服务配置。';
+    case 403:
+      return '当前操作未获授权，请检查权限。';
+    case 404:
+      return '未找到请求的内容，请刷新后再试。';
+    case 408:
+    case 504:
+      return knownErrorMessage('REQUEST_TIMEOUT');
+    case 409:
+      return '当前数据状态已变化，请先刷新核对。';
+    case 422:
+      return '请求信息不完整或格式不正确，请检查后再试。';
+    case 429:
+      return '请求过于频繁，请稍后再试。';
+    default:
+      return statusCode >= 500 ? 'CampusFlow 服务暂时不可用，请稍后再试。'
+        : '请求未能完成，请检查输入后再试。';
+  }
+}
+
+export function requestFailure(statusCode: number, responseText: string): CampusFlowRequestError {
+  let code = '';
+  try {
+    const payload = JSON.parse(responseText) as ErrorCodePayload | null;
+    if (payload !== null && typeof payload.code === 'string') {
+      code = payload.code;
+    }
+  } catch {
+    // Neither server response bodies nor transport diagnostics are user-facing error messages.
+  }
+  const message = knownErrorMessage(code);
+  return message.length > 0 ? new CampusFlowRequestError(statusCode, code, message)
+    : new CampusFlowRequestError(statusCode, 'HTTP_ERROR', httpErrorMessage(statusCode));
+}
+
+export function localRequestFailure(code: string, statusCode: number = 0): CampusFlowRequestError {
+  const message = knownErrorMessage(code);
+  return new CampusFlowRequestError(statusCode, message.length > 0 ? code : 'NETWORK_ERROR',
+    message.length > 0 ? message : knownErrorMessage('NETWORK_ERROR'));
+}
+
+export function displayToolTraces(traces?: ToolTrace[]): ToolDisplaySummary[] {
+  if (!Array.isArray(traces)) {
+    return [];
+  }
+  const allowedStates = ['success', 'empty', 'error', 'unavailable', 'pending', 'unverified', 'demo'];
+  return traces.map((trace: ToolTrace): ToolDisplaySummary => {
+    const display = trace?.display;
+    if (display !== undefined && display !== null && typeof display.label === 'string' &&
+      display.label.trim().length > 0 && typeof display.summary === 'string' &&
+      display.summary.trim().length > 0 && allowedStates.includes(display.state)) {
+      return { label: display.label, state: display.state, summary: display.summary };
+    }
+    return { label: '工具调用', state: 'unverified', summary: '服务未提供可核验的工具摘要。' };
+  });
+}
+
+export function mergeActions(current: PendingAction[], incoming: PendingAction[]): PendingAction[] {
+  const merged: PendingAction[] = [];
+  current.concat(incoming).forEach((action: PendingAction) => {
+    const index = merged.findIndex((item: PendingAction) => item.proposal_id === action.proposal_id);
+    if (index < 0) {
+      merged.push(action);
+    } else if (merged[index].status !== 'confirmed' && merged[index].status !== 'cancelled') {
+      merged[index] = action;
+    }
+  });
+  return merged;
+}
+
+export function restoreDraft(current: string, failed: string): string {
+  return current.trim().length === 0 ? failed : current;
+}

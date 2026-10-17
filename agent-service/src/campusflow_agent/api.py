@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import asyncio
 import json
+import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from openai import APIConnectionError, APIStatusError, BadRequestError
 from openai import AuthenticationError as OpenAIAuthenticationError
@@ -34,6 +35,7 @@ from .hduhelp import HDUHelpError, HDUHelpService, TokenSet
 from .hduhelp_access import HDUHelpAccess
 from .hduhelp_presenter import build_hduhelp_presentation
 from .key_vault import ApiKeyVault
+from .replanning import ReplanError, ReplanningService
 from .schedule_subscription import ScheduleSubscriptionError, ScheduleSubscriptionService
 from .schemas import (
     AdminUserSummary,
@@ -63,9 +65,12 @@ from .schemas import (
     LoginRequest,
     OnboardingRequest,
     OnboardingResponse,
+    PendingAction,
+    PlanningConflictsResponse,
     PlanningOverview,
     PlanningTask,
     RegisterRequest,
+    ReplanPreview,
     ScheduleSubscriptionPreview,
     ScheduleSubscriptionRequest,
     ScheduleSubscriptionStatus,
@@ -85,9 +90,24 @@ from .schemas import (
 )
 from .skills import SkillStore
 from .store import CampusStore
+from .tool_presentation import present_tool_trace
 from .vision import ImageValidationError, VisionService
 
 SESSION_COOKIE = "campusflow_session"
+
+
+class CampusFlowError(HTTPException):
+    """Stable error codes while preserving the existing string detail field."""
+
+    def __init__(
+        self,
+        status_code: int,
+        detail: str,
+        code: str,
+        headers: dict[str, str] | None = None,
+    ) -> None:
+        super().__init__(status_code=status_code, detail=detail, headers=headers)
+        self.code = code
 
 
 def _request_token(request: Request) -> str | None:
@@ -102,9 +122,10 @@ async def _require_user(request: Request) -> UserRecord:
     account_store: AccountStore = request.app.state.account_store
     user = account_store.resolve_session(token) if token else None
     if user is None:
-        raise HTTPException(
+        raise CampusFlowError(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="请先登录 CampusFlow。",
+            code="LOGIN_REQUIRED",
             headers={"WWW-Authenticate": "Bearer"},
         )
     return user
@@ -130,33 +151,39 @@ def _user_profile(user: UserRecord) -> UserProfile:
 
 def _deepseek_exception(exc: Exception) -> HTTPException:
     if isinstance(exc, OpenAIAuthenticationError):
-        return HTTPException(
+        return CampusFlowError(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="DeepSeek API Key 无效、已失效或没有当前模型权限。",
+            code="MODEL_AUTH_INVALID",
         )
     if isinstance(exc, OpenAIRateLimitError):
-        return HTTPException(
+        return CampusFlowError(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="DeepSeek API 请求过于频繁或账户额度不足，请稍后重试并检查余额。",
+            code="MODEL_RATE_LIMITED",
         )
     if isinstance(exc, BadRequestError):
-        return HTTPException(
+        return CampusFlowError(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="DeepSeek 拒绝了请求，请检查模型参数、图片格式或输入内容。",
+            code="MODEL_REQUEST_REJECTED",
         )
     if isinstance(exc, APIConnectionError):
-        return HTTPException(
+        return CampusFlowError(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="无法连接 DeepSeek API，请检查本机网络、防火墙或代理设置。",
+            code="MODEL_UNAVAILABLE",
         )
     if isinstance(exc, APIStatusError):
-        return HTTPException(
+        return CampusFlowError(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"DeepSeek API 返回 HTTP {exc.status_code}。",
+            code="MODEL_UNAVAILABLE",
         )
-    return HTTPException(
+    return CampusFlowError(
         status_code=status.HTTP_502_BAD_GATEWAY,
         detail=f"Agent execution failed: {type(exc).__name__}",
+        code="MODEL_UNAVAILABLE",
     )
 
 
@@ -172,10 +199,12 @@ def create_app(
     schedule_subscription_service: ScheduleSubscriptionService | None = None,
     hduhelp_service: HDUHelpService | None = None,
     hduhelp_access: HDUHelpAccess | None = None,
+    replanning_service: ReplanningService | None = None,
 ) -> FastAPI:
     settings = settings or get_settings()
     store = store or CampusStore(settings.database_path)
     account_store = account_store or AccountStore(settings.database_path)
+    replanning_service = replanning_service or ReplanningService(account_store, store)
     skill_store = skill_store or SkillStore(settings.database_path)
     api_key_vault = api_key_vault or ApiKeyVault(settings)
     hduhelp_service = hduhelp_service or HDUHelpService(settings)
@@ -202,6 +231,24 @@ def create_app(
         version="0.9.0",
         description="带校园路线图、版本化数据、课表订阅、规划执行与 Skills 的大学规划 Agent",
     )
+
+    @app.exception_handler(CampusFlowError)
+    async def campusflow_error_handler(request: Request, exc: CampusFlowError) -> JSONResponse:
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"detail": exc.detail, "code": exc.code},
+            headers=exc.headers,
+        )
+
+    @app.exception_handler(ReplanError)
+    async def replan_error_handler(request: Request, exc: ReplanError) -> JSONResponse:
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"detail": exc.detail, "code": exc.code},
+        )
+
+    app.state.replanning_service = replanning_service
+
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
@@ -247,16 +294,18 @@ def create_app(
     def load_api_key(user: UserRecord) -> str:
         encrypted = account_store.get_api_key_encrypted(user.user_id)
         if not encrypted:
-            raise HTTPException(
+            raise CampusFlowError(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="请先在用户设置中配置 DeepSeek API Key。",
+                code="MODEL_KEY_REQUIRED",
             )
         try:
             return api_key_vault.decrypt(encrypted)
         except ValueError as exc:
-            raise HTTPException(
+            raise CampusFlowError(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail=str(exc),
+                code="MODEL_KEY_REQUIRED",
             ) from exc
 
     def subscription_status(user_id: str) -> ScheduleSubscriptionStatus:
@@ -953,20 +1002,26 @@ def create_app(
                 message=request.message,
             )
         except AgentConfigurationError as exc:
-            raise HTTPException(
+            raise CampusFlowError(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail=str(exc),
+                code="MODEL_UNAVAILABLE",
             ) from exc
         except TimeoutError as exc:
-            raise HTTPException(
+            raise CampusFlowError(
                 status_code=status.HTTP_504_GATEWAY_TIMEOUT,
                 detail="Agent request timed out",
+                code="REQUEST_TIMEOUT",
             ) from exc
         except asyncio.CancelledError:
+            raise
+        except HTTPException:
             raise
         except Exception as exc:
             raise _deepseek_exception(exc) from exc
 
+        for trace in reply.tool_traces:
+            trace.display = present_tool_trace(trace, reply.pending_actions)
         return ChatResponse(
             session_id=request.session_id,
             message=reply.message,
@@ -1014,6 +1069,27 @@ def create_app(
     async def planning(user: CurrentUser) -> PlanningOverview:
         load_user_context(user)
         return store.planning_overview(user.user_id)
+
+    @app.get("/api/v1/planning/conflicts", response_model=PlanningConflictsResponse)
+    async def planning_conflicts(user: CurrentUser) -> PlanningConflictsResponse:
+        return replanning_service.conflicts(user.user_id)
+
+    @app.post("/api/v1/planning/replans", response_model=ReplanPreview)
+    async def preview_replan(user: CurrentUser) -> ReplanPreview:
+        return replanning_service.preview(user.user_id)
+
+    @app.get("/api/v1/planning/replans/{replan_id}", response_model=ReplanPreview)
+    async def replan_state(replan_id: str, user: CurrentUser) -> ReplanPreview:
+        return replanning_service.get(user.user_id, replan_id)
+
+    @app.post("/api/v1/planning/replans/{replan_id}/confirm", response_model=ReplanPreview)
+    async def confirm_replan(replan_id: str, user: CurrentUser) -> ReplanPreview:
+        try:
+            return replanning_service.confirm(user.user_id, replan_id)
+        except sqlite3.Error as exc:
+            raise CampusFlowError(
+                500, "未能完成改期确认，请先核对本次改期状态再重试。", "REPLAN_FAILED"
+            ) from exc
 
     @app.post("/api/v1/tasks", response_model=PlanningTask, status_code=201)
     async def create_task(payload: TaskCreateRequest, user: CurrentUser) -> PlanningTask:
@@ -1069,17 +1145,41 @@ def create_app(
             raise HTTPException(status_code=404, detail="计划不存在。") from exc
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
+    @app.get("/api/v1/actions/{proposal_id}", response_model=PendingAction)
+    async def action_state(proposal_id: str, user: CurrentUser) -> PendingAction:
+        action = store.get_proposal(proposal_id, user.user_id)
+        if action is None:
+            raise CampusFlowError(404, "提案不存在。", "ACTION_NOT_FOUND")
+        return action
+
     @app.post(
         "/api/v1/actions/{proposal_id}/confirm",
         response_model=ConfirmActionResponse,
     )
     async def confirm_action(proposal_id: str, user: CurrentUser) -> ConfirmActionResponse:
+        action = await action_state(proposal_id, user)
+        if action.status != "pending":
+            raise CampusFlowError(409, "提案已处理，请核对最新状态。", "ACTION_RESOLVED")
+        if action.action != "create":
+            raise CampusFlowError(
+                422, "当前暂不支持通过提案修改或删除待办。", "ACTION_UNSUPPORTED"
+            )
         try:
             action = store.confirm_proposal(proposal_id, user.user_id)
         except KeyError as exc:
-            raise HTTPException(status_code=404, detail="Proposal not found") from exc
+            raise CampusFlowError(404, "提案不存在。", "ACTION_NOT_FOUND") from exc
         except ValueError as exc:
-            raise HTTPException(status_code=409, detail="Proposal already resolved") from exc
+            if str(exc) == "proposal_already_resolved":
+                raise CampusFlowError(
+                    409, "提案已处理，请核对最新状态。", "ACTION_RESOLVED"
+                ) from exc
+            raise CampusFlowError(
+                422, "提案执行未完成，请先核对提案状态和规划。", "ACTION_FAILED"
+            ) from exc
+        except Exception as exc:
+            raise CampusFlowError(
+                500, "无法核实提案执行结果，请先核对提案状态和规划。", "ACTION_FAILED"
+            ) from exc
         return ConfirmActionResponse(
             action=action,
             applied=True,
@@ -1098,13 +1198,23 @@ def create_app(
         try:
             action = store.cancel_proposal(proposal_id, user.user_id)
         except KeyError as exc:
-            raise HTTPException(status_code=404, detail="Proposal not found") from exc
+            raise CampusFlowError(404, "提案不存在。", "ACTION_NOT_FOUND") from exc
         except ValueError as exc:
-            raise HTTPException(status_code=409, detail="Proposal already resolved") from exc
+            if str(exc) == "proposal_already_resolved":
+                raise CampusFlowError(
+                    409, "提案已处理，请核对最新状态。", "ACTION_RESOLVED"
+                ) from exc
+            raise CampusFlowError(
+                422, "未能取消提案，请核对最新状态。", "ACTION_FAILED"
+            ) from exc
+        except Exception as exc:
+            raise CampusFlowError(
+                500, "无法核实取消结果，请核对最新状态。", "ACTION_FAILED"
+            ) from exc
         return ConfirmActionResponse(
             action=action,
             applied=False,
-            message="已暂不执行，本次提案没有写入规划。",
+            message="提案已取消。",
         )
 
     return app

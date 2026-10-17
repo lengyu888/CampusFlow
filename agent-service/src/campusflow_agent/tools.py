@@ -274,7 +274,11 @@ def build_tools(
             )
         except HDUHelpError as exc:
             return {"available": False, "message": str(exc)}
-        return {"available": True, **electricity_overview(binding, balance, history)}
+        overview = electricity_overview(binding, balance, history)
+        updated_at = overview.get("balance_updated_at")
+        if isinstance(updated_at, datetime):
+            overview["balance_updated_at"] = updated_at.isoformat()
+        return {"available": True, **overview}
 
     @tool
     def propose_task_change(
