@@ -119,6 +119,41 @@ test('deleting the active session starts a new ID and prevents late response res
   assert.equal(saved.length, 0);
 });
 
+test('the first user message after deletion leaves the welcome state while the answer is still pending', async () => {
+  const response = deferred();
+  const { page } = harness({ chat: () => response.promise });
+  assert.equal(page.messages.length, 1);
+  assert.equal(page.messages[0].id, 'welcome');
+  assert.equal(page.hasConversation(), false, 'the initial welcome is not a conversation');
+
+  page.deletedSessionId = page.sessionId;
+  page.sessionDeleted();
+  assert.deepEqual(page.messages, []);
+  assert.equal(page.hasConversation(), false, 'a deleted conversation returns to the empty state');
+
+  page.prompt = '删除后重新开始的第一条消息';
+  const sending = page.send();
+  assert.equal(page.messages.length, 1);
+  assert.equal(page.messages[0].role, 'user');
+  assert.equal(page.hasConversation(), true, 'one real user message must not be hidden as welcome content');
+  response.resolve({ session_id: page.sessionId, message: '新会话的真实回答', pending_actions: [] });
+  await sending;
+  assert.equal(page.hasConversation(), true);
+  assert.deepEqual(page.messages.map(({ role, content }) => ({ role, content })), [
+    { role: 'user', content: '删除后重新开始的第一条消息' },
+    { role: 'assistant', content: '新会话的真实回答' }
+  ]);
+});
+
+test('one real assistant message is conversation content even without a welcome or user entry', () => {
+  const { page } = harness();
+  page.deletedSessionId = page.sessionId;
+  page.sessionDeleted();
+  page.appendMessage('assistant', '需要完整展示的助手消息');
+  assert.equal(page.messages.length, 1);
+  assert.equal(page.hasConversation(), true);
+});
+
 test('a slow failed send preserves a newer draft and keeps the original message available', async () => {
   const response = deferred();
   const { page, calls } = harness({ chat: () => response.promise });
