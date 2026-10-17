@@ -41,6 +41,13 @@ class Settings(BaseSettings):
     )
     hduhelp_timeout_seconds: float = 20.0
 
+    # Optional explicit campus-to-forecast-point mapping. No device location is collected.
+    weather_school: str | None = Field(default=None, min_length=1, max_length=120)
+    weather_campus: str | None = Field(default=None, min_length=1, max_length=120)
+    weather_location_label: str | None = Field(default=None, min_length=1, max_length=120)
+    weather_latitude: float | None = Field(default=None, ge=-90, le=90, allow_inf_nan=False)
+    weather_longitude: float | None = Field(default=None, ge=-180, le=180, allow_inf_nan=False)
+
 
 @lru_cache
 def get_settings() -> Settings:

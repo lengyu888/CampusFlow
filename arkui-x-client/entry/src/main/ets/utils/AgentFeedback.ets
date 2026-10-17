@@ -148,7 +148,10 @@ export function displayToolTraces(traces?: ToolTrace[]): ToolDisplaySummary[] {
     if (display !== undefined && display !== null && typeof display.label === 'string' &&
       display.label.trim().length > 0 && typeof display.summary === 'string' &&
       display.summary.trim().length > 0 && allowedStates.includes(display.state)) {
-      return { label: display.label, state: display.state, summary: display.summary };
+      const summary: ToolDisplaySummary = { label: display.label, state: display.state, summary: display.summary };
+      // EvidencePanel validates only the public source projection; raw tool arguments/results remain unused.
+      if (Array.isArray(display.evidence)) { summary.evidence = display.evidence; }
+      return summary;
     }
     return { label: '工具调用', state: 'unverified', summary: '服务未提供可核验的工具摘要。' };
   });

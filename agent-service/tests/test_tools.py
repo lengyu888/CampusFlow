@@ -1,4 +1,5 @@
 from datetime import datetime
+from types import SimpleNamespace
 
 import pytest
 
@@ -11,11 +12,11 @@ def tool_map(store: CampusStore):
     return {item.name: item for item in build_tools(store)}
 
 
-def test_schedule_tool_returns_demo_course() -> None:
+def test_schedule_without_confirmed_data_never_returns_demo_course() -> None:
     tools = tool_map(CampusStore())
     result = tools["get_schedule"].invoke({"date": "2026-09-29"})
-    assert result[0]["title"] == "高等数学"
-    assert result[0]["date"] == "2026-09-29"
+    assert result["items"] == []
+    assert result["evidence"][0]["status"] == "missing"
 
 
 def test_schedule_tool_supports_date_ranges() -> None:
@@ -48,7 +49,7 @@ def test_schedule_tool_supports_date_ranges() -> None:
     finally:
         CURRENT_USER_ID.reset(token)
 
-    assert [(item["date"], item["title"]) for item in result] == [
+    assert [(item["date"], item["title"]) for item in result["items"]] == [
         ("2026-10-04", "软件工程"),
         ("2026-10-05", "计算机网络"),
     ]
@@ -87,15 +88,21 @@ def test_tools_use_confirmed_user_timetable_and_campus_map() -> None:
     finally:
         CURRENT_USER_ID.reset(token)
 
-    assert schedule[0]["title"] == "操作系统"
-    assert schedule[0]["source"] == "用户确认的课表"
-    assert places[0]["name"] == "第7教学楼"
+    assert schedule["items"][0]["title"] == "操作系统"
+    assert schedule["items"][0]["source"] == "用户确认的课表"
+    assert places["items"][0]["name"] == "第7教学楼"
+    assert places["items"][0]["open"] is None
 
 
 def test_route_tool_returns_map_geometry_and_steps() -> None:
-    route = tool_map(CampusStore())["plan_campus_route"].invoke(
-        {"origin": "六教", "destination": "菜鸟驿站"}
+    account = SimpleNamespace(
+        get_user=lambda _: SimpleNamespace(
+            school="杭州电子科技大学",
+            campus="下沙校区",
+        )
     )
+    tools = {tool.name: tool for tool in build_tools(CampusStore(), hduhelp_store=account)}
+    route = tools["plan_campus_route"].invoke({"origin": "六教", "destination": "菜鸟驿站"})
 
     assert route["origin"]["place_id"] == "teaching-6"
     assert route["destination"]["place_id"] == "cainiao-station"

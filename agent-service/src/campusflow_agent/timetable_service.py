@@ -16,6 +16,7 @@ from typing import Any
 from uuid import UUID
 
 from .accounts import AccountStore
+from .evidence import timetable_evidence
 from .schemas import TimetableEntry, TimetableSaveReceipt, TimetableSaveRequest, TimetableSnapshot
 from .store import CampusStore
 
@@ -71,8 +72,20 @@ class TimetableService:
 
     def snapshot(self, user_id: str) -> TimetableSnapshot:
         with self.accounts._lock:
-            entries = self._entries(user_id)
-            return TimetableSnapshot(entries=entries, revision=_digest(entries))
+            row = self.accounts._connection.execute(
+                "SELECT timetable_json,timetable_updated_at,timetable_source FROM users "
+                "WHERE user_id=?", (user_id,),
+            ).fetchone()
+            if row is None:
+                raise TimetableError(404, "TIMETABLE_NOT_FOUND", "未找到当前账号的课表。")
+            entries = json.loads(row["timetable_json"])
+            metadata = {
+                "updated_at": row["timetable_updated_at"], "source": row["timetable_source"],
+            }
+            return TimetableSnapshot(
+                entries=entries, revision=_digest(entries),
+                evidence=[timetable_evidence(self.accounts, user_id, metadata)],
+            )
 
     def receipt(self, user_id: str, operation_id: UUID) -> TimetableSaveReceipt:
         with self.accounts._lock:
@@ -127,7 +140,9 @@ class TimetableService:
 
     def _replace(self, user_id: str, entries: list[dict[str, Any]]) -> None:
         self.accounts._connection.execute(
-            "UPDATE users SET timetable_json = ? WHERE user_id = ?", (_canonical(entries), user_id)
+            "UPDATE users SET timetable_json = ?,timetable_updated_at=?,"
+            "timetable_source='user' WHERE user_id = ?",
+            (_canonical(entries), self.clock().isoformat(), user_id),
         )
 
     def _refresh_context(self, user_id: str) -> None:
@@ -200,6 +215,9 @@ class TimetableService:
                     409, "TIMETABLE_STALE", "课表订阅连接已更改，请重新核对连接后再同步。"
                 )
             self._replace(user_id, values)
+            connection.execute(
+                "UPDATE users SET timetable_source='subscription' WHERE user_id=?", (user_id,)
+            )
             connection.execute(
                 """
                 INSERT INTO schedule_subscriptions (

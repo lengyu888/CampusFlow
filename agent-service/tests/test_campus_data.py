@@ -18,7 +18,9 @@ def test_package_exposes_versioned_places_and_notices() -> None:
     assert snapshot.package.package_id == "hdu-xiasha"
     assert snapshot.package.version == "2026.10.7"
     assert snapshot.package.place_count >= 17
-    assert snapshot.package.notice_count >= 3
+    assert snapshot.package.notice_count == 0
+    assert snapshot.notices == []
+    assert snapshot.package.evidence[0].status == "unverified"
     assert any(place.name == "图书馆" for place in snapshot.places)
 
 
@@ -33,7 +35,7 @@ def test_place_lookup_supports_alias_open_hours_and_walk_time() -> None:
 
     assert len(places) == 1
     assert places[0].name == "图书馆"
-    assert places[0].open_now is True
+    assert places[0].open_now is None
     assert places[0].open_hours == "07:00–22:00"
     assert places[0].walk_minutes == 5
 
@@ -49,7 +51,8 @@ def test_route_from_sixth_teaching_building_to_cainiao_uses_uploaded_map_graph()
 
     assert route.origin.place_id == "teaching-6"
     assert route.destination.place_id == "cainiao-station"
-    assert route.destination.open_now is True
+    assert route.destination.open_now is None
+    assert route.is_estimate is True
     assert route.total_minutes == 10
     assert route.estimated_distance_meters == 750
     assert [step.minutes for step in route.steps] == [5, 5]
@@ -93,13 +96,16 @@ def test_route_reports_unknown_place() -> None:
 def test_notice_search_and_active_filter() -> None:
     data = CampusDataStore()
 
-    matches = data.search_notices("操场")
+    assert data.search_notices("操场") == []
+    matches = data.search_notices("操场", demo=True)
     active = data.search_notices(
         active_only=True,
         at=datetime(2026, 10, 4, 12, 0, tzinfo=CAMPUS_TIMEZONE),
+        demo=True,
     )
 
     assert matches[0].notice_id == "notice-east-track-maintenance"
+    assert matches[0].evidence[0].kind == "demo"
     assert {item.notice_id for item in active} == {
         "notice-library-hours",
         "notice-holiday-teaching",

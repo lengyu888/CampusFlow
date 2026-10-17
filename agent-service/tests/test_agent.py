@@ -1,5 +1,6 @@
 import json
 from datetime import UTC, datetime
+from types import SimpleNamespace
 
 import pytest
 from langchain_core.messages import AIMessage, ToolMessage
@@ -136,6 +137,12 @@ async def test_route_intent_uses_tool_without_calling_remote_model() -> None:
     skills = SkillStore()
     skills.install("student-001", "campus-navigator", ["places.read"])
     service = AgentService(Settings(app_env="test"), store, skills)
+    service.account_store = SimpleNamespace(
+        get_user=lambda _: SimpleNamespace(school="杭电", campus="下沙"),
+        get_context=lambda _: ([], {}),
+        list_hduhelp_resources=lambda _: [],
+        get_hduhelp_status=lambda _: {"configured": False},
+    )
 
     reply = await service.chat(
         user_id="student-001",
@@ -147,6 +154,8 @@ async def test_route_intent_uses_tool_without_calling_remote_model() -> None:
 
     assert "步行约 10 分钟" in reply.message
     assert "北二门/南二门通道" in reply.message
+    assert "当前开放情况未知" in reply.message
+    assert "估算" in reply.message
     assert reply.tool_traces[0].tool_name == "plan_campus_route"
     assert reply.tool_traces[0].result["path"][-1]["place_id"] == "cainiao-station"
     assert [item.role for item in store.get_history("student-001", "route-session")] == [

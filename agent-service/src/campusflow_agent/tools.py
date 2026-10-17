@@ -3,8 +3,9 @@ from __future__ import annotations
 import asyncio
 import json
 from contextvars import ContextVar
+from datetime import UTC, datetime, timedelta
 from datetime import date as date_type
-from datetime import datetime, timedelta
+from typing import TYPE_CHECKING
 
 from langchain_core.tools import BaseTool, tool
 from pydantic import BaseModel, Field
@@ -16,11 +17,16 @@ from .campus_services import (
     classroom_usage_items,
     electricity_overview,
 )
+from .evidence import campus_supported, data_evidence, hdu_evidence
 from .hduhelp import HDUHelpError
 from .hduhelp_access import HDUHelpAccess
 from .key_vault import ApiKeyVault
 from .schemas import PlanEditRequest, PlanningActionRequest
 from .store import CampusStore
+from .timetable_service import TimetableService
+
+if TYPE_CHECKING:
+    from .weather import WeatherService
 
 CURRENT_USER_ID: ContextVar[str] = ContextVar("campusflow_user_id", default="demo-student")
 
@@ -63,28 +69,108 @@ def build_tools(
     hduhelp_store: AccountStore | None = None,
     credential_vault: ApiKeyVault | None = None,
     hduhelp_access: HDUHelpAccess | None = None,
+    weather_service: WeatherService | None = None,
 ) -> list[BaseTool]:
-    def hduhelp_resource(name: str) -> dict | None:
-        if hduhelp_store is None or credential_vault is None:
-            return None
-        snapshot = hduhelp_store.get_hduhelp_resource(CURRENT_USER_ID.get(), name)
-        if snapshot is None:
-            return None
+    def profile():
+        if hduhelp_store is not None:
+            try:
+                return hduhelp_store.get_user(CURRENT_USER_ID.get())
+            except KeyError:
+                pass
+        return None
+
+    def static_campus_available() -> bool:
+        user = profile()
+        return user is not None and campus_supported(user.school or "", user.campus or "")
+
+    def refresh_saved_context() -> None:
+        if hduhelp_store is None:
+            return
         try:
+            timetable, campus_map = hduhelp_store.get_context(CURRENT_USER_ID.get())
+        except KeyError:
+            return
+        store.set_user_context(CURRENT_USER_ID.get(), timetable=timetable, campus_map=campus_map)
+
+    def missing_source(source_id: str, label: str, note: str, *, status="missing") -> list[dict]:
+        return [
+            data_evidence(source_id, label, "remote", status, note=note).model_dump(mode="json")
+        ]
+
+    def live_failure(resource: str, status="missing") -> dict:
+        return {
+            "available": False,
+            "message": "校园实时数据暂不可用，请检查连接后重新查询。",
+            "evidence": missing_source(
+                f"hduhelp:{resource}",
+                "HDUHelp 实时查询",
+                "未取得本次查询结果，不能推断当前状态。",
+                status=status,
+            ),
+        }
+
+    def hduhelp_resource(name: str) -> dict:
+        snapshot = (
+            hduhelp_store.get_hduhelp_resource(CURRENT_USER_ID.get(), name)
+            if hduhelp_store is not None and credential_vault is not None
+            else None
+        )
+        if snapshot is None:
             return {
-                "resource": snapshot["resource"],
-                "data": json.loads(credential_vault.decrypt(snapshot["encrypted_data"])),
-                "synced_at": snapshot["synced_at"],
+                "resource": name,
+                "data": None,
+                "synced_at": None,
+                "needs_sync": True,
+                "evidence": missing_source(
+                    f"hduhelp:{name}",
+                    "HDUHelp 已同步资料",
+                    "尚未取得该项已授权资料，请先连接并同步。",
+                ),
             }
+        evidence = hdu_evidence(name, snapshot["synced_at"])
+        result = {
+            "resource": name,
+            "data": None,
+            "synced_at": snapshot["synced_at"],
+            "needs_sync": True,
+            "evidence": [evidence.model_dump(mode="json")],
+        }
+        if evidence.status != "fresh":
+            # Do not decrypt or supply expired balances, exams or other stale personal
+            # facts as model context. Their timestamps remain available for explanation.
+            return result
+        try:
+            data = json.loads(credential_vault.decrypt(snapshot["encrypted_data"]))
+            if not isinstance(data, dict | list):
+                raise ValueError("unsupported snapshot shape")
+            return {**result, "data": data, "needs_sync": False}
         except (ValueError, json.JSONDecodeError):
-            return None
+            result["evidence"] = missing_source(
+                f"hduhelp:{name}",
+                "HDUHelp 已同步资料",
+                "已存资料无法读取，请重新同步。",
+                status="error",
+            )
+            return result
+
+    def hduhelp_group(names: list[str]) -> dict:
+        snapshots = {name: hduhelp_resource(name) for name in names}
+        connected = (
+            hduhelp_store is not None
+            and hduhelp_store.get_hduhelp_status(CURRENT_USER_ID.get())["configured"]
+        )
+        return {
+            "connected": connected,
+            **snapshots,
+            "evidence": [item for value in snapshots.values() for item in value["evidence"]],
+        }
 
     @tool
     def get_schedule(
         date: str | None = None,
         start_date: str | None = None,
         end_date: str | None = None,
-    ) -> list[dict[str, str]]:
+    ) -> dict:
         """查询当前学生的课程和已确认事务。
 
         单日查询只传 date（YYYY-MM-DD）；“近期、本周”等范围查询传 start_date 和
@@ -105,33 +191,130 @@ def build_tools(
             raise ValueError("schedule range cannot exceed 32 days")
 
         result: list[dict[str, str]] = []
-        current = start
-        while current <= end:
-            date_key = current.isoformat()
+        user_id = CURRENT_USER_ID.get()
+        if hduhelp_store is not None:
+            # The snapshot reads content and provenance in the same SQLite SELECT.
+            # Do not combine an in-memory old timetable with newly saved metadata.
+            snapshot = TimetableService(hduhelp_store, store).snapshot(user_id)
+            course_source = snapshot.evidence[0]
             result.extend(
-                {"date": date_key, **item}
-                for item in store.get_schedule(CURRENT_USER_ID.get(), date_key)
+                {
+                    "date": item.date.isoformat(),
+                    "title": item.title,
+                    "start": item.start_time,
+                    "end": item.end_time,
+                    "location": item.location,
+                    "teacher": item.teacher,
+                    "source": "用户确认的课表",
+                }
+                for item in snapshot.entries
+                if start <= item.date <= end
             )
-            current += timedelta(days=1)
-        return result
+            for task in store.list_tasks(user_id):
+                if task.start_at is None:
+                    continue
+                begins = store._campus_local(task.start_at)
+                if start <= begins.date() <= end:
+                    ends = store._campus_local(task.end_at) if task.end_at else None
+                    result.append(
+                        {
+                            "date": begins.date().isoformat(),
+                            "title": task.title,
+                            "start": begins.strftime("%H:%M"),
+                            "end": ends.strftime("%H:%M") if ends else "",
+                            "location": task.location or "",
+                            "teacher": "",
+                            "source": "已确认事务",
+                        }
+                    )
+            user = profile()
+            has_timetable = (
+                bool(snapshot.entries)
+                or course_source.updated_at is not None
+                or (user is not None and user.onboarding_complete)
+            )
+        else:
+            current = start
+            while current <= end:
+                date_key = current.isoformat()
+                result.extend(
+                    {"date": date_key, **item} for item in store.get_schedule(user_id, date_key)
+                )
+                current += timedelta(days=1)
+            has_timetable = user_id in store._user_schedules
+            course_source = data_evidence(
+                "timetable:user",
+                "用户保存的课表",
+                "user",
+                "unverified",
+                note="来自当前账号保存的课程；未记录原始保存时间，非实时教务数据。",
+            )
+        result.sort(key=lambda item: (item["date"], item["start"]))
+        if not has_timetable:
+            course_source.status = "missing"
+            course_source.note = "尚未确认课表，不能据空集推断无课。"
+        return {
+            "items": result,
+            "evidence": [
+                course_source.model_dump(mode="json"),
+                data_evidence(
+                    "user:planning",
+                    "已确认的计划与待办",
+                    "user",
+                    "fresh",
+                    note="本次读取当前账号已保存的事务；不是学校教务信息。",
+                ).model_dump(mode="json"),
+            ],
+        }
 
     @tool
-    def get_weather(date: str) -> dict:
-        """查询指定日期的校园天气。date 必须是 YYYY-MM-DD。"""
-        return store.get_weather(date)
+    async def get_weather(date: str) -> dict:
+        """查询指定日期的城市级天气预报。检查 available 与 evidence，不能用过期预报推断当前天气。"""
+        if weather_service is None:
+            return store.get_weather(date)
+        user = profile()
+        result = await weather_service.forecast(
+            date,
+            user.school or "" if user else "",
+            user.campus or "" if user else "",
+        )
+        return result.model_dump(mode="json")
 
     @tool
-    def search_campus_notices(keyword: str = "") -> list[dict[str, str]]:
-        """查询校园通知。keyword 可使用图书馆、调课、考试、活动等关键词。"""
-        return store.search_notices(keyword)
+    def search_campus_notices(keyword: str = "") -> dict:
+        """查询校园参考通知。当前未接入官方通知源，空结果不等于学校没有公告。"""
+        return {
+            "items": store.search_notices(keyword) if static_campus_available() else [],
+            "evidence": missing_source(
+                "campus:notices",
+                "学校官方通知",
+                "当前尚未接入学校官方通知源，演示通知不会用于真实查询。",
+            ),
+        }
 
     @tool
-    def find_campus_places(query: str, origin: str = "") -> list[dict]:
+    def find_campus_places(query: str, origin: str = "") -> dict:
         """查询校园地点、开放状态和步行时间，例如图书馆、自习室、快递站。
 
         origin 可填写出发地点名称或别名；填写后会返回已知地点间的步行分钟数。
         """
-        return store.find_places(query, CURRENT_USER_ID.get(), origin)
+        refresh_saved_context()
+        supported = static_campus_available()
+        items = store.find_places(query, CURRENT_USER_ID.get(), origin, include_reference=supported)
+        evidence = [item for place in items for item in place.get("evidence", [])]
+        if not evidence:
+            evidence = [
+                item.model_dump(mode="json") for item in store._campus_data.reference_evidence()
+            ]
+            if not supported:
+                evidence = missing_source(
+                    "campus:places",
+                    "当前校区地点数据",
+                    "当前校区没有参考数据，仅可查询用户自己保存的地点。",
+                )
+        # Keep result metadata bounded even when many places share the same source.
+        unique = {item["source_id"]: item for item in evidence}
+        return {"items": items, "evidence": list(unique.values())}
 
     @tool
     def plan_campus_route(origin: str, destination: str) -> dict:
@@ -140,50 +323,43 @@ def build_tools(
         当用户询问“从哪里到哪里怎么走”、导航、拿快递路线或明确要求地图路线时调用。
         origin 和 destination 使用校园建筑、校门或生活服务地点名称，可使用简称。
         """
+        if not static_campus_available():
+            return {
+                "available": False,
+                "evidence": missing_source(
+                    "campus:route",
+                    "当前校区路线数据",
+                    "该校区尚无参考路线，请核对学校与校区设置。",
+                ),
+            }
         return store.plan_campus_route(origin, destination).model_dump(mode="json")
 
     @tool
     def get_hduhelp_profile() -> dict:
         """读取当前用户已授权并同步的 HDUHelp 本人身份与学籍信息。"""
-        if hduhelp_store is None:
-            return {"connected": False, "message": "HDUHelp 数据源未启用。"}
-        user_id = CURRENT_USER_ID.get()
-        return {
-            "connected": hduhelp_store.get_hduhelp_status(user_id)["configured"],
-            "identity": hduhelp_resource("identity"),
-            "person": hduhelp_resource("person"),
-        }
+        return hduhelp_group(["identity", "person"])
 
     @tool
     def get_hduhelp_academics() -> dict:
         """读取当前用户已同步的 HDUHelp 本人成绩、GPA 和考试安排。"""
-        if hduhelp_store is None:
-            return {"connected": False, "message": "HDUHelp 数据源未启用。"}
-        user_id = CURRENT_USER_ID.get()
-        return {
-            "connected": hduhelp_store.get_hduhelp_status(user_id)["configured"],
-            "grades": hduhelp_resource("grades"),
-            "exams": hduhelp_resource("exams"),
-        }
+        return hduhelp_group(["grades", "exams"])
 
     @tool
     def get_hduhelp_campus_life() -> dict:
         """读取当前用户已同步的校园卡、图书馆、长跑与提醒订阅信息。"""
-        if hduhelp_store is None:
-            return {"connected": False, "message": "HDUHelp 数据源未启用。"}
-        user_id = CURRENT_USER_ID.get()
-        return {
-            "connected": hduhelp_store.get_hduhelp_status(user_id)["configured"],
-            "card_balance": hduhelp_resource("card_balance"),
-            "library_bookings": hduhelp_resource("library_bookings"),
-            "library_attendance": hduhelp_resource("library_attendance"),
-            "library_reading": hduhelp_resource("library_reading"),
-            "library_seat_reservations": hduhelp_resource("library_seat_reservations"),
-            "sunrun_overview": hduhelp_resource("sunrun_overview"),
-            "sunrun_group": hduhelp_resource("sunrun_group"),
-            "sunrun_detail": hduhelp_resource("sunrun_detail"),
-            "subscriptions": hduhelp_resource("subscriptions"),
-        }
+        return hduhelp_group(
+            [
+                "card_balance",
+                "library_bookings",
+                "library_attendance",
+                "library_reading",
+                "library_seat_reservations",
+                "sunrun_overview",
+                "sunrun_group",
+                "sunrun_detail",
+                "subscriptions",
+            ]
+        )
 
     @tool
     async def get_unused_classrooms(
@@ -200,7 +376,7 @@ def build_tools(
         使用当前教学周、今天和当前时段。
         """
         if hduhelp_access is None:
-            return {"available": False, "message": "HDUHelp 实时服务未启用。"}
+            return live_failure("classrooms")
         params: dict[str, object] = {
             "status": "unused",
             "limit": max(1, min(limit, 50)),
@@ -219,13 +395,22 @@ def build_tools(
                 "/hduhelp-neo/academic/classroom",
                 params=params,
             )
-        except HDUHelpError as exc:
-            return {"available": False, "message": str(exc)}
+        except HDUHelpError:
+            return live_failure("classrooms", "error")
+        if not isinstance(payload, list) or any(not isinstance(item, dict) for item in payload):
+            return live_failure("classrooms", "error")
+        try:
+            classrooms = classroom_items(payload)
+        except (ValueError, TypeError, OverflowError):
+            return live_failure("classrooms", "error")
+        if any(not item["location_id"] or not item["location_name"] for item in classrooms):
+            return live_failure("classrooms", "error")
         return {
             "available": True,
             "building": building_name(building_id) if building_id else "全部教学楼",
             "time": "指定节次" if sections else "当前时段",
-            "classrooms": classroom_items(payload),
+            "classrooms": classrooms,
+            "evidence": [hdu_evidence("classrooms", datetime.now(UTC)).model_dump(mode="json")],
         }
 
     @tool
@@ -236,7 +421,7 @@ def build_tools(
     ) -> dict:
         """实时查询指定教室本学期的周次、星期和节次占用安排。"""
         if hduhelp_access is None:
-            return {"available": False, "message": "HDUHelp 实时服务未启用。"}
+            return live_failure("classroom_usage")
         params: dict[str, object] = {"locationID": location_id}
         if school_year:
             params["schoolYear"] = school_year
@@ -248,19 +433,33 @@ def build_tools(
                 "/hduhelp-neo/academic/classroom/usage",
                 params=params,
             )
-        except HDUHelpError as exc:
-            return {"available": False, "message": str(exc)}
+        except HDUHelpError:
+            return live_failure("classroom_usage", "error")
+        if not isinstance(payload, list) or any(not isinstance(item, dict) for item in payload):
+            return live_failure("classroom_usage", "error")
+        try:
+            usage = classroom_usage_items(payload)
+        except (ValueError, TypeError, OverflowError):
+            return live_failure("classroom_usage", "error")
+        if any(
+            item["week"] < 1 or not 1 <= item["weekday"] <= 7 or item["section"] < 1
+            for item in usage
+        ):
+            return live_failure("classroom_usage", "error")
         return {
             "available": True,
             "location_id": location_id,
-            "usage": classroom_usage_items(payload),
+            "usage": usage,
+            "evidence": [
+                hdu_evidence("classroom_usage", datetime.now(UTC)).model_dump(mode="json")
+            ],
         }
 
     @tool
     async def get_electricity_balance() -> dict:
         """读取当前用户在 HDUHelp 绑定寝室的电费余额和近 14 天变化。"""
         if hduhelp_access is None:
-            return {"available": False, "message": "HDUHelp 实时服务未启用。"}
+            return live_failure("electricity")
         user_id = CURRENT_USER_ID.get()
         try:
             binding, balance, history = await asyncio.gather(
@@ -268,18 +467,40 @@ def build_tools(
                 hduhelp_access.get(user_id, "/hduhelp-neo/campuslife/electric/balance"),
                 hduhelp_access.get(user_id, "/hduhelp-neo/campuslife/electric/history"),
             )
-        except HDUHelpError as exc:
-            return {"available": False, "message": str(exc)}
-        overview = electricity_overview(binding, balance, history)
+        except HDUHelpError:
+            return live_failure("electricity", "error")
+        if not all(isinstance(item, dict) for item in (binding, balance, history)):
+            return live_failure("electricity", "error")
+        try:
+            overview = electricity_overview(binding, balance, history)
+        except (ValueError, TypeError, OverflowError, OSError):
+            return live_failure("electricity", "error")
         updated_at = overview.get("balance_updated_at")
         if isinstance(updated_at, datetime):
             overview["balance_updated_at"] = updated_at.isoformat()
-        return {"available": True, **overview}
+        return {
+            "available": True,
+            **overview,
+            "evidence": [
+                hdu_evidence("electricity", datetime.now(UTC)).model_dump(mode="json"),
+            ],
+        }
 
     @tool
     def get_planning() -> dict:
         """读取本人计划、里程碑和待办的准确 ID 与当前字段，修改删除前必须先核对。"""
-        return store.planning_overview(CURRENT_USER_ID.get()).model_dump(mode="json")
+        return {
+            **store.planning_overview(CURRENT_USER_ID.get()).model_dump(mode="json"),
+            "evidence": [
+                data_evidence(
+                    "user:planning",
+                    "已确认的计划与待办",
+                    "user",
+                    "fresh",
+                    note="读取当前账号已保存的任务状态，不代表工具已执行新的修改。",
+                ).model_dump(mode="json")
+            ],
+        }
 
     @tool
     def propose_task_change(

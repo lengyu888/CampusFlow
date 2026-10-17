@@ -5,7 +5,7 @@ import re
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 from langchain.agents import create_agent
@@ -16,6 +16,7 @@ from openai import AsyncOpenAI
 
 from .accounts import AccountStore
 from .config import Settings
+from .evidence import campus_supported, data_evidence
 from .hduhelp_access import HDUHelpAccess
 from .key_vault import ApiKeyVault
 from .schemas import CampusRoute, PendingAction, ToolTrace
@@ -23,6 +24,9 @@ from .skills import SkillStore
 from .store import CampusStore
 from .tool_presentation import present_tool_trace
 from .tools import CURRENT_USER_ID, build_tools
+
+if TYPE_CHECKING:
+    from .weather import WeatherService
 
 SYSTEM_PROMPT = """你是 CampusFlow 大学规划与执行 Agent，服务高校学生。
 
@@ -48,6 +52,11 @@ SYSTEM_PROMPT = """你是 CampusFlow 大学规划与执行 Agent，服务高校�
 15. 修改或删除前先 get_planning 核对准确 task_id/plan_id；多个同名项必须澄清，不能按标题猜测。
     修改单个待办用 propose_task_change；修改计划信息或删除计划用 propose_plan_change。
     计划删除保留子任务为独立待办；不得宣称删除了子任务。缺时段只说明未核对，不能称无冲突。
+16. 数据以工具 evidence 为准，回答必须说明影响决策的来源和时效限制。
+    stale/missing/error/unverified 不能作为当前事实；demo 仅为演示。用户课表不是学校实时教务数据。
+    课表或通知数据源缺失时，不得把空结果说成“没有课程/公告”。需要同步的校园资料须请用户更新。
+17. 静态校园地图、开放时段与路线仅供参考；open_now 为 null 表示未知，不是关闭。
+    路线步行时间、距离、几何为估算，不含实时路况；天气仅是所标城市级预报，不是校内实测。
 """
 
 CAMPUS_TIMEZONE = timezone(timedelta(hours=8), name="Asia/Shanghai")
@@ -83,6 +92,7 @@ class AgentService:
         account_store: AccountStore | None = None,
         credential_vault: ApiKeyVault | None = None,
         hduhelp_access: HDUHelpAccess | None = None,
+        weather_service: WeatherService | None = None,
     ) -> None:
         self.settings = settings
         self.store = store
@@ -90,6 +100,7 @@ class AgentService:
         self.account_store = account_store
         self.credential_vault = credential_vault
         self.hduhelp_access = hduhelp_access
+        self.weather_service = weather_service
 
     @staticmethod
     def _build_system_prompt(now: datetime | None = None) -> str:
@@ -146,6 +157,7 @@ class AgentService:
                 self.account_store,
                 self.credential_vault,
                 self.hduhelp_access,
+                self.weather_service,
             ),
             system_prompt=self._build_system_prompt(),
         )
@@ -272,9 +284,15 @@ class AgentService:
         label = present_tool_trace(trace, []).label
         # Unknown provider-supplied names/arguments are not display text.
         event_name = name if tool is not None else "unavailable_tool"
-        await emit("tool_start", {
-            "call_id": call["id"], "tool_name": event_name, "label": label, "count": count,
-        })
+        await emit(
+            "tool_start",
+            {
+                "call_id": call["id"],
+                "tool_name": event_name,
+                "label": label,
+                "count": count,
+            },
+        )
         check_cancelled()
         try:
             arguments = json.loads(call["function"]["arguments"])
@@ -284,7 +302,10 @@ class AgentService:
             if tool is None:
                 raise ValueError("tool unavailable")
             invocation = {
-                "type": "tool_call", "name": name, "id": call["id"], "args": arguments,
+                "type": "tool_call",
+                "name": name,
+                "id": call["id"],
+                "args": arguments,
             }
             if getattr(tool, "coroutine", None) is not None:
                 result = await tool.ainvoke(invocation)
@@ -307,7 +328,9 @@ class AgentService:
         check_cancelled()
         pending = None
         if trace.status == "success" and name in {
-            "propose_task_change", "propose_plan", "propose_plan_change",
+            "propose_task_change",
+            "propose_plan",
+            "propose_plan_change",
         }:
             try:
                 pending = PendingAction.model_validate(trace.result)
@@ -316,10 +339,16 @@ class AgentService:
         trace.display = present_tool_trace(trace, [pending] if pending else [])
         if self.skill_store is not None and tool is not None:
             self.skill_store.record_tool_run(user_id, name)
-        await emit("tool_end", {
-            "call_id": call["id"], "tool_name": event_name, "label": trace.display.label,
-            "state": trace.status, "summary": trace.display.summary,
-        })
+        await emit(
+            "tool_end",
+            {
+                "call_id": call["id"],
+                "tool_name": event_name,
+                "label": trace.display.label,
+                "state": trace.status,
+                "summary": trace.display.summary,
+            },
+        )
         check_cancelled()
         return trace, pending
 
@@ -336,13 +365,14 @@ class AgentService:
         # Large proposals are still fully visible in the returned confirmation card.
         summary = trace.display.summary if trace.display else "工具返回结果较长。"
         envelope = {
-            "truncated": True, "summary": summary,
+            "truncated": True,
+            "summary": summary,
             "notice": "以下仅为结果摘录，不能据此宣称已查看全部数据。",
-            "preview": content[:max(0, limit - 600)],
+            "preview": content[: max(0, limit - 600)],
         }
         encoded = self._runtime_json(envelope)
         while len(encoded) > limit:
-            envelope["preview"] = envelope["preview"][:len(envelope["preview"]) // 2]
+            envelope["preview"] = envelope["preview"][: len(envelope["preview"]) // 2]
             encoded = self._runtime_json(envelope)
         return encoded
 
@@ -366,8 +396,13 @@ class AgentService:
         token = CURRENT_USER_ID.set(user_id)
         try:
             return await self._run_bounded(
-                user_id=user_id, session_id=session_id, api_key=api_key, model_name=model_name,
-                message=message, emit=emit, check_cancelled=check_cancelled,
+                user_id=user_id,
+                session_id=session_id,
+                api_key=api_key,
+                model_name=model_name,
+                message=message,
+                emit=emit,
+                check_cancelled=check_cancelled,
             )
         finally:
             CURRENT_USER_ID.reset(token)
@@ -386,23 +421,42 @@ class AgentService:
         if len(message) > self.settings.agent_max_context_chars:
             raise AgentBudgetExceeded("本轮输入已达到上限，请缩小查询范围后再试。")
         runtime_tools = build_tools(
-            self.store, self.allowed_tools_for_user(user_id), self.account_store,
-            self.credential_vault, self.hduhelp_access,
+            self.store,
+            self.allowed_tools_for_user(user_id),
+            self.account_store,
+            self.credential_vault,
+            self.hduhelp_access,
+            self.weather_service,
         )
         tool_map = {tool.name: tool for tool in runtime_tools}
         route_request = self._extract_route_request(message)
         if route_request is not None and "plan_campus_route" in tool_map:
             call_id = f"direct-route-{uuid4().hex}"
             route_trace, _ = await self._runtime_tool(
-                call={"id": call_id, "function": {
-                    "name": "plan_campus_route", "arguments": self._runtime_json({
-                        "origin": route_request[0], "destination": route_request[1],
-                    }),
-                }},
-                tool=tool_map["plan_campus_route"], count=1, user_id=user_id,
-                emit=emit, check_cancelled=check_cancelled,
+                call={
+                    "id": call_id,
+                    "function": {
+                        "name": "plan_campus_route",
+                        "arguments": self._runtime_json(
+                            {
+                                "origin": route_request[0],
+                                "destination": route_request[1],
+                            }
+                        ),
+                    },
+                },
+                tool=tool_map["plan_campus_route"],
+                count=1,
+                user_id=user_id,
+                emit=emit,
+                check_cancelled=check_cancelled,
             )
             answer = "校园路线暂时未能生成，请核对起点、终点名称后再试。"
+            if (
+                isinstance(route_trace.result, dict)
+                and route_trace.result.get("available") is False
+            ):
+                answer = "当前校区暂无可用的参考路线数据，请先核对学校与校区设置。"
             if route_trace.status == "success":
                 try:
                     answer = self._route_answer(CampusRoute.model_validate(route_trace.result))
@@ -473,10 +527,14 @@ class AgentService:
                         for part in getattr(delta, "tool_calls", None) or []:
                             if not isinstance(part.index, int) or not 0 <= part.index < 50:
                                 raise RuntimeError("模型工具请求格式无法读取，请重试。")
-                            call = calls.setdefault(part.index, {
-                                "id": "", "type": "function",
-                                "function": {"name": "", "arguments": ""},
-                            })
+                            call = calls.setdefault(
+                                part.index,
+                                {
+                                    "id": "",
+                                    "type": "function",
+                                    "function": {"name": "", "arguments": ""},
+                                },
+                            )
                             for key, value in (
                                 ("id", part.id),
                                 ("name", part.function.name if part.function else None),
@@ -522,7 +580,9 @@ class AgentService:
                         raise RuntimeError("模型工具请求标识无效，请重试。")
                     used_call_ids.add(call_id)
                 assistant: dict[str, Any] = {
-                    "role": "assistant", "content": answer or None, "tool_calls": batch,
+                    "role": "assistant",
+                    "content": answer or None,
+                    "tool_calls": batch,
                 }
                 if reasoning:
                     assistant["reasoning_content"] = reasoning
@@ -535,8 +595,11 @@ class AgentService:
                     self._runtime_context(system, history, turn, schemas)
                     tool_count += 1
                     trace, proposal = await self._runtime_tool(
-                        call=call, tool=tool_map.get(call["function"]["name"]),
-                        count=tool_count, user_id=user_id, emit=emit,
+                        call=call,
+                        tool=tool_map.get(call["function"]["name"]),
+                        count=tool_count,
+                        user_id=user_id,
+                        emit=emit,
                         check_cancelled=check_cancelled,
                     )
                     traces.append(trace)
@@ -544,10 +607,13 @@ class AgentService:
                         item.proposal_id != proposal.proposal_id for item in pending
                     ):
                         pending.append(proposal)
-                    turn.append({
-                        "role": "tool", "tool_call_id": call["id"],
-                        "content": self._runtime_tool_content(trace),
-                    })
+                    turn.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": call["id"],
+                            "content": self._runtime_tool_content(trace),
+                        }
+                    )
             raise AgentBudgetExceeded("本轮模型调用已达到上限，请缩小任务范围后再试。")
         finally:
             await client.close()
@@ -623,6 +689,35 @@ class AgentService:
             return None
         origin, destination = request
         try:
+            user = self.account_store.get_user(user_id) if self.account_store else None
+        except KeyError:
+            user = None
+        if user is None or not campus_supported(user.school or "", user.campus or ""):
+            result = {
+                "available": False,
+                "evidence": [
+                    data_evidence(
+                        "campus:route",
+                        "当前校区路线数据",
+                        "remote",
+                        "missing",
+                        note="该校区尚无参考路线，请核对学校与校区设置。",
+                    ).model_dump(mode="json")
+                ],
+            }
+            trace = ToolTrace(
+                tool_call_id=f"direct-route-{uuid4().hex}",
+                tool_name="plan_campus_route",
+                arguments={"origin": origin, "destination": destination},
+                result=result,
+                status="success",
+            )
+            trace.display = present_tool_trace(trace, [])
+            return AgentReply(
+                message="当前校区暂无可用的参考路线数据，请先核对学校与校区设置。",
+                tool_traces=[trace],
+            )
+        try:
             route = self.store.plan_campus_route(origin, destination)
         except KeyError:
             return None
@@ -649,12 +744,20 @@ class AgentService:
             and point.place_id not in {route.origin.place_id, route.destination.place_id}
         ]
         via = f"，途经{'、'.join(waypoint_names)}" if waypoint_names else ""
-        return (
-            f"路线已生成：从{route.origin.name}到{route.destination.name}{via}，"
-            f"步行约 {route.total_minutes} 分钟、{route.estimated_distance_meters} 米。"
-            f"目的地当前{'开放' if route.destination.open_now else '未开放'}，"
-            f"开放时间为 {route.destination.open_hours}。"
+        opening = (
+            "当前开放情况未知"
+            if route.destination.open_now is None
+            else "来源报告为开放"
+            if route.destination.open_now
+            else "来源报告为关闭"
         )
+        return (
+            f"参考路线已生成：从{route.origin.name}到{route.destination.name}{via}，"
+            f"步行约 {route.total_minutes} 分钟、{route.estimated_distance_meters} 米。"
+            f"以上来自静态地图，时间、距离与路线为估算，不含实时路况。目的地{opening}，"
+            f"参考开放时段为 {route.destination.open_hours}，请以现场或官方通知为准。"
+        )
+
     @staticmethod
     def _messages_for_latest_turn(messages: list[Any], user_message: str) -> list[Any]:
         start = 0

@@ -358,7 +358,9 @@ async def test_preview_edit_save_uses_exact_entries_without_refetch_or_subscript
     )
     assert fetcher.calls == 1
     current = await client.get("/api/v1/me/timetable", headers=headers)
-    assert current.json() == {"entries": edited, "revision": response.json()["revision"]}
+    assert current.json()["entries"] == edited
+    assert current.json()["revision"] == response.json()["revision"]
+    assert current.json()["evidence"][0]["kind"] == "user"
     receipt = await client.get(
         f"/api/v1/me/timetable/operations/{request.operation_id}", headers=headers
     )
@@ -496,7 +498,9 @@ async def test_clear_api_requires_boolean_confirmation_and_returns_a_queryable_r
     saved = await api_save(client, headers, confirmed)
     assert saved.status_code == 200 and saved.json()["entry_count"] == 0
     current = await client.get("/api/v1/me/timetable", headers=headers)
-    assert current.json() == {"entries": [], "revision": saved.json()["revision"]}
+    assert current.json()["entries"] == []
+    assert current.json()["revision"] == saved.json()["revision"]
+    assert current.json()["evidence"][0]["kind"] == "user"
     receipt = await client.get(
         f"/api/v1/me/timetable/operations/{request.operation_id}", headers=headers
     )

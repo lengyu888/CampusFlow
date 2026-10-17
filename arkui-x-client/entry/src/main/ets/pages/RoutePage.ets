@@ -1,9 +1,11 @@
-import { CampusDataPlace, CampusDataSnapshot, CampusRoute } from '../model/ApiModels';
+import { CampusDataPlace, CampusDataSnapshot, CampusRoute, DataEvidence } from '../model/ApiModels';
 import { RouteMap } from '../components/RouteMap';
 import { CampusFlowApi } from '../services/CampusFlowApi';
 import { AppTheme } from '../theme/AppTheme';
 import { AppIcon } from '../components/AppIcon';
 import { FeedbackPanel } from '../components/FeedbackPanel';
+import { EvidencePanel } from '../components/EvidencePanel';
+import { openingStatus } from '../utils/EvidencePresentation';
 
 class CampusSelectOption implements SelectOption {
   value: ResourceStr;
@@ -20,6 +22,7 @@ export struct RoutePage {
   @Watch('activeChanged') @Prop active: boolean = true;
   onBack: () => void = () => {};
   @State private places: CampusDataPlace[] = [];
+  @State private packageEvidence: DataEvidence[] = [];
   @State private originIndex: number = 0;
   @State private destinationIndex: number = 0;
   @State private route: CampusRoute | null = null;
@@ -68,6 +71,7 @@ export struct RoutePage {
       const data: CampusDataSnapshot = await new CampusFlowApi(baseUrl, token).campusData();
       if (!this.pageActive || !this.active || revision !== this.placesRevision || token !== this.token || baseUrl !== this.baseUrl) { return; }
       this.places = data.places;
+      this.packageEvidence = data.package.evidence ?? [];
       this.placesLoaded = true;
       const origin = this.places.findIndex((item: CampusDataPlace) => item.place_id === originId);
       const destination = this.places.findIndex((item: CampusDataPlace) => item.place_id === destinationId);
@@ -133,6 +137,17 @@ export struct RoutePage {
     }
   }
 
+  @Builder
+  private PlaceEvidence(place: CampusDataPlace) {
+    Column({ space: 8 }) {
+      Text(`${place.name} · ${openingStatus(place)}`).fontSize(AppTheme.bodySize).fontColor(AppTheme.ink)
+        .width('100%').wordBreak(WordBreak.BREAK_WORD)
+      Text(`参考开放时间：${place.open_hours.length > 0 ? place.open_hours : '未提供'}。临时闭馆与现场通行情况请另行核对。`)
+        .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%').wordBreak(WordBreak.BREAK_WORD)
+      EvidencePanel({ evidence: place.evidence ?? [], active: this.active })
+    }.width('100%').alignItems(HorizontalAlign.Start)
+  }
+
   build() {
     Column() {
       Row({ space: 12 }) {
@@ -142,7 +157,7 @@ export struct RoutePage {
           .accessibilityText('返回上一页').onClick(() => this.onBack())
         Column({ space: 3 }) {
           Text('校园导航').fontSize(28).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
-          Text('查看校园步行路线').fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary)
+          Text('查看校园路线示意与步行估算').fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary)
         }.alignItems(HorizontalAlign.Start).layoutWeight(1)
       }.width('100%').padding({ left: 18, right: 18, top: 12, bottom: 12 })
 
@@ -195,10 +210,14 @@ export struct RoutePage {
                   })
               }.width('100%').alignItems(HorizontalAlign.Start)
 
-              Button(this.routeLoading ? '正在计算道路…' : '生成路线图').width('100%').constraintSize({ minHeight: 48 })
+              Button(this.routeLoading ? '正在生成示意路线…' : '生成路线图').width('100%').constraintSize({ minHeight: 48 })
                 .fontSize(AppTheme.metaSize).fontWeight(FontWeight.Bold).fontColor(AppTheme.surface)
                 .backgroundColor(AppTheme.blue).borderRadius(15).enabled(!this.routeLoading)
                 .onClick(() => this.createRoute())
+            }
+
+            if (!this.loading && this.placesError.length === 0) {
+              EvidencePanel({ evidence: this.packageEvidence, active: this.active })
             }
 
             if (this.errorText.length > 0) {
@@ -209,6 +228,11 @@ export struct RoutePage {
 
           if (this.route !== null) {
             RouteMap({ route: this.route as CampusRoute })
+            Text('路线几何为示意，距离与步行分钟为估算；不含实时定位、道路封闭或通行状态。')
+              .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%').wordBreak(WordBreak.BREAK_WORD)
+            EvidencePanel({ evidence: this.route.evidence ?? [], active: this.active })
+            this.PlaceEvidence(this.route.origin)
+            this.PlaceEvidence(this.route.destination)
           } else if (!this.loading && !this.routeLoading && this.errorText.length === 0 && this.placesError.length === 0 && this.places.length >= 2) {
             Column({ space: 7 }) {
               AppIcon({ name: 'route', iconSize: 32, color: AppTheme.blue })

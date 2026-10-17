@@ -5,9 +5,11 @@ import json
 import sqlite3
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
+from datetime import date as Date
 from pathlib import Path
 from typing import Annotated
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -34,6 +36,7 @@ from .campus_services import (
     electricity_overview,
 )
 from .config import Settings, get_settings
+from .evidence import campus_supported, hdu_evidence
 from .hduhelp import HDUHelpError, HDUHelpService, TokenSet
 from .hduhelp_access import HDUHelpAccess
 from .hduhelp_presenter import build_hduhelp_presentation
@@ -99,12 +102,14 @@ from .schemas import (
     UserContextResponse,
     UserProfile,
     UserSettingsUpdate,
+    WeatherForecast,
 )
 from .skills import SkillStore
 from .store import CampusStore
 from .timetable_service import TimetableError, TimetableService
 from .tool_presentation import present_tool_trace
 from .vision import ImageValidationError, VisionService
+from .weather import WeatherService
 
 SESSION_COOKIE = "campusflow_session"
 
@@ -215,6 +220,7 @@ def create_app(
     replanning_service: ReplanningService | None = None,
     timetable_service: TimetableService | None = None,
     action_service: ActionService | None = None,
+    weather_service: WeatherService | None = None,
 ) -> FastAPI:
     settings = settings or get_settings()
     store = store or CampusStore(settings.database_path)
@@ -230,6 +236,7 @@ def create_app(
         api_key_vault,
         hduhelp_service,
     )
+    weather_service = weather_service or WeatherService(settings)
     agent_service = agent_service or AgentService(
         settings,
         store,
@@ -237,6 +244,7 @@ def create_app(
         account_store,
         api_key_vault,
         hduhelp_access,
+        weather_service=weather_service,
     )
     vision_service = vision_service or VisionService(settings)
     schedule_subscription_service = schedule_subscription_service or ScheduleSubscriptionService()
@@ -307,6 +315,7 @@ def create_app(
     app.state.api_key_vault = api_key_vault
     app.state.skill_store = skill_store
     app.state.schedule_subscription_service = schedule_subscription_service
+    app.state.weather_service = weather_service
     app.state.hduhelp_service = hduhelp_service
     app.state.hduhelp_access = hduhelp_access
 
@@ -606,26 +615,32 @@ def create_app(
     async def get_hduhelp_data(user: CurrentUser) -> HDUHelpDataResponse:
         resources: list[HDUHelpResourceSnapshot] = []
         presentation_resources: dict[str, object] = {}
+        sync_errors = account_store.get_hduhelp_sync_errors(user.user_id)
         for item in account_store.list_hduhelp_resources(user.user_id):
             try:
                 data = json.loads(api_key_vault.decrypt(item["encrypted_data"]))
             except (ValueError, json.JSONDecodeError):
+                sync_errors[item["resource"]] = "本地缓存无法读取，请重新同步。"
                 continue
             resources.append(
                 HDUHelpResourceSnapshot(
                     resource=item["resource"],
                     data=data,
                     synced_at=item["synced_at"],
+                    evidence=[hdu_evidence(item["resource"], item["synced_at"])],
                 )
             )
             presentation_resources[item["resource"]] = data
         sections, prompts = build_hduhelp_presentation(presentation_resources)
+        sources = {item.resource: item.evidence for item in resources}
+        for section in sections:
+            section.evidence = sources.get(section.resource, [])
         return HDUHelpDataResponse(
             status=hduhelp_status(user.user_id),
             resources=resources,
             sections=sections,
             suggested_prompts=prompts,
-            sync_errors=account_store.get_hduhelp_sync_errors(user.user_id),
+            sync_errors=sync_errors,
         )
 
     @app.get(
@@ -668,6 +683,7 @@ def create_app(
         period = f"第 {min(section)}–{max(section)} 节" if section else "当前时段"
         location = building_name(building_id) if building_id else "全部教学楼"
         return ClassroomSearchResponse(
+            evidence=[hdu_evidence("classrooms", datetime.now(UTC))],
             query_label=f"{location} · {period}",
             items=classroom_items(envelope.get("data")),
             total=int(pagination.get("total") or 0),
@@ -698,6 +714,7 @@ def create_app(
         except HDUHelpError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
         return ClassroomUsageResponse(
+            evidence=[hdu_evidence("classroom_usage", datetime.now(UTC))],
             location_id=location_id,
             items=classroom_usage_items(payload),
         )
@@ -724,7 +741,9 @@ def create_app(
             )
         except HDUHelpError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
-        return ElectricityOverview.model_validate(electricity_overview(binding, balance, history))
+        result = ElectricityOverview.model_validate(electricity_overview(binding, balance, history))
+        result.evidence = [hdu_evidence("electricity", datetime.now(UTC))]
+        return result
 
     @app.delete("/api/v1/hduhelp/connection", status_code=204)
     async def disconnect_hduhelp(user: CurrentUser) -> Response:
@@ -852,8 +871,26 @@ def create_app(
             raise HTTPException(status_code=403, detail="仅管理员可查看用户列表。")
         return [AdminUserSummary(**item) for item in account_store.list_users()]
 
+    def require_supported_campus(user: UserRecord) -> None:
+        if not campus_supported(user.school, user.campus):
+            raise CampusFlowError(
+                404, "当前学校或校区还没有可用的校园数据包。", "DATA_SCOPE_UNSUPPORTED"
+            )
+
+    @app.get("/api/v1/weather", response_model=WeatherForecast)
+    async def weather_forecast(user: CurrentUser, date: str | None = None) -> WeatherForecast:
+        value = date or datetime.now(ZoneInfo("Asia/Shanghai")).date().isoformat()
+        try:
+            day = Date.fromisoformat(value)
+            if day.isoformat() != value:
+                raise ValueError("non-canonical date")
+        except ValueError as exc:
+            raise CampusFlowError(422, "日期格式应为 YYYY-MM-DD。", "WEATHER_DATE_INVALID") from exc
+        return await weather_service.forecast(day, user.school or "", user.campus or "")
+
     @app.get("/api/v1/campus-data", response_model=CampusDataSnapshot)
     async def campus_data(user: CurrentUser) -> CampusDataSnapshot:
+        require_supported_campus(user)
         return store.campus_data_snapshot(user.user_id)
 
     @app.get("/api/v1/campus-data/places", response_model=list[CampusDataPlace])
@@ -862,7 +899,7 @@ def create_app(
         query: str = "",
         origin: str = "",
     ) -> list[CampusDataPlace]:
-        del user
+        require_supported_campus(user)
         return store.campus_data_places(query, origin)
 
     @app.get("/api/v1/campus-data/notices", response_model=list[CampusNotice])
@@ -871,7 +908,7 @@ def create_app(
         keyword: str = "",
         active_only: bool = False,
     ) -> list[CampusNotice]:
-        del user
+        require_supported_campus(user)
         return store.campus_notices(keyword, active_only)
 
     @app.get("/api/v1/campus-data/route", response_model=CampusRoute)
@@ -880,7 +917,7 @@ def create_app(
         origin: str,
         destination: str,
     ) -> CampusRoute:
-        del user
+        require_supported_campus(user)
         try:
             return store.plan_campus_route(origin, destination)
         except KeyError as exc:
@@ -910,6 +947,7 @@ def create_app(
         payload: CampusCorrectionCreate,
         user: CurrentUser,
     ) -> CampusCorrection:
+        require_supported_campus(user)
         return store.submit_campus_correction(
             user_id=user.user_id,
             **payload.model_dump(),

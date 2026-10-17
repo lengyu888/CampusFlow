@@ -277,7 +277,8 @@ struct Index {
         onPlanningChanged: () => this.homeRefresh++,
         onOpenAgent: (prompt) => this.openAgentWithPrompt(prompt) })
         .visibility(this.activeTab === 2 ? Visibility.Visible : Visibility.Hidden)
-      CampusPage({ user: this.user, onOpenTimetable: () => this.selectTab(9), onOpenRoute: () => this.selectTab(6),
+      CampusPage({ user: this.user, baseUrl: this.baseUrl, token: this.token, active: this.activeTab === 8 && this.voiceForeground,
+        onOpenTimetable: () => this.selectTab(9), onOpenRoute: () => this.selectTab(6),
         onOpenServices: () => this.selectTab(7), onOpenSkills: () => this.selectTab(3),
         onOpenProfile: () => this.selectTab(4), onOpenAgent: (prompt) => this.openAgentWithPrompt(prompt) })
         .visibility(this.activeTab === 8 ? Visibility.Visible : Visibility.Hidden)

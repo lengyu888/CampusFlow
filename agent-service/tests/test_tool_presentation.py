@@ -5,6 +5,7 @@ from typing import Any
 import pytest
 
 from campusflow_agent.campus_data import CampusDataStore
+from campusflow_agent.evidence import data_evidence
 from campusflow_agent.schemas import PendingAction, ToolTrace
 from campusflow_agent.tool_presentation import present_tool_trace
 
@@ -27,6 +28,15 @@ TOOLS = (
 
 
 def trace(name: str, result: Any, *, status: str | None = None) -> ToolTrace:
+    # Shape/count tests provide an explicit synthetic source. Separate evidence tests
+    # below exercise legacy responses without metadata and stale/unavailable sources.
+    evidence = [
+        data_evidence("test:source", "合成测试来源", "user", "fresh").model_dump(mode="json")
+    ]
+    if isinstance(result, list):
+        result = {"items": result, "evidence": evidence}
+    elif isinstance(result, dict) and "evidence" not in result:
+        result = {**result, "evidence": evidence}
     return ToolTrace(
         tool_call_id=SECRET,
         tool_name=name,
@@ -61,8 +71,11 @@ def normal_result(name: str) -> tuple[Any, list[PendingAction]]:
         "get_schedule": [{"date": "2030-10-01", "title": SECRET, "start": "09:00", "end": "10:00"}],
         "get_weather": {
             "date": "2030-10-01",
+            "available": True,
+            "location_label": "合成城市",
             "condition": SECRET,
-            "temperature_c": {"min": 19, "max": 25},
+            "temperature_min_c": 19,
+            "temperature_max_c": 25,
             "notice": SECRET,
         },
         "search_campus_notices": [
@@ -122,7 +135,11 @@ def test_all_known_tools_have_safe_summaries(name: str) -> None:
     result, pending = normal_result(name)
     display = present_tool_trace(trace(name, result), pending)
     expected_state = (
-        "pending" if name.startswith("propose_") else "demo" if name == "get_weather" else "success"
+        "pending"
+        if name.startswith("propose_")
+        else "unverified"
+        if name == "plan_campus_route"
+        else "success"
     )
     assert display.state == expected_state
     assert display.label != "其他工具"
@@ -285,8 +302,8 @@ def test_malformed_weather_and_route_are_not_reported_as_success() -> None:
     weather, _ = normal_result("get_weather")
     for update in (
         {"date": SECRET},
-        {"temperature_c": {"min": False, "max": 25}},
-        {"temperature_c": {"min": 30, "max": 20}},
+        {"temperature_min_c": False},
+        {"temperature_min_c": 30, "temperature_max_c": 20},
     ):
         assert present_tool_trace(trace("get_weather", weather | update), []).state == "unverified"
     route, _ = normal_result("plan_campus_route")

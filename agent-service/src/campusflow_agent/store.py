@@ -11,6 +11,7 @@ from typing import Any
 from uuid import uuid4
 
 from .campus_data import CampusDataStore
+from .evidence import data_evidence
 from .schemas import (
     HistoryMessage,
     PendingAction,
@@ -145,8 +146,17 @@ class CampusStore:
                     "category": place.get("category", "其他"),
                     "zone": place.get("zone", ""),
                     "aliases": place.get("aliases", []),
-                    "open": True,
+                    "open": None,
                     "source": "用户确认的校园地图",
+                    "evidence": [
+                        data_evidence(
+                            "user:campus-map",
+                            "用户确认的校园地点",
+                            "user",
+                            "fresh",
+                            note="来自当前账号保存的地点；未记录原始保存时间，未核验实时开放情况。",
+                        ).model_dump(mode="json")
+                    ],
                 }
             )
         with self._lock:
@@ -155,7 +165,6 @@ class CampusStore:
 
     def get_schedule(self, user_id: str, date: str) -> list[dict[str, str]]:
         with self._lock:
-            has_confirmed_context = user_id in self._user_schedules
             imported = [
                 {
                     "title": item.get("title", ""),
@@ -184,34 +193,26 @@ class CampusStore:
                     }
                 )
         scheduled = sorted(imported + scheduled_tasks, key=lambda item: item.get("start", ""))
-        if scheduled or has_confirmed_context:
-            return scheduled
-
-        # Demonstration fallback for users that have not completed onboarding.
-        demo = {
-            "2026-09-29": [
-                {
-                    "title": "高等数学",
-                    "start": "08:00",
-                    "end": "09:40",
-                    "location": "教学楼 A203",
-                },
-                {
-                    "title": "程序设计实验",
-                    "start": "14:00",
-                    "end": "15:40",
-                    "location": "实验楼 305",
-                },
-            ]
-        }
-        return demo.get(date, [])
+        return scheduled
 
     def get_weather(self, date: str) -> dict[str, Any]:
         return {
             "date": date,
-            "condition": "小雨",
-            "temperature_c": {"min": 19, "max": 25},
-            "notice": "演示数据：出行建议预留 10 分钟并携带雨具",
+            "location_label": "",
+            "available": False,
+            "condition": None,
+            "temperature_min_c": None,
+            "temperature_max_c": None,
+            "precipitation_probability": None,
+            "evidence": [
+                data_evidence(
+                    "weather:unconfigured",
+                    "天气服务",
+                    "remote",
+                    "missing",
+                    note="未接入天气查询服务，不能推断当前天气。",
+                ).model_dump(mode="json")
+            ],
         }
 
     def search_notices(self, keyword: str) -> list[dict[str, Any]]:
@@ -222,6 +223,8 @@ class CampusStore:
         query: str,
         user_id: str | None = None,
         origin: str = "",
+        *,
+        include_reference: bool = True,
     ) -> list[dict[str, Any]]:
         with self._lock:
             places = list(self._user_places.get(user_id or "", []))
@@ -241,7 +244,9 @@ class CampusStore:
         ]
         official = [
             item.model_dump(mode="json") | {"open": item.open_now}
-            for item in self._campus_data.find_places(query, origin=origin)
+            for item in (
+                self._campus_data.find_places(query, origin=origin) if include_reference else []
+            )
         ]
         seen = {item.get("name", "").strip().lower() for item in user_matches}
         return user_matches + [

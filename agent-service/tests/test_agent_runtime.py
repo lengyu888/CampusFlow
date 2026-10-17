@@ -20,15 +20,23 @@ from campusflow_agent.tools import CURRENT_USER_ID
 
 
 def chunk(text=None, *, reasoning=None, calls=(), finish=None):
-    return SimpleNamespace(choices=[SimpleNamespace(
-        index=0, finish_reason=finish,
-        delta=SimpleNamespace(content=text, reasoning_content=reasoning, tool_calls=list(calls)),
-    )])
+    return SimpleNamespace(
+        choices=[
+            SimpleNamespace(
+                index=0,
+                finish_reason=finish,
+                delta=SimpleNamespace(
+                    content=text, reasoning_content=reasoning, tool_calls=list(calls)
+                ),
+            )
+        ]
+    )
 
 
 def call(name, arguments, call_id="call_1", index=0):
     return SimpleNamespace(
-        index=index, id=call_id,
+        index=index,
+        id=call_id,
         function=SimpleNamespace(name=name, arguments=arguments),
     )
 
@@ -88,18 +96,29 @@ async def run(service, *, emit=None, check_cancelled=lambda: None, **values):
             await emit(kind, data)
 
     reply = await service.run(
-        user_id="student-001", session_id="session", api_key="synthetic-test-key",
-        model_name="deepseek-flash", message=values.pop("message", "帮我查询校园安排"),
-        emit=capture, check_cancelled=check_cancelled, **values,
+        user_id="student-001",
+        session_id="session",
+        api_key="synthetic-test-key",
+        model_name="deepseek-flash",
+        message=values.pop("message", "帮我查询校园安排"),
+        emit=capture,
+        check_cancelled=check_cancelled,
+        **values,
     )
     return reply, events
 
 
 async def test_visible_delta_arrives_before_stream_end_and_never_writes_history(monkeypatch):
-    service, client = setup(monkeypatch, [[
-        chunk(reasoning="PRIVATE_REASONING_NOT_FOR_UI"),
-        chunk("第一段"), chunk("\n第二段", finish="stop"),
-    ]])
+    service, client = setup(
+        monkeypatch,
+        [
+            [
+                chunk(reasoning="PRIVATE_REASONING_NOT_FOR_UI"),
+                chunk("第一段"),
+                chunk("\n第二段", finish="stop"),
+            ]
+        ],
+    )
     arrivals = []
 
     async def on_event(kind, data):
@@ -117,16 +136,23 @@ async def test_visible_delta_arrives_before_stream_end_and_never_writes_history(
 
 
 async def test_fragmented_tool_call_runs_real_tool_and_preserves_private_wire_context(monkeypatch):
-    service, client = setup(monkeypatch, [
-        [chunk("查询中", reasoning="SECRET_REASONING", calls=[call("get_", '{"da', "call_")]),
-         chunk(calls=[call("weather", 'te":"2030-10-19"}', "1")], finish="tool_calls")],
-        [chunk("天气结果来自演示数据。", finish="stop")],
-    ])
+    service, client = setup(
+        monkeypatch,
+        [
+            [
+                chunk(
+                    "查询中", reasoning="SECRET_REASONING", calls=[call("get_", '{"da', "call_")]
+                ),
+                chunk(calls=[call("weather", 'te":"2030-10-19"}', "1")], finish="tool_calls"),
+            ],
+            [chunk("当前尚无可用天气数据。", finish="stop")],
+        ],
+    )
     reply, events = await run(service)
-    assert reply.message == "天气结果来自演示数据。"
+    assert reply.message == "当前尚无可用天气数据。"
     assert reply.tool_traces[0].arguments == {"date": "2030-10-19"}
     assert reply.tool_traces[0].status == "success"
-    assert reply.tool_traces[0].display.state == "demo"
+    assert reply.tool_traces[0].display.state == "unavailable"
     assert [data["count"] for kind, data in events if kind == "model_start"] == [1, 2]
     assert [kind for kind, _ in events].count("answer_reset") == 2
     assistant = client.requests[1]["messages"][-2]
@@ -139,10 +165,13 @@ async def test_fragmented_tool_call_runs_real_tool_and_preserves_private_wire_co
 
 
 async def test_real_proposal_is_pending_and_not_committed_as_task_or_history(monkeypatch):
-    service, _ = setup(monkeypatch, [
-        tool_turn("propose_task_change", {"action": "create", "title": "整理笔记"}),
-        [chunk("请在卡片中确认待办。", finish="stop")],
-    ])
+    service, _ = setup(
+        monkeypatch,
+        [
+            tool_turn("propose_task_change", {"action": "create", "title": "整理笔记"}),
+            [chunk("请在卡片中确认待办。", finish="stop")],
+        ],
+    )
     reply, _ = await run(service)
     assert len(reply.pending_actions) == 1
     proposal = reply.pending_actions[0]
@@ -161,10 +190,21 @@ async def test_sequential_cancellation_does_not_start_second_tool(monkeypatch):
         calls.append((value, CURRENT_USER_ID.get()))
         return {"value": value}
 
-    service, client = setup(monkeypatch, [[chunk(calls=[
-        call("local_action", '{"value":1}', "first", 0),
-        call("local_action", '{"value":2}', "second", 1),
-    ], finish="tool_calls")]], tools=[local_action])
+    service, client = setup(
+        monkeypatch,
+        [
+            [
+                chunk(
+                    calls=[
+                        call("local_action", '{"value":1}', "first", 0),
+                        call("local_action", '{"value":2}', "second", 1),
+                    ],
+                    finish="tool_calls",
+                )
+            ]
+        ],
+        tools=[local_action],
+    )
     cancelled = False
     events = []
 
@@ -267,12 +307,16 @@ async def test_cancel_midstream_stops_deltas_and_closes_resources(monkeypatch):
 
 @pytest.mark.parametrize("arguments", ["{broken", "[]", '{"unexpected":"secret"}'])
 async def test_invalid_tool_arguments_become_safe_failure_and_model_can_recover(
-    monkeypatch, arguments,
+    monkeypatch,
+    arguments,
 ):
-    service, client = setup(monkeypatch, [
-        [chunk(calls=[call("get_weather", arguments)], finish="tool_calls")],
-        [chunk("查询未成功，请补充日期。", finish="stop")],
-    ])
+    service, client = setup(
+        monkeypatch,
+        [
+            [chunk(calls=[call("get_weather", arguments)], finish="tool_calls")],
+            [chunk("查询未成功，请补充日期。", finish="stop")],
+        ],
+    )
     reply, events = await run(service)
     assert reply.tool_traces[0].status == "error"
     assert "secret" not in repr(events)
@@ -287,18 +331,28 @@ async def test_tool_exception_diagnostics_are_not_sent_to_model_or_ui(monkeypatc
         """Fail with private diagnostics."""
         raise RuntimeError("private-token-and-student-identity")
 
-    service, client = setup(monkeypatch, [
-        tool_turn("broken_query", {}), [chunk("暂时无法查询。", finish="stop")],
-    ], tools=[broken_query])
+    service, client = setup(
+        monkeypatch,
+        [
+            tool_turn("broken_query", {}),
+            [chunk("暂时无法查询。", finish="stop")],
+        ],
+        tools=[broken_query],
+    )
     reply, events = await run(service)
     assert reply.tool_traces[0].status == "error"
     assert "private-token" not in repr(events) + repr(reply) + repr(client.requests)
 
 
 async def test_unavailable_tool_is_not_invoked_even_when_provider_requests_it(monkeypatch):
-    service, client = setup(monkeypatch, [
-        tool_turn("confirm_everything", {}), [chunk("需要用户手动确认。", finish="stop")],
-    ], tools=[])
+    service, client = setup(
+        monkeypatch,
+        [
+            tool_turn("confirm_everything", {}),
+            [chunk("需要用户手动确认。", finish="stop")],
+        ],
+        tools=[],
+    )
     reply, events = await run(service)
     assert "tools" not in client.requests[0]
     assert reply.tool_traces[0].status == "error"
@@ -308,10 +362,14 @@ async def test_unavailable_tool_is_not_invoked_even_when_provider_requests_it(mo
 
 
 async def test_model_call_budget_has_no_hidden_retry(monkeypatch):
-    service, client = setup(monkeypatch, [
-        tool_turn("get_weather", {"date": "2030-10-19"}, "one"),
-        tool_turn("get_weather", {"date": "2030-10-19"}, "two"),
-    ], agent_max_model_calls=2)
+    service, client = setup(
+        monkeypatch,
+        [
+            tool_turn("get_weather", {"date": "2030-10-19"}, "one"),
+            tool_turn("get_weather", {"date": "2030-10-19"}, "two"),
+        ],
+        agent_max_model_calls=2,
+    )
     with pytest.raises(AgentBudgetExceeded, match="模型调用"):
         await run(service)
     assert len(client.requests) == 2
@@ -327,19 +385,36 @@ async def test_entire_tool_batch_is_rejected_before_any_tool_if_over_budget(monk
         invoked.append(True)
         return {}
 
-    service, _ = setup(monkeypatch, [[chunk(calls=[
-        call("local_action", "{}", "one", 0), call("local_action", "{}", "two", 1),
-    ], finish="tool_calls")]], tools=[local_action], agent_max_tool_calls=1)
+    service, _ = setup(
+        monkeypatch,
+        [
+            [
+                chunk(
+                    calls=[
+                        call("local_action", "{}", "one", 0),
+                        call("local_action", "{}", "two", 1),
+                    ],
+                    finish="tool_calls",
+                )
+            ]
+        ],
+        tools=[local_action],
+        agent_max_tool_calls=1,
+    )
     with pytest.raises(AgentBudgetExceeded, match="工具调用"):
         await run(service)
     assert invoked == []
 
 
 async def test_output_budget_counts_all_model_rounds_and_never_emits_over_limit(monkeypatch):
-    service, client = setup(monkeypatch, [
-        tool_turn("get_weather", {"date": "2030-10-19"}, text="前" * 200),
-        [chunk("后" * 100, finish="stop")],
-    ], agent_max_output_chars=256)
+    service, client = setup(
+        monkeypatch,
+        [
+            tool_turn("get_weather", {"date": "2030-10-19"}, text="前" * 200),
+            [chunk("后" * 100, finish="stop")],
+        ],
+        agent_max_output_chars=256,
+    )
     emitted = []
 
     async def emit(kind, data):
@@ -353,10 +428,15 @@ async def test_output_budget_counts_all_model_rounds_and_never_emits_over_limit(
 
 
 async def test_context_trims_complete_old_pairs_only(monkeypatch):
-    service, client = setup(monkeypatch, [[chunk("结果", finish="stop")]], tools=[],
-                            agent_max_context_chars=4000)
-    for role, content in [("user", "旧" * 3000), ("assistant", "旧回答" * 1000),
-                          ("user", "最近问题"), ("assistant", "最近回答")]:
+    service, client = setup(
+        monkeypatch, [[chunk("结果", finish="stop")]], tools=[], agent_max_context_chars=4000
+    )
+    for role, content in [
+        ("user", "旧" * 3000),
+        ("assistant", "旧回答" * 1000),
+        ("user", "最近问题"),
+        ("assistant", "最近回答"),
+    ]:
         service.store.append_history("student-001", "session", role, content, "test")
     await run(service, message="当前请求")
     sent = client.requests[0]["messages"]
@@ -380,9 +460,14 @@ async def test_large_tool_result_is_explicitly_truncated_only_for_model_context(
         """Return a large read-only result."""
         return {"rows": large}
 
-    service, client = setup(monkeypatch, [
-        tool_turn("large_query", {}), [chunk("结果较长，需缩小查询。", finish="stop")],
-    ], tools=[large_query])
+    service, client = setup(
+        monkeypatch,
+        [
+            tool_turn("large_query", {}),
+            [chunk("结果较长，需缩小查询。", finish="stop")],
+        ],
+        tools=[large_query],
+    )
     reply, _ = await run(service)
     assert reply.tool_traces[0].result == {"rows": large}
     feedback = json.loads(client.requests[1]["messages"][-1]["content"])
@@ -408,8 +493,9 @@ async def test_concurrent_users_keep_tool_context_isolated(monkeypatch):
 
     monkeypatch.setattr(agent_module, "build_tools", lambda *args: [owner_query])
     service = AgentService(Settings(_env_file=None), CampusStore())
-    clients = [Client([tool_turn("owner_query", {}), [chunk("完成", finish="stop")]])
-               for _ in range(2)]
+    clients = [
+        Client([tool_turn("owner_query", {}), [chunk("完成", finish="stop")]]) for _ in range(2)
+    ]
     available = iter(clients)
     monkeypatch.setattr(service, "_build_runtime_client", lambda **kwargs: next(available))
 
@@ -417,12 +503,20 @@ async def test_concurrent_users_keep_tool_context_isolated(monkeypatch):
         pass
 
     before = CURRENT_USER_ID.get()
-    replies = await asyncio.gather(*[
-        service.run(user_id=owner, session_id="same-session", api_key="synthetic",
-                    model_name="deepseek-flash", message="查询本人信息", emit=emit,
-                    check_cancelled=lambda: None)
-        for owner in ["alice", "bob"]
-    ])
+    replies = await asyncio.gather(
+        *[
+            service.run(
+                user_id=owner,
+                session_id="same-session",
+                api_key="synthetic",
+                model_name="deepseek-flash",
+                message="查询本人信息",
+                emit=emit,
+                check_cancelled=lambda: None,
+            )
+            for owner in ["alice", "bob"]
+        ]
+    )
     assert sorted(owners) == ["alice", "bob"]
     assert [reply.tool_traces[0].result["owner"] for reply in replies] == ["alice", "bob"]
     assert CURRENT_USER_ID.get() == before
@@ -438,8 +532,9 @@ async def test_provider_exception_closes_stream_and_client_without_retry(monkeyp
 
 
 async def test_private_reasoning_is_also_memory_bounded(monkeypatch):
-    service, client = setup(monkeypatch, [[chunk(reasoning="秘" * 4001)]], tools=[],
-                            agent_max_context_chars=4000)
+    service, client = setup(
+        monkeypatch, [[chunk(reasoning="秘" * 4001)]], tools=[], agent_max_context_chars=4000
+    )
     with pytest.raises(AgentBudgetExceeded, match="模型响应"):
         await run(service)
     assert client.closed and client.streams[0].closed
@@ -462,10 +557,20 @@ async def test_provider_token_limit_maps_to_budget_not_completed_answer(monkeypa
 
 @pytest.mark.parametrize("ids", [["duplicate", "duplicate"], ["bad id", "good"]])
 async def test_invalid_call_identifiers_reject_whole_batch_before_any_invocation(monkeypatch, ids):
-    service, _ = setup(monkeypatch, [[chunk(calls=[
-        call("get_weather", '{"date":"2030-10-19"}', ids[0], 0),
-        call("get_weather", '{"date":"2030-10-19"}', ids[1], 1),
-    ], finish="tool_calls")]])
+    service, _ = setup(
+        monkeypatch,
+        [
+            [
+                chunk(
+                    calls=[
+                        call("get_weather", '{"date":"2030-10-19"}', ids[0], 0),
+                        call("get_weather", '{"date":"2030-10-19"}', ids[1], 1),
+                    ],
+                    finish="tool_calls",
+                )
+            ]
+        ],
+    )
     events = []
 
     async def emit(kind, data):
@@ -481,6 +586,12 @@ async def test_direct_route_uses_actual_tool_events_zero_model_calls_and_no_hist
     skills = SkillStore()
     skills.install("student-001", "campus-navigator", ["places.read"])
     service.skill_store = skills
+    service.account_store = SimpleNamespace(
+        get_user=lambda _: SimpleNamespace(school="杭电", campus="下沙"),
+        get_context=lambda _: ([], {}),
+        list_hduhelp_resources=lambda _: [],
+        get_hduhelp_status=lambda _: {"configured": False},
+    )
     reply, events = await run(service, message="从六教到菜鸟驿站怎么走？")
     assert "步行约 10 分钟" in reply.message
     assert reply.tool_traces[0].result["destination"]["place_id"] == "cainiao-station"
@@ -513,17 +624,28 @@ async def test_real_sdk_sse_parser_and_outbound_wire_format_with_offline_transpo
     def transport(request):
         requests.append(json.loads(request.content))
         data = {
-            "id": "mock-response", "object": "chat.completion.chunk", "created": 1,
-            "model": "deepseek-flash", "choices": [{
-                "index": 0, "delta": {"content": "真实 SDK 解析的增量"}, "finish_reason": "stop",
-            }],
+            "id": "mock-response",
+            "object": "chat.completion.chunk",
+            "created": 1,
+            "model": "deepseek-flash",
+            "choices": [
+                {
+                    "index": 0,
+                    "delta": {"content": "真实 SDK 解析的增量"},
+                    "finish_reason": "stop",
+                }
+            ],
         }
-        return httpx.Response(200, headers={"content-type": "text/event-stream"},
-                              text=f"data: {json.dumps(data)}\n\ndata: [DONE]\n\n")
+        return httpx.Response(
+            200,
+            headers={"content-type": "text/event-stream"},
+            text=f"data: {json.dumps(data)}\n\ndata: [DONE]\n\n",
+        )
 
     http = httpx.AsyncClient(transport=httpx.MockTransport(transport))
-    client = AsyncOpenAI(api_key="offline-only", base_url="https://provider.invalid",
-                         max_retries=0, http_client=http)
+    client = AsyncOpenAI(
+        api_key="offline-only", base_url="https://provider.invalid", max_retries=0, http_client=http
+    )
     service = AgentService(Settings(_env_file=None), CampusStore())
     monkeypatch.setattr(service, "_build_runtime_client", lambda **kwargs: client)
     reply, events = await run(service)
@@ -535,15 +657,25 @@ async def test_real_sdk_sse_parser_and_outbound_wire_format_with_offline_transpo
     assert http.is_closed
 
 
-@pytest.mark.parametrize("field,value", [
-    ("agent_max_model_calls", 0), ("agent_max_model_calls", 21),
-    ("agent_max_tool_calls", 0), ("agent_max_tool_calls", 51),
-    ("agent_max_context_chars", 3999), ("agent_max_context_chars", 200001),
-    ("agent_max_output_chars", 255), ("agent_max_output_chars", 64001),
-    ("agent_max_tokens", 255), ("agent_max_tokens", 16385),
-    ("agent_timeout_seconds", 0), ("agent_timeout_seconds", 601),
-    ("agent_timeout_seconds", float("inf")), ("agent_timeout_seconds", float("nan")),
-])
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("agent_max_model_calls", 0),
+        ("agent_max_model_calls", 21),
+        ("agent_max_tool_calls", 0),
+        ("agent_max_tool_calls", 51),
+        ("agent_max_context_chars", 3999),
+        ("agent_max_context_chars", 200001),
+        ("agent_max_output_chars", 255),
+        ("agent_max_output_chars", 64001),
+        ("agent_max_tokens", 255),
+        ("agent_max_tokens", 16385),
+        ("agent_timeout_seconds", 0),
+        ("agent_timeout_seconds", 601),
+        ("agent_timeout_seconds", float("inf")),
+        ("agent_timeout_seconds", float("nan")),
+    ],
+)
 def test_runtime_configuration_has_finite_safe_bounds(field, value):
     with pytest.raises(ValidationError):
         Settings(_env_file=None, **{field: value})
