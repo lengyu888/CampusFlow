@@ -9,6 +9,9 @@ import {
   TimetableEntry,
   UserContextResponse
 } from '../model/ApiModels';
+import { localDrafts } from '../services/LocalDrafts';
+import { DraftLease, DraftRecord, DraftOperation, DraftSaveState, NewTaskDraft } from '../utils/DraftStore';
+import { FeedbackPanel } from '../components/FeedbackPanel';
 import { CampusFlowApi } from '../services/CampusFlowApi';
 import { AppTheme } from '../theme/AppTheme';
 import { AppIcon } from '../components/AppIcon';
@@ -49,6 +52,7 @@ interface PlanningDetailFrame {
 export struct PlanCenterPage {
   @Prop baseUrl: string;
   @Prop token: string;
+  @Prop @Watch('draftScopeChanged') draftLease: DraftLease | null = null;
   @Watch('refreshPlanning') @Prop refreshKey: number = 0;
   @Watch('activityChanged') @Prop active: boolean = true;
   @Prop focusTaskId: string = '';
@@ -103,6 +107,14 @@ export struct PlanCenterPage {
   private editTaskOriginal: PlanningTask | null = null;
   private actionController: PlanningActionController | null = null;
   private submittedCreate: string = '';
+  @State private recoveredDraft: DraftRecord | null = null;
+  @State private draftMessage: string = '';
+  @State private pendingProposals: DraftOperation[] = [];
+  @State private draftStorageBusy: boolean = false;
+  private draftAnchorDate: string = '';
+  private draftUnsubscribe: (() => void) | null = null;
+  private draftReady: boolean = false;
+  private draftBoundGeneration: number = -1;
   private submittedTaskEdit: string = '';
   private submittedPlanEdit: string = '';
   private externalDetail: boolean = false;
@@ -126,12 +138,16 @@ export struct PlanCenterPage {
       this.draftTaskDate = this.selectedDate;
       this.draftDateChoice = 'today';
     }
+    this.draftScopeChanged();
     this.viewRequested();
     this.focusChanged();
     this.refreshPlanning();
   }
 
   aboutToDisappear(): void {
+    this.flushTaskDraft();
+    this.draftUnsubscribe?.();
+    this.draftUnsubscribe = null;
     this.pageActive = false;
     this.lifecycleRevision++;
     this.requestRevision++;
@@ -141,8 +157,143 @@ export struct PlanCenterPage {
 
   private activityChanged(): void {
     this.actionController?.setActive(this.active);
-    if (!this.active) { this.requestRevision++; return; }
+    if (!this.active) { this.flushTaskDraft(); this.requestRevision++; return; }
     this.refreshPlanning();
+  }
+
+  private draftScopeChanged(): void {
+    this.draftUnsubscribe?.();
+    this.draftUnsubscribe = null;
+    this.draftReady = false;
+    this.recoveredDraft = null;
+    this.pendingProposals = [];
+    const lease = this.draftLease;
+    if (this.draftBoundGeneration !== (lease?.generation ?? -1)) {
+      this.lifecycleRevision++;
+      this.title = ''; this.draftTaskDate = shanghaiDate(Date.now()); this.draftDateChoice = 'today'; this.draftTaskTime = '';
+      this.actionController?.dispose(); this.actionController = null;
+      this.actionState = { phase: 'idle', action: null, message: '' };
+      this.draftStorageBusy = false;
+      this.draftBoundGeneration = lease?.generation ?? -1;
+    }
+    if (lease === null || !localDrafts.valid(lease)) {
+      this.draftMessage = '本机草稿尚不可用，提交前需要先恢复本机保存。';
+      return;
+    }
+    this.draftAnchorDate = shanghaiDate(Date.now());
+    this.recoveredDraft = localDrafts.read(lease, { kind: 'new-task', ownerId: 'main' }) ?? null;
+    this.pendingProposals = localDrafts.operations(lease).filter((item: DraftOperation) => item.kind === 'proposal');
+    this.draftUnsubscribe = localDrafts.subscribe((state: DraftSaveState) => {
+      if (!this.pageActive || this.draftLease !== lease || state.generation !== lease.generation) { return; }
+      this.draftMessage = state.message;
+      this.pendingProposals = localDrafts.operations(lease).filter((item: DraftOperation) => item.kind === 'proposal');
+    });
+    this.draftReady = true;
+  }
+
+  private taskDraftPayload(): NewTaskDraft {
+    return { title: this.title, date: this.draftTaskDate, dateChoice: this.draftDateChoice,
+      time: this.draftTaskTime, anchorDate: this.draftAnchorDate || shanghaiDate(Date.now()), timezone: 'Asia/Shanghai' };
+  }
+
+  private stageTaskDraft(): void {
+    const lease = this.draftLease;
+    if (!this.draftReady || this.recoveredDraft !== null || lease === null || !localDrafts.valid(lease)) { return; }
+    try { localDrafts.stage(lease, { kind: 'new-task', ownerId: 'main' }, this.taskDraftPayload()); }
+    catch { this.draftMessage = '输入尚未保存到本机，请保留页面并重试。'; }
+  }
+
+  private flushTaskDraft(): void {
+    const lease = this.draftLease;
+    if (lease !== null && localDrafts.valid(lease)) {
+      localDrafts.flush(lease).catch(() => {
+        if (this.pageActive && this.draftLease === lease) { this.draftMessage = '输入尚未保存到本机，请重试保存。'; }
+      });
+    }
+  }
+
+  private restoreTaskDraft(): void {
+    const record = this.recoveredDraft;
+    if (record === null || this.draftLease === null || !localDrafts.valid(this.draftLease)) { return; }
+    const payload = record.payload as NewTaskDraft;
+    this.title = payload.title; this.draftTaskDate = payload.date; this.draftTaskTime = payload.time;
+    this.draftDateChoice = payload.dateChoice; this.draftAnchorDate = payload.anchorDate;
+    this.recoveredDraft = null;
+    this.draftMessage = payload.anchorDate === shanghaiDate(Date.now()) ? '已恢复输入，尚未提交。' :
+      `已恢复 ${payload.anchorDate} 的输入，日期仍为 ${payload.date || '无日期'}，请重新核对。`;
+    this.openDetails('draft');
+  }
+
+  private async discardTaskDraft(): Promise<void> {
+    const record = this.recoveredDraft; const lease = this.draftLease;
+    if (record === null || lease === null || this.draftStorageBusy) { return; }
+    this.draftStorageBusy = true;
+    try {
+      const removed = await localDrafts.remove(lease, { kind: 'new-task', ownerId: 'main' }, record.localRevision);
+      if (!this.pageActive || this.draftLease !== lease) { return; }
+      if (removed) { this.recoveredDraft = null; this.draftMessage = '这份本机草稿已丢弃。'; }
+      else { this.draftMessage = '草稿已变化或提交结果待核对，尚未丢弃。'; }
+    } catch { if (this.draftLease === lease) { this.draftMessage = '丢弃未完成，草稿仍保留。'; } }
+    finally { if (this.draftLease === lease) { this.draftStorageBusy = false; } }
+  }
+
+  private async recoverProposal(operation: DraftOperation): Promise<void> {
+    if (this.draftStorageBusy || !this.active || !this.pageActive) { return; }
+    this.openDetails('action');
+    await this.actionManager().recover(operation.id);
+    await this.settleProposal();
+  }
+
+  private async settleProposal(): Promise<void> {
+    const lease = this.draftLease; const state = this.actionState;
+    const action = state.action;
+    if (lease === null || action === null || !['resolved', 'cancelled', 'invalidated'].includes(state.phase)) { return; }
+    const operation = localDrafts.operations(lease).find((item: DraftOperation) => item.kind === 'proposal' && item.id === action.proposal_id);
+    if (operation === undefined) { return; }
+    try {
+      await localDrafts.resolveOperation(lease, 'proposal', operation.id, state.phase === 'resolved' || operation.ownerId !== 'main');
+      // The receipt pointer and its exact submitted revision settle in one atomic write.
+      // A newer input remains available after a receipt.
+      if (this.pageActive && this.draftLease === lease) {
+        const latest = localDrafts.read(lease, { kind: 'new-task', ownerId: 'main' });
+        if (this.recoveredDraft !== null && latest === undefined) { this.recoveredDraft = null; }
+      }
+    } catch {
+      if (this.pageActive && this.draftLease === lease) { this.draftMessage = '服务器结果已查回，本机核对记录尚未保存。请再次核对。'; }
+    }
+  }
+
+  private async writePlanningAction(cancel: boolean = false): Promise<void> {
+    if (this.mutationBusy || this.replanWriteBlocked || this.draftStorageBusy || !this.active || !this.pageActive) { return; }
+    const lease = this.draftLease; const action = this.actionState.action;
+    if (lease === null || !localDrafts.valid(lease) || action === null || !['review', 'retryable'].includes(this.actionState.phase)) {
+      this.errorText = '请先恢复本机草稿保存并核对原提案，再提交。'; return;
+    }
+    this.draftStorageBusy = true;
+    try {
+      let operation = localDrafts.operations(lease).find((item: DraftOperation) => item.kind === 'proposal' && item.id === action.proposal_id);
+      if (operation === undefined) {
+        const owner = action.action === 'create' && action.kind === 'task' && this.createSnapshot() === this.submittedCreate ? 'main' : `proposal_${action.proposal_id}`;
+        const payload: NewTaskDraft = owner === 'main' ? this.taskDraftPayload() :
+          { title: '', date: '', dateChoice: 'none', time: '', anchorDate: shanghaiDate(Date.now()), timezone: 'Asia/Shanghai' };
+        const ticket = localDrafts.stage(lease, { kind: 'new-task', ownerId: owner }, payload);
+        await localDrafts.beginOperation(lease, { kind: 'proposal', id: action.proposal_id, draftKind: 'new-task',
+          ownerId: owner, localRevision: ticket.localRevision });
+      } else {
+        await localDrafts.flush(lease);
+      }
+      if (!this.pageActive || !this.active || this.draftLease !== lease || !localDrafts.valid(lease) ||
+        this.actionState.action?.proposal_id !== action.proposal_id) { return; }
+      if (cancel) { await this.actionManager().cancel(); } else { await this.actionManager().confirm(); }
+      await this.settleProposal();
+    } catch {
+      if (this.pageActive && this.draftLease === lease) { this.errorText = '恢复标识尚未保存，本次未提交。请先重试保存，再核对原提案。'; }
+    } finally { if (this.draftLease === lease) { this.draftStorageBusy = false; } }
+  }
+
+  private async checkPlanningAction(): Promise<void> {
+    await this.actionManager().check();
+    await this.settleProposal();
   }
 
   private refreshPlanning(): void {
@@ -407,6 +558,7 @@ export struct PlanCenterPage {
         this.draftDateChoice = 'today';
       }
       this.draftTaskTime = value;
+      this.stageTaskDraft();
     });
   }
 
@@ -417,6 +569,8 @@ export struct PlanCenterPage {
       if (value.length === 0) {
         this.draftTaskTime = '';
       }
+      this.draftAnchorDate = shanghaiDate(Date.now());
+      this.stageTaskDraft();
     });
   }
 
@@ -426,6 +580,7 @@ export struct PlanCenterPage {
   }
 
   private openTimePicker(): void {
+    const lease = this.draftLease; const lifecycle = this.lifecycleRevision;
     const selected = new Date();
     if (this.draftTaskDate.length > 0) {
       const dateParts = this.draftTaskDate.split('-');
@@ -439,6 +594,8 @@ export struct PlanCenterPage {
       selected: selected,
       useMilitaryTime: true,
       onAccept: (value: TimePickerResult) => {
+        if (!this.pageActive || !this.active || lifecycle !== this.lifecycleRevision || this.draftLease !== lease ||
+          (lease !== null && !localDrafts.valid(lease))) { return; }
         const hour = value.hour === undefined ? selected.getHours() : value.hour;
         const minute = value.minute === undefined ? selected.getMinutes() : value.minute;
         this.selectDraftTime(`${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`);
@@ -574,7 +731,7 @@ export struct PlanCenterPage {
   }
 
   private writesBlocked(): boolean {
-    return this.mutationBusy || this.replanWriteBlocked || this.actionBlocksWrites() || !this.active || !this.pageActive;
+    return this.draftStorageBusy || this.pendingProposals.length > 0 || this.recoveredDraft !== null || this.mutationBusy || this.replanWriteBlocked || this.actionBlocksWrites() || !this.active || !this.pageActive;
   }
 
   private createSnapshot(): string {
@@ -614,7 +771,7 @@ export struct PlanCenterPage {
 
   private async confirmPlanningAction(): Promise<void> {
     if (this.mutationBusy || this.replanWriteBlocked || !this.active || !this.pageActive) { return; }
-    await this.actionManager().confirm();
+    await this.writePlanningAction();
   }
 
   private dismissAction(): void {
@@ -1023,12 +1180,21 @@ export struct PlanCenterPage {
   @Builder
   private TaskForm() {
     Column({ space: 16 }) {
+      Text(this.draftMessage).fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
+      if (this.draftMessage.includes('尚未保存')) {
+        Button('重试保存输入').constraintSize({ minHeight: 48 }).onClick(() => { this.stageTaskDraft(); this.flushTaskDraft(); })
+      }
+      if (this.draftAnchorDate.length > 0 && this.draftAnchorDate !== this.relativeDate(0)) {
+        Text(`输入时的日期是 ${this.draftAnchorDate}；当前仍按 ${this.draftTaskDate || '无日期'} 保存，请核对。`)
+          .fontSize(AppTheme.metaSize).fontColor(AppTheme.warning).width('100%')
+      }
       Text('待办内容').fontSize(AppTheme.bodySize).fontColor(AppTheme.quiet).width('100%')
       Row({ space: 8 }) {
         TextInput({ text: this.title, placeholder: '快速记录一个待办', controller: this.taskInputController })
           .layoutWeight(1).constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize).fontColor(AppTheme.ink)
           .backgroundColor(AppTheme.canvas).borderRadius(AppTheme.controlRadius)
-          .border({ width: 1, color: AppTheme.outline }).onChange((value) => this.title = value)
+          .border({ width: 1, color: AppTheme.outline }).enabled(this.recoveredDraft === null)
+          .onChange((value) => { this.title = value; this.stageTaskDraft(); })
         Button({ type: ButtonType.Circle }) {
           AppIcon({ name: 'plus', iconSize: 22, color: AppTheme.onAccent })
         }.width(48).height(48).backgroundColor(AppTheme.accent)
@@ -1252,9 +1418,9 @@ export struct PlanCenterPage {
           .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
         this.TaskForm()
       } else if (frame.kind === 'action') {
-        PlanningActionPanel({ state: this.actionState, active: this.active && !this.mutationBusy && !this.replanWriteBlocked,
+        PlanningActionPanel({ state: this.actionState, active: this.active && !this.mutationBusy && !this.replanWriteBlocked && !this.draftStorageBusy,
           retryIntent: this.actionController?.retryIntent() ?? '', onConfirm: () => this.confirmPlanningAction(),
-          onCancel: () => this.actionManager().cancel(), onCheck: () => this.actionManager().check(),
+          onCancel: () => this.writePlanningAction(true), onCheck: () => this.checkPlanningAction(),
           onDismiss: () => this.dismissAction(), onOpenTask: (id: string) => this.openDetails('task', id),
           onOpenPlan: (id: string) => this.openDetails('plan', id) })
       } else if (frame.kind === 'task-edit') {
@@ -1354,6 +1520,22 @@ export struct PlanCenterPage {
         Text('正在保存任务更改…').fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
           .padding({ left: AppTheme.pageInset, right: AppTheme.pageInset })
       }
+      if (this.recoveredDraft !== null) {
+        Column({ space: 8 }) {
+          Text('有一份未提交的待办草稿').fontSize(AppTheme.bodySize).fontColor(AppTheme.ink).width('100%')
+          Text('恢复只填回输入；原日期保留，核对后再保存。').fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
+          Row({ space: 8 }) {
+            Button('恢复草稿').constraintSize({ minHeight: 48 }).onClick(() => this.restoreTaskDraft())
+            Button('丢弃这份草稿').constraintSize({ minHeight: 48 }).enabled(!this.draftStorageBusy).onClick(() => this.discardTaskDraft())
+          }
+        }.width('100%').padding(AppTheme.pageInset).backgroundColor(AppTheme.accentSoft)
+      }
+      ForEach(this.pendingProposals, (operation: DraftOperation) => {
+        FeedbackPanel({ kind: 'warning', title: '上次提交结果待核对',
+          message: '保留了原提案编号。先查询服务器结果，避免重复安排。', actionLabel: '查询原提案',
+          busy: this.draftStorageBusy || ['checking', 'confirming', 'cancelling'].includes(this.actionState.phase),
+          onAction: () => this.recoverProposal(operation) })
+      }, (operation: DraftOperation) => operation.id)
       if (this.actionState.phase !== 'idle' && this.detailKind !== 'action') {
         Button(this.actionBlocksWrites() ? '查看待处理变更 / 核对结果' : '查看上次变更结果').width('100%').constraintSize({ minHeight: 48 })
           .fontSize(AppTheme.bodySize).fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft)
@@ -1363,7 +1545,7 @@ export struct PlanCenterPage {
       PlanningConflictsPanel({ baseUrl: this.baseUrl, token: this.token,
         refreshKey: this.conflictRefresh, active: this.active && (this.detailKind.length === 0 || this.detailKind === 'conflicts'),
         compact: this.detailKind !== 'conflicts', onOpenDetails: () => this.openDetails('conflicts'),
-        writeBlocked: this.mutationBusy || this.actionBlocksWrites(),
+        writeBlocked: this.mutationBusy || this.draftStorageBusy || this.pendingProposals.length > 0 || this.actionBlocksWrites(),
         onWriteStateChanged: (blocked: boolean) => this.replanWriteBlocked = blocked,
         onApplied: () => this.replanApplied() })
         .visibility(this.detailKind.length === 0 || this.detailKind === 'conflicts' ? Visibility.Visible : Visibility.None)

@@ -11,13 +11,24 @@ import hashlib
 import json
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
+from dataclasses import asdict
 from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
 from .accounts import AccountStore
 from .evidence import timetable_evidence
-from .schemas import TimetableEntry, TimetableSaveReceipt, TimetableSaveRequest, TimetableSnapshot
+from .schemas import (
+    OnboardingRequest,
+    OnboardingResponse,
+    OnboardingSaveReceipt,
+    OnboardingSnapshot,
+    TimetableEntry,
+    TimetableSaveReceipt,
+    TimetableSaveRequest,
+    TimetableSnapshot,
+    UserProfile,
+)
 from .store import CampusStore
 
 
@@ -101,6 +112,100 @@ class TimetableService:
                 "尚未查到这次课表保存的回执，请保留本次操作后再核对。",
             )
         return TimetableSaveReceipt.model_validate_json(row["receipt_json"])
+
+    def onboarding_snapshot(self, user_id: str) -> OnboardingSnapshot:
+        with self.accounts._lock:
+            row = self.accounts._connection.execute(
+                "SELECT * FROM users WHERE user_id = ?", (user_id,)
+            ).fetchone()
+            if row is None:
+                raise TimetableError(404, "ONBOARDING_NOT_FOUND", "未找到当前账号的首次配置。")
+            timetable = json.loads(row["timetable_json"])
+            campus_map = json.loads(row["campus_map_json"])
+            revision = _digest({
+                "school": row["school"], "campus": row["campus"], "semester": row["semester"],
+                "timetable": timetable, "campus_map": campus_map,
+                "onboarding_complete": bool(row["onboarding_complete"]),
+            })
+            return OnboardingSnapshot(
+                revision=revision,
+                user=UserProfile(**asdict(self.accounts._row_to_user(row))),
+                timetable=timetable,
+                campus_map=campus_map,
+            )
+
+    def onboarding_receipt(self, user_id: str, operation_id: UUID) -> OnboardingSaveReceipt:
+        with self.accounts._lock:
+            row = self.accounts._connection.execute(
+                "SELECT receipt_json FROM onboarding_operations "
+                "WHERE user_id = ? AND operation_id = ?", (user_id, str(operation_id)),
+            ).fetchone()
+        if row is None:
+            raise TimetableError(
+                404, "ONBOARDING_OPERATION_NOT_FOUND",
+                "尚未查到这次首次配置的回执，可保留原操作编号与内容后再核对或重试。",
+            )
+        return OnboardingSaveReceipt.model_validate_json(row["receipt_json"])
+
+    def save_onboarding(self, user_id: str, payload: OnboardingRequest) -> OnboardingResponse:
+        if payload.operation_id is None or payload.expected_revision is None:
+            raise TimetableError(422, "ONBOARDING_INVALID", "操作编号和原数据版本需要同时提供。")
+        self._validate_entries(payload.timetable, allow_empty=False)
+        if not payload.campus_map.places or not all(
+            value.strip() for value in (payload.school, payload.campus, payload.semester)
+        ):
+            raise TimetableError(422, "ONBOARDING_INVALID", "请确认校园资料与至少一个校园地点。")
+        timetable = [entry.model_dump(mode="json") for entry in payload.timetable]
+        campus_map = payload.campus_map.model_dump(mode="json")
+        operation_id = str(payload.operation_id)
+        request_hash = _digest(payload.model_dump(mode="json"))
+        with self._transaction():
+            previous = self.accounts._connection.execute(
+                "SELECT request_hash,receipt_json FROM onboarding_operations "
+                "WHERE user_id = ? AND operation_id = ?", (user_id, operation_id),
+            ).fetchone()
+            if previous is not None:
+                if previous["request_hash"] != request_hash:
+                    raise TimetableError(
+                        409, "ONBOARDING_OPERATION_CONFLICT",
+                        "本次操作编号已用于不同内容，请先核对原保存结果。",
+                    )
+                receipt = OnboardingSaveReceipt.model_validate_json(previous["receipt_json"])
+            else:
+                before = self.onboarding_snapshot(user_id)
+                if before.revision != payload.expected_revision:
+                    raise TimetableError(
+                        409, "ONBOARDING_STALE",
+                        "校园资料、课表或地图已被另一处修改，请读取最新资料后核对草稿。",
+                    )
+                now = self.clock()
+                now = now.replace(tzinfo=UTC) if now.tzinfo is None else now.astimezone(UTC)
+                self.accounts._connection.execute(
+                    "UPDATE users SET school=?,campus=?,semester=?,timetable_json=?,"
+                    "campus_map_json=?,onboarding_complete=1,timetable_updated_at=?,"
+                    "timetable_source='user' WHERE user_id=?",
+                    (payload.school.strip(), payload.campus.strip(), payload.semester.strip(),
+                     _canonical(timetable), _canonical(campus_map), now.isoformat(), user_id),
+                )
+                receipt = OnboardingSaveReceipt(
+                    operation_id=payload.operation_id, previous_revision=before.revision,
+                    revision=self.onboarding_snapshot(user_id).revision,
+                    timetable_count=len(timetable),
+                    campus_place_count=len(payload.campus_map.places),
+                    applied_at=now,
+                )
+                self.accounts._connection.execute(
+                    "INSERT INTO onboarding_operations "
+                    "(user_id,operation_id,request_hash,receipt_json) VALUES (?,?,?,?)",
+                    (user_id, operation_id, request_hash, receipt.model_dump_json()),
+                )
+        self._refresh_context(user_id)
+        # A replay returns the original receipt, without rolling current profile data back.
+        return OnboardingResponse(
+            user=UserProfile(**asdict(self.accounts.get_user(user_id))),
+            timetable_count=receipt.timetable_count, campus_place_count=receipt.campus_place_count,
+            receipt=receipt,
+        )
 
     @staticmethod
     def _validate_entries(entries: list[TimetableEntry], *, allow_empty: bool) -> None:

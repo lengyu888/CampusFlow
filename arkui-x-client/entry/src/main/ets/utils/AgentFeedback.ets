@@ -90,6 +90,18 @@ function knownErrorMessage(code: string): string {
       return '无法连接行简服务，请检查网络和服务地址。';
     case 'INVALID_RESPONSE':
       return '服务返回了无法识别的结果，请稍后刷新核对。';
+    case 'ONBOARDING_STALE':
+      return '校园资料或课表已更新，当前输入仍保留。请读取最新资料后重新核对。';
+    case 'ONBOARDING_OPERATION_CONFLICT':
+      return '这次保存标识已用于另一份资料，请先核对原保存回执。';
+    case 'ONBOARDING_OPERATION_NOT_FOUND':
+      return '未查到保存回执，可使用原内容和原操作标识重试。';
+    case 'ONBOARDING_INVALID':
+      return '资料格式未通过检查，请核对输入和保存版本。';
+    case 'ONBOARDING_FAILED':
+      return '保存结果尚未确认，请先核对回执，当前输入仍保留。';
+    case 'ONBOARDING_NOT_FOUND':
+      return '未找到当前账号，请重新登录后核对。';
     case 'TIMETABLE_STALE':
       return '课表已被其他操作更新。当前草稿仍保留，请读取最新课表后重新核对。';
     case 'TIMETABLE_OPERATION_CONFLICT':

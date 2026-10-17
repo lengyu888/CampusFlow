@@ -20,6 +20,7 @@ export struct LoginPage {
   @State private password: string = '';
   @State private displayName: string = '';
   @State private apiKey: string = '';
+  @State private showModelConfig: boolean = false;
   @State private loading: boolean = false;
   @State private errorText: string = '';
   @State private confirmCleanup: boolean = false;
@@ -54,8 +55,8 @@ export struct LoginPage {
       this.errorText = '请输入有效邮箱，密码至少 8 位。';
       return;
     }
-    if (this.registerMode && (this.displayName.length === 0 || this.apiKey.length === 0)) {
-      this.errorText = '注册时需要填写昵称和 DeepSeek API Key。';
+    if (this.registerMode && this.displayName.trim().length === 0) {
+      this.errorText = '请填写昵称，模型配置可以稍后设置。';
       return;
     }
     const revision = ++this.requestRevision;
@@ -64,7 +65,8 @@ export struct LoginPage {
     try {
       const api = new CampusFlowApi(this.baseUrl);
       const auth = this.registerMode
-        ? await api.register(this.email, this.password, this.displayName, this.apiKey)
+        ? await api.register(this.email, this.password, this.displayName,
+          this.apiKey.trim().length > 0 ? this.apiKey : undefined)
         : await api.login(this.email, this.password);
       if (!this.pageActive || revision !== this.requestRevision) { return; }
       await this.onAuthenticated(auth);
@@ -112,8 +114,23 @@ export struct LoginPage {
           this.inputField('邮箱', 'name@example.com', this.email, (value) => this.email = value, InputType.Email)
           this.inputField('密码', '至少 8 位', this.password, (value) => this.password = value, InputType.Password)
           if (this.registerMode) {
-            this.inputField('DeepSeek API Key', 'sk-…（服务端加密保存）', this.apiKey,
-              (value) => this.apiKey = value, InputType.Password)
+            Text('先创建账号，再确认校园与课表。手动维护课表和待办不需要模型密钥。')
+              .fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
+            Button(this.showModelConfig ? '收起模型配置（可选）' : '现在配置模型（可选）')
+              .width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
+              .fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft)
+              .enabled(!this.loading).onClick(() => this.showModelConfig = !this.showModelConfig)
+            if (this.showModelConfig) {
+              this.inputField('DeepSeek API Key（可选）', 'sk-…（服务端加密保存）', this.apiKey,
+                (value) => this.apiKey = value, InputType.Password)
+              Text('填写后会随注册保存；只做输入校验，不会在注册时调用模型。')
+                .fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
+            } else if (this.apiKey.trim().length > 0) {
+              Text('已填写模型密钥，将随注册保存；展开可修改或清空。')
+                .fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
+            }
+            Text('也可留空，登录后从个人设置 → 模型配置中补充。助手对话与图片识别需要可用的模型配置。')
+              .fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
           }
           if (this.errorText.length > 0) {
             FeedbackPanel({ kind: 'error', title: '暂未完成', message: this.errorText })
@@ -168,7 +185,7 @@ export struct LoginPage {
               .onClick(() => this.confirmCleanup = true)
           }
         }
-        Text('登录后自动使用已保存的模型配置，无需重复填写 API Key。')
+        Text('已有模型配置会继续保留；未配置也可以登录，之后再从个人设置补充。')
           .fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).textAlign(TextAlign.Center)
       }
       .width('100%')

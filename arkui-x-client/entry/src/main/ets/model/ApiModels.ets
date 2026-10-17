@@ -448,7 +448,25 @@ export interface ScheduleSubscriptionStatus {
   last_synced_at: string | null;
 }
 
+export interface OnboardingSnapshot {
+  revision: string;
+  user: UserProfile;
+  timetable: TimetableEntry[];
+  campus_map: CampusMapSummary;
+}
+
+export interface OnboardingSaveReceipt {
+  operation_id: string;
+  status: string;
+  previous_revision: string;
+  revision: string;
+  timetable_count: number;
+  campus_place_count: number;
+  applied_at: string;
+}
+
 export interface OnboardingResponse {
+  receipt?: OnboardingSaveReceipt | null;
   user: UserProfile;
   timetable_count: number;
   campus_place_count: number;

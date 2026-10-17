@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { stripTypeScriptTypes } from 'node:module';
 import { test } from 'node:test';
-import { makeRunController, runSnapshot, rememberHistory } from './helpers/agent-run-ui-fixture.mjs';
+import { makeDraftFixture, shanghaiDate, makeRunController, runSnapshot, rememberHistory } from './helpers/agent-run-ui-fixture.mjs';
 
 const voiceSource = readFileSync(new URL('../entry/src/main/ets/utils/VoiceInteraction.ets', import.meta.url), 'utf8');
 const { VoiceInteraction } = await import(
@@ -25,9 +25,9 @@ const pageSource = source.slice(0, firstBuilder)
   .replace('export struct AgentPage', 'class AgentPage') + '\n}\n';
 const createPage = new Function('CampusFlowApi', 'Scroller', 'CampusFlowRequestError',
   'displayToolTraces', 'mergeActions', 'restoreDraft', 'localRequestFailure', 'AppTheme', 'localHistory',
-  'PlatformVoiceDriver', 'VoiceInteraction', 'AgentRunController', ...Object.keys(reliability), stripTypeScriptTypes(pageSource) + '\nreturn AgentPage;');
+  'PlatformVoiceDriver', 'VoiceInteraction', 'AgentRunController', 'localDrafts', 'shanghaiDate', ...Object.keys(reliability), stripTypeScriptTypes(pageSource) + '\nreturn AgentPage;');
 
-function fixture({ chat = null, probe = null } = {}) {
+async function fixture({ chat = null, probe = null } = {}) {
   const calls = [];
   const drivers = [];
   const context = { fixtureContext: true };
@@ -63,12 +63,15 @@ function fixture({ chat = null, probe = null } = {}) {
     async confirmAction(...args) { calls.push(['confirm', ...args]); throw new Error('unexpected confirm'); }
     async cancelAction(...args) { calls.push(['reject', ...args]); throw new Error('unexpected rejection'); }
   }
+  const drafts = await makeDraftFixture();
   const Page = createPage(Api, class Scroller {}, helper.CampusFlowRequestError, helper.displayToolTraces,
-    helper.mergeActions, helper.restoreDraft, helper.localRequestFailure, {}, {}, Driver, Controller, makeRunController(helper.CampusFlowRequestError, helper.localRequestFailure), ...Object.values(reliability));
+    helper.mergeActions, helper.restoreDraft, helper.localRequestFailure, {}, {}, Driver, Controller, makeRunController(helper.CampusFlowRequestError, helper.localRequestFailure), drafts.store, shanghaiDate, ...Object.values(reliability));
   const page = new Page();
   page.baseUrl = 'http://fixture.invalid';
   page.token = 'test-only';
   page.voiceActive = true;
+  page.draftLease = drafts.lease;
+  page.draftLeaseChanged();
   page.getUIContext = () => ({ getHostContext: () => context });
   return { page, calls, drivers, timers,
     apiCalls: () => calls.filter(([name]) => ['chat', 'confirm', 'reject'].includes(name)),
@@ -96,7 +99,7 @@ function reply(f, role = 'assistant', content = '请先复习操作系统。') {
 test('microphone guards prevent driver creation while hidden, inactive or busy', async () => {
   for (const blocked of [{ pageActive: false }, { voiceActive: false }, { loading: true },
     { deletionBusy: true }, { decisionId: 'pending-write' }]) {
-    const f = fixture();
+    const f = await fixture();
     Object.assign(f.page, blocked);
     await f.page.startVoice();
     assert.equal(f.drivers.length, 0, JSON.stringify(blocked));
@@ -106,7 +109,7 @@ test('microphone guards prevent driver creation while hidden, inactive or busy',
 
 test('every capture phase prevents a second recording and a send without changing the draft', async () => {
   for (const phase of ['starting', 'listening', 'recognizing', 'review']) {
-    const f = fixture();
+    const f = await fixture();
     f.page.prompt = '尚未发送的草稿';
     await capture(f, phase);
     assert.equal(f.page.capturePending(), true, phase);
@@ -122,7 +125,7 @@ test('every capture phase prevents a second recording and a send without changin
 });
 
 test('recognition and explicit transcript acceptance only fill the draft, never send or confirm', async () => {
-  const f = fixture();
+  const f = await fixture();
   f.page.prompt = '  原有草稿  ';
   f.page.pendingActions = [{ proposal_id: 'proposal-1', status: 'pending' }];
   await capture(f, 'review', '  识别的文字  ');
@@ -143,7 +146,7 @@ test('recognition and explicit transcript acceptance only fill the draft, never 
 });
 
 test('combined Unicode length accepts exactly 8000 characters and keeps both drafts when over the limit', async () => {
-  const f = fixture();
+  const f = await fixture();
   f.page.prompt = '  原  ';
   const originalTranscript = `  ${'😀'.repeat(7999)}  `;
   await capture(f, 'review', originalTranscript);
@@ -162,7 +165,7 @@ test('combined Unicode length accepts exactly 8000 characters and keeps both dra
 });
 
 test('empty input receives a complete transcript without a leading newline; blank review remains editable', async () => {
-  const f = fixture();
+  const f = await fixture();
   f.page.prompt = '   ';
   await capture(f);
   f.page.editVoiceTranscript('   ');
@@ -179,7 +182,7 @@ test('empty input receives a complete transcript without a leading newline; blan
 
 test('hiding or backgrounding the mounted page stops capture and preserves received text without resuming', async () => {
   for (const phase of ['starting', 'listening', 'recognizing', 'review']) {
-    const f = fixture();
+    const f = await fixture();
     f.page.prompt = '输入框草稿';
     await capture(f, phase, '已识别文字');
     const oldEvents = f.recognition();
@@ -202,7 +205,7 @@ test('hiding or backgrounding the mounted page stops capture and preserves recei
 });
 
 test('hiding retains an intentionally cleared review and returning does not send it', async () => {
-  const f = fixture();
+  const f = await fixture();
   await capture(f);
   f.page.editVoiceTranscript('');
   f.page.voiceActive = false;
@@ -215,7 +218,7 @@ test('hiding retains an intentionally cleared review and returning does not send
 });
 
 test('speech is restricted to an existing assistant answer and respects activity and busy guards', async () => {
-  const f = fixture();
+  const f = await fixture();
   for (const message of [f.page.messages[0], reply(f, 'user'), reply(f, 'feedback'),
     { id: 'removed-answer', role: 'assistant', content: '已删除回答' }]) {
     await f.page.speakReply(message);
@@ -223,14 +226,14 @@ test('speech is restricted to an existing assistant answer and respects activity
   assert.equal(f.drivers.length, 0);
   for (const blocked of [{ pageActive: false }, { voiceActive: false }, { loading: true },
     { deletionBusy: true }, { decisionId: 'pending-write' }]) {
-    const guarded = fixture();
+    const guarded = await fixture();
     const message = reply(guarded);
     Object.assign(guarded.page, blocked);
     await guarded.page.speakReply(message);
     assert.equal(guarded.drivers.length, 0, JSON.stringify(blocked));
   }
   for (const phase of ['starting', 'listening', 'recognizing', 'review']) {
-    const guarded = fixture();
+    const guarded = await fixture();
     await capture(guarded, phase);
     await guarded.page.speakReply(reply(guarded));
     assert.equal(guarded.drivers[0].speech.length, 0);
@@ -241,7 +244,7 @@ test('speech is restricted to an existing assistant answer and respects activity
 
 test('tapping the current answer stops preparation or playback; a different answer starts explicitly', async () => {
   for (const started of [false, true]) {
-    const f = fixture();
+    const f = await fixture();
     const first = reply(f);
     await f.page.speakReply(first);
     if (started) f.speech().onStart();
@@ -261,7 +264,7 @@ test('tapping the current answer stops preparation or playback; a different answ
 
 test('manual send stops pending or active playback before the API call and does not auto-read the answer', async () => {
   for (const started of [false, true]) {
-    const f = fixture();
+    const f = await fixture();
     await f.page.speakReply(reply(f));
     if (started) f.speech().onStart();
     const oldSpeech = f.speech();
@@ -280,7 +283,7 @@ test('manual send stops pending or active playback before the API call and does 
 });
 
 test('hiding stops playback and a new suggested prompt suspends recording without losing received text', async () => {
-  const speaking = fixture();
+  const speaking = await fixture();
   await speaking.page.speakReply(reply(speaking));
   speaking.speech().onStart();
   speaking.page.voiceActive = false;
@@ -288,7 +291,7 @@ test('hiding stops playback and a new suggested prompt suspends recording withou
   assert.equal(speaking.page.voiceState.phase, 'idle');
   assert.ok(speaking.calls.some(([name]) => name === 'stop-speech'));
   assert.equal(speaking.timers.size, 0);
-  const recording = fixture();
+  const recording = await fixture();
   await capture(recording, 'listening', '需要保留的识别文字');
   recording.page.initialPrompt = '规划页传来的新草稿';
   recording.page.initialPromptChanged();
@@ -300,7 +303,7 @@ test('hiding stops playback and a new suggested prompt suspends recording withou
 
 test('page teardown disposes audio and rejects all late native callbacks without recreating a controller', async () => {
   for (const kind of ['recording', 'speech']) {
-    const f = fixture();
+    const f = await fixture();
     if (kind === 'recording') await capture(f, 'listening');
     else await f.page.speakReply(reply(f));
     const events = kind === 'recording' ? f.recognition() : f.speech();
@@ -321,7 +324,7 @@ test('page teardown disposes audio and rejects all late native callbacks without
 test('leaving during native capability probe prevents late microphone startup and permits a new explicit probe', async () => {
   let resolve; let count = 0;
   const waiting = new Promise(ok => resolve = ok);
-  const f = fixture({ probe: () => ++count === 1 ? waiting : Promise.resolve({ recognition: true, synthesis: true }) });
+  const f = await fixture({ probe: () => ++count === 1 ? waiting : Promise.resolve({ recognition: true, synthesis: true }) });
   const starting = f.page.startVoice();
   assert.equal(f.page.voiceProbeBusy, true);
   f.page.voiceActive = false; f.page.voiceActivityChanged();
@@ -333,14 +336,14 @@ test('leaving during native capability probe prevents late microphone startup an
 });
 test('sending while native capabilities are pending invalidates the old probe and preserves text as the only request', async () => {
   let resolve; const waiting = new Promise(ok => resolve = ok);
-  const f = fixture({ probe: () => waiting });
+  const f = await fixture({ probe: () => waiting });
   f.page.prompt = '仅发送这条文字'; const starting = f.page.startVoice();
   await f.page.send(); resolve({ recognition: true, synthesis: true }); await starting;
   assert.equal(f.calls.some(([name]) => name === 'record'), false);
   assert.equal(f.apiCalls().length, 1); assert.equal(f.apiCalls()[0][3], '仅发送这条文字');
 });
 test('capability probe failure keeps text usable and never exposes raw device diagnostics', async () => {
-  const f = fixture({ probe: async () => { throw Error('secret device path'); } });
+  const f = await fixture({ probe: async () => { throw Error('secret device path'); } });
   await f.page.startVoice(); assert.equal(f.page.voiceProbeBusy, false);
   assert.doesNotMatch(f.page.voiceNotice, /secret|path/);
   assert.equal(f.calls.some(([name]) => name === 'record'), false);

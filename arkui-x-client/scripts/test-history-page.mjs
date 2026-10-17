@@ -28,9 +28,16 @@ const indexController = indexSource.slice(0, indexSource.indexOf('\n  @Builder')
   .replace(/^@(Entry|Component)\r?\n/gm, '')
   .replace(/@(State|Prop)\s+|@(StorageLink|Watch)\('[^']+'\)\s*/g, '')
   .replace('struct Index', 'class Index') + '\n}\n';
-const createIndexFactory = new Function('localHistory', 'historyScope', 'CampusFlowApi', 'AppStorage', ...navNames,
+const draftSource = readFileSync(new URL('../entry/src/main/ets/utils/DraftStore.ets', import.meta.url), 'utf8');
+const { DraftStore } = await import(`data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(draftSource)).toString('base64')}`);
+const createIndexFactory = new Function('localHistory', 'historyScope', 'CampusFlowApi', 'AppStorage', 'localDrafts', ...navNames,
   stripTypeScriptTypes(indexController) + '\nreturn Index;');
-const createIndex = (...args) => createIndexFactory(...args, ...navNames.map(name => navigation[name]));
+const createIndex = (...args) => {
+  let text;
+  const drafts = new DraftStore({ read: async () => text, write: async value => { text = value; }, remove: async () => { text = undefined; } });
+  drafts.initialize();
+  return createIndexFactory(...args, drafts, ...navNames.map(name => navigation[name]));
+};
 const storeSource = readFileSync(new URL('../entry/src/main/ets/utils/LocalHistoryStore.ets', import.meta.url), 'utf8')
   .replace(/^import .* from '\.\.\/model\/ApiModels';\r?\n/m, '');
 const { LocalHistoryStore, historyScope } =

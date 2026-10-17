@@ -34,6 +34,11 @@ export struct ProfilePage {
   onEnableReminders: () => void = () => {};
   onDisableReminders: () => void = () => {};
   onRefreshReminders: () => void = () => {};
+  @Prop draftNotice: string = '';
+  @Prop draftClearConfirm: boolean = false;
+  @Prop draftCleanupBusy: boolean = false;
+  onClearDrafts: () => void = () => {};
+  onCancelClearDrafts: () => void = () => {};
   @State private displayName: string = '';
   @State private school: string = '';
   @State private campus: string = '';
@@ -799,6 +804,17 @@ export struct ProfilePage {
                 Toggle({ type: ToggleType.Switch, isOn: this.reduceMotion }).selectedColor(AppTheme.success)
                   .onChange((value: boolean) => this.reduceMotion = value).accessibilityText('减少动态效果')
               }.width('100%').constraintSize({ minHeight: 48 })
+              Text('本机草稿').fontSize(AppTheme.bodySize).fontColor(AppTheme.ink).width('100%')
+              Text(this.draftNotice || '未提交的输入只保存在这台设备。退出账号会清除，不包含密码或模型凭据。')
+                .fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+              if (this.draftClearConfirm) {
+                Text('确定清除本机未提交草稿？账号内已经保存的安排不受影响。')
+                  .fontSize(AppTheme.bodySize).fontColor(AppTheme.warning).width('100%')
+                Button('保留草稿').constraintSize({ minHeight: 48 }).onClick(() => this.onCancelClearDrafts())
+              }
+              Button(this.draftClearConfirm ? '确认清除本机草稿' : '清除本机草稿')
+                .width('100%').constraintSize({ minHeight: 48 }).fontColor(AppTheme.danger)
+                .backgroundColor(AppTheme.dangerSoft).enabled(!this.draftCleanupBusy).onClick(() => this.onClearDrafts())
               Text('当前服务地址').fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
               Text(this.baseUrl).fontSize(AppTheme.bodySize).fontColor(AppTheme.ink).width('100%').wordBreak(WordBreak.BREAK_ALL)
             }.width('100%').padding(AppTheme.cardInset).backgroundColor(AppTheme.surface).borderRadius(AppTheme.cardRadius)

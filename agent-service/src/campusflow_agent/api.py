@@ -78,6 +78,8 @@ from .schemas import (
     ModelCatalogResponse,
     OnboardingRequest,
     OnboardingResponse,
+    OnboardingSaveReceipt,
+    OnboardingSnapshot,
     PendingAction,
     PlanningActionRequest,
     PlanningConflictsResponse,
@@ -462,13 +464,17 @@ def create_app(
     @app.post("/api/v1/auth/register", response_model=AuthResponse, status_code=201)
     async def register(payload: RegisterRequest, response: Response) -> AuthResponse:
         try:
-            raw_api_key = payload.api_key.get_secret_value()
+            raw_api_key = (
+                payload.api_key.get_secret_value().strip() if payload.api_key is not None else None
+            )
             user = account_store.register(
                 email=payload.email,
                 password=payload.password,
                 display_name=payload.display_name,
-                api_key_encrypted=api_key_vault.encrypt(raw_api_key),
-                api_key_hint=f"•••• {raw_api_key[-4:]}",
+                api_key_encrypted=(
+                    api_key_vault.encrypt(raw_api_key) if raw_api_key is not None else None
+                ),
+                api_key_hint=f"•••• {raw_api_key[-4:]}" if raw_api_key is not None else None,
             )
         except AccountConflictError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
@@ -1011,6 +1017,8 @@ def create_app(
             raise HTTPException(status_code=502, detail="课表解析结果格式无效，请重试。") from exc
         except asyncio.CancelledError:
             raise
+        except HTTPException:
+            raise
         except Exception as exc:
             raise _deepseek_exception(exc) from exc
 
@@ -1030,14 +1038,32 @@ def create_app(
             raise HTTPException(status_code=502, detail="地图解析结果格式无效，请重试。") from exc
         except asyncio.CancelledError:
             raise
+        except HTTPException:
+            raise
         except Exception as exc:
             raise _deepseek_exception(exc) from exc
+
+    @app.get("/api/v1/onboarding", response_model=OnboardingSnapshot)
+    async def onboarding_snapshot(user: CurrentUser) -> OnboardingSnapshot:
+        return timetable_service.onboarding_snapshot(user.user_id)
+
+    @app.get("/api/v1/onboarding/operations/{operation_id}", response_model=OnboardingSaveReceipt)
+    async def onboarding_receipt(operation_id: UUID, user: CurrentUser) -> OnboardingSaveReceipt:
+        return timetable_service.onboarding_receipt(user.user_id, operation_id)
 
     @app.put("/api/v1/onboarding", response_model=OnboardingResponse)
     async def complete_onboarding(
         payload: OnboardingRequest,
         user: CurrentUser,
     ) -> OnboardingResponse:
+        if payload.operation_id is not None or payload.expected_revision is not None:
+            try:
+                return timetable_service.save_onboarding(user.user_id, payload)
+            except sqlite3.Error as exc:
+                raise CampusFlowError(
+                    500, "首次配置保存结果尚未核实，请按原操作编号查询后再决定重试。",
+                    "ONBOARDING_FAILED",
+                ) from exc
         if not payload.timetable:
             raise HTTPException(status_code=422, detail="请至少确认一条课程记录。")
         if not payload.campus_map.places:

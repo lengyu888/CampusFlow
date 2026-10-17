@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { stripTypeScriptTypes } from 'node:module';
 import { test } from 'node:test';
-import { makeRunController, runSnapshot, rememberHistory } from './helpers/agent-run-ui-fixture.mjs';
+import { makeDraftFixture, shanghaiDate, makeRunController, runSnapshot, rememberHistory } from './helpers/agent-run-ui-fixture.mjs';
 
 const helperSource = readFileSync(new URL('../entry/src/main/ets/utils/AgentFeedback.ets', import.meta.url), 'utf8')
   .replace(/^import \{[^\n]+\} from '\.\.\/model\/ApiModels';\r?\n/, '');
@@ -24,7 +24,7 @@ const controllerSource = source.slice(0, boundary)
   .replace('export struct AgentPage', 'class AgentPage') + '\n}\n';
 const create = new Function('CampusFlowApi', 'Scroller', 'CampusFlowRequestError', 'displayToolTraces',
   'mergeActions', 'restoreDraft', 'localRequestFailure', 'AppTheme', 'localHistory', 'Edge',
-  'AgentRunController', ...Object.keys(catalog), ...Object.keys(reliability), stripTypeScriptTypes(controllerSource) + '\nreturn AgentPage;');
+  'AgentRunController', 'localDrafts', 'shanghaiDate', ...Object.keys(catalog), ...Object.keys(reliability), stripTypeScriptTypes(controllerSource) + '\nreturn AgentPage;');
 
 function pending(id, title = '相同标题') {
   return { proposal_id: id, action: 'create', kind: 'task', title, start_at: null, end_at: null,
@@ -46,7 +46,7 @@ function deferred() {
   return { promise, resolve };
 }
 
-function harness(handlers = {}) {
+async function harness(handlers = {}) {
   const calls = [], scroll = [];
   class Api {
     call(method, args) { calls.push({ method, args }); assert.equal(typeof handlers[method], 'function'); return handlers[method](...args); }
@@ -63,17 +63,20 @@ function harness(handlers = {}) {
     scrollTo(value) { scroll.push({ kind: 'position', ...value }); }
     scrollEdge(edge) { scroll.push({ kind: 'edge', edge }); }
   }
+  const drafts = await makeDraftFixture();
   const Page = create(Api, Scroller, helper.CampusFlowRequestError, helper.displayToolTraces,
-    helper.mergeActions, helper.restoreDraft, helper.localRequestFailure, {}, {}, { Bottom: 'bottom' }, makeRunController(helper.CampusFlowRequestError, helper.localRequestFailure), ...Object.values(catalog), ...Object.values(reliability));
+    helper.mergeActions, helper.restoreDraft, helper.localRequestFailure, {}, {}, { Bottom: 'bottom' }, makeRunController(helper.CampusFlowRequestError, helper.localRequestFailure), drafts.store, shanghaiDate, ...Object.values(catalog), ...Object.values(reliability));
   const page = new Page();
   page.baseUrl = 'http://fixture.invalid';
   page.token = 'fixture-token';
   page.voiceActive = true;
+  page.draftLease = drafts.lease;
+  page.draftLeaseChanged();
   return { page, calls, scroll };
 }
 
-test('external prompts preserve a typed draft and require explicit append or empty-input adoption', () => {
-  const { page, calls } = harness();
+test('external prompts preserve a typed draft and require explicit append or empty-input adoption', async () => {
+  const { page, calls } = await harness();
   page.prompt = '我正在编辑的草稿';
   page.initialPrompt = '从计划页带来的建议';
   page.promptRevision = 1;
@@ -93,8 +96,8 @@ test('external prompts preserve a typed draft and require explicit append or emp
   assert.equal(page.prompt, '下一条');
 });
 
-test('suggestions retain arrival order and do not silently replace an earlier unhandled suggestion', () => {
-  const { page } = harness();
+test('suggestions retain arrival order and do not silently replace an earlier unhandled suggestion', async () => {
+  const { page } = await harness();
   page.prompt = '原稿';
   page.choosePrompt('建议一');
   page.choosePrompt('建议二');
@@ -105,8 +108,8 @@ test('suggestions retain arrival order and do not silently replace an earlier un
   assert.deepEqual(page.promptSuggestions, ['建议二']);
 });
 
-test('returning to an already initialized page does not replay its consumed initial prompt', () => {
-  const { page } = harness();
+test('returning to an already initialized page does not replay its consumed initial prompt', async () => {
+  const { page } = await harness();
   page.initialPrompt = '首次建议';
   page.promptRevision = 3;
   page.aboutToAppear();
@@ -117,8 +120,8 @@ test('returning to an already initialized page does not replay its consumed init
   assert.deepEqual(page.promptSuggestions, []);
 });
 
-test('Unicode suggestion overflow preserves both texts and never truncates the draft', () => {
-  const { page, calls } = harness();
+test('Unicode suggestion overflow preserves both texts and never truncates the draft', async () => {
+  const { page, calls } = await harness();
   page.prompt = '🌱'.repeat(7999);
   page.offerPrompt('安排');
   page.applySuggestion(true);
@@ -137,7 +140,7 @@ test('Unicode suggestion overflow preserves both texts and never truncates the d
 
 test('each proposal stays with the first answer returning its ID, including duplicate IDs and equal titles', async () => {
   const responses = [[pending('a'), pending('b')], [], [pending('a'), pending('c')]];
-  const { page } = harness({ chat: async () => ({ session_id: 's', message: '本轮回答', pending_actions: responses.shift() }) });
+  const { page } = await harness({ chat: async () => ({ session_id: 's', message: '本轮回答', pending_actions: responses.shift() }) });
   for (const prompt of ['第一轮', '无提案追问', '新的目标']) { page.prompt = prompt; await page.send(); }
   const answers = page.messages.filter(m => m.id !== 'welcome' && m.role === 'assistant');
   assert.deepEqual(page.actionsForMessage(answers[0].id).map(a => a.proposal_id), ['a', 'b']);
@@ -149,8 +152,8 @@ test('each proposal stays with the first answer returning its ID, including dupl
   assert.ok(answers.every(m => page.collapsedToolIds.includes(m.id)), 'tool evidence starts compact');
 });
 
-test('attention summary distinguishes pending decisions from uncertain writes even after a terminal status read', () => {
-  const { page } = harness();
+test('attention summary distinguishes pending decisions from uncertain writes even after a terminal status read', async () => {
+  const { page } = await harness();
   const a = pending('a'), b = { ...pending('b'), status: 'confirmed' }, c = { ...pending('c'), status: 'cancelled' };
   page.pendingActions = [a, b, c];
   page.setFeedback('b', '服务端已确认，实际写入仍需核对', true);
@@ -163,8 +166,8 @@ test('attention summary distinguishes pending decisions from uncertain writes ev
   assert.equal(c.status, 'cancelled');
 });
 
-test('attention navigation waits for measured message and proposal anchors then cycles by proposal identity', () => {
-  const { page, scroll } = harness();
+test('attention navigation waits for measured message and proposal anchors then cycles by proposal identity', async () => {
+  const { page, scroll } = await harness();
   page.pendingActions = [pending('a'), pending('b')];
   page.linkProposals('answer-a', [page.pendingActions[0]]);
   page.linkProposals('answer-b', [page.pendingActions[1]]);
@@ -184,7 +187,7 @@ test('attention navigation waits for measured message and proposal anchors then 
 
 test('reading an older answer preserves scroll when a new response arrives and exposes an explicit latest action', async () => {
   const response = deferred();
-  const { page, scroll } = harness({ chat: () => response.promise });
+  const { page, scroll } = await harness({ chat: () => response.promise });
   page.prompt = '正在等待的请求';
   const sending = page.send();
   page.contentHeight = 2000;
@@ -202,8 +205,8 @@ test('reading an older answer preserves scroll when a new response arrives and e
   assert.equal(page.unreadMessages, 0);
 });
 
-test('hidden-page responses do not move its scroll or replace the draft on return', () => {
-  const { page, scroll } = harness();
+test('hidden-page responses do not move its scroll or replace the draft on return', async () => {
+  const { page, scroll } = await harness();
   let suspended = 0;
   page.voiceInteraction = { suspend: () => { suspended++; } };
   page.prompt = '返回后继续写的草稿';
@@ -220,7 +223,7 @@ test('hidden-page responses do not move its scroll or replace the draft on retur
 });
 
 test('model options restore the previous reading position and busy requests keep their original model', async () => {
-  const { page, scroll, calls } = harness();
+  const { page, scroll, calls } = await harness();
   page.scrollOffset = 840;
   page.toggleOptions();
   assert.equal(page.optionsExpanded, true);
@@ -243,7 +246,7 @@ test('late confirmation and status responses cannot recreate feedback after tear
   for (const method of ['confirmAction', 'actionStatus']) {
     for (const teardown of ['dispose', 'delete']) {
       const response = deferred(), action = pending('a');
-      const { page } = harness({ [method]: () => response.promise });
+      const { page } = await harness({ [method]: () => response.promise });
       page.pendingActions = [action];
       const request = method === 'confirmAction' ? page.decide(action, true) : page.checkDecision(action);
       if (teardown === 'dispose') page.aboutToDisappear();
@@ -258,16 +261,19 @@ test('late confirmation and status responses cannot recreate feedback after tear
 
 test('deletion clears proposal associations but an old request cannot clear a newer request loading state', async () => {
   const oldResponse = deferred(), newResponse = deferred();
+  const oldStarted = deferred();
   const responses = [oldResponse, newResponse];
-  const { page } = harness({ chat: () => responses.shift().promise });
+  const { page } = await harness({ chat: () => { oldStarted.resolve(); return responses.shift().promise; } });
   page.pendingActions = [pending('old')];
   page.linkProposals('old-answer', page.pendingActions);
   page.rememberMessageAnchor('old-answer', 100);
   page.rememberProposalAnchor('old', 50);
   page.prompt = '旧请求';
   const oldSend = page.send();
+  await oldStarted.promise;
   page.deletedSessionId = page.sessionId;
   page.sessionDeleted();
+  await new Promise(resolve => setImmediate(resolve));
   assert.deepEqual(page.proposalOrigins, []);
   assert.deepEqual(page.messageAnchors, []);
   page.prompt = '新会话请求';

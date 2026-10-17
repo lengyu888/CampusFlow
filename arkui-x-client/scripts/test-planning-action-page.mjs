@@ -1,3 +1,4 @@
+import { draftFixture } from './helpers/local-draft-fixture.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { stripTypeScriptTypes } from 'node:module';
@@ -12,7 +13,8 @@ const methods = noImports(raw.slice(0, raw.indexOf('\n  @Builder')))
   .replace('export struct PlanCenterPage', 'class PlanCenterPage') + '\n}\n';
 const utility = async name => import(`data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(noImports(read(`utils/${name}.ets`)))).toString('base64')}`);
 const agenda = await utility('DailyAgenda');
-function fixture(handlers = {}) {
+async function fixture(handlers = {}) {
+  const drafts = await draftFixture(handlers.driver);
   const calls = [], changed = []; let action;
   const overview = { plans: [samplePlan()], tasks: [sampleTask()], total_tasks: 1, completed_tasks: 0, due_today: 0, overdue_tasks: 0, progress: 0 };
   class Api {
@@ -25,21 +27,21 @@ function fixture(handlers = {}) {
       return handlers.confirm ? handlers.confirm(result) : { applied: true, action: result, receipt: result.receipt, message: '' };
     }
     async cancelAction(id) { calls.push(['cancel', id]); return { action: { ...action, status: 'cancelled' }, receipt: null, applied: false }; }
-    async actionStatus(id) { calls.push(['status', id]); return applied(action); }
+    async actionStatus(id) { calls.push(['status', id]); return handlers.status ? handlers.status(id) : applied(action); }
   }
   class Input { stopEditing() {} }
   const Page = new Function('CampusFlowApi', 'TextInputController', 'Scroller', 'AppTheme', 'Curve', 'shanghaiDate', 'buildDailyAgenda',
-    'formatPlanDateTime', 'PlanningActionController', 'editedPlanningTime', 'validPlanningDate', 'planningTimestamp', 'CampusFlowRequestError',
+    'localDrafts', 'formatPlanDateTime', 'PlanningActionController', 'editedPlanningTime', 'validPlanningDate', 'planningTimestamp', 'CampusFlowRequestError',
     stripTypeScriptTypes(methods) + '\nreturn PlanCenterPage;')(Api, Input, class {}, { motion: () => 0 }, { EaseOut: '' },
-    agenda.shanghaiDate, agenda.buildDailyAgenda, presentation.formatPlanDateTime, PlanningActionController, editedPlanningTime, validPlanningDate, planningTimestamp, CampusFlowRequestError);
-  const page = new Page(); page.overview = clone(overview); page.getUIContext = () => ({ animateTo: (_, update) => update() });
+    agenda.shanghaiDate, agenda.buildDailyAgenda, drafts.store, presentation.formatPlanDateTime, PlanningActionController, editedPlanningTime, validPlanningDate, planningTimestamp, CampusFlowRequestError);
+  const page = new Page(); page.draftLease = drafts.lease; page.draftScopeChanged(); page.overview = clone(overview); page.getUIContext = () => ({ animateTo: (_, update) => update() });
   page.onPlanningChanged = () => changed.push(true);
-  return { page, calls, changed };
+  return { page, calls, changed, drafts };
 }
 
 test('create draft is cleared only after exact receipt; edited title or date survives confirmation', async () => {
   for (const changedDraft of ['none', 'title', 'date']) {
-    const f = fixture(); f.page.title = '原草稿'; f.page.draftTaskDate = '2028-10-20';
+    const f = await fixture(); f.page.title = '原草稿'; f.page.draftTaskDate = '2028-10-20';
     await f.page.addTask(); assert.equal(f.page.title, '原草稿'); assert.equal(f.changed.length, 0);
     if (changedDraft === 'title') f.page.title = '新草稿';
     if (changedDraft === 'date') f.page.draftTaskDate = '2028-10-21';
@@ -49,7 +51,7 @@ test('create draft is cleared only after exact receipt; edited title or date sur
 });
 
 test('task editor sends all five values, preserves precise unedited timestamps and reminder zero', async () => {
-  const f = fixture(); f.page.beginTaskEdit(sampleTask('target-exact', { title: '同名任务' }));
+  const f = await fixture(); f.page.beginTaskEdit(sampleTask('target-exact', { title: '同名任务' }));
   f.page.editTaskTitle = '仅改名称'; await f.page.previewTaskEdit();
   assert.deepEqual(f.calls[0], ['preview', { operation: 'update_task', task_id: 'target-exact', task: {
     title: '仅改名称', start_at: '2028-10-20T09:00:03+08:00', end_at: '2028-10-20T10:00:07+08:00', reminder_minutes: 0, location: '图书馆' } }]);
@@ -57,7 +59,7 @@ test('task editor sends all five values, preserves precise unedited timestamps a
 });
 
 test('editor rejects invalid intervals/reminders and keeps drafts until fixed', async () => {
-  const f = fixture(); f.page.beginTaskEdit(sampleTask()); f.page.editTaskStart = '2028-02-30 09:00';
+  const f = await fixture(); f.page.beginTaskEdit(sampleTask()); f.page.editTaskStart = '2028-02-30 09:00';
   await f.page.previewTaskEdit(); assert.equal(f.calls.length, 0); assert.match(f.page.errorText, /有效/);
   f.page.editTaskStart = ''; f.page.editTaskEnd = ''; f.page.editTaskReminder = '-1';
   await f.page.previewTaskEdit(); assert.equal(f.calls.length, 0); assert.match(f.page.errorText, /提醒/);
@@ -65,8 +67,8 @@ test('editor rejects invalid intervals/reminders and keeps drafts until fixed', 
   assert.equal(f.calls[0][1].task.reminder_minutes, null);
 });
 
-test('task/plan drafts survive back, other IDs cannot overwrite them, and discard is explicit', () => {
-  const f = fixture(); f.page.beginTaskEdit(sampleTask('a')); f.page.editTaskTitle = '保留草稿'; f.page.closeDetails();
+test('task/plan drafts survive back, other IDs cannot overwrite them, and discard is explicit', async () => {
+  const f = await fixture(); f.page.beginTaskEdit(sampleTask('a')); f.page.editTaskTitle = '保留草稿'; f.page.closeDetails();
   f.page.beginTaskEdit(sampleTask('b')); assert.equal(f.page.editTaskId, 'a'); assert.equal(f.page.editTaskTitle, '保留草稿');
   assert.equal(f.page.detailId, 'a'); f.page.discardTaskEdit(); f.page.beginTaskEdit(sampleTask('b')); assert.equal(f.page.editTaskId, 'b');
   f.page.beginPlanEdit(samplePlan('p1')); f.page.editPlanSummary = '较长草稿'; f.page.closeDetails();
@@ -74,7 +76,7 @@ test('task/plan drafts survive back, other IDs cannot overwrite them, and discar
 });
 
 test('plan metadata preview contains only editable fields and exact plan ID, deletion remains preview only', async () => {
-  const f = fixture(); f.page.beginPlanEdit(samplePlan('p-exact')); f.page.editPlanDate = ''; f.page.editPlanSummary = '';
+  const f = await fixture(); f.page.beginPlanEdit(samplePlan('p-exact')); f.page.editPlanDate = ''; f.page.editPlanSummary = '';
   await f.page.previewPlanEdit(); assert.deepEqual(f.calls[0][1], { operation: 'update_plan', plan_id: 'p-exact', plan: { title: '复习目标', summary: '', target_date: null } });
   await f.page.actionManager().cancel(); f.page.dismissAction();
   await f.page.requestPlanDelete(samplePlan('p-exact')); assert.deepEqual(f.calls.at(-1), ['preview', { operation: 'delete_plan', plan_id: 'p-exact' }]);
@@ -82,7 +84,7 @@ test('plan metadata preview contains only editable fields and exact plan ID, del
 });
 
 test('unknown action blocks create, update, completion, both deletes, and discarding its editor', async () => {
-  const f = fixture({ confirm: () => { throw new Error('response lost'); } }); f.page.beginTaskEdit(sampleTask());
+  const f = await fixture({ confirm: () => { throw new Error('response lost'); } }); f.page.beginTaskEdit(sampleTask());
   await f.page.previewTaskEdit(); await f.page.confirmPlanningAction(); assert.equal(f.page.actionState.phase, 'uncertain');
   const count = f.calls.length; f.page.title = 'new'; await f.page.addTask(); await f.page.toggle(sampleTask());
   await f.page.requestDelete(sampleTask('other')); await f.page.requestPlanDelete(samplePlan());
@@ -91,15 +93,16 @@ test('unknown action blocks create, update, completion, both deletes, and discar
 });
 
 test('replan unresolved state blocks all new action previews and task completion', async () => {
-  const f = fixture(); f.page.replanWriteBlocked = true; f.page.title = '待办';
+  const f = await fixture(); f.page.replanWriteBlocked = true; f.page.title = '待办';
   await f.page.addTask(); await f.page.toggle(sampleTask()); await f.page.requestDelete(sampleTask());
   await f.page.requestPlanDelete(samplePlan()); assert.deepEqual(f.calls, []);
 });
 
 test('hide/dispose during confirm ignores late result and never clears the draft or emits success', async () => {
   for (const kind of ['hide', 'dispose']) {
-    const d = deferred(); const f = fixture({ confirm: () => d.promise }); f.page.title = '保留'; await f.page.addTask();
+    const d = deferred(); const f = await fixture({ confirm: () => d.promise }); f.page.title = '保留'; await f.page.addTask();
     const pending = f.page.confirmPlanningAction();
+    while (!f.calls.some(c => c[0] === 'confirm')) await new Promise(resolve => setImmediate(resolve));
     if (kind === 'hide') { f.page.active = false; f.page.activityChanged(); } else f.page.aboutToDisappear();
     const result = applied(f.page.actionState.action); d.resolve({ applied: true, action: result, receipt: result.receipt }); await pending;
     assert.equal(f.page.title, '保留'); assert.equal(f.changed.length, 0);
@@ -109,14 +112,14 @@ test('hide/dispose during confirm ignores late result and never clears the draft
 
 test('successful edit clears its own unchanged draft only; later edits remain intact', async () => {
   for (const later of [false, true]) {
-    const f = fixture(); f.page.beginTaskEdit(sampleTask()); await f.page.previewTaskEdit();
+    const f = await fixture(); f.page.beginTaskEdit(sampleTask()); await f.page.previewTaskEdit();
     if (later) f.page.editTaskTitle = '后续草稿'; await f.page.confirmPlanningAction();
     assert.equal(f.page.editTaskId, later ? 'task-a' : '');
   }
 });
 
 test('restore conflict is a determinate error directing the user to edit the exact task', async () => {
-  const f = fixture({ toggle: () => { throw new CampusFlowRequestError(409, 'ACTION_CONFLICT', 'raw ignored'); } });
+  const f = await fixture({ toggle: () => { throw new CampusFlowRequestError(409, 'ACTION_CONFLICT', 'raw ignored'); } });
   await f.page.toggle(sampleTask('completed', { status: 'completed' }));
   assert.match(f.page.errorText, /调整时间/); assert.equal(f.changed.length, 0); assert.equal(f.page.mutationBusy, false);
 });
@@ -124,9 +127,102 @@ test('restore conflict is a determinate error directing the user to edit the exa
 test('editing one boundary of a naive legacy interval uses Shanghai on non-Shanghai devices', async () => {
   const previous = process.env.TZ; process.env.TZ = 'UTC';
   try {
-    const f = fixture(); f.page.beginTaskEdit(sampleTask('legacy', { start_at: '2028-10-20T09:00:00', end_at: '2028-10-20T10:00:00' }));
+    const f = await fixture(); f.page.beginTaskEdit(sampleTask('legacy', { start_at: '2028-10-20T09:00:00', end_at: '2028-10-20T10:00:00' }));
     f.page.editTaskEnd = '2028-10-20 11:00'; await f.page.previewTaskEdit();
     assert.equal(f.calls[0][1].task.start_at, '2028-10-20T09:00:00');
     assert.equal(f.calls[0][1].task.end_at, '2028-10-20T11:00:00+08:00');
   } finally { if (previous === undefined) delete process.env.TZ; else process.env.TZ = previous; }
+});
+
+test('cold draft recovery fills only after consent, retaining the original date and Shanghai anchor', async () => {
+  const first = await fixture(); first.page.title = '明天复习'; first.page.draftTaskDate = '2026-10-19';
+  first.page.draftDateChoice = 'tomorrow'; first.page.draftTaskTime = '18:30'; first.page.draftAnchorDate = '2026-10-18';
+  first.page.stageTaskDraft(); await first.drafts.store.flush(first.drafts.lease);
+  const next = await fixture({ driver: first.drafts.driver });
+  assert.equal(next.page.title, ''); assert.equal(next.calls.length, 0); assert.ok(next.page.recoveredDraft);
+  next.page.restoreTaskDraft();
+  assert.equal(next.page.title, '明天复习'); assert.equal(next.page.draftTaskDate, '2026-10-19');
+  assert.equal(next.page.draftAnchorDate, '2026-10-18'); assert.equal(next.page.draftTaskTime, '18:30');
+  assert.equal(next.calls.length, 0, 'restoring never previews or creates a server action');
+});
+
+test('disk failure before operation persistence prevents confirmation and retains a recoverable pointer', async () => {
+  const f = await fixture(); f.page.title = '先保存指针'; await f.page.addTask();
+  f.drafts.driver.failWrite = true; await f.page.confirmPlanningAction();
+  assert.equal(f.calls.filter(c => c[0] === 'confirm').length, 0);
+  assert.equal(f.page.pendingProposals.length, 1); assert.match(f.page.errorText, /本次未提交/);
+  assert.equal(f.page.title, '先保存指针');
+});
+
+test('unknown confirmation cold restart queries the same proposal without issuing a replacement write', async () => {
+  let original;
+  const first = await fixture({ preview: a => { original = clone(a); return a; }, confirm: () => { throw Error('lost response'); } });
+  first.page.title = '已经提交但回包丢失'; await first.page.addTask(); await first.page.confirmPlanningAction();
+  assert.equal(first.page.actionState.phase, 'uncertain');
+  const next = await fixture({ driver: first.drafts.driver, status: id => { assert.equal(id, original.proposal_id); return applied(original); } });
+  assert.equal(next.page.pendingProposals.length, 1); assert.equal(next.calls.length, 0);
+  await next.page.recoverProposal(next.page.pendingProposals[0]);
+  assert.equal(next.page.actionState.phase, 'resolved'); assert.equal(next.page.pendingProposals.length, 0);
+  assert.equal(next.page.recoveredDraft, null); assert.equal(next.changed.length, 1);
+  assert.equal(next.calls.some(c => ['confirm', 'preview', 'cancel'].includes(c[0])), false);
+});
+
+test('input typed after an unknown submission survives receipt resolution and a cold restart', async () => {
+  let original;
+  const f = await fixture({ preview: a => { original = clone(a); return a; }, confirm: () => { throw Error('offline'); }, status: () => applied(original) });
+  f.page.title = '原安排'; await f.page.addTask(); await f.page.confirmPlanningAction();
+  f.page.title = '后来新输入'; f.page.stageTaskDraft(); await f.drafts.store.flush(f.drafts.lease);
+  await f.page.recoverProposal(f.page.pendingProposals[0]);
+  assert.equal(f.page.title, '后来新输入');
+  const next = await fixture({ driver: f.drafts.driver }); next.page.restoreTaskDraft();
+  assert.equal(next.page.title, '后来新输入');
+});
+
+test('clear/account invalidation during pre-submit disk write cannot send the old proposal', async () => {
+  const f = await fixture(); f.page.title = '旧账号输入'; await f.page.addTask();
+  const held = deferred(), started = deferred();
+  f.drafts.driver.beforeWrite = async () => { started.resolve(); await held.promise; };
+  const submitting = f.page.confirmPlanningAction(); await started.promise;
+  const clearing = f.drafts.store.clear(); f.page.draftLease = null; f.page.draftScopeChanged();
+  held.resolve(); await submitting; await clearing;
+  assert.equal(f.calls.some(c => c[0] === 'confirm'), false); assert.equal(f.page.title, '');
+  assert.equal(f.page.actionState.action, null);
+});
+
+test('discard refuses an unresolved submission and a newer draft revision', async () => {
+  const f = await fixture({ confirm: () => { throw Error('offline'); } }); f.page.title = '待核对';
+  await f.page.addTask(); await f.page.confirmPlanningAction();
+  f.page.recoveredDraft = f.drafts.store.read(f.drafts.lease, { kind: 'new-task', ownerId: 'main' });
+  await f.page.discardTaskDraft(); assert.ok(f.page.recoveredDraft); assert.match(f.page.draftMessage, /待核对/);
+  const clean = await fixture(); clean.page.title = '第一版'; clean.page.stageTaskDraft(); await clean.drafts.store.flush(clean.drafts.lease);
+  const old = clean.drafts.store.read(clean.drafts.lease, { kind: 'new-task', ownerId: 'main' });
+  clean.page.title = '更新版'; clean.page.stageTaskDraft(); clean.page.recoveredDraft = old;
+  await clean.page.discardTaskDraft();
+  assert.equal(clean.drafts.store.read(clean.drafts.lease, { kind: 'new-task', ownerId: 'main' }).payload.title, '更新版');
+});
+
+test('read-back failure or wrong proposal ID leaves the saved pointer blocked, never interprets 404 as failure to apply', async () => {
+  let original;
+  const first = await fixture({ preview: a => { original = clone(a); return a; }, confirm: () => { throw Error('offline'); } });
+  first.page.title = '核对原编号'; await first.page.addTask(); await first.page.confirmPlanningAction();
+  for (const status of [() => { throw new CampusFlowRequestError(404, 'ACTION_NOT_FOUND', 'missing'); }, () => applied({ ...original, proposal_id: 'wrong-id' })]) {
+    const next = await fixture({ driver: first.drafts.driver, status });
+    await next.page.recoverProposal(next.page.pendingProposals[0]);
+    assert.equal(next.page.actionState.phase, 'uncertain'); assert.equal(next.page.pendingProposals.length, 1);
+    assert.equal(next.page.writesBlocked(), true); assert.equal(next.calls.some(c => ['confirm','preview'].includes(c[0])), false);
+  }
+});
+
+test('old time picker callback cannot repopulate a freshly cleared draft or a hidden page', async () => {
+  for (const transition of ['clear', 'hide']) {
+    const f = await fixture(); let picker;
+    f.page.getUIContext = () => ({ animateTo: (_o, fn) => fn(), showTimePickerDialog: value => { picker = value; } });
+    f.page.draftTaskTime = '14:00'; f.page.openTimePicker();
+    if (transition === 'clear') {
+      await f.drafts.store.clear(); f.page.draftLease = await f.drafts.store.activate(f.drafts.lease.scope); f.page.draftScopeChanged();
+    } else { f.page.active = false; f.page.activityChanged(); }
+    const before = f.page.draftTaskTime; picker.onAccept({ hour: 21, minute: 15 });
+    assert.equal(f.page.draftTaskTime, before);
+    assert.equal(f.drafts.store.read(f.page.draftLease, { kind: 'new-task', ownerId: 'main' }), undefined);
+  }
 });

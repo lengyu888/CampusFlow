@@ -34,3 +34,20 @@ export function rememberHistory(history, request, response) {
     { role: 'assistant', content: response.message, created_at: '2028-10-20T08:00:01+08:00' }
   ]));
 }
+
+
+// Real account-scoped draft storage; only filesystem and wall-clock debounce are injected.
+const draftSource = readFileSync(new URL('../../entry/src/main/ets/utils/DraftStore.ets', import.meta.url), 'utf8');
+const { DraftStore } = await import(`data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(draftSource)).toString('base64')}`);
+const dailySource = readFileSync(new URL('../../entry/src/main/ets/utils/DailyAgenda.ets', import.meta.url), 'utf8')
+  .replace(/^import [^\n]+;\r?\n/gm, '');
+const daily = await import(`data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(dailySource)).toString('base64')}`);
+export const shanghaiDate = daily.shanghaiDate;
+export async function makeDraftFixture(scope = 'fixture-authenticated-account') {
+  let text;
+  const store = new DraftStore({ read: async () => text, write: async value => { text = value; },
+    remove: async () => { text = undefined; } }, { now: () => Date.now(), set: () => 1, clear() {} });
+  await store.initialize();
+  const lease = await store.activate(scope);
+  return { store, lease };
+}

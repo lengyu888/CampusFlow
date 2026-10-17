@@ -1,3 +1,4 @@
+import { draftFixture } from './helpers/local-draft-fixture.mjs';
 import { PlanningActionController, candidate, applied } from './helpers/planning-action-fixture.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -17,10 +18,11 @@ const controllerSource = source.slice(0, firstBuilder)
   .replace(/^@Component\r?\n/m, '')
   .replace(/@(Prop|State)\s+|@Watch\('[^']+'\)\s*/g, '')
   .replace('export struct PlanCenterPage', 'class PlanCenterPage') + '\n}\n';
-const createController = new Function('TextInputController', 'AppTheme', 'Curve', 'CampusFlowApi', 'Scroller', 'shanghaiDate', 'buildDailyAgenda', 'PlanningActionController',
+const createController = new Function('TextInputController', 'AppTheme', 'Curve', 'CampusFlowApi', 'Scroller', 'shanghaiDate', 'buildDailyAgenda', 'PlanningActionController', 'localDrafts',
   stripTypeScriptTypes(controllerSource) + '\nreturn PlanCenterPage;');
 
-function page({ createError = null } = {}) {
+async function page({ createError = null } = {}) {
+  const drafts = await draftFixture();
   const calls = [];
   const overview = {
     plans: [], tasks: [], total_tasks: 0, completed_tasks: 0, due_today: 0, overdue_tasks: 0, progress: 0
@@ -47,8 +49,9 @@ function page({ createError = null } = {}) {
     async updateTask(id, completed) { calls.push(['updateTask', id, completed]); }
     async deleteTask(id) { calls.push(['deleteTask', id]); }
   }
-  const Controller = createController(InputController, { motion: () => 0 }, { EaseOut: 'ease-out' }, Api, class {}, agenda.shanghaiDate, agenda.buildDailyAgenda, PlanningActionController);
+  const Controller = createController(InputController, { motion: () => 0 }, { EaseOut: 'ease-out' }, Api, class {}, agenda.shanghaiDate, agenda.buildDailyAgenda, PlanningActionController, drafts.store);
   const instance = new Controller();
+  instance.draftLease = drafts.lease; instance.draftScopeChanged();
   instance.getUIContext = () => ({ animateTo: (_options, update) => update() });
   return { instance, calls, overview };
 }
@@ -64,8 +67,8 @@ function draftSnapshot(instance) {
   };
 }
 
-test('calendar and task form start collapsed and opening them performs no API work', () => {
-  const { instance, calls } = page();
+test('calendar and task form start collapsed and opening them performs no API work', async () => {
+  const { instance, calls } = await page();
   assert.equal(instance.calendarExpanded, false);
   assert.equal(instance.taskFormExpanded, false);
   instance.toggleCalendar();
@@ -76,8 +79,8 @@ test('calendar and task form start collapsed and opening them performs no API wo
   assert.deepEqual(calls, []);
 });
 
-test('repeated disclosure toggles preserve long draft, date choice, custom time and agenda selection', () => {
-  const { instance, calls } = page();
+test('repeated disclosure toggles preserve long draft, date choice, custom time and agenda selection', async () => {
+  const { instance, calls } = await page();
   instance.title = '复习离散数学，并完成较长的课程总结草稿。'.repeat(20);
   instance.selectedDate = '2026-10-22';
   instance.calendarMonth = new Date(2026, 9, 1).getTime();
@@ -97,8 +100,8 @@ test('repeated disclosure toggles preserve long draft, date choice, custom time 
   assert.deepEqual(calls, []);
 });
 
-test('calendar browsing remains independent of a collapsed draft date', () => {
-  const { instance } = page();
+test('calendar browsing remains independent of a collapsed draft date', async () => {
+  const { instance } = await page();
   instance.calendarMonth = new Date(2026, 9, 1).getTime();
   instance.selectedDate = '2026-10-21';
   instance.selectDraftDate(instance.selectedDate, 'calendar');
@@ -113,8 +116,8 @@ test('calendar browsing remains independent of a collapsed draft date', () => {
   assert.equal(instance.taskFormExpanded, false);
 });
 
-test('collapsed draft summary distinguishes no date, all day and custom time', () => {
-  const { instance } = page();
+test('collapsed draft summary distinguishes no date, all day and custom time', async () => {
+  const { instance } = await page();
   instance.selectDraftDate('', 'none');
   assert.equal(instance.draftScheduleSummary(), '未设日期 · 待安排时间');
   instance.selectDraftDate('2026-10-22', 'calendar');
@@ -124,7 +127,7 @@ test('collapsed draft summary distinguishes no date, all day and custom time', (
 });
 
 test('reopened draft creates the original title and schedule, then retains disclosure state after reload', async () => {
-  const { instance, calls } = page();
+  const { instance, calls } = await page();
   instance.title = '  完成课程总结  ';
   instance.selectedDate = '2026-11-01';
   instance.selectDraftDate('2026-10-22', 'calendar');
@@ -151,7 +154,7 @@ test('no-date and all-day API parameters remain intact after form collapse', asy
   for (const [date, choice, expected] of [
     ['', 'none', null], ['2026-10-22', 'calendar', '2026-10-22T23:59:00+08:00']
   ]) {
-    const { instance, calls } = page();
+    const { instance, calls } = await page();
     instance.title = '整理笔记';
     instance.selectDraftDate(date, choice);
     instance.toggleTaskForm();
@@ -163,7 +166,7 @@ test('no-date and all-day API parameters remain intact after form collapse', asy
 });
 
 test('failed create retains the draft through collapse and reopening for correction or retry', async () => {
-  const { instance, calls } = page({ createError: new Error('offline') });
+  const { instance, calls } = await page({ createError: new Error('offline') });
   instance.title = '失败后保留的草稿';
   instance.selectDraftDate('2026-10-22', 'calendar');
   instance.selectDraftTime('18:45');
@@ -181,7 +184,7 @@ test('failed create retains the draft through collapse and reopening for correct
 });
 
 test('task completion stays idempotent and deletion requires preview then explicit confirmation', async () => {
-  const { instance, calls } = page();
+  const { instance, calls } = await page();
   const task = { task_id: 'task-1', status: 'pending' };
   instance.toggleCalendar();
   instance.toggleTaskForm();

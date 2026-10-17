@@ -10,6 +10,12 @@ async function helperModule(name) {
 }
 const timetable = await helperModule('OnboardingTimetable');
 const feedback = await helperModule('AgentFeedback');
+const agenda = await helperModule('DailyAgenda');
+const { historyScope } = await helperModule('LocalHistoryStore');
+const { DraftStore } = await helperModule('DraftStore');
+const operationId = '01234567-89ab-4def-8abc-0123456789ab';
+const revisionA = 'a'.repeat(64), revisionB = 'b'.repeat(64);
+const tick = () => new Promise(resolve => setImmediate(resolve));
 const source = readFileSync(new URL('../entry/src/main/ets/pages/OnboardingPage.ets', import.meta.url), 'utf8');
 const firstBuilder = source.indexOf('\n  @Builder');
 assert.ok(firstBuilder > 0, 'the page non-UI method boundary must exist');
@@ -18,11 +24,11 @@ assert.ok(firstBuilder > 0, 'the page non-UI method boundary must exist');
 const pageSource = source.slice(0, firstBuilder)
   .replace(/^import [^\n]+;\r?\n/gm, '')
   .replace(/^@Component\r?\n/m, '')
-  .replace(/@(Prop|State)\s+/g, '')
+  .replace(/@(Prop|State)\s+|@Watch\('[^']+'\)\s*/g, '')
   .replace('export struct OnboardingPage', 'class OnboardingPage') + '\n}\n';
 const createPage = new Function('CampusFlowApi', 'CampusFlowRequestError', 'Scroller', 'Edge',
   'normalizeTimetableEntry', 'validateTimetableEntry', 'validateTimetableList', 'parseTimetablePreview',
-  'expandWeeklyEntry', stripTypeScriptTypes(pageSource) + '\nreturn OnboardingPage;');
+  'expandWeeklyEntry', 'shanghaiDate', 'timetableOperationId', 'localDrafts', 'historyScope', stripTypeScriptTypes(pageSource) + '\nreturn OnboardingPage;');
 
 function course(overrides = {}) {
   return { date: '2026-10-19', title: '操作系统', start_time: '08:05', end_time: '09:40',
@@ -41,7 +47,7 @@ const user = { user_id: 'fixture-user', email: 'fixture@example.invalid', displa
   school: '杭州电子科技大学', campus: '下沙校区', semester: '2026-2027 第一学期', onboarding_complete: true,
   role: 'user', api_key_configured: false, api_key_hint: null };
 function receipt(entries = [course()], map = { places: [{}] }) {
-  return { user: { ...user }, timetable_count: entries.length, campus_place_count: map.places.length };
+  return { user: { ...user }, timetable_count: entries.length, campus_place_count: map.places.length, receipt: { operation_id: operationId, status: 'applied', previous_revision: revisionA, revision: revisionB, timetable_count: entries.length, campus_place_count: map.places.length, applied_at: '2026-10-18T10:00:00Z' } };
 }
 function deferred() {
   let resolve;
@@ -49,18 +55,27 @@ function deferred() {
   const promise = new Promise((yes, no) => { resolve = yes; reject = no; });
   return { promise, resolve, reject };
 }
-function fixture(handlers = {}) {
-  const calls = [];
+async function fixture(handlers = {}) {
+  const calls = [], reads = [];
+  let storedText = handlers.initialDraftText;
+  const draftStore = handlers.draftStore ?? new DraftStore({ read: async () => storedText, write: async value => { if (handlers.diskFailure?.()) throw new Error('disk'); storedText = value; }, remove: async () => { storedText = undefined; } }, { now: () => Date.now(), set: () => 1, clear() {} });
+  await draftStore.initialize();
+  const lease = handlers.lease ?? await draftStore.activate(historyScope('http://fixture.invalid', 'fixture-user'));
+  let snapshot = { revision: revisionA, user: { ...user, onboarding_complete: false }, timetable: [], campus_map: { campus_name: '', places: [], warnings: [] } };
   const completed = [];
   const scrolls = [];
   class Api {
     invoke(name, args) {
-      calls.push({ name, args: structuredClone(args) });
+      (name === 'onboardingSnapshot' ? reads : calls).push({ name, args: structuredClone(args) });
       if (handlers[name]) return handlers[name](...args);
       if (name === 'campusData') return Promise.resolve(campusData());
-      if (name === 'completeOnboarding') return Promise.resolve(receipt(args[3], args[4]));
+      if (name === 'onboardingSnapshot') return Promise.resolve(structuredClone(snapshot));
+      if (name === 'onboardingOperation') return Promise.resolve(receipt(snapshot.timetable, snapshot.campus_map).receipt);
+      if (name === 'completeOnboarding') { snapshot = { revision: revisionB, user: { ...user }, timetable: structuredClone(args[3]), campus_map: structuredClone(args[4]) }; return Promise.resolve(receipt(args[3], args[4])); }
       throw new Error(`unexpected API: ${name}`);
     }
+    onboardingSnapshot(...args) { return this.invoke('onboardingSnapshot', args); }
+    onboardingOperation(...args) { return this.invoke('onboardingOperation', args); }
     previewSubscription(...args) { return this.invoke('previewSubscription', args); }
     campusData(...args) { return this.invoke('campusData', args); }
     completeOnboarding(...args) { return this.invoke('completeOnboarding', args); }
@@ -70,13 +85,13 @@ function fixture(handlers = {}) {
   class Scroller { scrollEdge(edge) { scrolls.push(edge); } }
   const Page = createPage(Api, feedback.CampusFlowRequestError, Scroller, { Top: 'top' },
     timetable.normalizeTimetableEntry, timetable.validateTimetableEntry, timetable.validateTimetableList,
-    timetable.parseTimetablePreview, timetable.expandWeeklyEntry);
+    timetable.parseTimetablePreview, timetable.expandWeeklyEntry, agenda.shanghaiDate, () => operationId, draftStore, historyScope);
   const page = new Page();
   page.baseUrl = 'http://fixture.invalid';
-  page.token = 'test-only';
+  page.token = 'test-only'; page.draftLease = lease;
   page.onCompleted = value => completed.push(value);
-  page.aboutToAppear();
-  return { page, calls, completed, scrolls };
+  page.aboutToAppear(); await tick();
+  return { page, calls, reads, completed, scrolls, draftStore, lease, stored: () => storedText, setSnapshot: value => { snapshot = structuredClone(value); } };
 }
 function fillEditor(page, entry = course()) {
   for (const [field, value] of Object.entries(entry)) page.updateEditor(field, value);
@@ -93,8 +108,8 @@ function prepareImport(f, url = 'https://neo.hduhelp.com/hduhelp-neo/feed/schedu
   f.page.updateScheduleUrl(url);
 }
 
-test('steps require a valid semester, at least one course and an explicitly resolved editor', () => {
-  const f = fixture();
+test('steps require a valid semester, at least one course and an explicitly resolved editor', async () => {
+  const f = await fixture();
   f.page.semester = ' ';
   f.page.nextStep();
   assert.equal(f.page.step, 0);
@@ -118,8 +133,8 @@ test('steps require a valid semester, at least one course and an explicitly reso
   assert.deepEqual(f.calls, []);
 });
 
-test('manual entry shows field errors without truncation and requires explicit weekly expansion', () => {
-  const f = fixture();
+test('manual entry shows field errors without truncation and requires explicit weekly expansion', async () => {
+  const f = await fixture();
   const invalid = course({ date: '2026-02-30', title: '😀'.repeat(101), end_time: '08:05' });
   fillEditor(f.page, invalid);
   f.page.addEntry();
@@ -138,8 +153,8 @@ test('manual entry shows field errors without truncation and requires explicit w
   assert.deepEqual(f.calls, []);
 });
 
-test('editing changes only one concrete course; dirty drafts cannot be replaced by another editor or source', () => {
-  const f = fixture();
+test('editing changes only one concrete course; dirty drafts cannot be replaced by another editor or source', async () => {
+  const f = await fixture();
   const second = course({ date: '2026-10-26' });
   f.page.refreshDraft([course(), second]);
   f.page.editEntry(0);
@@ -164,8 +179,8 @@ test('editing changes only one concrete course; dirty drafts cannot be replaced 
   assert.deepEqual(f.calls, []);
 });
 
-test('removal needs the matching confirmation and duplicate courses preserve the current draft', () => {
-  const f = fixture();
+test('removal needs the matching confirmation and duplicate courses preserve the current draft', async () => {
+  const f = await fixture();
   const second = course({ date: '2026-10-26' });
   f.page.refreshDraft([course(), second]);
   f.page.removeEntry(0);
@@ -186,7 +201,7 @@ test('removal needs the matching confirmation and duplicate courses preserve the
 
 test('preview is read-only until explicit acceptance, which merges courses and discards the subscription URL', async () => {
   const imported = course({ date: '2026-10-20', title: '计算机网络' });
-  const f = fixture({ previewSubscription: async () => preview([imported]) });
+  const f = await fixture({ previewSubscription: async () => preview([imported]) });
   f.page.step = 1;
   f.page.refreshDraft([course()]);
   prepareImport(f);
@@ -210,7 +225,7 @@ test('preview is read-only until explicit acceptance, which merges courses and d
 });
 
 test('failed merges retain both the existing draft and preview so the user can correct them', async () => {
-  const f = fixture({ previewSubscription: async () => preview() });
+  const f = await fixture({ previewSubscription: async () => preview() });
   f.page.refreshDraft([course()]);
   prepareImport(f);
   await f.page.previewImport();
@@ -225,7 +240,7 @@ test('failed merges retain both the existing draft and preview so the user can c
 test('accepted import source warnings survive editing, removal and repeated confirmation without keeping stale row warnings', async () => {
   const payload = preview([course(), course({ title: '时间重叠的课程', start_time: '09:00', end_time: '10:00' })]);
   payload.warnings = ['已跳过 2 条缺少课程时间或名称的事件。', '订阅事件超过 500 条，仅导入前 500 条。'];
-  const f = fixture({ previewSubscription: async () => payload });
+  const f = await fixture({ previewSubscription: async () => payload });
   f.page.step = 1;
   prepareImport(f);
   await f.page.previewImport();
@@ -257,7 +272,7 @@ test('preview and draft pagination preserve every course and use global indexes,
   const entries = Array.from({ length: 21 }, (_, index) => course({
     date: `2026-10-${String(index + 1).padStart(2, '0')}`, title: `课程 ${index + 1}`
   }));
-  const f = fixture({ previewSubscription: async () => preview(entries) });
+  const f = await fixture({ previewSubscription: async () => preview(entries) });
   prepareImport(f);
   await f.page.previewImport();
   const previewRows = [];
@@ -292,7 +307,7 @@ test('preview and draft pagination preserve every course and use global indexes,
 test('empty or malformed previews never replace an existing draft and never leak error diagnostics', async () => {
   for (const result of [null, {}, preview([]), { ...preview(), event_count: 8 },
     preview([course({ date: '2026-02-30' })])]) {
-    const f = fixture({ previewSubscription: async () => result });
+    const f = await fixture({ previewSubscription: async () => result });
     f.page.refreshDraft([course()]);
     prepareImport(f);
     await f.page.previewImport();
@@ -307,7 +322,7 @@ test('cancelled preview responses cannot overwrite a newer request, its loading 
   const old = deferred();
   const fresh = deferred();
   let request = 0;
-  const f = fixture({ previewSubscription: () => (++request === 1 ? old.promise : fresh.promise) });
+  const f = await fixture({ previewSubscription: () => (++request === 1 ? old.promise : fresh.promise) });
   prepareImport(f, 'https://fixture.invalid/old');
   const first = f.page.previewImport();
   await f.page.previewImport();
@@ -329,7 +344,7 @@ test('cancelled preview responses cannot overwrite a newer request, its loading 
 });
 
 test('URL edits invalidate an existing preview; old responses after leaving cannot update or navigate', async () => {
-  const f = fixture({ previewSubscription: async () => preview() });
+  const f = await fixture({ previewSubscription: async () => preview() });
   prepareImport(f);
   await f.page.previewImport();
   f.page.updateScheduleUrl('https://fixture.invalid/changed');
@@ -337,7 +352,7 @@ test('URL edits invalidate an existing preview; old responses after leaving cann
   assert.deepEqual(f.page.entries, []);
   assert.deepEqual(f.page.importEntries, []);
   const pending = deferred();
-  const leaving = fixture({ previewSubscription: () => pending.promise });
+  const leaving = await fixture({ previewSubscription: () => pending.promise });
   prepareImport(leaving);
   const request = leaving.page.previewImport();
   leaving.page.aboutToDisappear();
@@ -353,7 +368,7 @@ test('preview failures use safe status messages and only authentication failure 
   const secret = 'PRIVATE_subscription_token_123456';
   for (const error of [new Error(secret), new feedback.CampusFlowRequestError(422, 'HTTP_ERROR', secret),
     new feedback.CampusFlowRequestError(401, 'HTTP_ERROR', secret), feedback.localRequestFailure('NETWORK_ERROR')]) {
-    const f = fixture({ previewSubscription: async () => { throw error; } });
+    const f = await fixture({ previewSubscription: async () => { throw error; } });
     f.page.refreshDraft([course()]);
     prepareImport(f);
     await f.page.previewImport();
@@ -368,7 +383,7 @@ test('preview failures use safe status messages and only authentication failure 
 test('finish freezes confirmed courses and semester, blocks competing edits and submits exactly once', async () => {
   const data = deferred();
   const saved = deferred();
-  const f = fixture({ campusData: () => data.promise, completeOnboarding: () => saved.promise });
+  const f = await fixture({ campusData: () => data.promise, completeOnboarding: () => saved.promise });
   readyToConfirm(f);
   const finishing = f.page.finish();
   const revision = f.page.requestRevision;
@@ -386,11 +401,12 @@ test('finish freezes confirmed courses and semester, blocks competing edits and 
   f.page.entries[0].title = '较新的本地状态';
   f.page.semester = '较新的学期';
   data.resolve(campusData());
-  await Promise.resolve();
+  await tick();
   assert.deepEqual(f.calls.at(-1).args[3], [course()]);
   assert.equal(f.calls.at(-1).args[2], user.semester);
   assert.deepEqual(f.calls.at(-1).args[4].places,
     [{ name: '图书馆', category: '学习', zone: '中区', aliases: ['馆'] }]);
+  f.setSnapshot({ revision: revisionB, user: { ...user }, timetable: [course()], campus_map: { campus_name: '杭电', places: [{}], warnings: [] } });
   saved.resolve(receipt());
   await finishing;
   await f.page.finish();
@@ -402,7 +418,7 @@ test('finish freezes confirmed courses and semester, blocks competing edits and 
 
 test('finish cannot submit before confirmation or with invalid courses or semester', async () => {
   for (const step of [0, 1]) {
-    const f = fixture();
+    const f = await fixture();
     f.page.step = step;
     f.page.entries = [course()];
     await f.page.finish();
@@ -410,7 +426,7 @@ test('finish cannot submit before confirmation or with invalid courses or semest
   }
   for (const change of [{ entries: [] }, { entries: [course({ end_time: '07:00' })] },
     { semester: ' ' }, { semester: '学'.repeat(81) }]) {
-    const f = fixture();
+    const f = await fixture();
     readyToConfirm(f);
     Object.assign(f.page, change);
     await f.page.finish();
@@ -424,7 +440,7 @@ test('missing, empty or mismatched campus data cannot be relabelled or submitted
   wrong.package.campus = '其他校区';
   for (const snapshot of [null, {}, { ...campusData(), places: [] }, wrong,
     { ...campusData(), places: [{ name: '图书馆', category: '学习', zone: '', aliases: [42] }] }]) {
-    const f = fixture({ campusData: async () => snapshot });
+    const f = await fixture({ campusData: async () => snapshot });
     readyToConfirm(f);
     await f.page.finish();
     assert.deepEqual(f.calls.map(call => call.name), ['campusData']);
@@ -435,20 +451,24 @@ test('missing, empty or mismatched campus data cannot be relabelled or submitted
   }
 });
 
-test('ambiguous save failure retains the exact draft and permits an explicit retry without binding a subscription', async () => {
+test('ambiguous save blocks new writes and only exact not-found permits same-ID frozen retry', async () => {
   let saves = 0;
-  const f = fixture({ completeOnboarding: async (...args) => {
+  const f = await fixture({ completeOnboarding: async (...args) => {
     if (++saves === 1) throw feedback.localRequestFailure('NETWORK_ERROR');
     return receipt(args[3], args[4]);
-  } });
+  }, onboardingOperation: async () => { throw new feedback.CampusFlowRequestError(404, 'ONBOARDING_OPERATION_NOT_FOUND', 'safe'); } });
   readyToConfirm(f);
   await f.page.finish();
-  assert.match(f.page.message, /无法确认保存结果/);
+  assert.match(f.page.message, /保存结果尚未确认/);
   assert.equal(f.page.completed, false);
   assert.equal(f.page.loading, false);
   assert.deepEqual(f.page.entries, [course()]);
   assert.equal(f.completed.length, 0);
   await f.page.finish();
+  assert.equal(saves, 1); await f.page.retrySameSubmission(); assert.equal(saves, 1);
+  await f.page.checkSaveResult();
+  f.setSnapshot({ revision: revisionB, user: { ...user }, timetable: [course()], campus_map: { campus_name: '杭电', places: [{}], warnings: [] } });
+  await f.page.retrySameSubmission();
   const writes = f.calls.filter(call => call.name === 'completeOnboarding');
   assert.equal(writes.length, 2);
   assert.deepEqual(writes[0].args, writes[1].args);
@@ -461,7 +481,7 @@ test('incomplete or mismatched save receipts do not announce onboarding completi
     { ...receipt(), user: { ...user, onboarding_complete: 'false' } },
     { ...receipt(), timetable_count: 2 }, { ...receipt(), campus_place_count: 0 }];
   for (const result of invalid) {
-    const f = fixture({ completeOnboarding: async () => result });
+    const f = await fixture({ completeOnboarding: async () => result });
     readyToConfirm(f);
     await f.page.finish();
     assert.equal(f.completed.length, 0, JSON.stringify(result));
@@ -474,7 +494,7 @@ test('incomplete or mismatched save receipts do not announce onboarding completi
 
 test('leaving during the campus read prevents a write; leaving during a write prevents late completion', async () => {
   const data = deferred();
-  const f = fixture({ campusData: () => data.promise });
+  const f = await fixture({ campusData: () => data.promise });
   readyToConfirm(f);
   const first = f.page.finish();
   f.page.aboutToDisappear();
@@ -483,10 +503,10 @@ test('leaving during the campus read prevents a write; leaving during a write pr
   assert.deepEqual(f.calls.map(call => call.name), ['campusData']);
   assert.deepEqual(f.completed, []);
   const saved = deferred();
-  const saving = fixture({ completeOnboarding: () => saved.promise });
+  const saving = await fixture({ completeOnboarding: () => saved.promise });
   readyToConfirm(saving);
   const second = saving.page.finish();
-  await Promise.resolve();
+  await tick();
   assert.equal(saving.calls.at(-1).name, 'completeOnboarding');
   saving.page.aboutToDisappear();
   saved.resolve(receipt());
@@ -523,4 +543,96 @@ test('the actual previewSubscription method sends an authenticated POST preview,
   assert.equal(calls[0].options.header['Content-Type'], 'application/json');
   assert.deepEqual(JSON.parse(calls[0].options.extraData), { url });
   assert.equal(destroyed, 1);
+});
+
+test('partial onboarding form survives restart with original date and explicit restoration; URLs and unaccepted previews never persist', async () => {
+  const first = await fixture(); first.page.anchorDate = '2026-10-18';
+  first.page.updateSemester('尚未填完'); first.page.updateEditor('title', '  草稿  ');
+  first.page.updateEditor('date', '2026-'); first.page.updateEditor('end_time', '0');
+  first.page.scheduleUrl = 'https://private/?token=secret'; first.page.importEntries = [course({ title: '未接受候选' })];
+  await first.page.flushDraft(); const disk = first.stored();
+  assert.doesNotMatch(disk, /private|secret|未接受候选|scheduleUrl|importEntries/);
+  first.page.aboutToDisappear();
+  const second = await fixture({ initialDraftText: disk });
+  assert.ok(second.page.recoverableDraft); assert.equal(second.page.editor.title, '');
+  second.page.updateEditor('title', '不可覆盖恢复候选'); assert.equal(second.page.editor.title, '');
+  second.page.restoreStoredDraft(); await tick();
+  assert.equal(second.page.editor.title, '  草稿  '); assert.equal(second.page.editor.date, '2026-');
+  assert.equal(second.page.editor.end_time, '0'); assert.equal(second.page.anchorDate, '2026-10-18');
+  assert.equal(second.page.expectedRevision, revisionA); assert.equal(second.page.submission, null);
+  assert.equal(second.calls.some(call => call.name === 'completeOnboarding'), false);
+});
+
+test('restored onboarding baseline never rebinds to a changed account; full latest courses remain inspectable', async () => {
+  const first = await fixture(); first.page.refreshDraft([course({ title: '我的旧草稿' })]); await first.page.flushDraft();
+  const latest = Array.from({ length: 12 }, (_, i) => course({ title: `新课${i}`, date: `2026-11-${String(i + 1).padStart(2, '0')}` }));
+  const second = await fixture({ initialDraftText: first.stored(), onboardingSnapshot: async () => ({ revision: revisionB,
+    user: { ...user }, timetable: latest, campus_map: { campus_name: '新地图', places: [], warnings: [] } }) });
+  second.page.restoreStoredDraft(); await tick();
+  assert.equal(second.page.expectedRevision, revisionA); assert.equal(second.page.baselineStale, true);
+  assert.equal(second.page.entries[0].title, '我的旧草稿'); second.page.latestPage = 1;
+  assert.deepEqual(second.page.latestRows().map(item => item.index), [10, 11]);
+  second.page.step = 2; await second.page.finish(); assert.equal(second.calls.some(call => call.name === 'completeOnboarding'), false);
+  await second.page.discardStoredDraft(); await tick();
+  assert.equal(second.page.expectedRevision, revisionB); assert.deepEqual(second.page.entries, []);
+});
+
+test('onboarding unknown write survives process restart and queries original ID before a frozen same-ID retry', async () => {
+  const first = await fixture({ completeOnboarding: async () => { throw feedback.localRequestFailure('NETWORK_ERROR'); } });
+  readyToConfirm(first); await first.page.finish(); const sent = first.calls.find(call => call.name === 'completeOnboarding').args;
+  const second = await fixture({ initialDraftText: first.stored(), onboardingOperation: async () => {
+    throw new feedback.CampusFlowRequestError(404, 'ONBOARDING_OPERATION_NOT_FOUND', 'safe');
+  } });
+  assert.ok(second.page.recoverableDraft); await second.page.discardStoredDraft(); assert.ok(second.page.recoverableDraft);
+  second.page.restoreStoredDraft(); await tick();
+  assert.equal(second.page.savePhase, 'retryable'); assert.deepEqual(second.calls.map(call => call.name), ['onboardingOperation']);
+  assert.equal(second.calls[0].args[0], sent[5]); second.page.updateEditor('title', '不能改变冻结课程');
+  await second.page.retrySameSubmission();
+  assert.deepEqual(second.calls.find(call => call.name === 'completeOnboarding').args, sent);
+  assert.equal(second.calls.some(call => call.name === 'campusData'), false, 'retry uses the original reviewed map');
+  assert.equal(second.completed.length, 1); assert.equal(second.draftStore.read(second.lease, { kind: 'onboarding', ownerId: 'main' }), undefined);
+});
+
+test('onboarding disk failure prevents PUT and exposes a recoverable local failure without raw diagnostics', async () => {
+  let fail = false; const f = await fixture({ diskFailure: () => fail }); readyToConfirm(f); fail = true;
+  await f.page.finish(); assert.equal(f.calls.some(call => call.name === 'completeOnboarding'), false);
+  assert.equal(f.page.savePhase, 'uncertain'); assert.ok(f.page.draftMessage); assert.doesNotMatch(f.page.message, /disk|secret/);
+  assert.deepEqual(f.page.entries, [course()]);
+});
+
+test('logout invalidates a late onboarding write callback and cannot resurrect cleared local drafts', async () => {
+  const pending = deferred(); const f = await fixture({ completeOnboarding: () => pending.promise }); readyToConfirm(f);
+  const saving = f.page.finish(); await tick(); assert.equal(f.calls.at(-1).name, 'completeOnboarding');
+  await f.draftStore.clear(); pending.resolve(receipt()); await saving;
+  assert.equal(f.completed.length, 0); const other = await f.draftStore.activate('fixture-service::other-user');
+  assert.deepEqual(f.draftStore.list(other, 'onboarding'), []); assert.deepEqual(f.draftStore.operations(other), []);
+});
+
+test('onboarding confirmed stale rejection retains original baseline and reveals latest account differences', async () => {
+  const f = await fixture({ completeOnboarding: async () => { throw new feedback.CampusFlowRequestError(409, 'ONBOARDING_STALE', 'safe'); } });
+  readyToConfirm(f); f.setSnapshot({ revision: revisionB, user: { ...user }, timetable: [course({ title: '远端课程' })], campus_map: {} });
+  await f.page.finish(); await tick();
+  assert.equal(f.page.expectedRevision, revisionA); assert.equal(f.page.baselineStale, true);
+  assert.equal(f.page.submission, null); assert.equal(f.page.latestSnapshot.timetable[0].title, '远端课程');
+  assert.equal(f.draftStore.operations(f.lease).length, 0);
+  await f.page.finish(); assert.equal(f.calls.filter(call => call.name === 'completeOnboarding').length, 1);
+});
+
+
+test('expired authentication during receipt recovery offers re-login and never infers a missing operation', async () => {
+  const first = await fixture({ completeOnboarding: async () => { throw feedback.localRequestFailure('NETWORK_ERROR'); } });
+  readyToConfirm(first); await first.page.finish();
+  const next = await fixture({ initialDraftText: first.stored(), onboardingOperation: async () => {
+    throw new feedback.CampusFlowRequestError(401, 'LOGIN_REQUIRED', 'safe');
+  } });
+  next.page.restoreStoredDraft(); await tick();
+  assert.equal(next.page.needsLogin, true); assert.equal(next.page.savePhase, 'uncertain');
+  await next.page.retrySameSubmission(); assert.equal(next.calls.some(call => call.name === 'completeOnboarding'), false);
+});
+
+test('a mismatched user in the latest onboarding snapshot cannot switch the authenticated account', async () => {
+  const f = await fixture(); readyToConfirm(f);
+  const good = f.page.validSnapshot({ revision: revisionA, user, timetable: [course()], campus_map: {} });
+  assert.equal(good, true);
+  assert.equal(f.page.validSnapshot({ revision: revisionA, user: { ...user, user_id: 'other-user' }, timetable: [course()], campus_map: {} }), false);
 });

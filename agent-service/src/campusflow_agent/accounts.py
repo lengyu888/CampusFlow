@@ -101,6 +101,14 @@ class AccountStore:
                     PRIMARY KEY (user_id, operation_id)
                 );
 
+                CREATE TABLE IF NOT EXISTS onboarding_operations (
+                    user_id TEXT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+                    operation_id TEXT NOT NULL,
+                    request_hash TEXT NOT NULL,
+                    receipt_json TEXT NOT NULL,
+                    PRIMARY KEY (user_id, operation_id)
+                );
+
                 CREATE TABLE IF NOT EXISTS hduhelp_oauth_states (
                     state_hash TEXT PRIMARY KEY,
                     user_id TEXT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
@@ -253,13 +261,17 @@ class AccountStore:
         email: str,
         password: str,
         display_name: str,
-        api_key_encrypted: str,
-        api_key_hint: str,
+        api_key_encrypted: str | None = None,
+        api_key_hint: str | None = None,
     ) -> UserRecord:
         normalized_email = self._normalize_email(email)
         display_name = display_name.strip()
         if not display_name:
             raise ValueError("昵称不能为空")
+        # Absence is stored as NULL, never as an encrypted empty placeholder.
+        if not api_key_encrypted:
+            api_key_encrypted = None
+            api_key_hint = None
 
         user_id = uuid4().hex
         try:

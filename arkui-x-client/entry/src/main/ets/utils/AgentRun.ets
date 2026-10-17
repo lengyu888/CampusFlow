@@ -101,6 +101,7 @@ export class AgentRunController {
   private failures: number = 0;
   private notified: string[] = [];
   private state: AgentRunState = blankState();
+  private beforeSubmit: ((request: RunStartRequest) => Promise<void>) | null = null;
 
   constructor(api: AgentRunGateway, onChange: (state: AgentRunState) => void,
     onSucceeded: (run: RunSnapshot) => void, makeRunId: () => string,
@@ -108,6 +109,8 @@ export class AgentRunController {
     this.api = api; this.onChange = onChange; this.onSucceeded = onSucceeded;
     this.makeRunId = makeRunId; this.scheduler = scheduler;
   }
+
+  setBeforeSubmit(handler: (request: RunStartRequest) => Promise<void>): void { this.beforeSubmit = handler; }
 
   snapshot(): AgentRunState { return JSON.parse(JSON.stringify(this.state)) as AgentRunState; }
   private publish(): void { if (!this.disposed) { this.onChange(this.snapshot()); } }
@@ -150,7 +153,7 @@ export class AgentRunController {
 
   private schedule(): void {
     this.stopTimer();
-    if (!this.available() || this.state.runId.length === 0 || this.state.phase === 'error' ||
+    if (!this.available() || this.state.runId.length === 0 || ['error', 'local_error'].includes(this.state.phase) ||
       (this.state.snapshot !== null && isRunTerminal(this.state.snapshot.status)) || this.failures > 3) { return; }
     const revision = this.revision;
     const delay = this.failures === 0 ? 1000 : Math.min(8000, 1000 * Math.pow(2, this.failures));
@@ -251,6 +254,18 @@ export class AgentRunController {
     this.state.errorCode = '';
     this.state.message = '正在提交这次运行…'; this.publish();
     try {
+      if (this.beforeSubmit !== null) {
+        try { await this.beforeSubmit(frozen); }
+        catch {
+          if (this.current(revision)) {
+            this.state.phase = 'local_error'; this.state.canRetryStart = true;
+            this.state.errorCode = 'LOCAL_DRAFT_UNAVAILABLE';
+            this.state.message = '本机操作记录尚未保存，本次未发送。请保存后重试同一次运行。'; this.publish();
+          }
+          return;
+        }
+        if (!this.current(revision)) { return; }
+      }
       const snapshot = await this.api.startAgentRun(frozen);
       if (!this.current(revision)) { return; }
       this.accept(snapshot, frozen.run_id);
@@ -266,6 +281,19 @@ export class AgentRunController {
     } finally {
       if (this.current(revision)) { this.inFlight = false; this.schedule(); }
     }
+  }
+
+  // Durable recovery restores only the frozen request identity, then performs a GET.
+  // A missing record never starts a POST without an explicit retryStart action.
+  async recoverRequest(request: RunStartRequest): Promise<void> {
+    if (!this.available() || ['creating', 'cancelling'].includes(this.state.phase) || !uuid(request.run_id) ||
+      !text(request.session_id) || Array.from(request.session_id).length > 128 || !text(request.model) ||
+      !text(request.message) || Array.from(request.message).length > 8000) { return; }
+    this.stopTimer(); this.revision++; this.inFlight = false; this.failures = 0;
+    const recent = this.state.recent;
+    this.state = blankState(); this.state.recent = recent; this.state.runId = request.run_id;
+    this.state.request = JSON.parse(JSON.stringify(request)) as RunStartRequest;
+    await this.refresh();
   }
 
   async recover(runId: string): Promise<void> {
@@ -359,7 +387,7 @@ export class AgentRunController {
       if (!Array.isArray(runs) || runs.length > 50 || !runs.every((run: RunSnapshot) => validRunSnapshot(run)) ||
         new Set<string>(runs.map((run: RunSnapshot) => run.run_id)).size !== runs.length) { throw new Error('invalid run list'); }
       this.state.recent = JSON.parse(JSON.stringify(runs)) as RunSnapshot[];
-      this.state.listMessage = runs.length === 0 ? '服务器近期没有保留的运行记录。' : '服务器运行记录 · 可打开核对，未在本机另存请求正文。';
+      this.state.listMessage = runs.length === 0 ? '服务器近期没有保留的运行记录。' : '服务器运行记录 · 可打开核对；待核对运行的单次输入会保存在本机，便于恢复。';
     } catch (error) {
       if (this.available() && revision === this.listRevision && scope === this.scope) {
         this.state.listMessage = this.failure(error) + ' 运行列表暂未更新。';

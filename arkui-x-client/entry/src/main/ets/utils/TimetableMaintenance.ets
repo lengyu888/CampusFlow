@@ -17,13 +17,22 @@ export interface TimetableMaintenanceState {
   message: string;
   notice: string;
   evidence?: DataEvidence[];
+  latestEntries?: TimetableEntry[];
+  latestRevision?: string;
 }
 
-interface TimetableOperation {
+export interface TimetableOperation {
   id: string;
   entries: TimetableEntry[];
   revision: string;
   confirmClear: boolean;
+}
+
+export interface TimetableDraftSnapshot {
+  baselineEntries: TimetableEntry[];
+  expectedRevision: string;
+  draftEntries: TimetableEntry[];
+  operation: TimetableOperation | null;
 }
 
 // Request identity only, never an authentication secret. Injection makes replay tests deterministic.
@@ -56,6 +65,7 @@ export class TimetableMaintenance {
   private onChange: (state: TimetableMaintenanceState) => void;
   private onApplied: () => void;
   private idFactory: () => string;
+  private persistBeforeWrite: (draft: TimetableDraftSnapshot) => Promise<void>;
   private state: TimetableMaintenanceState = { phase: 'idle', entries: [], revision: '', dirty: false,
     warnings: [], message: '', notice: '' };
   private baseline: TimetableEntry[] = [];
@@ -67,21 +77,66 @@ export class TimetableMaintenance {
   private generation: number = 0;
   private notifiedId: string = '';
   private staleRevision: boolean = false;
+  private writeMayHaveStarted: boolean = false;
 
   constructor(api: TimetableGateway, onChange: (state: TimetableMaintenanceState) => void,
-    onApplied: () => void = () => {}, idFactory: () => string = timetableOperationId) {
+    onApplied: () => void = () => {}, idFactory: () => string = timetableOperationId,
+    persistBeforeWrite: (draft: TimetableDraftSnapshot) => Promise<void> = async () => {}) {
     this.api = api;
     this.onChange = onChange;
     this.onApplied = onApplied;
     this.idFactory = idFactory;
+    this.persistBeforeWrite = persistBeforeWrite;
   }
 
   snapshot(): TimetableMaintenanceState {
     return { phase: this.state.phase, entries: entriesCopy(this.state.entries), revision: this.state.revision,
       dirty: this.state.dirty, message: this.state.message, notice: this.state.notice,
       evidence: JSON.parse(JSON.stringify(this.state.evidence ?? [])) as DataEvidence[],
+      latestEntries: entriesCopy(this.state.latestEntries ?? []), latestRevision: this.state.latestRevision ?? '',
       warnings: this.state.warnings.map((issue: TimetableIssue): TimetableIssue => ({ index: issue.index,
         relatedIndex: issue.relatedIndex, field: issue.field, message: issue.message })) };
+  }
+
+  exportDraft(): TimetableDraftSnapshot | null {
+    if (!validRevision(this.state.revision)) { return null; }
+    return { baselineEntries: entriesCopy(this.baseline), expectedRevision: this.state.revision,
+      draftEntries: entriesCopy(this.state.entries), operation: this.operation === null ? null : {
+        id: this.operation.id, entries: entriesCopy(this.operation.entries), revision: this.operation.revision,
+        confirmClear: this.operation.confirmClear } };
+  }
+
+  restoreDraft(draft: TimetableDraftSnapshot, editorPending: boolean = false): boolean {
+    if (draft === null || typeof draft !== 'object' || this.disposed || this.operation !== null || this.receipt !== null ||
+      ['saving', 'checking'].includes(this.state.phase) || !validRevision(draft.expectedRevision) ||
+      !validateTimetableList(draft.baselineEntries, true).valid || !validateTimetableList(draft.draftEntries, true).valid) { return false; }
+    const operation = draft.operation;
+    if (operation !== null && (typeof operation !== 'object' || operation === undefined || typeof operation.id !== 'string' ||
+      !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(operation.id) ||
+      operation.revision !== draft.expectedRevision || typeof operation.confirmClear !== 'boolean' ||
+      !validateTimetableList(operation.entries, true).valid ||
+      (operation.entries.length === 0 && !operation.confirmClear) ||
+      JSON.stringify(operation.entries) !== JSON.stringify(draft.draftEntries))) { return false; }
+    // Invalidates an initial/latest GET before importing the original server baseline.
+    this.generation++;
+    this.baseline = entriesCopy(draft.baselineEntries);
+    this.state.entries = entriesCopy(draft.draftEntries);
+    this.state.revision = draft.expectedRevision;
+    this.state.evidence = [];
+    this.state.latestEntries = [];
+    this.state.latestRevision = '';
+    this.editorPending = editorPending;
+    this.operation = operation === null ? null : { id: operation.id, entries: entriesCopy(operation.entries),
+      revision: operation.revision, confirmClear: operation.confirmClear };
+    this.writeMayHaveStarted = operation !== null;
+    this.staleRevision = operation === null;
+    this.updateDirty();
+    this.state.phase = operation === null ? 'stale' : 'uncertain';
+    this.state.message = operation === null ? '已恢复原版本草稿，核对账号课表版本后才能保存。'
+      : '已恢复待核对的原保存操作，请查询结果；不会自动重复提交。';
+    this.state.notice = operation === null ? '恢复仅回填本机内容，尚未写入账号。' : '原提交结果仍待核对，恢复不会重复提交。';
+    this.emit();
+    return true;
   }
 
   private emit(): void {
@@ -151,6 +206,8 @@ export class TimetableMaintenance {
       if (this.receipt !== null) {
         if (snapshot.revision !== this.receipt.revision) {
           this.staleRevision = true;
+          this.state.latestEntries = entriesCopy(snapshot.entries);
+          this.state.latestRevision = snapshot.revision;
           this.state.phase = 'stale';
           this.state.message = '本次保存已完成，但课表随后又有更新。草稿保留；请重新载入并核对最新课表。';
           this.receipt = null;
@@ -160,6 +217,8 @@ export class TimetableMaintenance {
         }
       } else if (!discardDraft && this.state.dirty) {
         this.staleRevision = snapshot.revision !== this.state.revision;
+        this.state.latestEntries = this.staleRevision ? entriesCopy(snapshot.entries) : [];
+        this.state.latestRevision = this.staleRevision ? snapshot.revision : '';
         this.state.phase = snapshot.revision === this.state.revision ? 'ready' : 'stale';
         this.state.message = snapshot.revision === this.state.revision ? '账号课表版本未变，当前未保存草稿已保留。'
           : '账号课表已有新版本，当前草稿已保留。请先核对并重新载入，再修改保存。';
@@ -176,6 +235,8 @@ export class TimetableMaintenance {
       this.state.warnings = checked.warnings;
       this.editorPending = false;
       this.staleRevision = false;
+      this.state.latestEntries = [];
+      this.state.latestRevision = '';
       this.state.dirty = false;
       this.state.phase = applied ? 'saved' : 'ready';
       this.state.notice = applied ? '课表已更新。建议去计划核对已有任务与新课表的冲突。' : '已载入账号中的最新课表。';
@@ -207,6 +268,7 @@ export class TimetableMaintenance {
       this.state.message = '无法生成本次保存标识，请稍后重试。'; this.emit(); return;
     }
     this.operation = { id: id, entries: entriesCopy(checked.entries), revision: this.state.revision, confirmClear: confirmClear };
+    this.writeMayHaveStarted = false;
     await this.submit();
   }
 
@@ -240,7 +302,23 @@ export class TimetableMaintenance {
     this.state.phase = 'saving';
     this.state.message = '';
     this.emit();
+    const draft = this.exportDraft();
     try {
+      if (draft === null) { throw new Error('missing draft baseline'); }
+      await this.persistBeforeWrite(draft);
+    } catch {
+      if (this.current(generation)) {
+        if (!this.writeMayHaveStarted) { this.operation = null; }
+        this.state.phase = this.writeMayHaveStarted ? 'uncertain' : 'error';
+        this.state.message = this.writeMayHaveStarted ? '本机保存未完成，原操作仍需核对；本次没有再次提交。'
+          : '本机草稿保存失败，本次尚未提交。请重试保存本机草稿后再操作。';
+        this.emit();
+      }
+      return;
+    }
+    if (!this.current(generation)) { return; }
+    try {
+      this.writeMayHaveStarted = true;
       const receipt = await this.api.saveTimetable(entriesCopy(operation.entries), operation.revision, operation.id, operation.confirmClear);
       if (!this.current(generation)) { return; }
       await this.acceptReceipt(receipt, operation);

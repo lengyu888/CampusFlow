@@ -11,7 +11,7 @@ const apiSource=readFileSync(new URL('../entry/src/main/ets/services/CampusFlowA
  .replace('export class CampusFlowApi','class CampusFlowApi');
 const create=new Function('http','CampusFlowRequestError','localRequestFailure','requestFailure',stripTypeScriptTypes(apiSource)+'\nreturn CampusFlowApi;');
 function setup(response={responseCode:200,result:'{}'}){
- const calls=[];let destroyed=0;const http={RequestMethod:{GET:'GET',PUT:'PUT'},HttpDataType:{STRING:'STRING'},
+ const calls=[];let destroyed=0;const http={RequestMethod:{GET:'GET',PUT:'PUT',POST:'POST'},HttpDataType:{STRING:'STRING'},
  createHttp:()=>({request:async(url,options)=>{calls.push({url,options});if(response instanceof Error)throw response;return response;},destroy:()=>destroyed++})};
  const Api=create(http,feedback.CampusFlowRequestError,feedback.localRequestFailure,feedback.requestFailure);
  return {client:new Api('https://fixture.invalid/','token-a'),calls,destroyed:()=>destroyed};
@@ -39,4 +39,34 @@ test('network failure is typed as uncertain and the native request is destroyed'
  const {client,destroyed}=setup(Error('private-secret'));
  await assert.rejects(client.saveTimetable([],'a'.repeat(64),'op',true),error=>error instanceof feedback.CampusFlowRequestError&&!error.message.includes('private-secret'));
  assert.equal(destroyed(),1);
+});
+
+test('optional model registration omits absent credentials while preserving explicit values',async()=>{
+ const f=setup();
+ for(const key of [undefined,'','   ']) await f.client.register('student@example.test','fixture-password','同学',key);
+ await f.client.register('student@example.test','fixture-password','同学','fixture-key');
+ for(const c of f.calls.slice(0,3)) assert.equal(Object.hasOwn(JSON.parse(c.options.extraData),'api_key'),false);
+ assert.equal(JSON.parse(f.calls[3].options.extraData).api_key,'fixture-key');
+ assert.ok(f.calls.every(c=>c.options.method==='POST'&&c.url.endsWith('/api/v1/auth/register')));
+});
+
+test('onboarding original snapshot, paired CAS body and operation GET preserve the exact operation across retry',async()=>{
+ const f=setup(),rows=[{date:'2026-10-19',title:'课程',start_time:'09:00',end_time:'10:00',location:'',teacher:''}],map={campus_name:'下沙',places:[],warnings:[]};
+ await f.client.onboardingSnapshot();
+ await f.client.completeOnboarding('学校','校区','秋季',rows,map,'operation-1','b'.repeat(64));
+ await f.client.completeOnboarding('学校','校区','秋季',rows,map,'operation-1','b'.repeat(64));
+ await f.client.onboardingOperation('operation/a?b');
+ assert.deepEqual(f.calls.map(c=>[c.url.replace('https://fixture.invalid',''),c.options.method]),[
+ ['/api/v1/onboarding','GET'],['/api/v1/onboarding','PUT'],['/api/v1/onboarding','PUT'],['/api/v1/onboarding/operations/operation%2Fa%3Fb','GET']]);
+ assert.equal(f.calls[1].options.extraData,f.calls[2].options.extraData);
+ assert.deepEqual(JSON.parse(f.calls[1].options.extraData),{school:'学校',campus:'校区',semester:'秋季',timetable:rows,campus_map:map,operation_id:'operation-1',expected_revision:'b'.repeat(64)});
+ assert.equal(f.destroyed(),4);
+});
+
+test('onboarding typed errors reach UI without private backend messages',async()=>{
+ for(const code of ['ONBOARDING_STALE','ONBOARDING_OPERATION_CONFLICT','ONBOARDING_OPERATION_NOT_FOUND','ONBOARDING_INVALID','ONBOARDING_FAILED']){
+ const f=setup({responseCode:409,result:JSON.stringify({code,detail:'private-url-credential'})});
+ await assert.rejects(f.client.onboardingOperation('operation-1'),e=>e.code===code&&!e.message.includes('private'));
+ assert.equal(f.destroyed(),1);
+ }
 });

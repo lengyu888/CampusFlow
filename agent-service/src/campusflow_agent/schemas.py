@@ -316,9 +316,10 @@ class RegisterRequest(BaseModel):
     email: str = Field(min_length=5, max_length=254)
     password: str = Field(min_length=8, max_length=128)
     display_name: str = Field(min_length=1, max_length=48)
-    api_key: SecretStr = Field(
+    api_key: SecretStr | None = Field(
+        default=None,
         min_length=1,
-        description="DeepSeek API Key；服务端使用 Fernet 加密后保存。",
+        description="可稍后配置；省略或 null 表示未配置，有值时使用 Fernet 加密保存。",
     )
 
 
@@ -703,12 +704,33 @@ class OnboardingRequest(BaseModel):
     semester: str = Field(min_length=1, max_length=80)
     timetable: list[TimetableEntry] = Field(default_factory=list, max_length=500)
     campus_map: CampusMapParseResult
+    # Omit both fields only for compatibility with older clients.
+    operation_id: UUID | None = None
+    expected_revision: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+
+
+class OnboardingSnapshot(BaseModel):
+    revision: str
+    user: UserProfile
+    timetable: list[TimetableEntry]
+    campus_map: CampusMapParseResult
+
+
+class OnboardingSaveReceipt(BaseModel):
+    operation_id: UUID
+    status: Literal["applied"] = "applied"
+    previous_revision: str
+    revision: str
+    timetable_count: int
+    campus_place_count: int
+    applied_at: datetime
 
 
 class OnboardingResponse(BaseModel):
     user: UserProfile
     timetable_count: int
     campus_place_count: int
+    receipt: OnboardingSaveReceipt | None = None
 
 
 class UserSettingsUpdate(BaseModel):

@@ -16,6 +16,8 @@ import {
   HDUHelpSyncResponse,
   ElectricityOverview,
   OnboardingResponse,
+  OnboardingSnapshot,
+  OnboardingSaveReceipt,
   PendingAction,
   PlanningOverview,
   PlanningActionRequest,
@@ -128,7 +130,7 @@ export class CampusFlowApi {
       }
       const text = response.result as string;
       if (response.responseCode < 200 || response.responseCode >= 300) {
-        if (path === '/api/v1/models' || path === '/api/v1/learning-preferences' || path.startsWith('/api/v1/knowledge/') || path === '/api/v1/chat' || path.startsWith('/api/v1/agent-runs') || path.startsWith('/api/v1/actions/') || path.startsWith('/api/v1/planning/') ||
+        if (path === '/api/v1/onboarding' || path.startsWith('/api/v1/onboarding/') || path === '/api/v1/models' || path === '/api/v1/learning-preferences' || path.startsWith('/api/v1/knowledge/') || path === '/api/v1/chat' || path.startsWith('/api/v1/agent-runs') || path.startsWith('/api/v1/actions/') || path.startsWith('/api/v1/planning/') ||
           path === '/api/v1/tasks' || path.startsWith('/api/v1/tasks/') ||
           path === '/api/v1/me/timetable' || path.startsWith('/api/v1/me/timetable/') || path.startsWith('/api/v1/weather?')) {
           throw requestFailure(response.responseCode, text);
@@ -164,19 +166,31 @@ export class CampusFlowApi {
     return this.request<WeatherForecast>(`/api/v1/weather?date=${encodeURIComponent(date)}`, http.RequestMethod.GET);
   }
 
-  async register(email: string, password: string, displayName: string, apiKey: string): Promise<AuthResponse> {
+  async register(email: string, password: string, displayName: string, apiKey?: string): Promise<AuthResponse> {
     return this.request<AuthResponse>('/api/v1/auth/register', http.RequestMethod.POST,
-      JSON.stringify({ email: email, password: password, display_name: displayName, api_key: apiKey }));
+      JSON.stringify({ email: email, password: password, display_name: displayName, api_key: apiKey && apiKey.trim().length > 0 ? apiKey : undefined }));
+  }
+
+  async onboardingSnapshot(): Promise<OnboardingSnapshot> {
+    return this.request<OnboardingSnapshot>('/api/v1/onboarding', http.RequestMethod.GET);
+  }
+
+  async onboardingOperation(operationId: string): Promise<OnboardingSaveReceipt> {
+    return this.request<OnboardingSaveReceipt>(`/api/v1/onboarding/operations/${encodeURIComponent(operationId)}`,
+      http.RequestMethod.GET);
   }
 
   async completeOnboarding(school: string, campus: string, semester: string,
-    timetable: TimetableEntry[], campusMap: CampusMapSummary): Promise<OnboardingResponse> {
+    timetable: TimetableEntry[], campusMap: CampusMapSummary, operationId?: string,
+    expectedRevision?: string): Promise<OnboardingResponse> {
     return this.request<OnboardingResponse>('/api/v1/onboarding', http.RequestMethod.PUT, JSON.stringify({
       school: school,
       campus: campus,
       semester: semester,
       timetable: timetable,
-      campus_map: campusMap
+      campus_map: campusMap,
+      operation_id: operationId,
+      expected_revision: expectedRevision
     }));
   }
 

@@ -3,6 +3,9 @@ import { readFileSync } from 'node:fs';
 import { stripTypeScriptTypes } from 'node:module';
 import { test } from 'node:test';
 
+const draftSource = readFileSync(new URL('../entry/src/main/ets/utils/DraftStore.ets', import.meta.url), 'utf8');
+const { DraftStore } = await import(`data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(draftSource)).toString('base64')}`);
+
 // Execute real entry/auth controller methods with synthetic storage and HTTP.
 // This does not emulate ArkUI lifecycle scheduling or native file APIs.
 const navigationSource = readFileSync(new URL('../entry/src/main/ets/utils/AppNavigation.ets', import.meta.url), 'utf8');
@@ -14,7 +17,7 @@ const controller = source.slice(0, source.indexOf('\n  @Builder'))
   .replace(/^@(Entry|Component)\r?\n/gm, '')
   .replace(/@(State|Prop)\s+|@(StorageLink|Watch)\('[^']+'\)\s*/g, '')
   .replace('struct Index', 'class Index') + '\n}\n';
-const create = new Function('localHistory', 'historyScope', 'CampusFlowApi', 'AppStorage', 'AppTheme', 'Curve', ...navNames,
+const create = new Function('localHistory', 'historyScope', 'CampusFlowApi', 'AppStorage', 'AppTheme', 'Curve', 'localDrafts', ...navNames,
   stripTypeScriptTypes(controller) + '\nreturn Index;');
 const auth = (name = 'a') => ({ access_token: `${name}-token`, user: { user_id: name, display_name: name } });
 const deferred = () => {
@@ -22,7 +25,7 @@ const deferred = () => {
   const promise = new Promise((ok, fail) => { resolve = ok; reject = fail; });
   return { promise, resolve, reject };
 };
-function setup(overrides = {}) {
+function setup(overrides = {}, draftOverrides = {}) {
   const calls = [];
   const store = {
     info: () => ({ scope: 'scope-a', displayName: 'a', count: 2 }),
@@ -33,12 +36,21 @@ function setup(overrides = {}) {
     constructor(base, token) { this.token = token; }
     async logout() { calls.push(['logout', this.token]); }
   }
+  const draftDriver = {
+    text: undefined,
+    async read() { return this.text; },
+    async write(value) { this.text = value; },
+    async remove() { this.text = undefined; },
+    ...draftOverrides
+  };
+  const drafts = new DraftStore(draftDriver, { now: () => Date.UTC(2026, 9, 18), set: () => 1, clear() {} });
+  const draftReady = drafts.initialize().catch(() => {});
   const Index = create(store, (base, id) => `${base}|${id}`, Api, { setOrCreate: () => {} },
-    { motion: () => 0 }, { EaseOut: 0 }, ...navNames.map(name => navigation[name]));
+    { motion: () => 0 }, { EaseOut: 0 }, drafts, ...navNames.map(name => navigation[name]));
   const page = new Index();
   page.reminders = { configure() {}, setActive() {}, refresh() {}, async logout() {}, dispose() {} };
   page.getUIContext = () => ({ animateTo: (_options, update) => update() });
-  return { page, calls, store };
+  return { page, calls, store, drafts, draftDriver, draftReady };
 }
 
 test('login awaits account-scoped cache activation before showing authenticated pages', async () => {
@@ -194,4 +206,100 @@ test('system back delegates a plan detail to its own close path and auth resets 
   assert.equal(page.focusTaskId, '');
   assert.equal(page.focusOrigin, null);
   assert.deepEqual(page.navigation, navigation.createNavigation());
+});
+
+const draftKey = { kind: 'assistant', ownerId: 'local-session' };
+const draftText = (text = '未发送的文字') => ({ text, sessionId: 'local-session', anchorDate: '2026-10-18', timezone: 'Asia/Shanghai' });
+const settle = () => new Promise(resolve => setImmediate(resolve));
+
+test('drafts use their own authenticated lease when history storage is unavailable', async () => {
+  const h = setup({ activate: async () => { throw Error('history disk'); } });
+  await h.page.authenticated(auth('a'));
+  assert.equal(h.page.cacheScope, '');
+  assert.equal(h.drafts.valid(h.page.draftLease), true);
+  h.drafts.stage(h.page.draftLease, draftKey, draftText());
+  await h.drafts.flush(h.page.draftLease);
+  assert.equal(h.drafts.read(h.page.draftLease, draftKey).payload.text, '未发送的文字');
+});
+
+test('bad draft file does not block online login or expose content and explicit reset reactivates the account', async () => {
+  const h = setup({}, { text: '{broken' });
+  await h.page.authenticated(auth('a'));
+  assert.equal(h.page.token, 'a-token');
+  assert.equal(h.page.draftLease, null);
+  assert.equal(h.page.draftCleanupNeeded, true);
+  assert.equal(h.draftDriver.text, '{broken');
+  await h.page.clearLocalDrafts();
+  assert.equal(h.page.draftClearConfirm, true);
+  assert.equal(h.draftDriver.text, '{broken');
+  await h.page.clearLocalDrafts();
+  assert.equal(h.page.draftCleanupNeeded, false);
+  assert.equal(h.drafts.valid(h.page.draftLease), true);
+});
+
+test('foreground loss flushes pending draft without altering account or remote history', async () => {
+  const h = setup(); await h.page.authenticated(auth());
+  h.drafts.stage(h.page.draftLease, draftKey, draftText('后台前最后输入'));
+  assert.equal(h.drafts.status(h.page.draftLease).phase, 'pending');
+  h.page.voiceForeground = false; h.page.reminderActivityChanged(); await settle();
+  assert.equal(h.drafts.status(h.page.draftLease).phase, 'saved');
+  assert.equal(JSON.parse(h.draftDriver.text).records[0].payload.text, '后台前最后输入');
+  assert.equal(h.page.token, 'a-token');
+  assert.equal(h.calls.some(call => call[0] === 'clear'), false);
+});
+
+test('logout invalidates draft lease synchronously and cleanup failure remains visible without restoring login', async () => {
+  const pending = deferred();
+  const h = setup({}, { remove: () => pending.promise }); await h.page.authenticated(auth());
+  const lease = h.page.draftLease;
+  h.drafts.stage(lease, draftKey, draftText()); await h.drafts.flush(lease);
+  const logout = h.page.logout();
+  assert.equal(h.page.token, ''); assert.equal(h.page.draftLease, null);
+  assert.equal(h.drafts.valid(lease), false);
+  assert.throws(() => h.drafts.stage(lease, draftKey, draftText('迟到输入')));
+  pending.reject(Error('private filesystem message')); await logout;
+  assert.equal(h.page.draftCleanupNeeded, true);
+  assert.match(h.page.draftNotice, /尚未清理/);
+  assert.doesNotMatch(h.page.draftNotice, /private/);
+});
+
+test('draft cleanup from old logout cannot clear or alter a later account activation', async () => {
+  const pending = deferred();
+  const h = setup({}, { async remove() { await pending.promise; this.text = undefined; } });
+  await h.page.authenticated(auth('a')); const old = h.page.draftLease;
+  h.drafts.stage(old, draftKey, draftText('A')); await h.drafts.flush(old);
+  const logout = h.page.logout();
+  const login = h.page.authenticated(auth('b'));
+  pending.resolve(); await logout; await login;
+  assert.equal(h.page.token, 'b-token');
+  assert.equal(h.drafts.valid(h.page.draftLease), true);
+  assert.equal(h.drafts.list(h.page.draftLease, 'assistant').length, 0);
+  h.drafts.stage(h.page.draftLease, draftKey, draftText('B')); await h.drafts.flush(h.page.draftLease);
+  assert.equal(JSON.parse(h.draftDriver.text).records[0].payload.text, 'B');
+  assert.doesNotMatch(h.page.draftNotice, /退出/);
+});
+
+test('changing service during sign-in invalidates its draft lease and never opens old authenticated pages', async () => {
+  const pending = deferred();
+  const h = setup({ activate: () => pending.promise });
+  const login = h.page.authenticated(auth('a'));
+  await settle(); const lease = h.page.draftLease;
+  assert.equal(h.drafts.valid(lease), true);
+  h.page.baseUrl = 'https://different-service.invalid';
+  h.page.reminderAccountChanged();
+  assert.equal(h.drafts.valid(lease), false);
+  pending.resolve(); await login; await settle();
+  assert.equal(h.page.token, ''); assert.equal(h.page.draftLease, null);
+});
+
+test('ordinary history clear does not clear drafts and explicit draft clear blocks unresolved operations', async () => {
+  const h = setup(); await h.page.authenticated(auth());
+  const lease = h.page.draftLease; const ticket = h.drafts.stage(lease, draftKey, draftText());
+  await h.drafts.flush(lease); await h.page.clearLocalHistory();
+  assert.equal(h.drafts.read(lease, draftKey).payload.text, '未发送的文字');
+  await h.drafts.beginOperation(lease, { kind: 'run', id: 'run-1', draftKind: 'assistant', ownerId: draftKey.ownerId, localRevision: ticket.localRevision });
+  await h.page.clearLocalDrafts();
+  assert.equal(h.page.draftClearConfirm, false);
+  assert.match(h.page.draftNotice, /待核对/);
+  assert.equal(h.drafts.operations(lease).length, 1);
 });

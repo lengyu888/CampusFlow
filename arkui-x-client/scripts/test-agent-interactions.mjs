@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { stripTypeScriptTypes } from 'node:module';
 import { test } from 'node:test';
-import { makeRunController, runSnapshot, rememberHistory } from './helpers/agent-run-ui-fixture.mjs';
+import { makeDraftFixture, shanghaiDate, makeRunController, runSnapshot, rememberHistory } from './helpers/agent-run-ui-fixture.mjs';
 
 const helperSource = readFileSync(new URL('../entry/src/main/ets/utils/AgentFeedback.ets', import.meta.url), 'utf8')
   .replace(/^import \{[^\n]+\} from '\.\.\/model\/ApiModels';\r?\n/, '');
@@ -21,7 +21,7 @@ const controllerSource = source.slice(0, firstBuilder)
   .replace('export struct AgentPage', 'class AgentPage') + '\n}\n';
 const createController = new Function('CampusFlowApi', 'Scroller', 'CampusFlowRequestError',
   'displayToolTraces', 'mergeActions', 'restoreDraft', 'localRequestFailure', 'AppTheme', 'localHistory',
-  'AgentRunController', ...Object.keys(reliability), stripTypeScriptTypes(controllerSource) + '\nreturn AgentPage;');
+  'AgentRunController', 'localDrafts', 'shanghaiDate', ...Object.keys(reliability), stripTypeScriptTypes(controllerSource) + '\nreturn AgentPage;');
 
 function pending(id = 'proposal-1', title = '复习') {
   return { proposal_id: id, action: 'create', kind: 'task', title, start_at: null, end_at: null,
@@ -44,7 +44,7 @@ function deferred() {
   return { promise, resolve, reject };
 }
 
-function harness(handlers = {}, localHistory = {}) {
+async function harness(handlers = {}, localHistory = {}) {
   const calls = [];
   const histories = new Map();
   class Api {
@@ -63,18 +63,21 @@ function harness(handlers = {}, localHistory = {}) {
     cancelAction(...args) { return this.invoke('cancelAction', args); }
     actionStatus(...args) { return this.invoke('actionStatus', args); }
   }
+  const drafts = await makeDraftFixture();
   const Controller = createController(Api, class Scroller {}, helper.CampusFlowRequestError,
-    helper.displayToolTraces, helper.mergeActions, helper.restoreDraft, helper.localRequestFailure, {}, localHistory, makeRunController(helper.CampusFlowRequestError, helper.localRequestFailure), ...Object.values(reliability));
+    helper.displayToolTraces, helper.mergeActions, helper.restoreDraft, helper.localRequestFailure, {}, localHistory, makeRunController(helper.CampusFlowRequestError, helper.localRequestFailure), drafts.store, shanghaiDate, ...Object.values(reliability));
   const page = new Controller();
   page.baseUrl = 'http://fixture.invalid';
   page.token = 'test-only';
   page.voiceActive = true;
+  page.draftLease = drafts.lease;
+  page.draftLeaseChanged();
   return { page, calls };
 }
 
 test('completed turns persist only user/assistant text without tools, credentials or proposals', async () => {
   const saved = [];
-  const { page } = harness({ chat: async () => ({ session_id: 'local-session', message: '完整回答',
+  const { page } = await harness({ chat: async () => ({ session_id: 'local-session', message: '完整回答',
     pending_actions: [pending()], tool_traces: [] }) }, {
     save: async (...args) => { saved.push(args); return true; }
   });
@@ -93,7 +96,7 @@ test('completed turns persist only user/assistant text without tools, credential
 });
 
 test('local persistence failure does not turn a successful chat into a failed send', async () => {
-  const { page, calls } = harness({ chat: async () => ({ session_id: 'local-session', message: '真实回答',
+  const { page, calls } = await harness({ chat: async () => ({ session_id: 'local-session', message: '真实回答',
     pending_actions: [] }) }, { save: async () => { throw new Error('disk failure'); } });
   page.historyScope = 'account-scope';
   page.prompt = '问题';
@@ -108,7 +111,7 @@ test('local persistence failure does not turn a successful chat into a failed se
 test('logout/disposal blocks a late answer from recreating local history', async () => {
   const response = deferred();
   const saved = [];
-  const { page } = harness({ chat: () => response.promise }, { save: async (...args) => { saved.push(args); return true; } });
+  const { page } = await harness({ chat: () => response.promise }, { save: async (...args) => { saved.push(args); return true; } });
   page.historyScope = 'account-scope';
   page.prompt = '问题';
   const sending = page.send();
@@ -122,7 +125,7 @@ test('logout/disposal blocks a late answer from recreating local history', async
 test('deleting the active session starts a new ID and prevents late response resurrection', async () => {
   const response = deferred();
   const saved = [];
-  const { page } = harness({ chat: () => response.promise }, { save: async (...args) => { saved.push(args); return true; } });
+  const { page } = await harness({ chat: () => response.promise }, { save: async (...args) => { saved.push(args); return true; } });
   page.historyScope = 'account-scope';
   page.prompt = '问题';
   page.pendingActions = [pending()];
@@ -141,7 +144,7 @@ test('deleting the active session starts a new ID and prevents late response res
 
 test('the first user message after deletion leaves the welcome state while the answer is still pending', async () => {
   const response = deferred();
-  const { page } = harness({ chat: () => response.promise });
+  const { page } = await harness({ chat: () => response.promise });
   assert.equal(page.messages.length, 1);
   assert.equal(page.messages[0].id, 'welcome');
   assert.equal(page.hasConversation(), false, 'the initial welcome is not a conversation');
@@ -165,8 +168,8 @@ test('the first user message after deletion leaves the welcome state while the a
   ]);
 });
 
-test('one real assistant message is conversation content even without a welcome or user entry', () => {
-  const { page } = harness();
+test('one real assistant message is conversation content even without a welcome or user entry', async () => {
+  const { page } = await harness();
   page.deletedSessionId = page.sessionId;
   page.sessionDeleted();
   page.appendMessage('assistant', '需要完整展示的助手消息');
@@ -176,7 +179,7 @@ test('one real assistant message is conversation content even without a welcome 
 
 test('a slow failed send preserves a newer draft and keeps the original message available', async () => {
   const response = deferred();
-  const { page, calls } = harness({ chat: () => response.promise });
+  const { page, calls } = await harness({ chat: () => response.promise });
   page.prompt = '原来的规划请求';
   const sending = page.send();
   assert.equal(page.loading, true);
@@ -193,7 +196,7 @@ test('a slow failed send preserves a newer draft and keeps the original message 
 });
 
 test('unknown sends preserve their original request without refilling an empty draft or exposing diagnostics', async () => {
-  const { page } = harness({ chat: async () => { throw new Error('PRIVATE_KEY_OR_URL'); } });
+  const { page } = await harness({ chat: async () => { throw new Error('PRIVATE_KEY_OR_URL'); } });
   page.prompt = '今晚复习';
   await page.send();
   assert.equal(page.prompt, '');
@@ -205,12 +208,14 @@ test('unknown sends preserve their original request without refilling an empty d
 
 test('a second send cannot run during an outstanding request', async () => {
   const response = deferred();
-  const { page, calls } = harness({ chat: () => response.promise });
+  const started = deferred();
+  const { page, calls } = await harness({ chat: () => { started.resolve(); return response.promise; } });
   const sessionId = page.sessionId;
   page.prompt = '第一条';
   const first = page.send();
   page.prompt = '第二条草稿';
   await page.send();
+  await started.promise; // The production durable-before-POST barrier is asynchronous.
   assert.equal(calls.length, 1);
   response.resolve({ session_id: 'session-1', message: '完成', pending_actions: [] });
   await first;
@@ -222,7 +227,7 @@ test('later turns keep unresolved proposals and cannot revive resolved ones', as
   const firstAction = pending('first');
   const secondAction = pending('second');
   const responses = [[firstAction], [], [pending('first'), secondAction]];
-  const { page } = harness({ chat: async () => ({ session_id: 'session-1', message: '结果',
+  const { page } = await harness({ chat: async () => ({ session_id: 'session-1', message: '结果',
     pending_actions: responses.shift(), tool_traces: [] }) });
   page.prompt = '第一轮';
   await page.send();
@@ -238,7 +243,7 @@ test('later turns keep unresolved proposals and cannot revive resolved ones', as
 
 test('rapid confirm taps issue exactly one POST and block simultaneous chat sends', async () => {
   const response = deferred();
-  const { page, calls } = harness({ confirmAction: () => response.promise });
+  const { page, calls } = await harness({ confirmAction: () => response.promise });
   const action = pending();
   page.pendingActions = [action];
   const first = page.decide(action, true);
@@ -257,7 +262,7 @@ test('a false applied flag or a mismatched proposal ID never reports successful 
   for (const change of [{ applied: false }, { action: { ...pending('another'), status: 'confirmed' } }]) {
     const action = pending();
     const result = { ...confirmed(action), message: 'DO_NOT_TRUST_ME', ...change };
-    const { page } = harness({ confirmAction: async () => result });
+    const { page } = await harness({ confirmAction: async () => result });
     page.pendingActions = [action];
     await page.decide(action, true);
     assert.equal(page.pendingActions[0].status, 'pending');
@@ -268,7 +273,7 @@ test('a false applied flag or a mismatched proposal ID never reports successful 
 
 test('after an ambiguous write failure, an unreceipted confirmed label cannot authorize another write', async () => {
   const action = pending();
-  const { page, calls } = harness({
+  const { page, calls } = await harness({
     confirmAction: async () => { throw helper.localRequestFailure('NETWORK_ERROR'); },
     actionStatus: async () => ({ ...action, status: 'confirmed' })
   });
@@ -285,7 +290,7 @@ test('after an ambiguous write failure, an unreceipted confirmed label cannot au
 
 test('a valid cancellation is terminal and cannot subsequently trigger confirmation', async () => {
   const action = pending();
-  const { page, calls } = harness({ cancelAction: async () => ({ applied: false,
+  const { page, calls } = await harness({ cancelAction: async () => ({ applied: false,
     message: 'cancelled', action: { ...action, status: 'cancelled' }, receipt: null }) });
   page.pendingActions = [action];
   await page.decide(action, false);
@@ -296,7 +301,7 @@ test('a valid cancellation is terminal and cannot subsequently trigger confirmat
 
 test('a stale create callback cannot confirm a proposal whose current action is unsupported', async () => {
   const stale = pending();
-  const { page, calls } = harness();
+  const { page, calls } = await harness();
   page.pendingActions = [{ ...stale, action: 'update' }];
   await page.decide(stale, true);
   assert.equal(calls.length, 0);
@@ -306,7 +311,7 @@ test('a stale create callback cannot confirm a proposal whose current action is 
 test('a malformed chat envelope does not replace the session or append a broken assistant entry', async () => {
   for (const result of [null, {}, { session_id: 'new', message: null, pending_actions: [] },
     { session_id: 'new', message: 'bad contract', pending_actions: null }]) {
-    const { page } = harness({ chat: async () => result });
+    const { page } = await harness({ chat: async () => result });
     const originalSession = page.sessionId;
     page.prompt = '保留这条问题';
     await page.send();
@@ -320,7 +325,7 @@ test('a malformed chat envelope does not replace the session or append a broken 
 
 
 test('an over-limit draft is retained without making a request', async () => {
-  const { page, calls } = harness();
+  const { page, calls } = await harness();
   page.prompt = '字'.repeat(8001);
   await page.send();
   assert.equal(calls.length, 0);
@@ -330,7 +335,7 @@ test('an over-limit draft is retained without making a request', async () => {
 
 
 test('the input limit counts Unicode characters consistently with the API, not UTF-16 units', async () => {
-  const { page, calls } = harness({ chat: async () => ({ session_id: 'unicode-session',
+  const { page, calls } = await harness({ chat: async () => ({ session_id: 'unicode-session',
     message: '已收到', pending_actions: [] }) });
   page.prompt = '🌱'.repeat(8000);
   assert.equal(page.inputLength(page.prompt), 8000);
@@ -345,7 +350,7 @@ test('the input limit counts Unicode characters consistently with the API, not U
 test('an unknown confirm resolves only through a matching durable receipt, refreshes once and opens its exact task', async () => {
   const action = pending();
   const result = confirmed(action);
-  const { page, calls } = harness({
+  const { page, calls } = await harness({
     confirmAction: async () => { throw helper.localRequestFailure('NETWORK_ERROR'); },
     actionStatus: async () => result.action
   });
@@ -369,7 +374,7 @@ test('an unknown confirm resolves only through a matching durable receipt, refre
 
 test('v2 pending after an unknown result enables only an explicit same-ID retry, never an automatic write', async () => {
   const action = pending(); let writes = 0;
-  const { page, calls } = harness({
+  const { page, calls } = await harness({
     confirmAction: async id => { assert.equal(id, action.proposal_id); if (++writes === 1) throw helper.localRequestFailure('NETWORK_ERROR'); return confirmed(action); },
     actionStatus: async () => ({ ...action })
   });
@@ -388,7 +393,7 @@ test('v2 pending after an unknown result enables only an explicit same-ID retry,
 
 test('a known stale rejection remains blocked after repeated handlers, failed reads and a later pending status', async () => {
   const action = pending(); let reads = 0;
-  const { page, calls } = harness({
+  const { page, calls } = await harness({
     confirmAction: async () => { throw new helper.CampusFlowRequestError(409, 'ACTION_STALE', '安排已变化'); },
     actionStatus: async () => { if (++reads === 1) throw helper.localRequestFailure('NETWORK_ERROR'); return { ...action }; },
     cancelAction: async () => ({ applied: false, action: { ...action, status: 'cancelled' }, receipt: null })
@@ -409,7 +414,7 @@ test('a known stale rejection remains blocked after repeated handlers, failed re
 
 test('legacy proposals remain readable but neither raw terminal labels nor same-ID reads authorize execution', async () => {
   const action = pending(); delete action.contract_version;
-  const { page, calls } = harness({ actionStatus: async () => ({ ...action, status: 'confirmed' }) });
+  const { page, calls } = await harness({ actionStatus: async () => ({ ...action, status: 'confirmed' }) });
   page.pendingActions = [action];
   await page.decide(action, true);
   await page.checkDecision(action);
@@ -424,7 +429,7 @@ test('a changed payload, before snapshot or receipt envelope cannot replace the 
     r => { r.action.before_task = { title: 'bad snapshot' }; },
     r => { r.receipt = { ...r.receipt, receipt_id: 'different-envelope' }; }]) {
     const action = pending(); const result = confirmed(action); result.action = structuredClone(result.action); mutate(result);
-    const { page } = harness({ confirmAction: async () => result });
+    const { page } = await harness({ confirmAction: async () => result });
     page.pendingActions = [action];
     await page.decide(action, true);
     assert.equal(page.pendingActions[0], action);
@@ -434,7 +439,7 @@ test('a changed payload, before snapshot or receipt envelope cannot replace the 
 
 test('a cancel/confirm race is resolved to the actual receipt instead of reporting a false cancellation', async () => {
   const action = pending(); const result = confirmed(action);
-  const { page, calls } = harness({ cancelAction: async () => result, actionStatus: async () => result.action });
+  const { page, calls } = await harness({ cancelAction: async () => result, actionStatus: async () => result.action });
   page.pendingActions = [action];
   await page.decide(action, false);
   assert.equal(page.pendingActions[0].status, 'pending');
@@ -455,7 +460,7 @@ test('update/delete preserve complete before/after data and deletion never links
     if (operation === 'delete') action.payload = {};
     else action.payload.task.location = '新的教室';
     const result = confirmed(action); result.receipt.task_ids = ['existing-task'];
-    const { page } = harness({ confirmAction: async () => result });
+    const { page } = await harness({ confirmAction: async () => result });
     const opened = []; page.onOpenTaskDetails = id => opened.push(id);
     page.pendingActions = [action];
     assert.equal(page.beforeTasks(action)[0], action.before_task);
@@ -467,8 +472,8 @@ test('update/delete preserve complete before/after data and deletion never links
   }
 });
 
-test('new preview suggestions preserve an existing draft and are never sent automatically', () => {
-  const { page, calls } = harness();
+test('new preview suggestions preserve an existing draft and are never sent automatically', async () => {
+  const { page, calls } = await harness();
   page.prompt = '尚未发送的原草稿';
   page.regenerateProposal(pending());
   assert.equal(page.prompt, '尚未发送的原草稿');
@@ -479,7 +484,7 @@ test('new preview suggestions preserve an existing draft and are never sent auto
 
 test('malformed proposals are excluded without dropping the assistant answer or other valid proposals', async () => {
   const action = pending();
-  const { page } = harness({ chat: async () => ({ session_id: 'session-1', message: '仍可阅读的完整回答',
+  const { page } = await harness({ chat: async () => ({ session_id: 'session-1', message: '仍可阅读的完整回答',
     pending_actions: [null, { ...action, proposal_id: 'bad', warnings: [null] }, action] }) });
   page.prompt = '帮我规划'; await page.send();
   assert.deepEqual(page.pendingActions.map(a => a.proposal_id), [action.proposal_id]);
@@ -489,7 +494,7 @@ test('malformed proposals are excluded without dropping the assistant answer or 
 
 test('late confirmation after session removal does not publish a receipt or refresh the next conversation', async () => {
   const action = pending(); const request = deferred();
-  const { page } = harness({ confirmAction: () => request.promise });
+  const { page } = await harness({ confirmAction: () => request.promise });
   let refreshes = 0; page.onPlanningChanged = () => refreshes++;
   page.pendingActions = [action]; const confirming = page.decide(action, true);
   page.deletedSessionId = page.sessionId; page.sessionDeleted();
@@ -500,7 +505,7 @@ test('late confirmation after session removal does not publish a receipt or refr
 
 test('one unknown proposal pauses other confirmations but permits chat, status reads and explicit cancellation', async () => {
   const first = pending('first'); const second = pending('second'); const third = pending('third');
-  const { page, calls } = harness({
+  const { page, calls } = await harness({
     confirmAction: async id => { if (id === first.proposal_id) throw helper.localRequestFailure('NETWORK_ERROR'); return confirmed(third); },
     chat: async () => ({ session_id: 'session-1', message: '只读说明', pending_actions: [] }),
     cancelAction: async () => ({ applied: false, action: { ...second, status: 'cancelled' }, receipt: null }),

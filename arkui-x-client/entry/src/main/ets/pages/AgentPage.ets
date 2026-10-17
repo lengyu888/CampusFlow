@@ -1,5 +1,8 @@
-import { HistoryMessage, SessionSummary, PendingAction, PendingMilestonePreview, PendingTaskPreview, ToolDisplaySummary, PlanningTaskDraft, PlanningPlanDraft, RunSnapshot, RunToolProgress, ModelCatalog, ModelOption } from '../model/ApiModels';
+import { HistoryMessage, SessionSummary, PendingAction, PendingMilestonePreview, PendingTaskPreview, ToolDisplaySummary, PlanningTaskDraft, PlanningPlanDraft, RunSnapshot, RunToolProgress, ModelCatalog, ModelOption, RunStartRequest } from '../model/ApiModels';
 import { CampusFlowApi } from '../services/CampusFlowApi';
+import { localDrafts } from '../services/LocalDrafts';
+import { DraftLease, DraftRecord, DraftOperation, AssistantDraft, DraftRunRequest, DraftSaveState, DraftKey } from '../utils/DraftStore';
+import { shanghaiDate } from '../utils/DailyAgenda';
 import { localHistory } from '../services/LocalHistory';
 import { MessageContent } from '../components/MessageContent';
 import { AppTheme } from '../theme/AppTheme';
@@ -56,6 +59,7 @@ export struct AgentPage {
   @Watch('modelConnectionChanged') @Prop baseUrl: string;
   @Watch('modelConnectionChanged') @Prop token: string;
   @Prop historyScope: string = '';
+  @Prop @Watch('draftLeaseChanged') draftLease: DraftLease | null = null;
   @Prop deletedSessionId: string = '';
   @Prop deletionBusy: boolean = false;
   @Prop @Watch('sessionDeleted') deletionRevision: number = 0;
@@ -71,6 +75,19 @@ export struct AgentPage {
   onOpenProfile: () => void = () => {};
   onChatBusyChange: (busy: boolean) => void = () => {};
   @State private prompt: string = '';
+  @State private recoverableDraft: DraftRecord | null = null;
+  @State private draftOperations: DraftOperation[] = [];
+  @State private draftMessage: string = '本机草稿尚未就绪。';
+  @State private draftNotice: string = '';
+  @State private draftPhase: string = 'idle';
+  @State private draftAnchorDate: string = '';
+  private draftKey: DraftKey = { kind: 'assistant', ownerId: 'main' };
+  private boundDraftLease: DraftLease | null = null;
+  private draftBindingRevision: number = 0;
+  private draftUnsubscribe: (() => void) | null = null;
+  private draftLocalRevision: number = 0;
+  private settlingDraftRuns: string[] = [];
+
   @State private availableHeight: number = 600;
   @State private model: string = 'deepseek-v4-pro';
   @State private modelCatalog: ModelCatalog | null = null;
@@ -138,6 +155,7 @@ export struct AgentPage {
 
   aboutToAppear(): void {
     this.pageActive = true;
+    this.bindDraftLease();
     this.loadModels();
     if (this.receivedPromptRevision !== this.promptRevision) {
       this.initialPromptChanged();
@@ -145,6 +163,8 @@ export struct AgentPage {
   }
 
   aboutToDisappear(): void {
+    this.flushDraft();
+    this.draftUnsubscribe?.(); this.draftUnsubscribe = null;
     this.pageActive = false;
     this.modelsRevision++;
     this.modelsLoading = false;
@@ -158,7 +178,179 @@ export struct AgentPage {
     this.runInteraction = null;
   }
 
+  private draftLeaseChanged(): void { this.bindDraftLease(); }
+
+  private draftCurrent(lease: DraftLease, revision: number): boolean {
+    return this.pageActive && revision === this.draftBindingRevision && localDrafts.valid(lease) &&
+      this.draftLease?.scope === lease.scope && this.draftLease?.generation === lease.generation;
+  }
+
+  private bindDraftLease(): void {
+    const lease = this.draftLease;
+    const same = lease !== null && this.boundDraftLease?.scope === lease.scope &&
+      this.boundDraftLease?.generation === lease.generation;
+    if (!same) {
+      this.draftBindingRevision++; this.draftUnsubscribe?.(); this.draftUnsubscribe = null;
+      if (this.boundDraftLease !== null) {
+        // Never transfer the previous account's input or pending request to a new lease.
+        this.prompt = ''; this.promptSuggestions = []; this.draftAnchorDate = '';
+        this.runInteraction?.dispose(); this.runInteraction = null;
+        this.loading = false; this.onChatBusyChange(false);
+      }
+      this.boundDraftLease = lease === null ? null : { scope: lease.scope, generation: lease.generation };
+      this.recoverableDraft = null; this.draftOperations = []; this.draftLocalRevision = 0;
+      this.draftNotice = ''; this.settlingDraftRuns = [];
+    }
+    if (lease === null || !localDrafts.valid(lease)) {
+      this.draftPhase = 'error'; this.draftMessage = '本机草稿暂不可用，输入仍保留；恢复保存后才能发送。'; return;
+    }
+    if (!same) {
+      const saved = localDrafts.read(lease, this.draftKey);
+      if (saved !== undefined && !localDrafts.isBlocked(lease, this.draftKey, saved.localRevision)) {
+        if ((saved.payload as AssistantDraft).text.length > 0) { this.recoverableDraft = saved; }
+      }
+    }
+    if (this.draftUnsubscribe === null) {
+      const revision = this.draftBindingRevision;
+      this.draftUnsubscribe = localDrafts.subscribe((state: DraftSaveState): void => {
+        if (!this.draftCurrent(lease, revision) || state.scope !== lease.scope || state.generation !== lease.generation) { return; }
+        this.draftPhase = state.phase; this.draftMessage = state.message;
+        this.draftOperations = localDrafts.operations(lease).filter((item: DraftOperation): boolean =>
+          item.kind === 'run' && item.draftKind === 'assistant' && item.ownerId === 'main');
+      });
+    }
+    if (this.voiceActive && this.draftOperations.length > 0 && this.runInteraction === null) {
+      this.recoverDraftRun(this.draftOperations[0]);
+    }
+  }
+
+  private changePrompt(value: string, keepAnchor: boolean = false): void {
+    if (!keepAnchor && this.prompt.length === 0 && value.length > 0) { this.draftAnchorDate = shanghaiDate(Date.now()); }
+    this.prompt = value;
+    this.stagePrompt();
+  }
+
+  private stagePrompt(): boolean {
+    const lease = this.draftLease;
+    if (this.recoverableDraft !== null) {
+      this.draftNotice = '输入框内容尚未覆盖上次草稿，请先恢复或舍弃上次草稿。'; return false;
+    }
+    if (lease === null || !localDrafts.valid(lease)) {
+      this.draftPhase = 'error'; this.draftMessage = '本机草稿暂不可用，输入仍保留；恢复保存后才能发送。'; return false;
+    }
+    if (this.draftAnchorDate.length === 0) { this.draftAnchorDate = shanghaiDate(Date.now()); }
+    const value: AssistantDraft = { text: this.prompt, sessionId: this.sessionId,
+      anchorDate: this.draftAnchorDate, timezone: 'Asia/Shanghai' };
+    const current = localDrafts.read(lease, this.draftKey);
+    if (current !== undefined && JSON.stringify(current.payload) === JSON.stringify(value)) {
+      this.draftLocalRevision = current.localRevision; return true;
+    }
+    try { this.draftLocalRevision = localDrafts.stage(lease, this.draftKey, value).localRevision; return true; }
+    catch { this.draftPhase = 'error'; this.draftMessage = localDrafts.status(lease).message; return false; }
+  }
+
+  private async flushDraft(): Promise<void> {
+    const lease = this.draftLease;
+    if (lease === null || !localDrafts.valid(lease)) { return; }
+    try { await localDrafts.flush(lease); } catch { /* The store exposes a truthful persistent error state. */ }
+  }
+
+  private restoreStoredDraft(): void {
+    const saved = this.recoverableDraft;
+    if (saved === null || this.prompt.length > 0 || this.draftLease === null || !localDrafts.valid(this.draftLease)) { return; }
+    const value = saved.payload as AssistantDraft;
+    this.recoverableDraft = null; this.draftAnchorDate = value.anchorDate;
+    this.changePrompt(value.text, true);
+    this.draftNotice = '已恢复文字，未恢复旧会话或自动发送。请核对“今天、明天”等相对日期。';
+  }
+
+  private async discardStoredDraft(): Promise<void> {
+    const saved = this.recoverableDraft; const lease = this.draftLease; const revision = this.draftBindingRevision;
+    if (saved === null || lease === null || !localDrafts.valid(lease)) { return; }
+    try {
+      const removed = await localDrafts.remove(lease, this.draftKey, saved.localRevision);
+      if (!this.draftCurrent(lease, revision)) { return; }
+      if (!removed) { this.draftNotice = '草稿已变化或仍有待核对操作，尚未舍弃。'; return; }
+      this.recoverableDraft = null; this.draftNotice = '上次草稿已舍弃。';
+      if (this.prompt.length > 0) { this.stagePrompt(); }
+    } catch { if (this.draftCurrent(lease, revision)) { this.draftNotice = '舍弃失败，原草稿仍保留。'; } }
+  }
+
+  private draftBlocksSend(): boolean {
+    return this.draftLease === null || !localDrafts.valid(this.draftLease) || this.recoverableDraft !== null ||
+      localDrafts.isBlocked(this.draftLease, this.draftKey);
+  }
+
+  private async prepareRunDraft(request: RunStartRequest): Promise<void> {
+    const lease = this.draftLease; const revision = this.draftBindingRevision;
+    const base = this.baseUrl; const token = this.token;
+    if (lease === null || !this.draftCurrent(lease, revision) || !this.voiceActive) { throw new Error('draft unavailable'); }
+    const existing = localDrafts.operations(lease).find((item: DraftOperation): boolean => item.kind === 'run' && item.id === request.run_id);
+    const localRevision = existing?.localRevision ?? this.draftLocalRevision;
+    if (existing === undefined) {
+      if (localDrafts.isBlocked(lease, this.draftKey)) { throw new Error('another run pending'); }
+      const saved = localDrafts.read(lease, this.draftKey);
+      if (saved === undefined || saved.localRevision !== localRevision ||
+        (saved.payload as AssistantDraft).text.trim() !== request.message ||
+        (saved.payload as AssistantDraft).sessionId !== request.session_id) { throw new Error('draft changed'); }
+    } else if (existing.runRequest === null || JSON.stringify(existing.runRequest) !== JSON.stringify(request)) {
+      throw new Error('request changed');
+    }
+    const frozen: DraftRunRequest = { run_id: request.run_id, session_id: request.session_id, model: request.model, message: request.message };
+    await localDrafts.beginOperation(lease, { kind: 'run', id: request.run_id, draftKind: 'assistant', ownerId: 'main',
+      localRevision: localRevision, runRequest: frozen });
+    if (!this.draftCurrent(lease, revision) || !this.voiceActive || base !== this.baseUrl || token !== this.token) {
+      throw new Error('draft identity changed');
+    }
+    // The submitted revision remains durable until the terminal result. New typing creates a newer revision.
+    if (this.draftLocalRevision === localRevision && this.prompt.trim() === request.message) { this.prompt = ''; }
+  }
+
+  private async recoverDraftRun(operation: DraftOperation): Promise<void> {
+    if (!this.pageActive || !this.voiceActive || this.deletionBusy || this.decisionId.length > 0 ||
+      this.draftLease === null || !localDrafts.valid(this.draftLease) || operation.scope !== this.draftLease.scope) { return; }
+    this.restoredRunIds = this.restoredRunIds.includes(operation.id) ? this.restoredRunIds : this.restoredRunIds.concat([operation.id]);
+    if (operation.runRequest !== null) { await this.runController().recoverRequest(operation.runRequest); }
+    else { await this.runController().recover(operation.id); }
+  }
+
+  private async settleRunDraft(state: AgentRunState): Promise<void> {
+    const lease = this.draftLease; const revision = this.draftBindingRevision;
+    const terminal = state.snapshot !== null && ['succeeded', 'failed', 'cancelled', 'timed_out', 'budget_exceeded', 'interrupted'].includes(state.snapshot.status);
+    if (lease === null || !localDrafts.valid(lease) || (!terminal && state.phase !== 'error') || this.settlingDraftRuns.includes(state.runId)) { return; }
+    const operation = localDrafts.operations(lease).find((item: DraftOperation): boolean => item.kind === 'run' && item.id === state.runId);
+    if (operation === undefined) { return; }
+    this.settlingDraftRuns = this.settlingDraftRuns.concat([state.runId]);
+    try {
+      const removeSubmitted = state.snapshot?.status === 'succeeded' || state.errorCode === 'RUN_DELETED';
+      await localDrafts.resolveOperation(lease, 'run', operation.id, removeSubmitted);
+      if (!this.draftCurrent(lease, revision)) { return; }
+      if (!removeSubmitted && this.prompt.length === 0) {
+        const saved = localDrafts.read(lease, this.draftKey);
+        if (saved !== undefined && (saved.payload as AssistantDraft).text.length > 0) { this.recoverableDraft = saved; }
+      }
+    } catch { if (this.draftCurrent(lease, revision)) { this.draftNotice = '服务器状态已取得，本机核对记录尚未保存。请再次查询同一次运行。'; } }
+    finally {
+      if (this.draftCurrent(lease, revision)) { this.settlingDraftRuns = this.settlingDraftRuns.filter((id: string): boolean => id !== state.runId); }
+    }
+  }
+
+  private async settleDeletedDraftSession(sessionId: string): Promise<void> {
+    const lease = this.draftLease; const revision = this.draftBindingRevision;
+    if (sessionId.length === 0 || lease === null || !localDrafts.valid(lease)) { return; }
+    const operations = localDrafts.operations(lease).filter((item: DraftOperation): boolean =>
+      item.kind === 'run' && item.runRequest?.session_id === sessionId);
+    for (const operation of operations) {
+      try { await localDrafts.resolveOperation(lease, 'run', operation.id, true); }
+      catch {
+        if (this.draftCurrent(lease, revision)) { this.draftNotice = '会话已删除，本机恢复标识清理失败。可核对原运行后重试清理。'; }
+      }
+    }
+  }
+
   private sessionDeleted(): void {
+    // This callback is issued only after an authoritative server deletion or tombstone.
+    this.settleDeletedDraftSession(this.deletedSessionId);
     if (this.deletedSessionId !== this.sessionId) {
       this.removeDeletedRunSession(this.deletedSessionId);
       return;
@@ -283,8 +475,8 @@ export struct AgentPage {
   private offerPrompt(value: string): void {
     if (value.trim().length === 0) { return; }
     this.voiceInteraction?.suspend();
-    if (this.inputLength(this.prompt) === 0 && this.inputLength(value) <= 8000) {
-      this.prompt = value;
+    if (this.recoverableDraft === null && this.inputLength(this.prompt) === 0 && this.inputLength(value) <= 8000) {
+      this.changePrompt(value);
       this.suggestionNotice = '建议已填入，请检查后手动发送。';
     } else if (value.trim() !== this.prompt.trim() && !this.promptSuggestions.includes(value)) {
       this.promptSuggestions = this.promptSuggestions.concat([value]);
@@ -304,7 +496,7 @@ export struct AgentPage {
       this.suggestionNotice = '合并后超过 8000 字，原草稿和建议均已保留。请缩短输入后再操作。';
       return;
     }
-    this.prompt = combined;
+    this.changePrompt(combined);
     this.promptSuggestions = this.promptSuggestions.slice(1);
     this.suggestionNotice = '建议已填入，请检查后手动发送。';
   }
@@ -319,6 +511,9 @@ export struct AgentPage {
   }
 
   private modelConnectionChanged(): void {
+    // A controller must not reuse the previous connection or credential on a later retry.
+    this.runInteraction?.dispose(); this.runInteraction = null;
+    this.loading = false; this.onChatBusyChange(false);
     this.modelsRevision++; this.modelsLoading = false; this.modelCatalog = null; this.modelsMessage = '';
     this.loadModels();
   }
@@ -501,12 +696,13 @@ export struct AgentPage {
   private voiceActivityChanged(): void {
     // Index keeps hidden tabs mounted. Also stop when the Ability enters background.
     if (!this.voiceActive) {
+      this.flushDraft();
       this.scrollForNewMessage = false;
       this.voiceInteraction?.suspend();
       this.voiceProbeRevision++;
       this.voiceProbeBusy = false;
       this.modelsRevision++; this.modelsLoading = false;
-    } else { this.loadModels(); }
+    } else { this.bindDraftLease(); this.loadModels(); }
     this.runInteraction?.setActive(this.voiceActive);
   }
 
@@ -592,7 +788,7 @@ export struct AgentPage {
     }
     const accepted = this.voiceInteraction.takeTranscript();
     if (accepted.length === 0) { return; }
-    this.prompt = combined;
+    this.changePrompt(combined);
     this.voiceNotice = '文字已填入，请检查后手动发送。';
   }
 
@@ -620,7 +816,7 @@ export struct AgentPage {
     this.cancelVoice();
     this.optionsExpanded = false;
     this.followLatest = true;
-    this.prompt = '';
+    if (this.draftBlocksSend() || !this.stagePrompt()) { this.draftNotice = '请先恢复本机保存，或核对上次运行；输入尚未发送。'; return; }
     await this.runController().start(this.sessionId, this.model, text);
   }
 
@@ -637,6 +833,7 @@ export struct AgentPage {
       const api = new CampusFlowApi(this.baseUrl, this.token);
       this.runInteraction = new AgentRunController(api, (state: AgentRunState) => this.runChanged(state),
         (run: RunSnapshot) => this.runSucceeded(run), () => this.newRunId());
+      this.runInteraction.setBeforeSubmit((request: RunStartRequest): Promise<void> => this.prepareRunDraft(request));
       this.runInteraction.configure(this.historyScope.length > 0 ? this.historyScope : `${this.baseUrl}|current-page`, api);
       this.runInteraction.setActive(this.voiceActive);
     }
@@ -668,6 +865,7 @@ export struct AgentPage {
     if (!this.pageActive) { return; }
     state.recent = state.recent.filter((run: RunSnapshot) => !this.deletedRunSessionIds.includes(run.session_id));
     this.runState = state;
+    this.settleRunDraft(state);
     if (state.errorCode === 'RUN_DELETED') {
       state.recent = state.recent.filter((run: RunSnapshot) => run.run_id !== state.runId);
       const sessionId = state.snapshot?.session_id ?? state.request?.session_id ?? '';
@@ -696,7 +894,7 @@ export struct AgentPage {
     const original = state.request?.message ?? run?.message ?? '';
     if (stopped && state.runId.length > 0 && !this.displayedRunFailures.includes(state.runId)) {
       this.displayedRunFailures = this.displayedRunFailures.concat([state.runId]);
-      if (!this.restoredRunIds.includes(state.runId)) { this.prompt = restoreDraft(this.prompt, original); }
+      if (!this.restoredRunIds.includes(state.runId) && this.prompt.length === 0) { this.changePrompt(restoreDraft(this.prompt, original), true); }
       const messageId = this.appendMessage('feedback', state.message.length > 0 ? state.message : '这次运行未完成，已收到的片段保留供核对。',
         [], this.restoredRunIds.includes(state.runId) ? '' : original, 'RUN_STATE');
       this.messages = this.messages.map((item: ConversationEntry) => item.id === messageId ? {
@@ -999,6 +1197,46 @@ export struct AgentPage {
   }
 
   @Builder
+  private DraftRecovery() {
+    Column({ space: 8 }) {
+      Text(`本机草稿 · ${this.draftMessage}`).fontSize(AppTheme.metaSize)
+        .fontColor(this.draftPhase === 'error' ? AppTheme.danger : AppTheme.quiet).width('100%')
+      if (this.draftPhase === 'error') {
+        Button('重试本机保存').constraintSize({ minHeight: 48 }).fontColor(AppTheme.accent)
+          .backgroundColor(AppTheme.accentSoft).onClick(() => this.flushDraft())
+      }
+      if (this.recoverableDraft !== null) {
+        Text('发现上次未提交的输入').fontSize(AppTheme.bodySize).fontWeight(FontWeight.Medium).fontColor(AppTheme.ink).width('100%')
+        Text((this.recoverableDraft.payload as AssistantDraft).text).fontSize(AppTheme.metaSize)
+          .fontColor(AppTheme.quiet).maxLines(3).textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
+        Text(`原日期 ${(this.recoverableDraft.payload as AssistantDraft).anchorDate} · 上海时区。恢复后请核对相对日期。`)
+          .fontSize(AppTheme.metaSize).fontColor(AppTheme.warning).width('100%')
+        Flex({ wrap: FlexWrap.Wrap }) {
+          Button('恢复文字').constraintSize({ minHeight: 48 }).fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft)
+            .enabled(this.prompt.length === 0).onClick(() => this.restoreStoredDraft())
+          Button('舍弃上次草稿').constraintSize({ minHeight: 48 }).fontColor(AppTheme.secondary).backgroundColor(AppTheme.field)
+            .onClick(() => this.discardStoredDraft())
+        }.width('100%')
+      }
+      ForEach(this.draftOperations, (operation: DraftOperation) => {
+        Column({ space: 4 }) {
+          Text('这次提交仍需核对，未自动重发。').fontSize(AppTheme.metaSize).fontColor(AppTheme.warning).width('100%')
+          Button('核对原运行').constraintSize({ minHeight: 48 }).fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft)
+            .enabled(this.voiceActive && !this.deletionBusy && !['creating', 'cancelling', 'checking'].includes(this.runState.phase))
+            .onClick(() => this.recoverDraftRun(operation))
+        }.width('100%')
+      }, (operation: DraftOperation) => operation.id)
+      if (this.draftNotice.length > 0) {
+        Text(this.draftNotice).fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+      }
+      if (this.prompt.length > 0 && this.draftAnchorDate.length > 0 && this.draftAnchorDate !== shanghaiDate(Date.now())) {
+        Text(`这份输入起于 ${this.draftAnchorDate}（上海时区），请核对“今天、明天”等表达后再发送。`)
+          .fontSize(AppTheme.metaSize).fontColor(AppTheme.warning).width('100%')
+      }
+    }.width('100%').alignItems(HorizontalAlign.Start)
+  }
+
+  @Builder
   private ToolResults(message: ConversationEntry) {
     Column({ space: 8 }) {
       if (message.tools.length === 0) {
@@ -1036,7 +1274,7 @@ export struct AgentPage {
       Button(this.inputLength(this.prompt) > 0 ? '输入框已有草稿' : '恢复本次输入')
         .constraintSize({ minHeight: 48 }).fontSize(AppTheme.metaSize).fontColor(AppTheme.accent)
         .backgroundColor(AppTheme.accentSoft).enabled(!this.loading && this.inputLength(this.prompt) === 0)
-        .onClick(() => this.prompt = restoreDraft(this.prompt, message.failedPrompt))
+        .onClick(() => this.changePrompt(restoreDraft(this.prompt, message.failedPrompt), true))
       if (message.failureCode === 'LOGIN_REQUIRED' || message.failureCode === 'MODEL_AUTH_INVALID' ||
         message.failureCode === 'MODEL_KEY_REQUIRED') {
         Text(message.failureCode === 'LOGIN_REQUIRED' ? '重新登录前，请先复制要保留的输入。' : '可在个人设置检查模型 API Key。')
@@ -1361,7 +1599,8 @@ export struct AgentPage {
           .enabled(!this.deletionBusy).onClick(() => this.cancelRun())
       }
       if (this.runState.canRetryStart) {
-        Text('尚不能确定首次提交是否到达。重试会沿用同一运行标识和原问题，不创建另一笔请求。')
+        Text(this.runState.phase === 'local_error' ? '本次尚未发送；先完成本机保存，再沿用同一运行标识提交。' :
+          '尚不能确定首次提交是否到达。重试会沿用同一运行标识和原问题，不创建另一笔请求。')
           .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
         Button('重试提交同一运行').width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
           .fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft).borderRadius(AppTheme.controlRadius)
@@ -1638,6 +1877,7 @@ export struct AgentPage {
           Button(this.runRecordsExpanded ? '收起最近运行' : '最近运行 · 恢复查看').width('100%')
             .constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize).fontColor(AppTheme.accent)
             .backgroundColor(Color.Transparent).onClick(() => this.toggleRunRecords())
+          this.DraftRecovery()
           if (this.runRecordsExpanded) { this.RunRecords() }
           if (this.runState.runId.length > 0) { this.RunPanel() }
           if (!this.hasConversation()) {
@@ -1747,12 +1987,12 @@ export struct AgentPage {
             .backgroundColor(AppTheme.canvas).borderRadius(AppTheme.controlRadius)
             .border({ width: 1, color: AppTheme.outline })
             .padding({ left: 15, right: 12, top: 13, bottom: 10 })
-            .onChange((value) => this.prompt = value)
+            .onChange((value) => this.changePrompt(value))
           Button('发送').constraintSize({ minWidth: 64, minHeight: 48 }).fontSize(AppTheme.bodySize).fontWeight(FontWeight.Medium)
             .fontColor(this.inputLength(this.prompt) > 0 && this.inputLength(this.prompt) <= 8000 ? AppTheme.onAccent : AppTheme.muted)
             .backgroundColor(this.inputLength(this.prompt) > 0 && this.inputLength(this.prompt) <= 8000 ? AppTheme.accent : AppTheme.field)
             .borderRadius(AppTheme.controlRadius)
-            .enabled(!this.selectedModelBlocked() && !this.capturePending() && !this.loading && !this.deletionBusy && this.decisionId.length === 0 && this.inputLength(this.prompt) > 0 && this.inputLength(this.prompt) <= 8000).onClick(() => this.send())
+            .enabled(!this.draftBlocksSend() && !this.selectedModelBlocked() && !this.capturePending() && !this.loading && !this.deletionBusy && this.decisionId.length === 0 && this.inputLength(this.prompt) > 0 && this.inputLength(this.prompt) <= 8000).onClick(() => this.send())
         }.width('100%').alignItems(VerticalAlign.Bottom)
       }.width('100%').padding({ left: 20, right: 20, top: 12, bottom: 12 }).backgroundColor(AppTheme.surface)
         .border({ width: { top: 0.5 }, color: AppTheme.line })

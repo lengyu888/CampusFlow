@@ -8,8 +8,9 @@ const methods = (source,name) => stripTypeScriptTypes(source.slice(0,source.inde
   .replace(/@(State|Prop)\s+|@(Watch|StorageLink)\('[^']+'\)\s*/g,'').replace(`export struct ${name}`,`class ${name}`).replace(`struct ${name}`,`class ${name}`)+'\n}\n');
 const navigation=await import(`data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(read('utils/AppNavigation'))).toString('base64')}`);
 const names=['createNavigation','currentRoute','selectRoot','openSecondary','backNavigation','isRootRoute','hasBack'];
+const {DraftStore}=await import(`data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(read('utils/DraftStore'))).toString('base64')}`);
 const indexSource=read('pages/Index');
-const create=new Function('localHistory','historyScope','CampusFlowApi','AppStorage','AppTheme','Curve','ReminderCoordinator','PlatformReminderDriver',...names,
+const create=new Function('localHistory','historyScope','CampusFlowApi','AppStorage','AppTheme','Curve','ReminderCoordinator','PlatformReminderDriver','localDrafts',...names,
   methods(indexSource,'Index')+'\nreturn Index;');
 const deferred=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return{promise,resolve,reject};};
 function setup({activate=async()=>{},load=async()=>({tasks:[]}),cleanup=async()=>{},disable=async()=>{}}={}) {
@@ -27,7 +28,8 @@ function setup({activate=async()=>{},load=async()=>({tasks:[]}),cleanup=async()=
  class Driver{constructor(ctx){assert.equal(ctx,'context');}}
  class Api{constructor(base,token){this.base=base;this.token=token;}async planning(){calls.push(['planning',this.base,this.token]);return load();}async logout(){calls.push(['revoke',this.token]);}}
  const store={activate,clear:async()=>calls.push(['clear-cache']),info:()=>({scope:'cache',displayName:'a',count:0})};
- const Index=create(store,(base,id)=>`${base}|${id}`,Api,{setOrCreate(){}},{motion:()=>0},{EaseOut:0},Coordinator,Driver,...names.map(n=>navigation[n]));
+ let draftText;const drafts=new DraftStore({read:async()=>draftText,write:async value=>{draftText=value;},remove:async()=>{draftText=undefined;}});drafts.initialize();
+ const Index=create(store,(base,id)=>`${base}|${id}`,Api,{setOrCreate(){}},{motion:()=>0},{EaseOut:0},Coordinator,Driver,drafts,...names.map(n=>navigation[n]));
  const page=new Index();page.baseUrl='https://example.test';page.getUIContext=()=>({getHostContext:()=> 'context',animateTo:(_o,f)=>f()});
  return{page,calls,manager:()=>manager,publish:s=>published(s)};
 }
@@ -45,10 +47,12 @@ test('foreground updates and authoritative planning callbacks refresh the one co
  assert.deepEqual(f.calls,[['active',false],['active',true],['refresh']]);
  assert.equal(f.page.homeRefresh,home+1);assert.equal(f.page.planRefresh,plan+1);
 });
-test('service/account changes reject a stale task read and reconfigure without using cache scope',async()=>{
+test('service changes reject stale task reads and log out instead of forwarding old credentials',async()=>{
  const read=deferred(),f=setup({load:()=>read.promise});await f.page.authenticated(auth('a'));
  const old=f.manager().loader();f.page.baseUrl='https://other.test';f.page.reminderAccountChanged();
- read.resolve({tasks:[]});await assert.rejects(old,/ACCOUNT_CHANGED/);assert.equal(f.manager().scope,'https://other.test|a');
+ read.resolve({tasks:[]});await assert.rejects(old,/ACCOUNT_CHANGED/);assert.equal(f.page.token,'');
+ assert.equal(f.manager().scope,'https://example.test|a');
+ assert.equal(f.calls.some(c=>c[0]==='configure'&&c[1]==='https://other.test|a'),false);
 });
 test('logout closes auth immediately, still clears cache/revokes token, and failed OS cleanup is explicit and retryable',async()=>{
  const pending=deferred();const f=setup({cleanup:()=>pending.promise});await f.page.authenticated(auth('a'));f.calls.length=0;

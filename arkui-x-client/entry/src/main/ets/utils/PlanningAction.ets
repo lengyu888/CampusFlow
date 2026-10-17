@@ -199,6 +199,31 @@ export class PlanningActionController {
     if (this.current(revision)) { this.publish(); }
   }
 
+  // A saved ID grants read access only. The full authenticated candidate is shown again;
+  // this method never confirms, cancels, or creates a replacement proposal.
+  async recover(proposalId: string): Promise<void> {
+    if (!this.active || this.disposed || this.busy() || proposalId.length === 0) { return; }
+    const revision = ++this.revision;
+    this.state = { phase: 'checking', action: null, message: '正在查询上次提交的原提案…' };
+    this.intent = '';
+    this.publish();
+    try {
+      const latest = await this.api.actionStatus(proposalId);
+      if (!this.current(revision)) { return; }
+      if (!validReliableAction(latest) || latest.proposal_id !== proposalId) { throw new Error('mismatched recovery'); }
+      this.state.action = JSON.parse(JSON.stringify(latest)) as PendingAction;
+      this.accept(latest);
+      if (this.state.phase === 'retryable') {
+        this.state.message = '原提案仍待处理，请重新核对下方完整内容。仅在明确确认后执行同一提案。';
+      }
+    } catch {
+      if (!this.current(revision)) { return; }
+      this.state = { phase: 'uncertain', action: null,
+        message: '未查到可核验的原提案，保留提交编号。请稍后再查，不另建重复安排。' };
+    }
+    if (this.current(revision)) { this.publish(); }
+  }
+
   async check(): Promise<void> {
     const action = this.state.action;
     if (!this.active || this.disposed || action === null || !['uncertain', 'retryable'].includes(this.state.phase)) { return; }

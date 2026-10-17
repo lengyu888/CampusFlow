@@ -2,6 +2,8 @@ import { KeyboardAvoidMode } from '@ohos.arkui.UIContext';
 import common from '@ohos.app.ability.common';
 import { AuthResponse, UserProfile } from '../model/ApiModels';
 import { CampusFlowApi } from '../services/CampusFlowApi';
+import { localDrafts } from '../services/LocalDrafts';
+import { DraftLease } from '../utils/DraftStore';
 import { localHistory } from '../services/LocalHistory';
 import { historyScope } from '../utils/LocalHistoryStore';
 import { AgentPage } from './AgentPage';
@@ -45,6 +47,12 @@ struct Index {
   @State private historyDeleteBusy: boolean = false;
   @State private cleanupNeeded: boolean = false;
   private authRevision: number = 0;
+  private authBaseUrl: string = '';
+  @State private draftLease: DraftLease | null = null;
+  @State private draftNotice: string = '';
+  @State private draftCleanupNeeded: boolean = false;
+  @State private draftCleanupBusy: boolean = false;
+  @State private draftClearConfirm: boolean = false;
   @State private activeTab: number = 0;
   @State private agentPrompt: string = '';
   @State private promptRevision: number = 0;
@@ -74,9 +82,12 @@ struct Index {
     this.refreshLocalHistory();
     this.cacheNotice = AppStorage.get<string>('localHistoryError') ?? '';
     this.cleanupNeeded = this.cacheNotice.length > 0;
+    this.draftNotice = AppStorage.get<string>('localDraftsError') ?? '';
+    this.draftCleanupNeeded = this.draftNotice.length > 0;
   }
 
   aboutToDisappear(): void {
+    this.flushDrafts();
     this.pageActive = false;
     this.authRevision++;
     this.reminders?.dispose();
@@ -94,6 +105,11 @@ struct Index {
   }
 
   private reminderAccountChanged(): void {
+    if (this.authBaseUrl.length > 0 && this.authBaseUrl !== this.baseUrl) {
+      // A token issued by one service must never be reused against another service.
+      this.logout();
+      return;
+    }
     if (!this.pageActive || this.token.length === 0 || this.user.user_id.length === 0) { return; }
     const token = this.token; const baseUrl = this.baseUrl; const revision = this.authRevision;
     const manager = this.reminderManager();
@@ -107,7 +123,53 @@ struct Index {
     });
   }
 
-  private reminderActivityChanged(): void { this.reminders?.setActive(this.voiceForeground); }
+  private reminderActivityChanged(): void {
+    this.reminders?.setActive(this.voiceForeground);
+    if (!this.voiceForeground) { this.flushDrafts(); }
+  }
+
+  private flushDrafts(): void {
+    const lease = this.draftLease;
+    if (lease === null || !localDrafts.valid(lease)) { return; }
+    localDrafts.flush(lease).catch(() => {
+      if (this.pageActive && this.draftLease === lease) {
+        this.draftNotice = '部分输入尚未保存到本机，请回到原页面重试保存。';
+      }
+    });
+  }
+
+  private async clearLocalDrafts(): Promise<void> {
+    if (this.draftCleanupBusy) { return; }
+    if (this.draftLease !== null && localDrafts.operations(this.draftLease).length > 0) {
+      this.draftNotice = '还有提交结果待核对，请先在助手、计划或课表页核对，保留原操作编号。';
+      this.draftClearConfirm = false;
+      return;
+    }
+    if (!this.draftClearConfirm) { this.draftClearConfirm = true; return; }
+    this.draftClearConfirm = false;
+    const revision = this.authRevision;
+    const scope = this.token.length > 0 && this.user.user_id.length > 0 ?
+      historyScope(this.authBaseUrl || this.baseUrl, this.user.user_id) : '';
+    this.draftLease = null;
+    this.draftCleanupBusy = true;
+    try {
+      await localDrafts.clear();
+      if (revision !== this.authRevision) { return; }
+      if (scope.length > 0 && this.token.length > 0) {
+        const lease = await localDrafts.activate(scope);
+        if (revision !== this.authRevision) { return; }
+        this.draftLease = lease;
+      }
+      this.draftCleanupNeeded = false;
+      this.draftNotice = '本机未提交草稿已清除，已保存到账号的安排不受影响。';
+      AppStorage.setOrCreate<string>('localDraftsError', '');
+    } catch {
+      if (revision === this.authRevision) {
+        this.draftCleanupNeeded = true;
+        this.draftNotice = '本机草稿清理失败，旧内容未重新开放。请重试清理。';
+      }
+    } finally { if (revision === this.authRevision) { this.draftCleanupBusy = false; } }
+  }
 
   private async enableReminders(): Promise<void> {
     if (!this.pageActive || this.token.length === 0) { return; }
@@ -153,6 +215,20 @@ struct Index {
     const revision = ++this.authRevision;
     this.offlineHistory = false;
     this.cacheNotice = '';
+    this.authBaseUrl = this.baseUrl;
+    this.draftLease = null;
+    this.draftCleanupBusy = false;
+    this.draftClearConfirm = false;
+    // Invalidate the previous account synchronously; history failures do not disable drafts.
+    const draftsReady = localDrafts.activate(historyScope(this.baseUrl, auth.user.user_id))
+      .then((lease: DraftLease) => {
+        if (revision === this.authRevision) { this.draftLease = lease; this.draftNotice = ''; this.draftCleanupNeeded = false; }
+      }).catch(() => {
+        if (revision === this.authRevision) {
+          this.draftCleanupNeeded = true;
+          this.draftNotice = '本机草稿暂不可用，已有文件未覆盖。联网查看仍可使用。';
+        }
+      });
     try {
       await localHistory.activate(historyScope(this.baseUrl, auth.user.user_id), auth.user.display_name);
       if (revision !== this.authRevision) { return; }
@@ -163,6 +239,8 @@ struct Index {
       this.localHistoryCount = 0;
       this.cacheNotice = '本机保存暂不可用，当前可联网使用；新的对话尚不能离线回看。';
     }
+    await draftsReady;
+    if (revision !== this.authRevision) { return; }
     this.user = auth.user;
     this.resetNavigation();
     this.agentPrompt = '';
@@ -187,7 +265,16 @@ struct Index {
 
   private async logout(): Promise<void> {
     const revision = ++this.authRevision;
-    const api = new CampusFlowApi(this.baseUrl, this.token);
+    const api = new CampusFlowApi(this.authBaseUrl || this.baseUrl, this.token);
+    this.authBaseUrl = '';
+    this.draftLease = null;
+    this.draftClearConfirm = false;
+    this.draftCleanupBusy = false;
+    const draftResult = localDrafts.clear().then(() => {
+      if (revision === this.authRevision) { this.draftNotice = '退出后本机草稿已清除。'; this.draftCleanupNeeded = false; }
+    }).catch(() => {
+      if (revision === this.authRevision) { this.draftNotice = '已退出，但本机草稿尚未清理，请重试。'; this.draftCleanupNeeded = true; }
+    });
     this.token = '';
     this.cacheScope = '';
     this.localHistoryCount = 0;
@@ -223,6 +310,7 @@ struct Index {
       // Never restore a local sign-in when remote token revocation fails.
     }
     await reminderResult;
+    await draftResult;
   }
 
   private resetNavigation(): void {
@@ -327,7 +415,7 @@ struct Index {
         onOpenRoute: () => this.selectTab(6),
         onOpenServices: () => this.selectTab(7), onOpenProfile: () => this.selectTab(4) })
         .visibility(this.activeTab === 0 ? Visibility.Visible : Visibility.Hidden)
-      AgentPage({ baseUrl: this.baseUrl, token: this.token, initialPrompt: this.agentPrompt,
+      AgentPage({ baseUrl: this.baseUrl, token: this.token, draftLease: this.draftLease, initialPrompt: this.agentPrompt,
         voiceActive: this.activeTab === 1 && this.voiceForeground,
         historyScope: this.cacheScope, deletedSessionId: this.deletedSessionId,
         deletionRevision: this.deletionRevision,
@@ -340,7 +428,7 @@ struct Index {
         onOpenTaskDetails: (id) => this.openPlanDetails(id, ''),
         onOpenPlanDetails: (id) => this.openPlanDetails('', id), onOpenProfile: () => this.selectTab(4) })
         .visibility(this.activeTab === 1 ? Visibility.Visible : Visibility.Hidden)
-      PlanCenterPage({ baseUrl: this.baseUrl, token: this.token,
+      PlanCenterPage({ baseUrl: this.baseUrl, token: this.token, draftLease: this.draftLease,
         refreshKey: this.planRefresh, active: this.activeTab === 2 && this.voiceForeground,
         focusTaskId: this.focusTaskId, focusPlanId: this.focusPlanId, focusRevision: this.focusRevision,
         requestedView: this.planRequestedView, viewRevision: this.planViewRevision,
@@ -362,6 +450,9 @@ struct Index {
         this.SecondaryHeader('个人设置')
         Column() {
           ProfilePage({ baseUrl: this.baseUrl, token: this.token, user: this.user,
+            draftNotice: this.draftNotice, draftClearConfirm: this.draftClearConfirm,
+            draftCleanupBusy: this.draftCleanupBusy, onClearDrafts: () => this.clearLocalDrafts(),
+            onCancelClearDrafts: () => this.draftClearConfirm = false,
             reminderState: this.reminderState, reminderCleanupBusy: this.reminderCleanupBusy,
             onEnableReminders: () => this.enableReminders(), onDisableReminders: () => this.disableReminders(),
             onRefreshReminders: () => this.reminderAccountChanged(),
@@ -387,7 +478,7 @@ struct Index {
         onBack: () => this.goBack(), onOpenProfile: () => this.selectTab(4),
         onOpenAgent: (prompt) => this.openAgentWithPrompt(prompt) })
         .visibility(this.activeTab === 7 ? Visibility.Visible : Visibility.Hidden)
-      TimetablePage({ baseUrl: this.baseUrl, token: this.token, active: this.activeTab === 9 && this.voiceForeground,
+      TimetablePage({ baseUrl: this.baseUrl, token: this.token, draftLease: this.draftLease, active: this.activeTab === 9 && this.voiceForeground,
         onBack: () => this.goBack(), onTimetableChanged: () => this.timetableChanged(),
         onOpenPlan: () => this.openPlanList('agenda') })
         .visibility(this.activeTab === 9 ? Visibility.Visible : Visibility.Hidden)
@@ -432,6 +523,12 @@ struct Index {
         onBack: () => { this.offlineHistory = false; this.refreshLocalHistory(); } })
     } else if (this.token.length === 0) {
       Column() {
+      if (this.draftCleanupNeeded) {
+        FeedbackPanel({ kind: 'error', title: '本机草稿待处理', message: this.draftNotice,
+          actionLabel: this.draftClearConfirm ? '确认清除本机未提交草稿' : '清除本机草稿',
+          busy: this.draftCleanupBusy, onAction: () => this.clearLocalDrafts() })
+        if (this.draftClearConfirm) { Button('保留草稿').onClick(() => this.draftClearConfirm = false) }
+      }
       if (this.reminderCleanupNotice.length > 0) {
         FeedbackPanel({ kind: 'error', title: '系统提醒待清理', message: this.reminderCleanupNotice,
           actionLabel: '重试关闭提醒', busy: this.reminderCleanupBusy, onAction: () => this.disableReminders() })
@@ -449,7 +546,7 @@ struct Index {
       }.layoutWeight(1).width('100%')
       }.width('100%').height('100%')
     } else if (!this.user.onboarding_complete) {
-      OnboardingPage({ baseUrl: this.baseUrl, token: this.token,
+      OnboardingPage({ baseUrl: this.baseUrl, token: this.token, draftLease: this.draftLease,
         onCompleted: (updated) => this.user = updated, onReturnToLogin: () => this.logout() })
     } else {
       Column() {

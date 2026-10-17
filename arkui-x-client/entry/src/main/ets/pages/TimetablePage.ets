@@ -1,7 +1,9 @@
 import { TimetableEntry } from '../model/ApiModels';
 import { CampusFlowApi } from '../services/CampusFlowApi';
-import { TimetableMaintenance, TimetableMaintenanceState } from '../utils/TimetableMaintenance';
+import { TimetableMaintenance, TimetableMaintenanceState, TimetableDraftSnapshot, timetableOperationId } from '../utils/TimetableMaintenance';
 import { TimetableFieldErrors, TimetableIssue, normalizeTimetableEntry, validateTimetableEntry, validateTimetableList, parseTimetablePreview, expandWeeklyEntry } from '../utils/OnboardingTimetable';
+import { DraftLease, DraftKey, DraftRecord, DraftSaveState, TimetableDraft } from '../utils/DraftStore';
+import { localDrafts } from '../services/LocalDrafts';
 import { shanghaiDate } from '../utils/DailyAgenda';
 import { AppTheme } from '../theme/AppTheme';
 import { EvidencePanel } from '../components/EvidencePanel';
@@ -14,6 +16,7 @@ interface CourseRow { index: number; entry: TimetableEntry; }
 export struct TimetablePage {
   @Prop baseUrl: string;
   @Prop token: string;
+  @Watch('draftLeaseChanged') @Prop draftLease: DraftLease | null = null;
   @Watch('activityChanged') @Prop active: boolean = true;
   onBack: () => void = () => {};
   onTimetableChanged: () => void = () => {};
@@ -45,6 +48,18 @@ export struct TimetablePage {
   @State private reviewOpen: boolean = false;
   @State private clearRequested: boolean = false;
   @State private reloadRequested: boolean = false;
+  @State private recoverableDraft: DraftRecord | null = null;
+  @State private draftMessage: string = '';
+  @State private optionalFieldsExpanded: boolean = false;
+  @State private latestExpanded: boolean = false;
+  @State private latestPage: number = 0;
+  private anchorDate: string = shanghaiDate(Date.now());
+  private draftKey: DraftKey = { kind: 'timetable', ownerId: 'main' };
+  private boundLease: DraftLease | null = null;
+  private draftUnsubscribe: (() => void) | null = null;
+  private localRevision: number = 0;
+  private trackedOperationId: string = '';
+  private controllerGeneration: number = 0;
   private controller: TimetableMaintenance | null = null;
   private pageActive: boolean = false;
   private requestRevision: number = 0;
@@ -53,29 +68,39 @@ export struct TimetablePage {
 
   aboutToAppear(): void {
     this.pageActive = true;
+    this.bindDraftLease();
     if (this.controller === null) {
+      const generation = ++this.controllerGeneration;
       this.resetEditor();
       this.controller = new TimetableMaintenance(new CampusFlowApi(this.baseUrl, this.token),
         (state: TimetableMaintenanceState) => {
-          if (!this.pageActive) { return; }
+          if (!this.pageActive || (this.boundLease !== null && !localDrafts.valid(this.boundLease)) || generation !== this.controllerGeneration) { return; }
           if (JSON.stringify(this.entries) !== JSON.stringify(state.entries)) {
             this.entries = state.entries;
             this.draftRevision++;
             this.pendingDelete = -1;
             this.pageIndex = Math.max(0, Math.min(this.pageIndex, Math.ceil(this.entries.length / 10) - 1));
           }
+          if (state.latestRevision !== this.view.latestRevision) { this.latestPage = 0; }
           this.view = state;
           this.warnings = state.warnings;
           this.loading = this.previewBusy || ['loading', 'saving', 'checking'].includes(state.phase);
-          if (state.phase === 'saved') { this.reviewOpen = false; this.notice = ''; this.message = ''; }
+          if (state.phase === 'saved') {
+            this.reviewOpen = false; this.notice = ''; this.message = ''; this.clearAppliedDraft();
+          } else if (this.trackedOperationId.length > 0 && this.controller?.exportDraft()?.operation === null &&
+            ['stale', 'error'].includes(state.phase)) { this.releaseKnownOperation(); }
           if (!state.dirty) { this.sourceWarnings = []; }
-        }, () => { if (this.pageActive && this.active) { this.onTimetableChanged(); } });
+        }, () => { if (this.pageActive && this.active) { this.onTimetableChanged(); } }, timetableOperationId,
+        (draft: TimetableDraftSnapshot) => this.persistSubmission(draft));
     }
     this.controller.setActive(this.active);
   }
 
   aboutToDisappear(): void {
+    this.flushDraft();
+    this.draftUnsubscribe?.(); this.draftUnsubscribe = null;
     this.pageActive = false;
+    this.controllerGeneration++;
     this.requestRevision++;
     this.scheduleUrl = '';
     this.controller?.dispose();
@@ -84,6 +109,7 @@ export struct TimetablePage {
 
   private activityChanged(): void {
     if (!this.active) {
+      this.flushDraft();
       this.requestRevision++;
       this.previewBusy = false;
       this.scheduleUrl = '';
@@ -91,15 +117,145 @@ export struct TimetablePage {
     this.controller?.setActive(this.active);
   }
 
-  private editable(): boolean { return this.controller !== null && this.controller.canEdit(); }
+  private draftLeaseChanged(): void {
+    if (!this.pageActive) { return; }
+    const lease = this.draftLease;
+    if (this.boundLease !== null && (lease === null || lease.scope !== this.boundLease.scope || lease.generation !== this.boundLease.generation)) {
+      this.controllerGeneration++; this.requestRevision++; this.controller?.dispose(); this.controller = null;
+      this.entries = []; this.editorDirty = false; this.editingIndex = -1; this.sourceWarnings = [];
+      this.importEntries = []; this.scheduleUrl = ''; this.localRevision = 0; this.trackedOperationId = '';
+      this.reviewOpen = false; this.anchorDate = shanghaiDate(Date.now());
+      this.resetEditor(); this.editorOpen = false; this.latestExpanded = false; this.latestPage = 0;
+      this.view = { phase: 'idle', entries: [], revision: '', dirty: false, warnings: [], message: '', notice: '' };
+      this.message = ''; this.notice = ''; this.draftMessage = ''; this.loading = false;
+    }
+    if (lease === null || !localDrafts.valid(lease)) {
+      this.draftUnsubscribe?.(); this.draftUnsubscribe = null; this.boundLease = null; this.recoverableDraft = null; return;
+    }
+    this.aboutToAppear();
+  }
+  private observeDraftState(): void {
+    this.draftUnsubscribe?.();
+    this.draftUnsubscribe = localDrafts.subscribe((state: DraftSaveState) => {
+      if (!this.pageActive || this.boundLease === null || state.scope !== this.boundLease.scope ||
+        state.generation !== this.boundLease.generation) { return; }
+      if (state.phase === 'error' || state.phase === 'unavailable') { this.draftMessage = state.message; }
+      else if (state.phase === 'saved') { this.draftMessage = ''; }
+    });
+  }
+  private bindDraftLease(): void {
+    const lease = this.draftLease;
+    if (lease === null || !localDrafts.valid(lease)) { this.boundLease = null; this.recoverableDraft = null; return; }
+    if (this.boundLease?.scope === lease.scope && this.boundLease?.generation === lease.generation) { this.observeDraftState(); return; }
+    this.boundLease = lease; this.observeDraftState();
+    this.recoverableDraft = localDrafts.read(lease, this.draftKey) ?? null;
+    this.localRevision = this.recoverableDraft?.localRevision ?? 0;
+  }
+  private draftPayload(snapshot: TimetableDraftSnapshot): TimetableDraft {
+    return { baselineEntries: snapshot.baselineEntries, expectedRevision: snapshot.expectedRevision,
+      draftEntries: snapshot.draftEntries, editor: this.editor, editorOpen: this.editorOpen,
+      editorDirty: this.editorDirty, editingIndex: this.editingIndex, repeatWeeks: this.repeatWeeks,
+      sourceWarnings: this.sourceWarnings, anchorDate: this.anchorDate, timezone: 'Asia/Shanghai',
+      submission: snapshot.operation === null ? null : { operationId: snapshot.operation.id,
+        expectedRevision: snapshot.operation.revision, entries: snapshot.operation.entries, confirmClear: snapshot.operation.confirmClear } };
+  }
+  private stageDraft(): void {
+    const lease = this.boundLease;
+    if (!this.pageActive || this.recoverableDraft !== null || lease === null || !localDrafts.valid(lease)) { return; }
+    const snapshot = this.controller?.exportDraft();
+    if (snapshot === null || snapshot === undefined || snapshot.operation !== null || this.trackedOperationId.length > 0) { return; }
+    if (!this.view.dirty && !this.editorDirty && this.editingIndex < 0) { return; }
+    try { this.localRevision = localDrafts.stage(lease, this.draftKey, this.draftPayload(snapshot)).localRevision; this.draftMessage = ''; }
+    catch { this.draftMessage = '本机草稿暂未保存。内容仍在本页，请重试保存草稿。'; }
+  }
+  private async flushDraft(): Promise<void> {
+    if (this.trackedOperationId.length > 0 && this.view.phase === 'saved') { await this.clearAppliedDraft(); return; }
+    if (this.trackedOperationId.length > 0 && this.controller?.exportDraft()?.operation === null &&
+      ['stale', 'error'].includes(this.view.phase)) { await this.releaseKnownOperation(); }
+    this.stageDraft(); const lease = this.boundLease;
+    if (lease === null || !localDrafts.valid(lease)) { return; }
+    try { await localDrafts.flush(lease); }
+    catch { if (this.pageActive && this.boundLease === lease) { this.draftMessage = '本机草稿保存失败，请保留本页并重试。'; } }
+  }
+  private async persistSubmission(snapshot: TimetableDraftSnapshot): Promise<void> {
+    const lease = this.boundLease; const operation = snapshot.operation;
+    if (lease === null || !localDrafts.valid(lease) || operation === null) { throw new Error('draft storage unavailable'); }
+    if (this.trackedOperationId.length > 0 && this.trackedOperationId !== operation.id) { throw new Error('previous operation cleanup pending'); }
+    const existing = localDrafts.read(lease, this.draftKey) ?? null;
+    const payload = this.draftPayload(snapshot);
+    if (existing !== null && (existing.payload as TimetableDraft).submission?.operationId === operation.id) {
+      if (JSON.stringify((existing.payload as TimetableDraft).submission) !== JSON.stringify(payload.submission)) { throw new Error('operation mismatch'); }
+      this.localRevision = existing.localRevision;
+    } else { this.localRevision = localDrafts.stage(lease, this.draftKey, payload).localRevision; }
+    await localDrafts.flush(lease);
+    if (!localDrafts.valid(lease) || this.boundLease !== lease) { throw new Error('stale lease'); }
+    // beginOperation retains its in-memory block even when the disk write fails.
+    // Track it before awaiting, so known-unsent cleanup cannot orphan this draft revision.
+    this.trackedOperationId = operation.id;
+    await localDrafts.beginOperation(lease, { kind: 'timetable', id: operation.id, draftKind: 'timetable',
+      ownerId: 'main', localRevision: this.localRevision });
+    if (!localDrafts.valid(lease) || this.boundLease !== lease) { throw new Error('stale lease'); }
+  }
+  private async releaseKnownOperation(): Promise<void> {
+    const lease = this.boundLease; const id = this.trackedOperationId;
+    if (lease === null || id.length === 0) { return; }
+    try {
+      await localDrafts.resolveOperation(lease, 'timetable', id);
+      if (this.boundLease === lease && this.trackedOperationId === id && localDrafts.valid(lease)) {
+        this.trackedOperationId = ''; this.stageDraft();
+      }
+    } catch { if (this.boundLease === lease) { this.draftMessage = '本机操作记录清理失败，请重试核对；原草稿仍保留。'; } }
+  }
+  private async clearAppliedDraft(): Promise<void> {
+    const lease = this.boundLease; const id = this.trackedOperationId;
+    if (lease === null || id.length === 0) { return; }
+    try {
+      await localDrafts.resolveOperation(lease, 'timetable', id, true);
+      if (this.boundLease === lease && localDrafts.valid(lease)) { this.trackedOperationId = ''; this.localRevision = 0; this.draftMessage = ''; this.stageDraft(); }
+    } catch { if (this.boundLease === lease) { this.draftMessage = '账号保存已确认，本机草稿清理失败；可再次核对后清理。'; } }
+  }
+  private async discardStoredDraft(): Promise<void> {
+    const lease = this.boundLease;
+    if (lease === null || !localDrafts.valid(lease)) { return; }
+    const record = this.recoverableDraft ?? localDrafts.read(lease, this.draftKey) ?? null;
+    if (record === null || (record.payload as TimetableDraft).submission !== null || localDrafts.isBlocked(lease, this.draftKey)) { return; }
+    try {
+      const removed = await localDrafts.remove(lease, this.draftKey, record.localRevision);
+      if (removed && this.boundLease === lease && localDrafts.valid(lease)) { this.recoverableDraft = null; this.localRevision = 0; this.draftMessage = ''; }
+    } catch { if (this.boundLease === lease) { this.draftMessage = '未能舍弃本机草稿，请重试。'; } }
+  }
+  private restoreStoredDraft(): void {
+    const record = this.recoverableDraft; const lease = this.boundLease;
+    if (record === null || lease === null || !localDrafts.valid(lease) || this.controller === null) { return; }
+    const draft = record.payload as TimetableDraft;
+    const submission = draft.submission;
+    if (!this.controller.restoreDraft({ baselineEntries: draft.baselineEntries, expectedRevision: draft.expectedRevision,
+      draftEntries: draft.draftEntries, operation: submission === null ? null : { id: submission.operationId,
+        entries: submission.entries, revision: submission.expectedRevision, confirmClear: submission.confirmClear } },
+      draft.editorDirty || draft.editingIndex >= 0)) { this.draftMessage = '草稿无法恢复，已保留原记录。'; return; }
+    this.editor = { date: draft.editor.date, title: draft.editor.title, start_time: draft.editor.start_time,
+      end_time: draft.editor.end_time, location: draft.editor.location, teacher: draft.editor.teacher };
+    this.editorOpen = draft.editorOpen; this.editorDirty = draft.editorDirty; this.editingIndex = draft.editingIndex;
+    this.repeatWeeks = draft.repeatWeeks; this.sourceWarnings = draft.sourceWarnings; this.anchorDate = draft.anchorDate;
+    this.recoverableDraft = null; this.localRevision = record.localRevision;
+    this.trackedOperationId = submission?.operationId ?? ''; this.source = 'manual'; this.scheduleUrl = ''; this.importEntries = [];
+    this.reviewOpen = false; this.notice = '已恢复本机草稿，原日期和课表版本保持不变。';
+    if (submission !== null) { this.controller.checkResult(); } else { this.controller.refresh(); }
+  }
+  private latestRows(): CourseRow[] {
+    return (this.view.latestEntries ?? []).slice(this.latestPage * 10, this.latestPage * 10 + 10)
+      .map((entry: TimetableEntry, index: number): CourseRow => ({ index: this.latestPage * 10 + index, entry: entry }));
+  }
+  private editable(): boolean { return this.recoverableDraft === null && this.controller !== null && this.controller.canEdit(); }
   private current(revision: number): boolean { return this.pageActive && this.active && this.requestRevision === revision; }
   private resetEditor(): void {
-    this.editor = { date: shanghaiDate(Date.now()), title: '', start_time: '', end_time: '', location: '', teacher: '' };
+    this.editor = { date: this.anchorDate, title: '', start_time: '', end_time: '', location: '', teacher: '' };
     this.fieldErrors = { date: '', title: '', start_time: '', end_time: '', location: '', teacher: '' };
     this.editingIndex = -1; this.repeatWeeks = 1; this.editorDirty = false;
   }
   private syncPending(): void {
     this.controller?.setEditorPending(this.editorDirty || this.editingIndex >= 0 || this.importEntries.length > 0);
+    this.stageDraft();
   }
   private updateEditor(field: string, value: string): void {
     if (this.loading || !this.editable()) { return; }
@@ -137,7 +293,7 @@ export struct TimetablePage {
   }
   private newEntry(): void {
     if (this.loading || !this.editable() || this.editorDirty || this.editingIndex >= 0) { return; }
-    this.resetEditor(); this.source = 'manual'; this.editorOpen = true; this.message = '';
+    this.resetEditor(); this.source = 'manual'; this.editorOpen = true; this.message = ''; this.stageDraft();
   }
   private editEntry(index: number): void {
     if (this.loading || !this.editable() || index < 0 || index >= this.entries.length) { return; }
@@ -158,7 +314,7 @@ export struct TimetablePage {
   private removeEntry(index: number): void {
     if (this.loading || !this.editable() || this.pendingDelete !== index || this.editorDirty || this.editingIndex >= 0) { return; }
     if (this.controller?.replaceDraft(this.entries.filter((_entry: TimetableEntry, position: number) => position !== index))) {
-      this.pendingDelete = -1; this.notice = '已从草稿移除，账号课表尚未改动。'; this.message = '';
+      this.pendingDelete = -1; this.notice = '已从草稿移除，账号课表尚未改动。'; this.message = ''; this.stageDraft();
     }
   }
   private selectSource(source: string): void {
@@ -229,7 +385,7 @@ export struct TimetablePage {
     }
     if (this.controller?.replaceDraft([])) {
       this.clearRequested = false; this.sourceWarnings = []; this.editorOpen = false;
-      this.notice = '草稿已清空，账号原课表仍保留。保存时还需明确确认清空账号课表。';
+      this.notice = '草稿已清空，账号原课表仍保留。保存时还需明确确认清空账号课表。'; this.stageDraft();
     }
   }
   private reviewSave(): void {
@@ -256,7 +412,7 @@ export struct TimetablePage {
     if (loaded && this.current(revision)) {
       this.resetEditor(); this.editorOpen = false; this.importEntries = []; this.importWarnings = [];
       this.scheduleUrl = ''; this.sourceWarnings = []; this.reviewOpen = false; this.reloadRequested = false;
-      this.message = ''; this.notice = ''; this.syncPending();
+      this.message = ''; this.notice = ''; this.syncPending(); await this.discardStoredDraft();
     }
   }
   private returnFromReview(): void {
@@ -352,8 +508,13 @@ export struct TimetablePage {
             (value: string) => this.updateEditor('end_time', value))
         }.layoutWeight(1)
       }.width('100%').alignItems(VerticalAlign.Top)
-      Text('使用 24 小时制；每条课程对应一个具体日期，当天结束时间应晚于开始时间。')
+      Text('使用北京时间、24 小时制；每条课程对应一个具体日期，当天结束时间应晚于开始时间。')
         .fontSize(AppTheme.metaSize).lineHeight(19).fontColor(AppTheme.quiet).width('100%')
+      Button(this.optionalFieldsExpanded ? '收起补充信息' : '地点、教师与重复周次（选填）')
+        .width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
+        .fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft)
+        .onClick(() => this.optionalFieldsExpanded = !this.optionalFieldsExpanded)
+      if (this.optionalFieldsExpanded || this.fieldErrors.location.length > 0 || this.fieldErrors.teacher.length > 0) {
       this.FormField('上课地点（选填）', '例如：第7教研楼北406', this.editor.location, this.fieldErrors.location,
         (value: string) => this.updateEditor('location', value))
       this.FormField('任课教师（选填）', '老师姓名', this.editor.teacher, this.fieldErrors.teacher,
@@ -375,6 +536,10 @@ export struct TimetablePage {
           .fontSize(AppTheme.metaSize).lineHeight(19).fontColor(AppTheme.quiet).width('100%')
       } else {
         Text('此次只修改选中的日期，不会改变其他周的同名课程。')
+          .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+      }
+      } else {
+        Text(this.repeatWeeks === 1 ? '先录入这一次即可；需要时再补充地点或连续周次。' : `已设置连续 ${this.repeatWeeks} 周，可展开调整。`)
           .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
       }
       Button(this.editingIndex >= 0 ? '保存这次修改' : '加入课表草稿').width('100%')
@@ -474,6 +639,40 @@ export struct TimetablePage {
   }
 
   @Builder
+  private DraftRecovery() {
+    if (this.recoverableDraft !== null) {
+      FeedbackPanel({ kind: 'info', title: '有一份本机课表草稿',
+        message: '可恢复未填完的表单与原课表版本。恢复不会自动保存到账号；待核对的保存会先查询原操作。',
+        actionLabel: '恢复草稿', onAction: () => this.restoreStoredDraft() })
+      if ((this.recoverableDraft.payload as TimetableDraft).submission === null) {
+        Button('舍弃这份本机草稿').width('100%').constraintSize({ minHeight: 48 }).fontColor(AppTheme.quiet)
+          .backgroundColor(AppTheme.surface).onClick(() => this.discardStoredDraft())
+      }
+    }
+    if (this.draftMessage.length > 0) {
+      FeedbackPanel({ kind: 'error', title: '本机草稿', message: this.draftMessage,
+        actionLabel: '重试保存草稿', onAction: () => this.flushDraft() })
+    }
+    if ((this.view.latestRevision ?? '').length > 0) {
+      FeedbackPanel({ kind: 'info', title: '原草稿与最新课表不同',
+        message: `下方保留本机 ${this.entries.length} 次课程；账号最新为 ${(this.view.latestEntries ?? []).length} 次。不会把旧草稿绑定到新版本。` })
+      Button(this.latestExpanded ? '收起账号最新课表' : '查看账号最新课表').width('100%').constraintSize({ minHeight: 48 })
+        .fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft).onClick(() => this.latestExpanded = !this.latestExpanded)
+      if (this.latestExpanded) {
+        ForEach(this.latestRows(), (row: CourseRow) => { this.CourseCard(row, false) },
+          (row: CourseRow) => `latest-${this.view.latestRevision}-${row.index}`)
+        if ((this.view.latestEntries ?? []).length === 0) { Text('账号最新课表为空').fontColor(AppTheme.quiet) }
+        Row({ space: 8 }) {
+          Button('上一页').constraintSize({ minHeight: 48 }).layoutWeight(1).enabled(this.latestPage > 0)
+            .onClick(() => this.latestPage--)
+          Button('下一页').constraintSize({ minHeight: 48 }).layoutWeight(1)
+            .enabled((this.latestPage + 1) * 10 < (this.view.latestEntries ?? []).length).onClick(() => this.latestPage++)
+        }.width('100%')
+      }
+    }
+  }
+
+  @Builder
   private SavingFeedback() {
     if (this.view.phase === 'uncertain' || this.view.phase === 'retryable' || this.view.phase === 'checking') {
       FeedbackPanel({ kind: 'info', title: '先核对这笔保存', message: this.view.message,
@@ -512,6 +711,7 @@ export struct TimetablePage {
       }.width('100%').padding({ left: AppTheme.pageInset, right: AppTheme.pageInset, top: 16, bottom: 12 })
       Scroll(this.scroller) {
         Column({ space: AppTheme.sectionGap }) {
+          this.DraftRecovery()
           this.SavingFeedback()
           if (this.loading) {
             FeedbackPanel({ kind: 'loading', title: this.previewBusy ? '读取导入候选' : this.view.phase === 'saving' ? '保存已确认课表' : '读取并核对课表',
@@ -573,7 +773,7 @@ export struct TimetablePage {
             Button('保留当前草稿').width('100%').constraintSize({ minHeight: 48 }).fontColor(AppTheme.quiet)
               .backgroundColor(AppTheme.surface).onClick(() => this.reloadRequested = false)
           }
-          Text('草稿只在本次登录期间保留；退出账号会清除。所有课程按北京时间填写。')
+          Text('未完成草稿可保存在本机，恢复时仍需核对原课表版本；退出账号会清除。所有课程按北京时间填写。')
             .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
         }.width('100%').alignItems(HorizontalAlign.Start).padding({ left: AppTheme.pageInset, right: AppTheme.pageInset, top: 12, bottom: 24 })
       }.width('100%').layoutWeight(1).scrollBar(BarState.Off)

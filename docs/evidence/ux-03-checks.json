@@ -1,0 +1,47 @@
+{
+  "stage": "UX03",
+  "time": "2026-10-17T23:31:20.802856+00:00",
+  "backend": {
+    "passed": 618,
+    "deselected": 2,
+    "real_model": false
+  },
+  "client": {
+    "total": 689,
+    "passed": 688,
+    "skipped": 1,
+    "skip_reason": "Existing JDK dependent check; no JDK installed"
+  },
+  "static": {
+    "arkts_ts_files": 60,
+    "configuration_files": 17
+  },
+  "native_build": false,
+  "device_acceptance": false,
+  "logs": {
+    "ux03-backend-full.log": {
+      "bytes": 755,
+      "sha256": "a7270bc73aff5df1838794a6e1732c8fd9d8264ab3d1372ae7d2f8ebfc0ec6c8"
+    },
+    "ux03-client-final.log": {
+      "bytes": 81163,
+      "sha256": "4f36fc061ed15b34a75461d41950ced40017677df7941d2d265f4400c12c10da"
+    },
+    "ux03-static-final.log": {
+      "bytes": 226,
+      "sha256": "855b5d0bdb7111d21a5e800934c16d7e264da24a85697a14d5045ef552dd1b26"
+    },
+    "ux03-agent-final.log": {
+      "bytes": 4911,
+      "sha256": "95c2f70df0ccde69a1bbd3e779032c906c6b624812e4aff74231fbc557addb58"
+    },
+    "ux03-plan-new.log": {
+      "bytes": 2296,
+      "sha256": "d3ddfd22f15433ca5e3ff5c0cf6adf5c8105654b1b8b9454649377db85411aa4"
+    },
+    "ux03-api-test.log": {
+      "bytes": 1019,
+      "sha256": "636c5a463e3f230d6ab8d4f8aca591fafd56d9d369930065cd247e37575d8afb"
+    }
+  }
+}

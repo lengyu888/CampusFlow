@@ -33,7 +33,7 @@ function fixture(handlers = {}) {
     },
     async timetableOperation(operation) { calls.push(['lookup', operation]); return handlers.lookup ? handlers.lookup(operation) : receipt(); }
   };
-  const store = new TimetableMaintenance(api, state => updates.push(state), () => applied.push(true), () => id);
+  const store = new TimetableMaintenance(api, state => updates.push(state), () => applied.push(true), () => id, handlers.persist ?? (async () => {}));
   return { store, calls, updates, applied, setCurrent: next => current = clone(next) };
 }
 async function loaded(handlers = {}) { const f = fixture(handlers); f.store.setActive(true); await tick(); return f; }
@@ -128,7 +128,7 @@ test('known applied receipt plus GET failure retains read-only verification stat
 
 test('hidden save is invalidated without claiming cancellation; late response cannot notify; reentry queries original ID', async () => {
   const pending = deferred(); const { store, calls, setCurrent, applied } = await loaded({ save: () => pending.promise });
-  store.replaceDraft([row('更新')]); const save = store.save(); store.setActive(false); assert.equal(store.snapshot().phase, 'uncertain');
+  store.replaceDraft([row('更新')]); const save = store.save(); await tick(); store.setActive(false); assert.equal(store.snapshot().phase, 'uncertain');
   pending.resolve(receipt()); await save; assert.equal(applied.length, 0);
   store.setActive(true); setCurrent({ revision: b, entries: [row('更新')] }); await store.checkResult();
   assert.equal(applied.length, 1); assert.equal(calls.filter(call => call[0] === 'put').length, 1);
@@ -148,4 +148,51 @@ test('malformed snapshot and over-limit edits preserve prior verified data', asy
   assert.equal(store.replaceDraft(Array.from({ length: 501 }, (_, i) => row(`课${i}`))), false);
   assert.deepEqual(store.snapshot().entries, old.entries); setCurrent({ revision: 'bad', entries: [] }); await store.refresh();
   assert.deepEqual(store.snapshot().entries, old.entries); assert.equal(store.snapshot().revision, a);
+});
+
+
+test('persistent restore retains original revision, raw pending guard and latest-version comparison', async () => {
+  const f = await loaded();
+  const original = { baselineEntries: [row()], expectedRevision: a, draftEntries: [row('原草稿')], operation: null };
+  assert.equal(f.store.restoreDraft(original, true), true);
+  f.setCurrent({ revision: c, entries: [row('远端新课')] });
+  await f.store.refresh();
+  assert.equal(f.store.snapshot().revision, a);
+  assert.equal(f.store.snapshot().entries[0].title, '原草稿');
+  assert.equal(f.store.snapshot().latestEntries[0].title, '远端新课');
+  assert.equal(f.store.snapshot().latestRevision, c);
+  await f.store.save(); assert.equal(f.calls.some(call => call[0] === 'put'), false);
+  original.draftEntries[0].title = '外部改写'; assert.equal(f.store.exportDraft().draftEntries[0].title, '原草稿');
+});
+
+test('restarted unknown operation is query-only until exact not-found and replays frozen original body', async () => {
+  const f = await loaded({ lookup: async () => { throw error(404, 'TIMETABLE_OPERATION_NOT_FOUND'); } });
+  const body = [row('原操作')];
+  assert.equal(f.store.restoreDraft({ baselineEntries: [row()], expectedRevision: a, draftEntries: body,
+    operation: { id, entries: body, revision: a, confirmClear: false } }), true);
+  await f.store.retrySameOperation(); assert.equal(f.calls.some(call => call[0] === 'put'), false);
+  await f.store.checkResult(); await f.store.retrySameOperation();
+  assert.deepEqual(f.calls.find(call => call[0] === 'put'), ['put', body, a, id, false]);
+});
+
+test('durable snapshot is required before PUT; failed flush or hiding never sends the first write', async () => {
+  const wait = deferred(); const f = await loaded({ persist: () => wait.promise });
+  f.store.replaceDraft([row('草稿')]); const saving = f.store.save();
+  assert.equal(f.calls.some(call => call[0] === 'put'), false);
+  f.store.setActive(false); wait.resolve(); await saving;
+  assert.equal(f.calls.some(call => call[0] === 'put'), false);
+  const g = await loaded({ persist: async () => { throw new Error('disk'); } });
+  g.store.replaceDraft([row('保留')]); await g.store.save();
+  assert.equal(g.calls.some(call => call[0] === 'put'), false); assert.equal(g.store.canEdit(), true);
+  assert.equal(g.store.snapshot().entries[0].title, '保留');
+});
+
+test('retry persistence failure cannot erase an operation that may already have been applied', async () => {
+  let persistenceCalls = 0;
+  const f = await loaded({ persist: async () => { if (++persistenceCalls > 1) throw new Error('disk'); },
+    save: async () => { throw error(0, 'NETWORK_ERROR'); },
+    lookup: async () => { throw error(404, 'TIMETABLE_OPERATION_NOT_FOUND'); } });
+  f.store.replaceDraft([row('原操作')]); await f.store.save(); await f.store.checkResult(); await f.store.retrySameOperation();
+  assert.equal(f.store.snapshot().phase, 'uncertain'); assert.equal(f.store.exportDraft().operation.id, id);
+  assert.equal(f.store.canEdit(), false); assert.equal(f.calls.filter(call => call[0] === 'put').length, 1);
 });

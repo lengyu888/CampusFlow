@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { stripTypeScriptTypes } from 'node:module';
 import { test } from 'node:test';
-import { makeRunController, runSnapshot } from './helpers/agent-run-ui-fixture.mjs';
+import { makeDraftFixture, shanghaiDate, makeRunController, runSnapshot } from './helpers/agent-run-ui-fixture.mjs';
 
 const load = async name => {
   const code = readFileSync(new URL(`../entry/src/main/ets/utils/${name}.ets`, import.meta.url), 'utf8')
@@ -15,7 +15,7 @@ const controllerSource = source.slice(0, source.indexOf('\n  @Builder')).replace
   .replace(/^@Component\r?\n/m, '').replace(/@(Prop|State)\s+|@Watch\('[^']+'\)\s*/g, '')
   .replace('export struct AgentPage', 'class AgentPage') + '\n}\n';
 const makePage = new Function('CampusFlowApi', 'Scroller', 'CampusFlowRequestError', 'displayToolTraces', 'mergeActions',
-  'restoreDraft', 'localRequestFailure', 'AppTheme', 'localHistory', 'AgentRunController', ...Object.keys(reliability),
+  'restoreDraft', 'localRequestFailure', 'AppTheme', 'localHistory', 'AgentRunController', 'localDrafts', 'shanghaiDate', ...Object.keys(reliability),
   stripTypeScriptTypes(controllerSource) + '\nreturn AgentPage;');
 const now = '2028-10-20T08:00:00+08:00';
 const oldId = '11111111-1111-4111-8111-111111111111';
@@ -26,7 +26,7 @@ const proposal = id => ({ proposal_id: id, action: 'create', kind: 'task', title
 const deferred = () => { let resolve, reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; };
 const settle = async () => { for (let i = 0; i < 8; i++) await Promise.resolve(); };
 
-function harness(handlers = {}) {
+async function harness(handlers = {}) {
   const calls = [], saves = [];
   class Api {
     invoke(name, args) { calls.push({ name, args }); assert.equal(typeof handlers[name], 'function', `unexpected ${name}`); return handlers[name](...args); }
@@ -37,17 +37,20 @@ function harness(handlers = {}) {
     recentAgentRuns(...args) { return this.invoke('recentAgentRuns', args); }
     history(...args) { return this.invoke('history', args); }
   }
+  const drafts = await makeDraftFixture();
   const Page = makePage(Api, class {}, feedback.CampusFlowRequestError, feedback.displayToolTraces, feedback.mergeActions,
     feedback.restoreDraft, feedback.localRequestFailure, {}, { save: async (...args) => { saves.push(args); return true; } },
-    makeRunController(feedback.CampusFlowRequestError, feedback.localRequestFailure), ...Object.values(reliability));
+    makeRunController(feedback.CampusFlowRequestError, feedback.localRequestFailure), drafts.store, shanghaiDate, ...Object.values(reliability));
   const page = new Page(); page.baseUrl = 'https://fixture.invalid'; page.token = 'secret-token'; page.voiceActive = true;
   page.historyScope = 'account-a';
+  page.draftLease = drafts.lease;
+  page.draftLeaseChanged();
   return { page, calls, saves };
 }
 
 test('actual snapshots replace partial text after model reset and bind final proposals to the same run bubble', async () => {
   let request, next;
-  const { page, saves } = harness({ startAgentRun: async value => { request = value; return runSnapshot(value, null, { status: 'running', seq: 1 }); },
+  const { page, saves } = await harness({ startAgentRun: async value => { request = value; return runSnapshot(value, null, { status: 'running', seq: 1 }); },
     agentRunEvents: async () => ({ run_id: request.run_id, events: [], snapshot: next }), history: async () => history('问题', '最终回答') });
   page.prompt = '问题'; await page.send();
   const id = `run-${request.run_id}-assistant`;
@@ -70,7 +73,7 @@ test('actual snapshots replace partial text after model reset and bind final pro
 
 test('cancelled runs keep real partial content, preserve a new draft, cannot speak incomplete text and are not cached', async () => {
   let request;
-  const { page, saves, calls } = harness({ startAgentRun: async value => { request = value; return runSnapshot(value, null,
+  const { page, saves, calls } = await harness({ startAgentRun: async value => { request = value; return runSnapshot(value, null,
     { status: 'running', seq: 4, partial_answer: '已收到的一段' }); },
     cancelAgentRun: async () => runSnapshot(request, null, { status: 'cancelled', seq: 5, partial_answer: '已收到的一段' }) });
   page.prompt = '原问题'; await page.send(); page.prompt = '新的草稿';
@@ -85,7 +88,7 @@ test('cancelled runs keep real partial content, preserve a new draft, cannot spe
 
 test('a cancellation race displaying succeeded does not invent cancellation and caches the committed result', async () => {
   let request;
-  const { page, saves } = harness({ startAgentRun: async value => { request = value; return runSnapshot(value, null, { status: 'running' }); },
+  const { page, saves } = await harness({ startAgentRun: async value => { request = value; return runSnapshot(value, null, { status: 'running' }); },
     cancelAgentRun: async () => runSnapshot(request, turn(), { seq: 5 }), history: async () => history('问题', '完整回答') });
   page.prompt = '问题'; await page.send(); await page.cancelRun(); await settle();
   assert.equal(page.runState.snapshot.status, 'succeeded'); assert.equal(page.loading, false);
@@ -94,7 +97,7 @@ test('a cancellation race displaying succeeded does not invent cancellation and 
 
 test('unknown creation never becomes another run; explicit retry keeps the complete frozen request', async () => {
   const requests = []; let created;
-  const { page, calls } = harness({ startAgentRun: async request => {
+  const { page, calls } = await harness({ startAgentRun: async request => {
     requests.push(structuredClone(request)); if (requests.length === 1) throw feedback.localRequestFailure('NETWORK_ERROR');
     created = runSnapshot(request, turn()); return created;
   }, agentRun: async () => { throw new feedback.CampusFlowRequestError(404, 'RUN_NOT_FOUND', '未找到'); },
@@ -110,7 +113,7 @@ test('unknown creation never becomes another run; explicit retry keeps the compl
 
 test('hiding pauses reads without cancelling or restoring the submitted prompt; return recovers original identity', async () => {
   let request;
-  const { page, calls } = harness({ startAgentRun: async value => { request = value; return runSnapshot(value, null, { status: 'running' }); },
+  const { page, calls } = await harness({ startAgentRun: async value => { request = value; return runSnapshot(value, null, { status: 'running' }); },
     agentRun: async () => runSnapshot(request, turn(), { seq: 4 }), history: async () => history('问题', '完整回答') });
   page.prompt = '问题'; await page.send();
   page.voiceActive = false; page.voiceActivityChanged();
@@ -125,7 +128,7 @@ test('recovering a recent old run uses its own bubble and full history without s
   const request = { run_id: oldId, session_id: 'older-session', model: 'deepseek-flash', message: '旧问题' };
   const snapshot = runSnapshot(request, turn('旧回答', [proposal('older-proposal')]));
   const full = history('更早的问题', '更早的回答', '旧问题', '旧回答');
-  const { page, calls, saves } = harness({ recentAgentRuns: async limit => { assert.equal(limit, 20); return [snapshot]; },
+  const { page, calls, saves } = await harness({ recentAgentRuns: async limit => { assert.equal(limit, 20); return [snapshot]; },
     agentRun: async () => snapshot, history: async id => { assert.equal(id, request.session_id); return full; } });
   const originalSession = page.sessionId; page.prompt = '当前草稿';
   await page.toggleRunRecords(); await page.recoverRun(oldId); await settle(); await page.refreshRun(); await settle();
@@ -140,7 +143,7 @@ test('recovering a recent old run uses its own bubble and full history without s
 test('out-of-order history reads cannot replace a newer complete session with an older pair', async () => {
   const oldRead = deferred(); let reads = 0;
   const full = history('一问', '一答', '二问', '二答');
-  const { page, saves } = harness({ startAgentRun: async request => runSnapshot(request, turn(request.message === '一问' ? '一答' : '二答')),
+  const { page, saves } = await harness({ startAgentRun: async request => runSnapshot(request, turn(request.message === '一问' ? '一答' : '二答')),
     history: async () => ++reads === 1 ? oldRead.promise : full });
   page.prompt = '一问'; await page.send(); page.prompt = '二问'; await page.send(); await settle();
   oldRead.resolve(history('一问', '一答')); await settle();
@@ -149,21 +152,21 @@ test('out-of-order history reads cannot replace a newer complete session with an
 
 test('failed history sync preserves succeeded state and can be retried; logout suppresses a late history write', async () => {
   let snapshot, reads = 0;
-  const { page, saves } = harness({ startAgentRun: async request => { snapshot = runSnapshot(request, turn()); return snapshot; },
+  const { page, saves } = await harness({ startAgentRun: async request => { snapshot = runSnapshot(request, turn()); return snapshot; },
     agentRun: async () => snapshot, history: async () => { if (++reads === 1) throw Error('private-secret'); return history('问题', '完整回答'); } });
   page.prompt = '问题'; await page.send(); await settle();
   assert.equal(page.runState.snapshot.status, 'succeeded'); assert.match(page.cacheNotice, /保存失败/);
   assert.doesNotMatch(page.cacheNotice, /private-secret/);
   await page.refreshRun(); assert.equal(saves.length, 1);
   const late = deferred();
-  const second = harness({ startAgentRun: async request => runSnapshot(request, turn()), history: () => late.promise });
+  const second = await harness({ startAgentRun: async request => runSnapshot(request, turn()), history: () => late.promise });
   second.page.prompt = '问题'; await second.page.send(); second.page.aboutToDisappear();
   late.resolve(history('问题', '完整回答')); await settle(); assert.equal(second.saves.length, 0);
 });
 
 test('cache receives only white-listed history fields and hidden sends keep drafts untouched', async () => {
   const records = history('问题', '完整回答').map(item => ({ ...item, token: 'must-not-cache', raw_tools: [] }));
-  const { page, saves, calls } = harness({ startAgentRun: async request => runSnapshot(request, turn()), history: async () => records });
+  const { page, saves, calls } = await harness({ startAgentRun: async request => runSnapshot(request, turn()), history: async () => records });
   page.voiceActive = false; page.prompt = '问题'; await page.send(); assert.equal(page.prompt, '问题'); assert.equal(calls.length, 0);
   page.voiceActive = true; await page.send(); await settle();
   assert.deepEqual(saves[0][2], history('问题', '完整回答')); assert.doesNotMatch(JSON.stringify(saves), /must-not-cache|raw_tools|secret-token/);
@@ -173,7 +176,7 @@ test('deleting a recovered old session removes only its run, proposal and pendin
   const request = { run_id: oldId, session_id: 'deleted-old-session', model: 'deepseek-flash', message: '旧问题' };
   const snapshot = runSnapshot(request, turn('旧回答', [proposal('delete-old-proposal')]));
   const reading = deferred();
-  const { page, saves } = harness({ agentRun: async () => snapshot, history: () => reading.promise });
+  const { page, saves } = await harness({ agentRun: async () => snapshot, history: () => reading.promise });
   const currentSession = page.sessionId;
   page.prompt = '当前草稿'; const currentMessage = page.appendMessage('assistant', '当前会话内容');
   await page.recoverRun(oldId);
@@ -188,7 +191,7 @@ test('deleting a recovered old session removes only its run, proposal and pendin
 
 test('a user can cancel a known active run while a manual status GET is still waiting', async () => {
   let request; const reading = deferred();
-  const { page, calls } = harness({ startAgentRun: async value => { request = value; return runSnapshot(value, null, { status: 'running' }); },
+  const { page, calls } = await harness({ startAgentRun: async value => { request = value; return runSnapshot(value, null, { status: 'running' }); },
     agentRun: () => reading.promise, cancelAgentRun: async () => runSnapshot(request, null, { status: 'cancelled', seq: 3 }) });
   page.prompt = '问题'; await page.send(); const checking = page.refreshRun();
   assert.equal(page.runState.phase, 'checking'); assert.equal(page.canCancelRun(), true);
@@ -200,7 +203,7 @@ test('a user can cancel a known active run while a manual status GET is still wa
 
 test('a deleted run ID clears its current run content and starts a fresh session without restoring or replaying the old prompt', async () => {
   let request;
-  const { page, calls } = harness({ startAgentRun: async value => { request = value; return runSnapshot(value, null, { status: 'running' }); },
+  const { page, calls } = await harness({ startAgentRun: async value => { request = value; return runSnapshot(value, null, { status: 'running' }); },
     agentRun: async () => { throw new feedback.CampusFlowRequestError(410, 'RUN_DELETED', '已删除'); } });
   const previous = page.sessionId; page.prompt = '被删除的原问题'; await page.send(); page.prompt = '新草稿';
   await page.refreshRun();
@@ -211,7 +214,7 @@ test('a deleted run ID clears its current run content and starts a fresh session
 });
 
 test('a definitive model failure restores an empty draft, keeps only real fragments and displays a safe actionable reason', async () => {
-  const { page, saves } = harness({ startAgentRun: async request => runSnapshot(request, null, {
+  const { page, saves } = await harness({ startAgentRun: async request => runSnapshot(request, null, {
     status: 'failed', partial_answer: '', error_code: 'MODEL_KEY_REQUIRED', error_message: 'private-secret-provider-detail' }) });
   page.prompt = '保留问题'; await page.send();
   assert.equal(page.loading, false); assert.equal(page.prompt, '保留问题'); assert.equal(page.runState.snapshot.status, 'failed');
