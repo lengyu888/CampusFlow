@@ -26,7 +26,7 @@ const indexSource = readFileSync(new URL('../entry/src/main/ets/pages/Index.ets'
 const indexController = indexSource.slice(0, indexSource.indexOf('\n  @Builder'))
   .replace(/^import [^\n]+;\r?\n/gm, '')
   .replace(/^@(Entry|Component)\r?\n/gm, '')
-  .replace(/@(State|Prop)\s+|@StorageLink\('[^']+'\)\s*/g, '')
+  .replace(/@(State|Prop)\s+|@(StorageLink|Watch)\('[^']+'\)\s*/g, '')
   .replace('struct Index', 'class Index') + '\n}\n';
 const createIndexFactory = new Function('localHistory', 'historyScope', 'CampusFlowApi', 'AppStorage', ...navNames,
   stripTypeScriptTypes(indexController) + '\nreturn Index;');
@@ -273,6 +273,7 @@ test('leaving History during deletion still clears the captured cache and notifi
     handlers: { deleteSession: () => remote.promise } });
   const Index = createIndex({}, historyScope, class {}, { setOrCreate: () => {} });
   const index = new Index();
+  index.reminders = { configure() {}, setActive() {}, refresh() {}, async logout() {}, dispose() {} };
   index.token = 'same-account-token';
   index.authRevision = 7;
   index.activeTab = 5;
@@ -319,6 +320,7 @@ test('logout and another login invalidate an old deletion without touching the n
   }
   const Index = createIndex(store, historyScope, Api, { setOrCreate: () => {} });
   const index = new Index();
+  index.reminders = { configure() {}, setActive() {}, refresh() {}, async logout() {}, dispose() {} };
   index.token = 'old-account-token';
   index.authRevision = 4;
   index.cacheScope = h.scope;

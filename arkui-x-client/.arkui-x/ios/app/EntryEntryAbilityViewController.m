@@ -14,8 +14,10 @@
  */
 
 #import "EntryEntryAbilityViewController.h"
+#import "CFPlatformBridge.h"
 
 @interface EntryEntryAbilityViewController ()
+@property(nonatomic, strong) CFPlatformBridge *platformBridge;
 
 @end
 
@@ -23,7 +25,7 @@
 - (instancetype)initWithInstanceName:(NSString *)instanceName {
     self = [super initWithInstanceName:instanceName];
     if (self) {
-
+        self.platformBridge = [[CFPlatformBridge alloc] initWithManager:[self getBridgeManager]];
     }
     return self;
 }
@@ -32,5 +34,9 @@
     [super viewDidLoad];
     self.edgesForExtendedLayout = UIRectEdgeNone;
     self.extendedLayoutIncludesOpaqueBars = YES;
+}
+- (void)viewDidDisappear:(BOOL)animated {
+    [super viewDidDisappear:animated];
+    [self.platformBridge stopVoiceForBackground];
 }
 @end

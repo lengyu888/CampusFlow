@@ -19,3 +19,8 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# ArkUI-X BridgePlugin finds dispatch by reflection. Keep its wire name in release builds.
+-keep class com.campusflow.agent.CampusFlowPlatformBridge {
+    public java.lang.String dispatch(java.lang.String);
+}

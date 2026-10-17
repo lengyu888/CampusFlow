@@ -12,8 +12,8 @@ assert.equal(source.split(loadExpression).length, 2, 'the native module loading 
 // Execute the real adapter with only its platform APIs and native module loader replaced.
 // This is an async/platform contract test, not a native SDK build or microphone test.
 const adapterSource = source.replace(/^import [^\n]+;\r?\n/gm, '')
-  .replace(loadExpression, 'loadProvider()').replace('export class PlatformVoiceDriver', 'class PlatformVoiceDriver');
-const createAdapter = new Function('VoiceInteractionError', 'deviceInfo', 'canIUse', 'loadProvider',
+  .replace(loadExpression, 'loadProvider()').replace("import('./NativeBridgeVoiceDriver')", 'loadNativeProvider()').replace('export class PlatformVoiceDriver', 'class PlatformVoiceDriver');
+const createAdapter = new Function('VoiceInteractionError', 'deviceInfo', 'canIUse', 'loadProvider', 'loadNativeProvider',
   stripTypeScriptTypes(adapterSource, { mode: 'transform' }) + '\nreturn PlatformVoiceDriver;').bind(null, VoiceInteractionError);
 
 const abilitySource = readFileSync(new URL('../entry/src/main/ets/entryability/EntryAbility.ets', import.meta.url), 'utf8')
@@ -236,4 +236,31 @@ test('EntryAbility lifecycle writes actual foreground state and clears stale tru
   assert.equal(values.get('voiceForeground'), false);
   assert.deepEqual(changes.filter(([key]) => key === 'voiceForeground').map(([, value]) => value),
     [false, true, false, true, false]);
+});
+
+// Native bridge capabilities become available only after a real asynchronous probe.
+test('Android/iOS probe the shared bridge without importing Harmony or asking permissions', async () => {
+  for (const os of ['Android 15', 'iOS 18', 'iPadOS 18']) {
+    const calls = [];
+    class Native { async probe() { calls.push('probe'); return { recognition: true, synthesis: true }; }
+      async startListening(id) { calls.push(id); } dispose() { calls.push('dispose'); } }
+    const Adapter = createAdapter({ osFullName: os }, () => { throw Error('no Harmony probe'); },
+      () => { throw Error('no Harmony import'); }, async () => ({ NativeBridgeVoiceDriver: Native }));
+    const driver = new Adapter(undefined);
+    assert.deepEqual(driver.capabilities(), { recognition: false, synthesis: false });
+    assert.deepEqual(await driver.probe(), { recognition: true, synthesis: true });
+    await driver.startListening('explicit', recognitionEvents);
+    assert.deepEqual(calls, ['probe', 'explicit']);
+  }
+});
+test('dispose during asynchronous native capability probe never enables voice', async () => {
+  const pending = deferred(); let disposed = 0;
+  class Native { async probe() { return pending.promise; } dispose() { disposed++; } }
+  const Adapter = createAdapter({ osFullName: 'Android 15' }, () => false, () => {},
+    async () => ({ NativeBridgeVoiceDriver: Native }));
+  const driver = new Adapter(undefined); const checking = driver.probe();
+  await Promise.resolve(); await Promise.resolve(); driver.dispose(); pending.resolve({ recognition: true, synthesis: true });
+  assert.deepEqual(await checking, { recognition: false, synthesis: false });
+  assert.deepEqual(driver.capabilities(), { recognition: false, synthesis: false });
+  assert.equal(disposed, 1);
 });

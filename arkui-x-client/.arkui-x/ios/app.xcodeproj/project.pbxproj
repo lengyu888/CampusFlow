@@ -15,6 +15,12 @@
 		F0AF1ADD27D36856008C55DD /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = F0AF1ADC27D36856008C55DD /* Assets.xcassets */; };
 		F0AF1AE027D36856008C55DD /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = F0AF1ADE27D36856008C55DD /* LaunchScreen.storyboard */; };
 		F0AF1AE327D36856008C55DD /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = F0AF1AE227D36856008C55DD /* main.m */; };
+		CF1500000000000000000003 /* CFNativeProtocol.m in Sources */ = {isa = PBXBuildFile; fileRef = CF1500000000000000000002 /* CFNativeProtocol.m */; };
+		CF1500010000000000000003 /* CFReminderService.m in Sources */ = {isa = PBXBuildFile; fileRef = CF1500010000000000000002 /* CFReminderService.m */; };
+		CF1500020000000000000003 /* CFPlatformBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = CF1500020000000000000002 /* CFPlatformBridge.m */; };
+		CF1510000000000000000002 /* Speech.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = CF1510000000000000000001 /* Speech.framework */; };
+		CF1510010000000000000002 /* AVFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = CF1510010000000000000001 /* AVFoundation.framework */; };
+		CF1510020000000000000002 /* UserNotifications.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = CF1510020000000000000001 /* UserNotifications.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -43,6 +49,15 @@
 		F0AF1ADF27D36856008C55DD /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		F0AF1AE127D36856008C55DD /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		F0AF1AE227D36856008C55DD /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
+		CF1500000000000000000001 /* CFNativeProtocol.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = CFNativeProtocol.h; sourceTree = "<group>"; };
+		CF1500000000000000000002 /* CFNativeProtocol.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = CFNativeProtocol.m; sourceTree = "<group>"; };
+		CF1500010000000000000001 /* CFReminderService.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = CFReminderService.h; sourceTree = "<group>"; };
+		CF1500010000000000000002 /* CFReminderService.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = CFReminderService.m; sourceTree = "<group>"; };
+		CF1500020000000000000001 /* CFPlatformBridge.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = CFPlatformBridge.h; sourceTree = "<group>"; };
+		CF1500020000000000000002 /* CFPlatformBridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = CFPlatformBridge.m; sourceTree = "<group>"; };
+		CF1510000000000000000001 /* Speech.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Speech.framework; path = System/Library/Frameworks/Speech.framework; sourceTree = SDKROOT; };
+		CF1510010000000000000001 /* AVFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVFoundation.framework; path = System/Library/Frameworks/AVFoundation.framework; sourceTree = SDKROOT; };
+		CF1510020000000000000001 /* UserNotifications.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UserNotifications.framework; path = System/Library/Frameworks/UserNotifications.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -50,6 +65,9 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				CF1510000000000000000002 /* Speech.framework in Frameworks */,
+				CF1510010000000000000002 /* AVFoundation.framework in Frameworks */,
+				CF1510020000000000000002 /* UserNotifications.framework in Frameworks */,
 				DF9C1B5E28B9FC3A005DCF58 /* libarkui_ios.xcframework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -78,6 +96,12 @@
 		F0AF1ACF27D3684F008C55DD /* app */ = {
 			isa = PBXGroup;
 			children = (
+				CF1500000000000000000001 /* CFNativeProtocol.h */,
+				CF1500000000000000000002 /* CFNativeProtocol.m */,
+				CF1500010000000000000001 /* CFReminderService.h */,
+				CF1500010000000000000002 /* CFReminderService.m */,
+				CF1500020000000000000001 /* CFPlatformBridge.h */,
+				CF1500020000000000000002 /* CFPlatformBridge.m */,
 				DF4BEDE829F4F5280060CCEB /* EntryEntryAbilityViewController.h */,
 				DF4BEDE729F4F5270060CCEB /* EntryEntryAbilityViewController.m */,
 				F0AF1AD027D3684F008C55DD /* AppDelegate.h */,
@@ -93,6 +117,9 @@
 		F0AF1AEB27D36948008C55DD /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				CF1510000000000000000001 /* Speech.framework */,
+				CF1510010000000000000001 /* AVFoundation.framework */,
+				CF1510020000000000000001 /* UserNotifications.framework */,
 				DF9C1B5D28B9FC3A005DCF58 /* libarkui_ios.xcframework */,
 			);
 			name = Frameworks;
@@ -169,6 +196,9 @@
 			buildActionMask = 2147483647;
 			files = (
 				F0AF1AD227D3684F008C55DD /* AppDelegate.m in Sources */,
+				CF1500000000000000000003 /* CFNativeProtocol.m in Sources */,
+				CF1500010000000000000003 /* CFReminderService.m in Sources */,
+				CF1500020000000000000003 /* CFPlatformBridge.m in Sources */,
 				DF4BEDE929F4F5280060CCEB /* EntryEntryAbilityViewController.m in Sources */,
 				F0AF1AE327D36856008C55DD /* main.m in Sources */,
 			);
@@ -306,10 +336,8 @@
 				ARCHS = arm64;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_IDENTITY = "iPhone Distribution: ";
-				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = MCN34247SC;
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = app/Info.plist;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -324,7 +352,6 @@
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.campusflow.agent;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				PROVISIONING_PROFILE_SPECIFIER = "shiseido sc adhoc";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -336,10 +363,8 @@
 				ARCHS = arm64;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_IDENTITY = "iPhone Distribution: ";
-				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = MCN34247SC;
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = app/Info.plist;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -354,7 +379,6 @@
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.campusflow.agent;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				PROVISIONING_PROFILE_SPECIFIER = "shiseido sc adhoc";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
