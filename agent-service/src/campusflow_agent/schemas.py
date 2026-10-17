@@ -1,7 +1,8 @@
 from datetime import date, datetime
 from typing import Any, Literal
+from uuid import UUID
 
-from pydantic import BaseModel, Field, SecretStr
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, StrictBool
 
 
 class ChatRequest(BaseModel):
@@ -218,6 +219,29 @@ class TimetableEntry(BaseModel):
     end_time: str = Field(pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
     location: str = Field(default="", max_length=120)
     teacher: str = Field(default="", max_length=80)
+
+
+class TimetableSnapshot(BaseModel):
+    entries: list[TimetableEntry]
+    revision: str
+
+
+class TimetableSaveRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    entries: list[TimetableEntry] = Field(max_length=500)
+    expected_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
+    operation_id: UUID
+    confirm_clear: StrictBool = False
+
+
+class TimetableSaveReceipt(BaseModel):
+    operation_id: UUID
+    status: Literal["applied"] = "applied"
+    previous_revision: str
+    revision: str
+    entry_count: int
+    applied_at: datetime
 
 
 class PlanningConflict(BaseModel):

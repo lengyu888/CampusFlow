@@ -153,6 +153,7 @@ class CampusStore:
 
     def get_schedule(self, user_id: str, date: str) -> list[dict[str, str]]:
         with self._lock:
+            has_confirmed_context = user_id in self._user_schedules
             imported = [
                 {
                     "title": item.get("title", ""),
@@ -181,7 +182,7 @@ class CampusStore:
                     }
                 )
         scheduled = sorted(imported + scheduled_tasks, key=lambda item: item.get("start", ""))
-        if scheduled:
+        if scheduled or has_confirmed_context:
             return scheduled
 
         # Demonstration fallback for users that have not completed onboarding.

@@ -64,7 +64,7 @@ test('secondary navigation pushes and back pops one frame while preserving the r
 test('duplicate taps do not grow a stack and unsupported routes do not alter navigation', () => {
   const state = openSecondary(createNavigation(), 5);
   assert.deepEqual(openSecondary(state, 5), state);
-  for (const route of [-1, 9, NaN, 0, 1, 2, 8]) assert.deepEqual(openSecondary(state, route), state);
+  for (const route of [-1, 10, NaN, 0, 1, 2, 8]) assert.deepEqual(openSecondary(state, route), state);
   for (const route of [-1, 9, NaN, 3, 4, 5, 6, 7]) assert.deepEqual(selectRoot(state, route, true), state);
 });
 
@@ -97,4 +97,16 @@ test('authentication reset discards all prior account stacks without affecting t
   }
   assert.equal(currentRoute(previous), 7);
   assert.equal(currentRoute(selectRoot(previous, 1)), 5);
+});
+
+ test('timetable maintenance returns through settings to its original campus root', () => {
+  let state = selectRoot(createNavigation(), 8);
+  state = openSecondary(state, 4);
+  state = openSecondary(state, 9);
+  assert.equal(currentRoute(state), 9);
+  assert.deepEqual(openSecondary(state, 9), state);
+  state = backNavigation(state);
+  assert.equal(currentRoute(state), 4);
+  state = backNavigation(state);
+  assert.equal(currentRoute(state), 8);
 });

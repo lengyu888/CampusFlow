@@ -17,7 +17,7 @@ const controllerSource = source.slice(0, buildStart)
   .replace(/^@Component\r?\n/m, '')
   .replace(/@(Prop|State)\s+|@Watch\('[^']+'\)\s*/g, '')
   .replace('export struct HistoryPage', 'class HistoryPage') + '\n}\n';
-const createController = new Function('CampusFlowApi', 'localHistory', 'CampusFlowRequestError', 'AppTheme', 'Curve',
+const createController = new Function('CampusFlowApi', 'localHistory', 'CampusFlowRequestError', 'AppTheme', 'Curve', 'Scroller',
   stripTypeScriptTypes(controllerSource) + '\nreturn HistoryPage;');
 const navigationSource = readFileSync(new URL('../entry/src/main/ets/utils/AppNavigation.ets', import.meta.url), 'utf8');
 const navigation = await import(`data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(navigationSource)).toString('base64')}`);
@@ -97,7 +97,8 @@ function harness({ handlers = {}, cached = [], removed = [], local = {} } = {}) 
     }
   };
   const Controller = createController(Api, store, CampusFlowRequestError,
-    { motion: (duration) => duration }, { EaseOut: 'fixture-ease-out' });
+    { motion: (duration) => duration }, { EaseOut: 'fixture-ease-out' },
+    class { scrollTo(value) { this.position = value; } currentOffset() { return { yOffset: 0 }; } });
   const page = new Controller();
   page.baseUrl = 'http://fixture.invalid';
   page.token = 'test-only';
@@ -434,4 +435,35 @@ test('an empty server history removes the stale local copy instead of persisting
   assert.deepEqual(h.localCalls, [{ method: 'removeSession', args: [h.scope, summary.session_id, true] }]);
   assert.deepEqual(h.deleted, [summary.session_id]);
   assert.equal(h.page.loading, false);
+});
+
+test('failed uncached history can be retried explicitly without inventing a local copy', async () => {
+  let unavailable = true;
+  const summary = session('retry');
+  const h = harness({ handlers: { history: async () => {
+    if (unavailable) throw new Error('temporary');
+    return messages('重试得到的完整回答');
+  } } });
+  await h.page.openSession(summary);
+  assert.equal(h.page.selected, null);
+  assert.equal(h.localCalls.length, 0);
+  unavailable = false;
+  await h.page.retryRead();
+  assert.equal(h.page.selected.session_id, 'retry');
+  assert.equal(h.page.messages[1].content, '重试得到的完整回答');
+});
+
+test('return from detail restores the list source and saved reading position', async () => {
+  const summary = session('cached');
+  const h = harness({ cached: [{ summary, history: messages() }] });
+  h.page.offlineOnly = true;
+  await h.page.reload();
+  const listSource = h.page.sourceText;
+  h.page.listOffset = 620;
+  await h.page.openSession(summary);
+  h.page.goBack();
+  h.page.restoreListPosition();
+  assert.equal(h.page.sourceText, listSource);
+  assert.deepEqual(h.page.listScroller.position, { xOffset: 0, yOffset: 620, animation: false });
+  assert.equal(h.apiCalls.length, 0);
 });

@@ -15,6 +15,7 @@ import { RoutePage } from './RoutePage';
 import { SkillsPage } from './SkillsPage';
 import { AppIcon } from '../components/AppIcon';
 import { AppTheme } from '../theme/AppTheme';
+import { TimetablePage } from './TimetablePage';
 import { CampusPage } from './CampusPage';
 import { AppNavigationState, createNavigation, currentRoute, selectRoot, openSecondary, backNavigation, isRootRoute, hasBack } from '../utils/AppNavigation';
 
@@ -273,18 +274,19 @@ struct Index {
         onPlanningChanged: () => this.homeRefresh++,
         onOpenAgent: (prompt) => this.openAgentWithPrompt(prompt) })
         .visibility(this.activeTab === 2 ? Visibility.Visible : Visibility.Hidden)
-      CampusPage({ user: this.user, onOpenRoute: () => this.selectTab(6),
+      CampusPage({ user: this.user, onOpenTimetable: () => this.selectTab(9), onOpenRoute: () => this.selectTab(6),
         onOpenServices: () => this.selectTab(7), onOpenSkills: () => this.selectTab(3),
         onOpenProfile: () => this.selectTab(4), onOpenAgent: (prompt) => this.openAgentWithPrompt(prompt) })
         .visibility(this.activeTab === 8 ? Visibility.Visible : Visibility.Hidden)
       Column() {
         this.SecondaryHeader('能力管理')
-        Column() { SkillsPage({ baseUrl: this.baseUrl, token: this.token }) }.layoutWeight(1).width('100%')
+        Column() { SkillsPage({ baseUrl: this.baseUrl, token: this.token, active: this.activeTab === 3 && this.voiceForeground }) }.layoutWeight(1).width('100%')
       }.width('100%').height('100%').visibility(this.activeTab === 3 ? Visibility.Visible : Visibility.Hidden)
       Column() {
         this.SecondaryHeader('个人设置')
         Column() {
           ProfilePage({ baseUrl: this.baseUrl, token: this.token, user: this.user,
+            active: this.activeTab === 4 && this.voiceForeground, onOpenTimetable: () => this.selectTab(9),
             onUserChanged: (updated) => this.user = updated, onLogout: () => this.logout(),
             onTimetableChanged: () => this.timetableChanged(), onOpenPlan: () => this.openPlanList(),
             onOpenAgent: (prompt) => this.openAgentWithPrompt(prompt) })
@@ -298,12 +300,18 @@ struct Index {
           onSessionDeleted: (id, revision) => this.sessionDeleted(id, revision),
           onDeleteBusyChange: (busy, revision) => this.deletionBusyChanged(busy, revision),
           onBack: () => this.goBack() })
-      } else if (this.activeTab === 6) {
-        RoutePage({ baseUrl: this.baseUrl, token: this.token, onBack: () => this.goBack() })
-      } else if (this.activeTab === 7) {
-        CampusServicesPage({ baseUrl: this.baseUrl, token: this.token, onBack: () => this.goBack(),
-          onOpenAgent: (prompt) => this.openAgentWithPrompt(prompt) })
       }
+      RoutePage({ baseUrl: this.baseUrl, token: this.token, active: this.activeTab === 6 && this.voiceForeground,
+        onBack: () => this.goBack() })
+        .visibility(this.activeTab === 6 ? Visibility.Visible : Visibility.Hidden)
+      CampusServicesPage({ baseUrl: this.baseUrl, token: this.token, active: this.activeTab === 7 && this.voiceForeground,
+        onBack: () => this.goBack(), onOpenProfile: () => this.selectTab(4),
+        onOpenAgent: (prompt) => this.openAgentWithPrompt(prompt) })
+        .visibility(this.activeTab === 7 ? Visibility.Visible : Visibility.Hidden)
+      TimetablePage({ baseUrl: this.baseUrl, token: this.token, active: this.activeTab === 9 && this.voiceForeground,
+        onBack: () => this.goBack(), onTimetableChanged: () => this.timetableChanged(),
+        onOpenPlan: () => this.openPlanList('agenda') })
+        .visibility(this.activeTab === 9 ? Visibility.Visible : Visibility.Hidden)
     }.width('100%').height('100%')
   }
 
