@@ -1,3 +1,4 @@
+import { validCoursePolicy, validCourseReceipt, sameCoursePolicy, sameCourseReceipt } from './CourseReview';
 import { ActionReceipt, PendingAction, PendingMilestonePreview, PendingTaskPreview,
   PlanningTaskDraft, PlanningPlanDraft, PlanningTask, PlanSummary, PlanMilestone } from '../model/ApiModels';
 
@@ -11,6 +12,7 @@ function reminder(value: number | null): boolean {
 }
 function taskFields(value: PlanningTaskDraft | PendingTaskPreview, requireValidRange: boolean = true): boolean {
   return value !== null && typeof value === 'object' && !Array.isArray(value) && text(value.title) &&
+    (value.allow_during_course === undefined || typeof value.allow_during_course === 'boolean') &&
     dateTime(value.start_at) && dateTime(value.end_at) && nullableText(value.location) && reminder(value.reminder_minutes) &&
     (!requireValidRange || value.start_at === null || value.end_at === null || Date.parse(value.end_at) > Date.parse(value.start_at));
 }
@@ -61,7 +63,7 @@ export function validActionPreview(action: PendingAction): boolean {
 }
 
 export function validReliableAction(action: PendingAction): boolean {
-  if (!validActionPreview(action) || action.contract_version !== 2 || !text(action.created_at ?? '') ||
+  if (!validActionPreview(action) || !validCoursePolicy(action) || action.contract_version !== 2 || !text(action.created_at ?? '') ||
     !text(action.expires_at ?? '') || !Number.isFinite(Date.parse(action.created_at ?? '')) ||
     !Number.isFinite(Date.parse(action.expires_at ?? '')) ||
     Date.parse(action.expires_at ?? '') <= Date.parse(action.created_at ?? '')) { return false; }
@@ -124,7 +126,7 @@ export function validatedActionReceipt(action: PendingAction): ActionReceipt | n
     (receipt.task_ids.length > 0 || receipt.retained_task_ids.length !== action.before_plan?.task_count ||
       receipt.milestone_ids.length !== action.before_plan?.milestones.length ||
       !receipt.milestone_ids.every((id: string) => action.before_plan?.milestones.some((item: PlanMilestone) => item.milestone_id === id) ?? false))) { return null; }
-  return receipt;
+  return validCourseReceipt(action, receipt) ? receipt : null;
 }
 
 export function receiptTaskId(action: PendingAction): string {
@@ -139,7 +141,7 @@ export function receiptPlanId(action: PendingAction): string {
 
 export function sameActionReceipt(left: ActionReceipt | null | undefined, right: ActionReceipt | null | undefined): boolean {
   if (left === null || left === undefined || right === null || right === undefined) { return left === right; }
-  return left.receipt_id === right.receipt_id && left.proposal_id === right.proposal_id && left.action === right.action &&
+  return sameCourseReceipt(left, right) && left.receipt_id === right.receipt_id && left.proposal_id === right.proposal_id && left.action === right.action &&
     left.kind === right.kind && left.applied_at === right.applied_at && ids(left.task_ids) && ids(right.task_ids) &&
     ids(left.plan_ids) && ids(right.plan_ids) && ids(left.milestone_ids) && ids(right.milestone_ids) &&
     ids(left.retained_task_ids) && ids(right.retained_task_ids) &&
@@ -164,7 +166,8 @@ export function canConfirmAction(action: PendingAction, nowMs: number = Date.now
 
 function sameTaskFields(left: PlanningTaskDraft | undefined, right: PlanningTaskDraft | undefined): boolean {
   if (left === undefined || right === undefined) { return left === right; }
-  return left.title === right.title && left.start_at === right.start_at && left.end_at === right.end_at &&
+  return left.candidate_id === right.candidate_id && (left.allow_during_course ?? false) === (right.allow_during_course ?? false) &&
+    left.title === right.title && left.start_at === right.start_at && left.end_at === right.end_at &&
     left.location === right.location && left.reminder_minutes === right.reminder_minutes;
 }
 function samePlanFields(left: PlanningPlanDraft | undefined, right: PlanningPlanDraft | undefined): boolean {
@@ -174,7 +177,7 @@ function samePlanFields(left: PlanningPlanDraft | undefined, right: PlanningPlan
 function sameTaskBefore(left: PlanningTask | null | undefined, right: PlanningTask | null | undefined): boolean {
   if (left === null || left === undefined || right === null || right === undefined) { return left === right; }
   return taskSnapshot(left, left.task_id) && taskSnapshot(right, right.task_id) &&
-    sameTaskFields(left, right) && left.task_id === right.task_id && left.plan_id === right.plan_id &&
+    sameTaskFields(left, right) && left.task_version === right.task_version && left.task_id === right.task_id && left.plan_id === right.plan_id &&
     left.milestone_id === right.milestone_id && left.status === right.status && left.source === right.source &&
     left.created_at === right.created_at && left.completed_at === right.completed_at;
 }
@@ -196,7 +199,7 @@ function sameMilestones(left: PendingMilestonePreview[] | undefined, right: Pend
 }
 
 export function sameActionCandidate(original: PendingAction, latest: PendingAction): boolean {
-  return validActionPreview(original) && validActionPreview(latest) && original.proposal_id === latest.proposal_id &&
+  return validActionPreview(original) && validActionPreview(latest) && sameCoursePolicy(original, latest) && original.proposal_id === latest.proposal_id &&
     original.contract_version === latest.contract_version && original.action === latest.action && original.kind === latest.kind &&
     original.target_task_id === latest.target_task_id && original.target_plan_id === latest.target_plan_id &&
     original.title === latest.title && original.start_at === latest.start_at && original.end_at === latest.end_at &&

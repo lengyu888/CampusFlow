@@ -1,3 +1,5 @@
+import { CourseAcknowledgement } from '../model/ApiModels';
+import { validCourseAcknowledgements } from './CourseReview';
 import { PendingAction, PlanningActionRequest, ConfirmActionResponse, PlanningTaskDraft } from '../model/ApiModels';
 import { CampusFlowRequestError } from './AgentFeedback';
 import { validReliableAction, validatedActionReceipt, sameActionCandidate, sameActionReceipt, decisionDisposition } from './ActionReliability';
@@ -5,7 +7,7 @@ import { formatPlanDateTime } from './PlanPresentation';
 
 export interface PlanningActionGateway {
   previewPlanningAction(request: PlanningActionRequest): Promise<PendingAction>;
-  confirmAction(id: string): Promise<ConfirmActionResponse>;
+  confirmAction(id: string, acknowledgements?: CourseAcknowledgement[]): Promise<ConfirmActionResponse>;
   cancelAction(id: string): Promise<ConfirmActionResponse>;
   actionStatus(id: string): Promise<PendingAction>;
 }
@@ -44,7 +46,8 @@ function sameTime(a: string | null, b: string | null): boolean {
 
 function sameTask(a: PlanningTaskDraft, b: PlanningTaskDraft): boolean {
   return a.title === b.title && sameTime(a.start_at, b.start_at) && sameTime(a.end_at, b.end_at) &&
-    a.reminder_minutes === b.reminder_minutes && a.location === b.location;
+    a.reminder_minutes === b.reminder_minutes && a.location === b.location &&
+    (a.allow_during_course === undefined || a.allow_during_course === (b.allow_during_course ?? false));
 }
 
 function matchesRequest(request: PlanningActionRequest, action: PendingAction): boolean {
@@ -150,7 +153,7 @@ export class PlanningActionController {
     } else { throw new Error('unverified status'); }
   }
 
-  async confirm(): Promise<void> {
+  async confirm(acknowledgements: CourseAcknowledgement[] = []): Promise<void> {
     const action = this.state.action;
     if (!this.active || this.disposed || action === null || !['review', 'retryable'].includes(this.state.phase) ||
       (this.intent.length > 0 && this.intent !== 'confirm')) { return; }
@@ -158,7 +161,11 @@ export class PlanningActionController {
       this.state.message = '这份预览存在冲突或已过期。请取消本提案，再根据保留的草稿重新预览。';
       this.publish(); return;
     }
-    await this.write('confirm');
+    if (!validCourseAcknowledgements(action, acknowledgements)) {
+      this.state.message = '请先核对每项任务与课程重叠的时段，并明确选择仍这样安排。';
+      this.publish(); return;
+    }
+    await this.write('confirm', acknowledgements);
   }
 
   async cancel(): Promise<void> {
@@ -166,7 +173,7 @@ export class PlanningActionController {
     await this.write('cancel');
   }
 
-  private async write(intent: string): Promise<void> {
+  private async write(intent: string, acknowledgements: CourseAcknowledgement[] = []): Promise<void> {
     const action = this.state.action;
     if (action === null) { return; }
     const revision = ++this.revision;
@@ -175,7 +182,7 @@ export class PlanningActionController {
     this.state.message = intent === 'confirm' ? '正在确认，请勿重复提交。' : '正在取消提案。';
     this.publish();
     try {
-      const response = intent === 'confirm' ? await this.api.confirmAction(action.proposal_id) :
+      const response = intent === 'confirm' ? await this.api.confirmAction(action.proposal_id, acknowledgements) :
         await this.api.cancelAction(action.proposal_id);
       if (!this.current(revision)) { return; }
       const latest = response.action;
@@ -188,7 +195,7 @@ export class PlanningActionController {
     } catch (error) {
       if (!this.current(revision)) { return; }
       if (intent === 'confirm' && error instanceof CampusFlowRequestError &&
-        ['ACTION_STALE', 'ACTION_EXPIRED', 'ACTION_CONFLICT', 'ACTION_INVALID'].includes(error.code)) {
+        ['ACTION_STALE', 'ACTION_EXPIRED', 'ACTION_CONFLICT', 'ACTION_INVALID', 'COURSE_PERMISSION_PREVIEW_REQUIRED', 'COURSE_ACK_STALE', 'COURSE_ACK_INVALID'].includes(error.code)) {
         this.state.phase = 'invalidated';
         this.state.message = '服务器拒绝了这份过期、冲突或已变化的候选。本次未执行；保留草稿，返回调整后重新预览。';
       } else {

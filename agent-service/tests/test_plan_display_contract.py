@@ -22,9 +22,7 @@ async def plan_api(tmp_path: Path) -> AsyncIterator[tuple[AsyncClient, CampusSto
         store=store,
         account_store=AccountStore(":memory:"),
     )
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         registered = await client.post(
             "/api/v1/auth/register",
             json={
@@ -111,21 +109,26 @@ async def test_full_plan_survives_confirmation_with_ids_and_optional_fields(plan
         assert milestone["title"] == expected["title"]
         assert milestone["due_at"] == expected["due_at"]
         tasks = [
-            task for task in overview["tasks"]
-            if task["milestone_id"] == milestone["milestone_id"]
+            task for task in overview["tasks"] if task["milestone_id"] == milestone["milestone_id"]
         ]
         assert len(tasks) == milestone["task_count"] == 2
         assert milestone["completed_count"] == 0
         assert all(task["status"] == "pending" and task["source"] == "agent" for task in tasks)
         actual_fields = [{field: task[field] for field in fields} for task in tasks]
         assert sorted(actual_fields, key=lambda item: item["start_at"] or "") == sorted(
-            expected["tasks"], key=lambda item: item["start_at"] or ""
+            [{field: task[field] for field in fields} for task in expected["tasks"]],
+            key=lambda item: item["start_at"] or "",
         )
+        assert all(task["allow_during_course"] is False for task in tasks)
         undated = next(task for task in tasks if task["start_at"] is None)
         assert undated["end_at"] is undated["location"] is undated["reminder_minutes"] is None
 
     # 0 分钟提醒有意义，不能因真假值判断而变成未设置。
     assert sum(task["reminder_minutes"] == 0 for task in overview["tasks"]) == 1
+    assert {item["task_id"] for item in confirmed["receipt"]["candidate_tasks"]} == {
+        task["task_id"] for task in overview["tasks"]
+    }
+    assert len({item["candidate_id"] for item in confirmed["receipt"]["candidate_tasks"]}) == 10
 
 
 async def test_cancelled_full_plan_does_not_write_business_data(plan_api) -> None:

@@ -1,12 +1,11 @@
+import { reliability } from './helpers/course-review-fixture.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { stripTypeScriptTypes } from 'node:module';
 import { test } from 'node:test';
 
 // Execute the shared production validator, independently of the UI and native runtime.
-const source = readFileSync(new URL('../entry/src/main/ets/utils/ActionReliability.ets', import.meta.url), 'utf8')
-  .replace(/^import \{[\s\S]*?\} from '[^']+';\r?\n/gm, '');
-const api = await import(`data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(source)).toString('base64')}`);
+const api = reliability;
 const clone = value => JSON.parse(JSON.stringify(value));
 const now = Date.parse('2028-10-20T08:00:00+08:00');
 const fields = () => ({ title: '复习', start_at: '2028-10-20T09:00:00+08:00', end_at: '2028-10-20T10:00:00+08:00',

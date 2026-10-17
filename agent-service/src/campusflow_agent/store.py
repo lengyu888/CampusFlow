@@ -41,6 +41,14 @@ class CampusStore:
     _campus_data: CampusDataStore = field(init=False, repr=False)
     _connection: sqlite3.Connection | None = field(default=None, init=False, repr=False)
     _action_service: Any = field(default=None, init=False, repr=False)
+    _planning_versions: dict[str, int] = field(default_factory=dict, init=False, repr=False)
+    _timetable_versions: dict[str, int] = field(default_factory=dict, init=False, repr=False)
+    _course_acknowledgements: list[dict[str, Any]] = field(
+        default_factory=list, init=False, repr=False
+    )
+    _course_replacements: dict[str, tuple[str, str, str]] = field(
+        default_factory=dict, init=False, repr=False
+    )
     _action_snapshots: dict[str, str] = field(default_factory=dict, init=False, repr=False)
 
     def __post_init__(self) -> None:
@@ -131,6 +139,10 @@ class CampusStore:
                 """
             )
 
+        from .course_policy import ensure_schema
+
+        ensure_schema(self._connection)
+
     def set_user_context(
         self,
         user_id: str,
@@ -160,6 +172,8 @@ class CampusStore:
                 }
             )
         with self._lock:
+            if self._user_schedules.get(user_id, []) != timetable:
+                self._timetable_versions[user_id] = self._timetable_versions.get(user_id, 0) + 1
             self._user_schedules[user_id] = list(timetable)
             self._user_places[user_id] = places
 
@@ -429,8 +443,10 @@ class CampusStore:
             self._proposals[proposal.proposal_id] = proposal
             self._proposal_owners[proposal.proposal_id] = user_id
 
-    def confirm_proposal(self, proposal_id: str, user_id: str) -> PendingAction:
-        return self.action_service().confirm(user_id, proposal_id)
+    def confirm_proposal(
+        self, proposal_id: str, user_id: str, acknowledgements=None
+    ) -> PendingAction:
+        return self.action_service().confirm(user_id, proposal_id, acknowledgements)
 
     def cancel_proposal(self, proposal_id: str, user_id: str) -> PendingAction:
         return self.action_service().cancel(user_id, proposal_id)
@@ -701,16 +717,22 @@ class CampusStore:
                 )
             return task
         with self._lock:
-            self._tasks.setdefault(user_id, []).append(task.model_dump(mode="json"))
+            self._tasks.setdefault(user_id, []).append(
+                task.model_dump(mode="json", exclude={"course_overlap"})
+            )
+            self._planning_versions[user_id] = self._planning_versions.get(user_id, 0) + 1
         return task
 
     def list_tasks(self, user_id: str) -> list[PlanningTask]:
+        if self._action_service is not None:
+            return self._action_service.tasks(user_id)
         if self._connection is not None:
             with self._lock:
                 rows = self._connection.execute(
                     """
                     SELECT task_id, plan_id, milestone_id, title, start_at, end_at,
-                           reminder_minutes, location, status, source, created_at, completed_at
+                           reminder_minutes, location, status, source, created_at, completed_at,
+                           allow_during_course,task_version
                     FROM planning_tasks
                     WHERE user_id = ?
                     ORDER BY CASE WHEN status = 'pending' THEN 0 ELSE 1 END,
@@ -730,36 +752,7 @@ class CampusStore:
             )
 
     def update_task_status(self, user_id: str, task_id: str, completed: bool) -> PlanningTask:
-        status = "completed" if completed else "pending"
-        completed_at = datetime.now(UTC) if completed else None
-        if self._connection is not None:
-            with self._lock, self._connection:
-                cursor = self._connection.execute(
-                    """
-                    UPDATE planning_tasks SET status = ?, completed_at = ?
-                    WHERE task_id = ? AND user_id = ?
-                    """,
-                    (
-                        status,
-                        completed_at.isoformat() if completed_at else None,
-                        task_id,
-                        user_id,
-                    ),
-                )
-            if cursor.rowcount != 1:
-                raise KeyError("task_not_found")
-            return next(task for task in self.list_tasks(user_id) if task.task_id == task_id)
-        with self._lock:
-            items = self._tasks.get(user_id, [])
-            for index, item in enumerate(items):
-                if item.get("task_id") != task_id:
-                    continue
-                task = PlanningTask.model_validate(item).model_copy(
-                    update={"status": status, "completed_at": completed_at}
-                )
-                items[index] = task.model_dump(mode="json")
-                return task
-        raise KeyError("task_not_found")
+        return self.action_service().set_completed(user_id, task_id, completed)
 
     def delete_task(self, user_id: str, task_id: str) -> None:
         if self._connection is not None:
@@ -777,6 +770,7 @@ class CampusStore:
             if len(remaining) == len(items):
                 raise KeyError("task_not_found")
             self._tasks[user_id] = remaining
+            self._planning_versions[user_id] = self._planning_versions.get(user_id, 0) + 1
 
     def delete_plan(self, user_id: str, plan_id: str) -> None:
         """Remove a plan card while preserving its tasks as standalone todos."""
@@ -811,6 +805,7 @@ class CampusStore:
             if len(remaining_plans) == len(plans):
                 raise KeyError("plan_not_found")
             self._plans[user_id] = remaining_plans
+            self._planning_versions[user_id] = self._planning_versions.get(user_id, 0) + 1
             self._milestones[user_id] = [
                 item for item in self._milestones.get(user_id, []) if item.get("plan_id") != plan_id
             ]
@@ -818,6 +813,7 @@ class CampusStore:
                 if task.get("plan_id") == plan_id:
                     task["plan_id"] = None
                     task["milestone_id"] = None
+                    task["task_version"] = task.get("task_version", 1) + 1
 
     def planning_overview(self, user_id: str) -> PlanningOverview:
         tasks = self.list_tasks(user_id)

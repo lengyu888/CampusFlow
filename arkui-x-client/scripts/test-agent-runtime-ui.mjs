@@ -1,3 +1,4 @@
+import { reliability } from './helpers/course-review-fixture.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { stripTypeScriptTypes } from 'node:module';
@@ -9,7 +10,7 @@ const load = async name => {
     .replace(/^import \{[\s\S]*?\} from '[^']+';\r?\n/gm, '');
   return import(`data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(code)).toString('base64')}`);
 };
-const feedback = await load('AgentFeedback'), reliability = await load('ActionReliability');
+const feedback = await load('AgentFeedback');
 const source = readFileSync(new URL('../entry/src/main/ets/pages/AgentPage.ets', import.meta.url), 'utf8');
 const controllerSource = source.slice(0, source.indexOf('\n  @Builder')).replace(/^import [^\n]+;\r?\n/gm, '')
   .replace(/^@Component\r?\n/m, '').replace(/@(Prop|State)\s+|@Watch\('[^']+'\)\s*/g, '')

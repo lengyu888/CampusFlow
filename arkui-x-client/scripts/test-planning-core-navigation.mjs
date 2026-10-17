@@ -1,4 +1,4 @@
-import { PlanningActionController, candidate } from './helpers/planning-action-fixture.mjs';
+import { PlanningActionController, candidate, validPlanningDate, quickCapture, courseReview } from './helpers/planning-action-fixture.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { stripTypeScriptTypes } from 'node:module';
@@ -16,7 +16,7 @@ const controller = noImports(source.slice(0, boundary))
   .replace(/^@Component\r?\n/m, '').replace(/@(Prop|State)\s+|@Watch\('[^']+'\)\s*/g, '')
   .replace('export struct PlanCenterPage', 'class PlanCenterPage') + '\n}\n';
 const factory = new Function('CampusFlowApi', 'TextInputController', 'Scroller', 'AppTheme', 'Curve',
-  'shanghaiDate', 'buildDailyAgenda', 'formatPlanDateTime', 'Date', 'PlanningActionController', stripTypeScriptTypes(controller) + '\nreturn PlanCenterPage;');
+  'shanghaiDate', 'buildDailyAgenda', 'formatPlanDateTime', 'Date', 'PlanningActionController', 'validPlanningDate', 'parseQuickCapture', 'captureEndAt', 'validCourseAcknowledgements', stripTypeScriptTypes(controller) + '\nreturn PlanCenterPage;');
 const empty = () => ({ plans: [], tasks: [], total_tasks: 0, completed_tasks: 0, due_today: 0, overdue_tasks: 0, progress: 0 });
 const task = (id, extra = {}) => ({ task_id: id, title: '相同标题', plan_id: null, milestone_id: null,
   start_at: '2026-10-20T09:00:00+08:00', end_at: '2026-10-20T10:00:00+08:00',
@@ -36,7 +36,7 @@ function fixture(handlers = {}, now = Date.parse('2026-10-19T23:30:00Z')) {
   class Scroller { offset = 0; }
   class Clock extends Date { static now() { return now; } }
   const Page = factory(Api, Input, Scroller, { motion: () => 0, pageInset: 20 }, { EaseOut: '' },
-    agenda.shanghaiDate, agenda.buildDailyAgenda, presentation.formatPlanDateTime, Clock, PlanningActionController);
+    agenda.shanghaiDate, agenda.buildDailyAgenda, presentation.formatPlanDateTime, Clock, PlanningActionController, validPlanningDate, quickCapture.parseQuickCapture, quickCapture.captureEndAt, courseReview.validCourseAcknowledgements);
   const page = new Page();
   page.getUIContext = () => ({ animateTo: (_options, update) => update() });
   page.onInnerNavigationChanged = active => navigation.push(active);

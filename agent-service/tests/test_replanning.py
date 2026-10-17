@@ -66,11 +66,15 @@ class Scenario:
 
     def tasks(self):
         return {
-            task.task_id: task.model_dump(mode="json")
+            task.task_id: task.model_dump(mode="json", exclude={"course_overlap"})
             for task in self.store.list_tasks(self.user_id)
         }
 
     def planned_task(self, *, target_date="2026-10-19", due_at=None):
+        # Create the original plan before a later course change introduces the
+        # conflict. Even legacy store wrappers now read the authoritative table.
+        later_courses, _ = self.accounts.get_context(self.user_id)
+        self.courses([])
         proposal = self.store.create_plan_proposal(
             user_id=self.user_id,
             title="原有计划",
@@ -94,6 +98,7 @@ class Scenario:
             reason=None,
         )
         self.store.confirm_proposal(proposal.proposal_id, self.user_id)
+        self.courses(later_courses)
         return next(task for task in self.store.list_tasks(self.user_id) if task.plan_id)
 
 
@@ -305,8 +310,9 @@ def test_confirm_preserves_task_identity_plan_links_reminder_and_completed_stati
     assert datetime.fromisoformat(after[task.task_id]["start_at"]) == changed.new_start_at
     assert datetime.fromisoformat(after[task.task_id]["end_at"]) == changed.new_end_at
     for field, value in before[task.task_id].items():
-        if field not in {"start_at", "end_at"}:
+        if field not in {"start_at", "end_at", "task_version"}:
             assert after[task.task_id][field] == value
+    assert after[task.task_id]["task_version"] == before[task.task_id]["task_version"] + 1
     assert after[done.task_id] == before[done.task_id]
     final_progress = scenario.store.planning_overview(scenario.user_id)
     assert final_progress.completed_tasks == progress.completed_tasks

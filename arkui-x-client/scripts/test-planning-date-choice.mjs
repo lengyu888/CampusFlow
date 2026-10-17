@@ -11,7 +11,7 @@ const firstBuilder = source.indexOf('\n  @Builder');
 assert.ok(firstBuilder > 0, 'the non-UI method boundary must exist');
 // Exercise production selection state, not a copied implementation or a simulated native layout.
 const controllerSource = source.slice(0, firstBuilder)
-  .replace(/^import \{[\s\S]*?\} from '\.\.\/model\/ApiModels';\r?\n/, '')
+  .replace(/^import \{[\s\S]*?\} from '[^']+';\r?\n/gm, '')
   .replace(/^import [^\n]+;\r?\n/gm, '')
   .replace(/^@Component\r?\n/m, '')
   .replace(/@(Prop|State)\s+|@Watch\('[^']+'\)\s*/g, '')

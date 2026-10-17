@@ -1,3 +1,7 @@
+import { validCourseAcknowledgements } from '../utils/CourseReview';
+import { TaskCaptureIntent } from '../utils/TaskCaptureTypes';
+import { QuickCaptureIssue, parseQuickCapture, captureEndAt } from '../utils/QuickCaptureParser';
+import { CourseAcknowledgement } from '../model/ApiModels';
 import {
   PendingAction,
   PlanningTaskDraft,
@@ -51,6 +55,10 @@ interface PlanningDetailFrame {
 @Component
 export struct PlanCenterPage {
   @Prop baseUrl: string;
+  @Prop @Watch('captureRequested') captureOnly: boolean = false;
+  @Prop @Watch('captureRequested') captureIntent: TaskCaptureIntent | null = null;
+  @Prop @Watch('captureRequested') captureRevision: number = 0;
+  onCloseCapture: () => void = () => {};
   @Prop token: string;
   @Prop @Watch('draftScopeChanged') draftLease: DraftLease | null = null;
   @Watch('refreshPlanning') @Prop refreshKey: number = 0;
@@ -69,6 +77,15 @@ export struct PlanCenterPage {
     plans: [], tasks: [], total_tasks: 0, completed_tasks: 0, due_today: 0, overdue_tasks: 0, progress: 0
   };
   @State private title: string = '';
+  @State private durationText: string = '';
+  @State private allowDuringCourse: boolean = false;
+  @State private captureOriginalText: string = '';
+  @State private captureIssues: QuickCaptureIssue[] = [];
+  @State private captureTimeExpanded: boolean = false;
+  @State private pendingCaptureIntent: TaskCaptureIntent | null = null;
+  private appliedCaptureRevision: number = 0;
+  private capturePreviousStack: PlanningDetailFrame[] = [];
+  private captureOpened: boolean = false;
   @State private errorText: string = '';
   @State private timetable: TimetableEntry[] = [];
   @State private calendarMonth: number = new Date(new Date().getFullYear(), new Date().getMonth(), 1).getTime();
@@ -94,6 +111,7 @@ export struct PlanCenterPage {
   @State private pageWidth: number = 360;
   @State private actionState: PlanningActionState = { phase: 'idle', action: null, message: '' };
   @State private replanWriteBlocked: boolean = false;
+  @State private editTaskAllowDuringCourse: boolean = false;
   @State private editTaskId: string = '';
   @State private editTaskTitle: string = '';
   @State private editTaskStart: string = '';
@@ -142,6 +160,7 @@ export struct PlanCenterPage {
     this.viewRequested();
     this.focusChanged();
     this.refreshPlanning();
+    this.captureRequested();
   }
 
   aboutToDisappear(): void {
@@ -170,7 +189,9 @@ export struct PlanCenterPage {
     const lease = this.draftLease;
     if (this.draftBoundGeneration !== (lease?.generation ?? -1)) {
       this.lifecycleRevision++;
-      this.title = ''; this.draftTaskDate = shanghaiDate(Date.now()); this.draftDateChoice = 'today'; this.draftTaskTime = '';
+      this.title = ''; this.durationText = ''; this.allowDuringCourse = false; this.captureOriginalText = ''; this.captureIssues = [];
+      this.captureOpened = false; this.capturePreviousStack = []; this.pendingCaptureIntent = null;
+      this.draftTaskDate = shanghaiDate(Date.now()); this.draftDateChoice = 'today'; this.draftTaskTime = '';
       this.actionController?.dispose(); this.actionController = null;
       this.actionState = { phase: 'idle', action: null, message: '' };
       this.draftStorageBusy = false;
@@ -193,7 +214,8 @@ export struct PlanCenterPage {
 
   private taskDraftPayload(): NewTaskDraft {
     return { title: this.title, date: this.draftTaskDate, dateChoice: this.draftDateChoice,
-      time: this.draftTaskTime, anchorDate: this.draftAnchorDate || shanghaiDate(Date.now()), timezone: 'Asia/Shanghai' };
+      time: this.draftTaskTime, durationMinutes: /^\d+$/.test(this.durationText) && Number(this.durationText) >= 1 && Number(this.durationText) <= 1440 ? Number(this.durationText) : null,
+      allowDuringCourse: this.allowDuringCourse, originalText: this.captureOriginalText, durationText: this.durationText, anchorDate: this.draftAnchorDate || shanghaiDate(Date.now()), timezone: 'Asia/Shanghai' };
   }
 
   private stageTaskDraft(): void {
@@ -218,6 +240,11 @@ export struct PlanCenterPage {
     const payload = record.payload as NewTaskDraft;
     this.title = payload.title; this.draftTaskDate = payload.date; this.draftTaskTime = payload.time;
     this.draftDateChoice = payload.dateChoice; this.draftAnchorDate = payload.anchorDate;
+    this.durationText = payload.durationText ?? (payload.durationMinutes === undefined || payload.durationMinutes === null ? '' : `${payload.durationMinutes}`);
+    this.allowDuringCourse = payload.allowDuringCourse ?? false;
+    this.captureOriginalText = payload.originalText ?? '';
+    this.captureIssues = this.captureOriginalText.length === 0 ? [] : parseQuickCapture(this.captureOriginalText, payload.anchorDate).issues;
+    this.captureTimeExpanded = this.draftTaskTime.length > 0 || this.durationText.length > 0 || this.allowDuringCourse;
     this.recoveredDraft = null;
     this.draftMessage = payload.anchorDate === shanghaiDate(Date.now()) ? '已恢复输入，尚未提交。' :
       `已恢复 ${payload.anchorDate} 的输入，日期仍为 ${payload.date || '无日期'}，请重新核对。`;
@@ -263,11 +290,14 @@ export struct PlanCenterPage {
     }
   }
 
-  private async writePlanningAction(cancel: boolean = false): Promise<void> {
+  private async writePlanningAction(cancel: boolean = false, acknowledgements: CourseAcknowledgement[] = []): Promise<void> {
     if (this.mutationBusy || this.replanWriteBlocked || this.draftStorageBusy || !this.active || !this.pageActive) { return; }
     const lease = this.draftLease; const action = this.actionState.action;
     if (lease === null || !localDrafts.valid(lease) || action === null || !['review', 'retryable'].includes(this.actionState.phase)) {
       this.errorText = '请先恢复本机草稿保存并核对原提案，再提交。'; return;
+    }
+    if (!cancel && !validCourseAcknowledgements(action, acknowledgements)) {
+      this.errorText = '请核对重叠课程并选择仍这样安排，再确认这份变更。'; return;
     }
     this.draftStorageBusy = true;
     try {
@@ -284,7 +314,7 @@ export struct PlanCenterPage {
       }
       if (!this.pageActive || !this.active || this.draftLease !== lease || !localDrafts.valid(lease) ||
         this.actionState.action?.proposal_id !== action.proposal_id) { return; }
-      if (cancel) { await this.actionManager().cancel(); } else { await this.actionManager().confirm(); }
+      if (cancel) { await this.actionManager().cancel(); } else { await this.actionManager().confirm(acknowledgements); }
       await this.settleProposal();
     } catch {
       if (this.pageActive && this.draftLease === lease) { this.errorText = '恢复标识尚未保存，本次未提交。请先重试保存，再核对原提案。'; }
@@ -294,6 +324,71 @@ export struct PlanCenterPage {
   private async checkPlanningAction(): Promise<void> {
     await this.actionManager().check();
     await this.settleProposal();
+  }
+
+  // The home sheet uses this same form and controller; it never creates a second draft writer.
+  private captureRequested(): void {
+    if (this.captureRevision === this.appliedCaptureRevision || this.captureIntent === null || !this.captureOnly) { return; }
+    if (this.captureIntent.requestRevision !== undefined && this.captureIntent.requestRevision !== this.captureRevision) { return; }
+    this.appliedCaptureRevision = this.captureRevision;
+    if (!this.captureOpened) {
+      this.capturePreviousStack = this.detailStack.slice();
+      this.captureOpened = true;
+      // Preserve keyed Scroll nodes below the sheet so their scroll positions survive.
+      this.detailKind = ''; this.detailId = ''; this.externalDetail = false;
+      this.openDetails('draft');
+    }
+    const intent = this.captureIntent;
+    if (intent.source === 'home') { this.pendingCaptureIntent = null; return; }
+    this.pendingCaptureIntent = JSON.parse(JSON.stringify(intent)) as TaskCaptureIntent;
+    if (this.title.trim().length === 0 && this.recoveredDraft === null && !this.actionBlocksWrites() && this.pendingProposals.length === 0) {
+      this.applyCaptureSuggestion();
+    }
+  }
+
+  private applyCaptureSuggestion(): void {
+    const intent = this.pendingCaptureIntent;
+    if (intent === null || this.writesBlocked()) { return; }
+    // A gap suggestion only changes time after an explicit choice if a draft already exists.
+    if (this.title.trim().length === 0) { this.title = intent.text; }
+    this.draftTaskDate = intent.date; this.draftTaskTime = intent.time;
+    this.draftDateChoice = intent.date.length > 0 ? 'capture' : 'none';
+    this.durationText = intent.durationMinutes === null ? '' : `${intent.durationMinutes}`;
+    this.draftAnchorDate = intent.anchorDate;
+    this.captureTimeExpanded = true;
+    this.pendingCaptureIntent = null;
+    this.stageTaskDraft();
+  }
+
+  private finishCapture(): void {
+    this.flushTaskDraft(); this.taskInputController.stopEditing();
+    this.pendingCaptureIntent = null;
+    this.detailStack = this.capturePreviousStack.slice(); this.capturePreviousStack = []; this.captureOpened = false;
+    const previous = this.detailStack.length > 0 ? this.detailStack[this.detailStack.length - 1] : null;
+    this.detailKind = previous?.kind ?? ''; this.detailId = previous?.id ?? ''; this.externalDetail = previous?.external ?? false;
+    this.onInnerNavigationChanged(previous !== null);
+    this.onCloseCapture();
+  }
+
+  private parseCapture(): void {
+    if (this.writesBlocked() || this.title.trim().length === 0) { return; }
+    const candidate = parseQuickCapture(this.title, this.draftAnchorDate || shanghaiDate(Date.now()));
+    this.captureOriginalText = candidate.originalText;
+    this.title = candidate.title || candidate.originalText;
+    this.draftTaskDate = candidate.date; this.draftTaskTime = candidate.time;
+    this.durationText = candidate.durationMinutes === null ? '' : `${candidate.durationMinutes}`;
+    this.draftDateChoice = candidate.date.length === 0 ? 'none' : 'capture';
+    this.captureIssues = candidate.issues;
+    this.captureTimeExpanded = true;
+    this.stageTaskDraft();
+  }
+
+  private captureToAssistant(): void {
+    const original = this.captureOriginalText || this.title;
+    const current = `当前标题：${this.title}；日期：${this.draftTaskDate || '无日期'}；时刻：${this.draftTaskTime || '尚未定时'}；时长：${this.durationText || '未设置'}分钟；课内设置：${this.allowDuringCourse ? '允许课内完成，仍需逐项确认重叠' : '未允许课内完成'}。`;
+    this.flushTaskDraft();
+    if (this.captureOpened) { this.finishCapture(); }
+    this.onOpenAgent(`请以以下当前编辑值核对安排，原文仅供参考。${current}原始描述：${original}。输入基准日期 ${this.draftAnchorDate || shanghaiDate(Date.now())}，北京时间。先提出候选，暂不执行。`);
   }
 
   private refreshPlanning(): void {
@@ -360,6 +455,7 @@ export struct PlanCenterPage {
   }
 
   private closeDetails(): void {
+    if (this.captureOpened && this.detailStack.length <= this.capturePreviousStack.length + 1) { this.finishCapture(); return; }
     if (this.detailStack.length === 0) { return; }
     const external = this.externalDetail;
     if (this.detailKind === 'draft') {
@@ -399,6 +495,7 @@ export struct PlanCenterPage {
   }
 
   private backLabel(): string {
+    if (this.captureOpened && this.detailStack.length <= this.capturePreviousStack.length + 1) { return '返回今日'; }
     if (this.detailStack.length > 1) {
       const kind = this.detailStack[this.detailStack.length - 2].kind;
       return kind === 'task' ? '返回任务详情' : kind === 'plan' ? '返回目标计划' : '返回上一层';
@@ -558,6 +655,7 @@ export struct PlanCenterPage {
         this.draftDateChoice = 'today';
       }
       this.draftTaskTime = value;
+      if (value.length === 0) { this.durationText = ''; }
       this.stageTaskDraft();
     });
   }
@@ -567,7 +665,7 @@ export struct PlanCenterPage {
       this.draftTaskDate = value;
       this.draftDateChoice = choice;
       if (value.length === 0) {
-        this.draftTaskTime = '';
+        this.draftTaskTime = ''; this.durationText = '';
       }
       this.draftAnchorDate = shanghaiDate(Date.now());
       this.stageTaskDraft();
@@ -735,11 +833,11 @@ export struct PlanCenterPage {
   }
 
   private createSnapshot(): string {
-    return JSON.stringify([this.title, this.draftTaskDate, this.draftTaskTime, this.draftDateChoice]);
+    return JSON.stringify([this.title, this.draftTaskDate, this.draftTaskTime, this.draftDateChoice, this.durationText, this.allowDuringCourse]);
   }
 
   private taskEditSnapshot(): string {
-    return JSON.stringify([this.editTaskId, this.editTaskTitle, this.editTaskStart, this.editTaskEnd, this.editTaskLocation, this.editTaskReminder]);
+    return JSON.stringify([this.editTaskId, this.editTaskTitle, this.editTaskStart, this.editTaskEnd, this.editTaskLocation, this.editTaskReminder, this.editTaskAllowDuringCourse]);
   }
 
   private planEditSnapshot(): string {
@@ -749,7 +847,7 @@ export struct PlanCenterPage {
   private actionApplied(action: PendingAction): void {
     if (!this.pageActive || !this.active) { return; }
     if (action.action === 'create' && action.kind === 'task' && this.createSnapshot() === this.submittedCreate) {
-      this.title = '';
+      this.title = ''; this.durationText = ''; this.allowDuringCourse = false; this.captureOriginalText = ''; this.captureIssues = [];
       this.taskInputController.stopEditing();
     }
     if (action.action === 'update' && action.kind === 'task' && this.taskEditSnapshot() === this.submittedTaskEdit) {
@@ -769,9 +867,9 @@ export struct PlanCenterPage {
     await this.actionManager().preview(request);
   }
 
-  private async confirmPlanningAction(): Promise<void> {
+  private async confirmPlanningAction(acknowledgements: CourseAcknowledgement[] = []): Promise<void> {
     if (this.mutationBusy || this.replanWriteBlocked || !this.active || !this.pageActive) { return; }
-    await this.writePlanningAction();
+    await this.writePlanningAction(false, acknowledgements);
   }
 
   private dismissAction(): void {
@@ -783,11 +881,27 @@ export struct PlanCenterPage {
   private async addTask(): Promise<void> {
     if (this.title.trim().length === 0 || this.writesBlocked()) { return; }
     if (Array.from(this.title.trim()).length > 120) { this.errorText = '待办名称请控制在 120 字以内。'; return; }
+    const duration = this.durationText.trim().length === 0 ? null : Number(this.durationText);
+    if (duration !== null && (!/^\d+$/.test(this.durationText.trim()) || !Number.isInteger(duration) || duration < 1 || duration > 1440)) {
+      this.errorText = '时长请填写 1–1440 的整数分钟，留空表示未定时长。'; return;
+    }
+    if ((this.draftTaskDate.length > 0 && !validPlanningDate(this.draftTaskDate)) ||
+      (this.draftTaskTime.length > 0 && !/^([01]\d|2[0-3]):[0-5]\d$/.test(this.draftTaskTime)) ||
+      (this.draftTaskTime.length > 0 && this.draftTaskDate.length === 0) ||
+      (duration !== null && (this.draftTaskDate.length === 0 || this.draftTaskTime.length === 0))) {
+      this.errorText = '请核对日期和时间；要保存时长，需要明确开始日期与时刻。'; return;
+    }
+    if (this.draftTaskTime === '23:59' && duration === null) {
+      this.errorText = '23:59 需要填写时长，或明确选择全天，避免与全天事项混淆。'; return;
+    }
     const taskTime = this.draftTaskTime.length === 0 ? '23:59' : this.draftTaskTime;
     const startAt = this.draftTaskDate.length === 0 ? null : `${this.draftTaskDate}T${taskTime}:00+08:00`;
+    const endAt = captureEndAt(this.draftTaskDate, this.draftTaskTime, duration);
+    if (duration !== null && endAt === null) { this.errorText = '结束时间超出支持范围，请调整日期或时长。'; return; }
     this.submittedCreate = this.createSnapshot();
     await this.previewAction({ operation: 'create_task', task: { title: this.title.trim(), start_at: startAt,
-      end_at: null, reminder_minutes: null, location: null } });
+      end_at: endAt, reminder_minutes: null, location: null,
+      allow_during_course: this.allowDuringCourse } });
   }
 
   private beginTaskEdit(task: PlanningTask): void {
@@ -800,6 +914,7 @@ export struct PlanCenterPage {
       this.editTaskId = task.task_id;
       this.editTaskOriginal = JSON.parse(JSON.stringify(task)) as PlanningTask;
       this.editTaskTitle = task.title;
+      this.editTaskAllowDuringCourse = task.allow_during_course ?? false;
       this.editTaskStart = task.start_at === null ? '' : formatPlanDateTime(task.start_at);
       this.editTaskEnd = task.end_at === null ? '' : formatPlanDateTime(task.end_at);
       this.editTaskLocation = task.location ?? '';
@@ -830,7 +945,7 @@ export struct PlanCenterPage {
     if (reminder.length > 0 && (!/^\d+$/.test(reminder) || Number(reminder) > 10080)) {
       this.errorText = '提醒请输入 0–10080 的整数分钟，留空表示不设置。'; return;
     }
-    const task: PlanningTaskDraft = { title: this.editTaskTitle.trim(), start_at: start, end_at: end,
+    const task: PlanningTaskDraft = { allow_during_course: this.editTaskAllowDuringCourse, title: this.editTaskTitle.trim(), start_at: start, end_at: end,
       reminder_minutes: reminder.length === 0 ? null : Number(reminder),
       location: this.editTaskLocation === (original.location ?? '') ? original.location : this.editTaskLocation.trim() || null };
     this.submittedTaskEdit = this.taskEditSnapshot();
@@ -1038,6 +1153,13 @@ export struct PlanCenterPage {
           }
           ForEach(this.milestoneTasks(plan.plan_id, milestone.milestone_id), (task: PlanningTask) => {
             this.PlanTask(task)
+            if (task.allow_during_course === true || (task.course_overlap?.overlaps.length ?? 0) > 0) {
+              Text(task.course_overlap?.state === 'accepted' ? '已确认课内安排；只适用于当前任务和课表' :
+                task.course_overlap?.state === 'none' ? '允许课内完成；当前没有课程重叠' :
+                task.course_overlap?.state === 'unchecked' ? '允许课内完成；起止时间或课表尚未完整核对' :
+                task.allow_during_course === true ? '允许课内完成；当前重叠仍需重新核对' : '当前时段与课程重叠，请调整时间')
+                .fontSize(AppTheme.bodySize).fontColor(AppTheme.warning).width('100%')
+            }
             this.TaskDetailLink(task)
           }, (task: PlanningTask) => `${task.task_id}-${task.status}-${task.completed_at ?? ''}`)
         }.width('100%').alignItems(HorizontalAlign.Start)
@@ -1178,34 +1300,56 @@ export struct PlanCenterPage {
   }
 
   @Builder
+  private CoursePermission(value: boolean, change: (value: boolean) => void) {
+    Column({ space: 8 }) {
+      Button(value ? '已允许 · 可在上课时完成' : '可在上课时完成 · 未开启').width('100%').constraintSize({ minHeight: 48 })
+        .fontSize(AppTheme.bodySize).fontColor(value ? AppTheme.onAccent : AppTheme.accent)
+        .backgroundColor(value ? AppTheme.accent : AppTheme.accentSoft).borderRadius(AppTheme.controlRadius)
+        .enabled(!this.writesBlocked()).onClick(() => change(!value))
+      Text(value ? '若与课程重叠，预览会列出具体课程和时段，仍需你再次确认。' : '默认避开课程；适合课内完成的任务可以单独开启。')
+        .fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+    }.width('100%').alignItems(HorizontalAlign.Start)
+  }
+
+  @Builder
   private TaskForm() {
     Column({ space: 16 }) {
       Text(this.draftMessage).fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
       if (this.draftMessage.includes('尚未保存')) {
         Button('重试保存输入').constraintSize({ minHeight: 48 }).onClick(() => { this.stageTaskDraft(); this.flushTaskDraft(); })
       }
+      if (this.pendingCaptureIntent !== null) {
+        Text(`首页建议 ${this.pendingCaptureIntent.date} ${this.pendingCaptureIntent.time}，留 ${this.pendingCaptureIntent.durationMinutes ?? 0} 分钟。已有输入已保留。`)
+          .fontSize(AppTheme.bodySize).fontColor(AppTheme.secondary).width('100%')
+        Button('使用这个时段，保留标题').constraintSize({ minHeight: 48 }).enabled(!this.writesBlocked())
+          .onClick(() => this.applyCaptureSuggestion())
+      }
       if (this.draftAnchorDate.length > 0 && this.draftAnchorDate !== this.relativeDate(0)) {
         Text(`输入时的日期是 ${this.draftAnchorDate}；当前仍按 ${this.draftTaskDate || '无日期'} 保存，请核对。`)
           .fontSize(AppTheme.metaSize).fontColor(AppTheme.warning).width('100%')
       }
-      Text('待办内容').fontSize(AppTheme.bodySize).fontColor(AppTheme.quiet).width('100%')
-      Row({ space: 8 }) {
-        TextInput({ text: this.title, placeholder: '快速记录一个待办', controller: this.taskInputController })
-          .layoutWeight(1).constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize).fontColor(AppTheme.ink)
-          .backgroundColor(AppTheme.canvas).borderRadius(AppTheme.controlRadius)
-          .border({ width: 1, color: AppTheme.outline }).enabled(this.recoveredDraft === null)
-          .onChange((value) => { this.title = value; this.stageTaskDraft(); })
-        Button({ type: ButtonType.Circle }) {
-          AppIcon({ name: 'plus', iconSize: 22, color: AppTheme.onAccent })
-        }.width(48).height(48).backgroundColor(AppTheme.accent)
-          .accessibilityText('预览添加待办').enabled(this.title.trim().length > 0 && !this.writesBlocked()).onClick(() => this.addTask())
-      }.width('100%')
-      Row() {
-        Text('日期').fontSize(AppTheme.bodySize).fontColor(AppTheme.quiet)
-        Text(this.draftTaskDate.length === 0 ? '无日期' : this.draftTaskDate)
-          .fontSize(AppTheme.bodySize).fontWeight(FontWeight.Medium).fontColor(AppTheme.accent)
-          .layoutWeight(1).textAlign(TextAlign.End)
-      }.width('100%')
+      Text('记一件事').fontSize(AppTheme.sectionTitle).fontColor(AppTheme.ink).width('100%')
+      TextInput({ text: this.title, placeholder: '例如：明晚八点复习一小时', controller: this.taskInputController })
+        .width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize).fontColor(AppTheme.ink)
+        .backgroundColor(AppTheme.surface).borderRadius(AppTheme.controlRadius)
+        .border({ width: 1, color: AppTheme.outline }).enabled(this.recoveredDraft === null && !this.actionBlocksWrites())
+        .onChange((value) => { this.title = value; this.stageTaskDraft(); })
+      Button('从这句话提取时间').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
+        .fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft).borderRadius(AppTheme.controlRadius)
+        .enabled(this.title.trim().length > 0 && !this.writesBlocked()).onClick(() => this.parseCapture())
+      Text('支持明确日期、时刻和分钟/小时；“下午”“下课后”等不会猜一个时间。提取只填写草稿。')
+        .fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+      if (this.captureOriginalText.length > 0) {
+        Text(`解析原文：${this.captureOriginalText}`).fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+        ForEach(this.captureIssues, (issue: QuickCaptureIssue) => {
+          Text(issue.message).fontSize(AppTheme.bodySize).fontColor(AppTheme.warning).width('100%').wordBreak(WordBreak.BREAK_WORD)
+        }, (issue: QuickCaptureIssue, index: number) => `${index}-${issue.code}`)
+        Button('交给助手进一步核对').constraintSize({ minHeight: 48 }).fontColor(AppTheme.accent)
+          .backgroundColor(AppTheme.accentSoft).onClick(() => this.captureToAssistant())
+      }
+      this.EditField('日期 · 可留空', this.draftTaskDate, 'YYYY-MM-DD，留空即无日期', (value: string) => {
+        this.draftTaskDate = value; this.draftDateChoice = value.length === 0 ? 'none' : 'capture'; this.stageTaskDraft();
+      })
       Row({ space: 8 }) {
         this.DateChoice('今天', this.relativeDate(0), 'today')
         this.DateChoice('明天', this.relativeDate(1), 'tomorrow')
@@ -1214,26 +1358,27 @@ export struct PlanCenterPage {
         this.DateChoice('日历所选', this.selectedDate, 'calendar')
         this.DateChoice('无日期', '', 'none')
       }.width('100%')
-      Row() {
-        Text('时间').fontSize(AppTheme.bodySize).fontColor(AppTheme.quiet)
-        Text(this.draftTaskTime.length === 0 ? '全天' : this.draftTaskTime)
-          .fontSize(AppTheme.bodySize).fontWeight(FontWeight.Medium).fontColor(AppTheme.accent)
-          .layoutWeight(1).textAlign(TextAlign.End)
-      }.width('100%')
-      Row({ space: 8 }) {
-        this.TimeChoice('全天', '')
-        this.TimeChoice('08:00', '08:00')
-      }.width('100%')
-      Row({ space: 8 }) {
-        this.TimeChoice('14:00', '14:00')
-        Button({ type: ButtonType.Normal }) {
-          Text(this.draftTaskTime.length > 0 && this.draftTaskTime !== '08:00' &&
-            this.draftTaskTime !== '14:00' ? this.draftTaskTime : '自定义')
-            .fontSize(AppTheme.bodySize).fontColor(AppTheme.accent).width('100%').textAlign(TextAlign.Center)
-        }.constraintSize({ minHeight: 48 }).padding(10).layoutWeight(1)
-          .backgroundColor(AppTheme.accentSoft).borderRadius(AppTheme.controlRadius).accessibilityText('自定义时间')
-          .onClick(() => this.openTimePicker())
-      }.width('100%')
+      Button(this.captureTimeExpanded ? '收起时间与时长' : '再安排时间、时长').constraintSize({ minHeight: 48 })
+        .fontSize(AppTheme.bodySize).fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft)
+        .onClick(() => this.captureTimeExpanded = !this.captureTimeExpanded)
+      if (this.captureTimeExpanded) {
+        Text(`时间：${this.draftTaskTime || '全天 / 尚未定时'} · 北京时间`).fontSize(AppTheme.bodySize).fontColor(AppTheme.secondary).width('100%')
+        Row({ space: 8 }) {
+          this.TimeChoice('全天', '')
+          this.TimeChoice('08:00', '08:00')
+        }.width('100%')
+        Row({ space: 8 }) {
+          this.TimeChoice('14:00', '14:00')
+          Button('自定义时间').constraintSize({ minHeight: 48 }).layoutWeight(1).fontSize(AppTheme.bodySize)
+            .fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft).borderRadius(AppTheme.controlRadius)
+            .onClick(() => this.openTimePicker())
+        }.width('100%')
+        this.EditField('时长 · 分钟', this.durationText, '可留空，例如 25、60', (value: string) => { this.durationText = value; this.stageTaskDraft(); })
+      }
+      this.CoursePermission(this.allowDuringCourse, (value: boolean) => { this.allowDuringCourse = value; this.stageTaskDraft(); })
+      Button(this.draftTaskDate.length === 0 ? '预览无日期待办' : '核对安排预览').width('100%').constraintSize({ minHeight: 48 })
+        .fontSize(AppTheme.bodySize).fontColor(AppTheme.onAccent).backgroundColor(AppTheme.accent).borderRadius(AppTheme.controlRadius)
+        .accessibilityText('预览添加待办').enabled(this.title.trim().length > 0 && !this.writesBlocked()).onClick(() => this.addTask())
     }.width('100%').alignItems(HorizontalAlign.Start)
   }
 
@@ -1259,6 +1404,7 @@ export struct PlanCenterPage {
         this.EditField('开始时间', this.editTaskStart, '例如 2026-10-20 18:30，留空待安排', (value: string) => this.editTaskStart = value)
         this.EditField('结束时间', this.editTaskEnd, '例如 2026-10-20 19:30，可留空', (value: string) => this.editTaskEnd = value)
         this.EditField('地点', this.editTaskLocation, '可留空', (value: string) => this.editTaskLocation = value)
+        this.CoursePermission(this.editTaskAllowDuringCourse, (value: boolean) => this.editTaskAllowDuringCourse = value)
         this.EditField('提前提醒（分钟）', this.editTaskReminder, '0 表示开始时；留空不设置', (value: string) => this.editTaskReminder = value)
         Text('这里保存提醒设置；系统通知实际送达仍取决于平台支持与通知权限。')
           .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
@@ -1414,12 +1560,12 @@ export struct PlanCenterPage {
   private DetailContent(frame: PlanningDetailFrame) {
     Column({ space: 16 }) {
       if (frame.kind === 'draft') {
-        Text('返回会保留草稿。点击加号先预览，明确确认后才加入任务列表。')
+        Text('先记下来，日期可以稍后安排。返回会保留输入；核对预览后才加入任务列表。')
           .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
         this.TaskForm()
       } else if (frame.kind === 'action') {
         PlanningActionPanel({ state: this.actionState, active: this.active && !this.mutationBusy && !this.replanWriteBlocked && !this.draftStorageBusy,
-          retryIntent: this.actionController?.retryIntent() ?? '', onConfirm: () => this.confirmPlanningAction(),
+          retryIntent: this.actionController?.retryIntent() ?? '', onConfirm: (acks: CourseAcknowledgement[]) => this.confirmPlanningAction(acks),
           onCancel: () => this.writePlanningAction(true), onCheck: () => this.checkPlanningAction(),
           onDismiss: () => this.dismissAction(), onOpenTask: (id: string) => this.openDetails('task', id),
           onOpenPlan: (id: string) => this.openDetails('plan', id) })

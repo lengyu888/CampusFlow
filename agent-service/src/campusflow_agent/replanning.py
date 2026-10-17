@@ -14,13 +14,14 @@ import json
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, time, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
 from .accounts import AccountStore
+from .course_policy import overlap_state
 from .schemas import (
     PlanningConflict,
     PlanningConflictsResponse,
@@ -38,6 +39,7 @@ POLICY = (
     "保持时长，在原开始时间之后 7 天内的 08:00–22:00 寻找空档，"
     "避开课程、其他明确时段的未完成事项及本次建议，遵守计划和里程碑截止时间。"
     "原任务和计划保留，确认前不会修改安排；预览 15 分钟内有效。"
+    "已逐项接受的课内安排不会自动移走；许可待重新核对的事项保留原时间并单列提醒。"
 )
 
 
@@ -55,6 +57,7 @@ class _Snapshot:
     tasks: list[dict[str, Any]]
     plans: list[dict[str, Any]]
     milestones: list[dict[str, Any]]
+    course_context: dict[str, Any] = field(default_factory=dict)
 
     def digest(self) -> str:
         # Include all task fields and deadlines, including non-conflicting tasks:
@@ -64,6 +67,7 @@ class _Snapshot:
             "tasks": sorted(self.tasks, key=lambda item: item["task_id"]),
             "plans": sorted(self.plans, key=lambda item: item["plan_id"]),
             "milestones": sorted(self.milestones, key=lambda item: item["milestone_id"]),
+            "course_context": self.course_context,
         }
         return hashlib.sha256(_canonical(value).encode("utf-8")).hexdigest()
 
@@ -98,6 +102,8 @@ def _overlaps(left: tuple[datetime, datetime], right: tuple[datetime, datetime])
 def _courses(
     timetable: list[dict[str, Any]],
 ) -> list[tuple[TimetableEntry, tuple[datetime, datetime]]]:
+    if not isinstance(timetable, list):
+        raise ReplanError(422, "REPLAN_INVALID_TIMETABLE", "课表格式无效，请先检查课表。")
     courses = []
     for raw in timetable:
         try:
@@ -174,13 +180,22 @@ class ReplanningService:
 
     def _snapshot(self, user_id: str) -> _Snapshot:
         connection = self.store._connection
+        context: dict[str, Any] = {}
         if self._shared_database and connection is not None:
             row = connection.execute(
-                "SELECT timetable_json FROM users WHERE user_id = ?", (user_id,)
+                "SELECT timetable_json,school,campus,timetable_version "
+                "FROM users WHERE user_id = ?",
+                (user_id,),
             ).fetchone()
             timetable = json.loads(row[0]) if row else []
+            context = dict(row) if row else {}
+            context.pop("timetable_json", None)
         else:
             timetable, _ = self.accounts.get_context(user_id)
+            row = self.accounts._connection.execute(
+                "SELECT school,campus,timetable_version FROM users WHERE user_id=?", (user_id,)
+            ).fetchone()
+            context = dict(row) if row else {}
         if connection is not None:
 
             def rows(table: str) -> list[dict[str, Any]]:
@@ -192,20 +207,30 @@ class ReplanningService:
                     ).fetchall()
                 ]
 
+            version = connection.execute(
+                "SELECT version FROM planning_versions WHERE user_id=?", (user_id,)
+            ).fetchone()
+            context["planning_version"] = version[0] if version else 0
+            context["acknowledgements"] = rows("task_course_acknowledgements")
             return _Snapshot(
-                timetable, rows("planning_tasks"), rows("plans"), rows("plan_milestones")
+                timetable, rows("planning_tasks"), rows("plans"), rows("plan_milestones"), context
             )
+        context["planning_version"] = self.store._planning_versions.get(user_id, 0)
+        context["acknowledgements"] = deepcopy(
+            [ack for ack in self.store._course_acknowledgements if ack["user_id"] == user_id]
+        )
         return _Snapshot(
             deepcopy(timetable),
             deepcopy(self.store._tasks.get(user_id, [])),
             deepcopy(self.store._plans.get(user_id, [])),
             deepcopy(self.store._milestones.get(user_id, [])),
+            context,
         )
 
     @staticmethod
     def _conflicts(snapshot: _Snapshot, now: datetime) -> PlanningConflictsResponse:
         courses = _courses(snapshot.timetable)
-        conflicts, unchecked = [], []
+        conflicts, unchecked, accepted, reviews = [], [], [], []
         for task in snapshot.tasks:
             if task.get("status") == "completed":
                 continue
@@ -223,18 +248,30 @@ class ReplanningService:
                 continue
             matching = [course for course, occupied in courses if _overlaps(interval, occupied)]
             if matching:
-                conflicts.append(
-                    PlanningConflict(
-                        task_id=task["task_id"],
-                        title=task["title"],
-                        start_at=interval[0],
-                        end_at=interval[1],
-                        courses=matching,
-                    )
+                conflict = PlanningConflict(
+                    task_id=task["task_id"],
+                    title=task["title"],
+                    start_at=interval[0],
+                    end_at=interval[1],
+                    courses=matching,
                 )
+                course_state = overlap_state(
+                    task, {**snapshot.course_context, "timetable": snapshot.timetable}, now
+                )
+                if course_state.state == "accepted":
+                    accepted.append(conflict)
+                elif task.get("allow_during_course", False):
+                    reviews.append(conflict)
+                else:
+                    conflicts.append(conflict)
         conflicts.sort(key=lambda item: (item.start_at, item.task_id))
         return PlanningConflictsResponse(
-            checked_at=now, policy=POLICY, conflicts=conflicts, unchecked=unchecked
+            checked_at=now,
+            policy=POLICY,
+            conflicts=conflicts,
+            unchecked=unchecked,
+            accepted_course_overlaps=accepted,
+            course_overlap_reviews=reviews,
         )
 
     def conflicts(self, user_id: str) -> PlanningConflictsResponse:
@@ -315,6 +352,14 @@ class ReplanningService:
             course_times = [interval for _, interval in _courses(snapshot.timetable)]
             changes = []
             unresolved = list(report.unchecked)
+            unresolved.extend(
+                ReplanUnresolved(
+                    task_id=item.task_id,
+                    title=item.title,
+                    reason="课内许可需要重新核对准确课程重叠；本次保留原时间，不自动改期。",
+                )
+                for item in report.course_overlap_reviews
+            )
             for conflict in report.conflicts:
                 reason = ""
                 slot = None
@@ -448,7 +493,11 @@ class ReplanningService:
                     if change:
                         task["start_at"] = change.new_start_at.isoformat()
                         task["end_at"] = change.new_end_at.isoformat()
+                        task["task_version"] = task.get("task_version", 1) + 1
                 record = (user_id, confirmed.model_copy(deep=True), digest)
                 self.store._tasks[user_id] = updated_tasks
+                self.store._planning_versions[user_id] = (
+                    self.store._planning_versions.get(user_id, 0) + 1
+                )
                 self._memory[replan_id] = record
             return confirmed

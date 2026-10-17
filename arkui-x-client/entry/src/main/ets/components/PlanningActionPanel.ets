@@ -1,3 +1,6 @@
+import { CourseAcknowledgement, CourseReview } from '../model/ApiModels';
+import { CourseReviewPanel } from './CourseReviewPanel';
+import { validCourseAcknowledgements } from '../utils/CourseReview';
 import { PendingAction, PlanningTaskDraft, PlanningPlanDraft } from '../model/ApiModels';
 import { PlanningActionState } from '../utils/PlanningAction';
 import { canConfirmAction, validatedActionReceipt, receiptTaskId, receiptPlanId } from '../utils/ActionReliability';
@@ -8,15 +11,30 @@ import { AppTheme } from '../theme/AppTheme';
 
 @Component
 export struct PlanningActionPanel {
-  @Prop state: PlanningActionState;
+  @Prop @Watch('stateChanged') state: PlanningActionState;
+  @State private selectedCourseAcks: CourseAcknowledgement[] = [];
+  private courseSelectionKey: string = '';
   @Prop active: boolean = true;
   @Prop retryIntent: string = '';
-  onConfirm: () => void = () => {};
+  onConfirm: (acknowledgements: CourseAcknowledgement[]) => void = () => {};
   onCancel: () => void = () => {};
   onCheck: () => void = () => {};
   onDismiss: () => void = () => {};
   onOpenTask: (id: string) => void = () => {};
   onOpenPlan: (id: string) => void = () => {};
+
+  private stateChanged(): void {
+    const action = this.state.action;
+    const key = action === null ? '' : `${action.proposal_id}:${(action.course_reviews ?? []).map((item: CourseReview) => item.review_digest).join(':')}`;
+    if (key !== this.courseSelectionKey || !['review', 'retryable'].includes(this.state.phase)) { this.selectedCourseAcks = []; }
+    this.courseSelectionKey = key;
+  }
+  private toggleCourse(review: CourseReview): void {
+    if (!this.active || !['review', 'retryable'].includes(this.state.phase)) { return; }
+    const existing = this.selectedCourseAcks.some((item: CourseAcknowledgement) => item.candidate_id === review.candidate_id && item.review_digest === review.review_digest);
+    this.selectedCourseAcks = this.selectedCourseAcks.filter((item: CourseAcknowledgement) => item.candidate_id !== review.candidate_id);
+    if (!existing) { this.selectedCourseAcks = this.selectedCourseAcks.concat([{ candidate_id: review.candidate_id, review_digest: review.review_digest }]); }
+  }
 
   private actions(): PendingAction[] { return this.state.action === null ? [] : [this.state.action]; }
   private busy(): boolean { return ['previewing', 'confirming', 'cancelling', 'checking'].includes(this.state.phase); }
@@ -30,6 +48,8 @@ export struct PlanningActionPanel {
       Text(label).fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
       Text(task.title).fontSize(AppTheme.bodySize).fontColor(AppTheme.ink).fontWeight(FontWeight.Medium)
         .width('100%').wordBreak(WordBreak.BREAK_WORD)
+      Text(task.allow_during_course === true ? '可在上课时完成：已开启' : '可在上课时完成：未开启')
+        .fontSize(AppTheme.bodySize).fontColor(AppTheme.secondary).width('100%')
       TaskScheduleDetails({ startAt: task.start_at, endAt: task.end_at, location: task.location, reminderMinutes: task.reminder_minutes })
     }.width('100%').alignItems(HorizontalAlign.Start).padding(16).backgroundColor(AppTheme.surface).borderRadius(AppTheme.cardRadius)
   }
@@ -85,13 +105,16 @@ export struct PlanningActionPanel {
           ForEach(action.warnings ?? [], (warning: string, index: number) => {
             Text(`核对提示 ${index + 1}：${warning}`).fontSize(AppTheme.bodySize).fontColor(AppTheme.warning).width('100%').wordBreak(WordBreak.BREAK_WORD)
           }, (warning: string, index: number) => `${index}`)
+          CourseReviewPanel({ action: action, enabled: this.active && ['review', 'retryable'].includes(this.state.phase),
+            selected: this.selectedCourseAcks, onToggle: (review: CourseReview) => this.toggleCourse(review) })
           Text(`预览有效至 ${formatPlanDateTime(action.expires_at ?? null)} · 北京时间`)
             .fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
           if (this.state.phase === 'review' || this.state.phase === 'retryable') {
             if (this.retryIntent !== 'cancel') {
               Button(this.state.phase === 'retryable' ? '重试确认同一笔变更' : '确认以上变更').width('100%').constraintSize({ minHeight: 48 })
                 .fontSize(AppTheme.bodySize).fontColor(AppTheme.onAccent).backgroundColor(AppTheme.accent)
-                .borderRadius(AppTheme.controlRadius).enabled(this.active && canConfirmAction(action)).onClick(this.onConfirm)
+                .borderRadius(AppTheme.controlRadius).enabled(this.active && canConfirmAction(action) && validCourseAcknowledgements(action, this.selectedCourseAcks))
+                .onClick(() => this.onConfirm(this.selectedCourseAcks))
             }
             if (!canConfirmAction(action)) {
               Text('候选存在冲突或已过期，不能直接确认。取消本提案后可调整草稿重新预览。')

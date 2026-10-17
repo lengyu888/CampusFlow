@@ -48,6 +48,7 @@ from .replanning import ReplanError, ReplanningService
 from .run_service import RunError, RunService
 from .schedule_subscription import ScheduleSubscriptionError, ScheduleSubscriptionService
 from .schemas import (
+    ActionConfirmRequest,
     ActionTaskRequest,
     AdminUserSummary,
     AgentRunRequest,
@@ -64,6 +65,7 @@ from .schemas import (
     ClassroomSearchResponse,
     ClassroomUsageResponse,
     ConfirmActionResponse,
+    CoursePermissionRequest,
     ElectricityOverview,
     HDUHelpConnectionStatus,
     HDUHelpConnectResponse,
@@ -274,8 +276,9 @@ def create_app(
 
     @app.exception_handler(RunError)
     async def run_error_handler(request: Request, exc: RunError) -> JSONResponse:
-        return JSONResponse(status_code=exc.status_code,
-                            content={"detail": exc.detail, "code": exc.code})
+        return JSONResponse(
+            status_code=exc.status_code, content={"detail": exc.detail, "code": exc.code}
+        )
 
     @app.exception_handler(CampusFlowError)
     async def campusflow_error_handler(request: Request, exc: CampusFlowError) -> JSONResponse:
@@ -1061,7 +1064,8 @@ def create_app(
                 return timetable_service.save_onboarding(user.user_id, payload)
             except sqlite3.Error as exc:
                 raise CampusFlowError(
-                    500, "首次配置保存结果尚未核实，请按原操作编号查询后再决定重试。",
+                    500,
+                    "首次配置保存结果尚未核实，请按原操作编号查询后再决定重试。",
                     "ONBOARDING_FAILED",
                 ) from exc
         if not payload.timetable:
@@ -1168,7 +1172,8 @@ def create_app(
 
     @app.get("/api/v1/agent-runs", response_model=list[RunSnapshot])
     async def recent_agent_runs(
-        user: CurrentUser, limit: int = Query(default=20, ge=1, le=50),
+        user: CurrentUser,
+        limit: int = Query(default=20, ge=1, le=50),
     ) -> list[RunSnapshot]:
         return run_service.recent(user.user_id, limit)
 
@@ -1178,7 +1183,9 @@ def create_app(
 
     @app.get("/api/v1/agent-runs/{run_id}/events", response_model=RunEventsPage)
     async def agent_run_events(
-        run_id: UUID, user: CurrentUser, after_seq: int = Query(default=0, ge=0),
+        run_id: UUID,
+        user: CurrentUser,
+        after_seq: int = Query(default=0, ge=0),
     ) -> RunEventsPage:
         return run_service.events(user.user_id, str(run_id), after_seq)
 
@@ -1307,11 +1314,10 @@ def create_app(
                     operation="create_task", task=ActionTaskRequest(**payload.model_dump())
                 ),
             )
-            return PlanningTask(
-                task_id=action.receipt.task_ids[0],
-                created_at=action.receipt.applied_at,
-                source="manual",
-                **action.payload["task"],
+            return next(
+                task
+                for task in action_service.tasks(user.user_id)
+                if task.task_id == action.receipt.task_ids[0]
             )
         except ActionError as exc:
             if exc.code == "ACTION_CONFLICT":
@@ -1373,10 +1379,27 @@ def create_app(
     async def action_state(proposal_id: str, user: CurrentUser) -> PendingAction:
         return action_service.get(user.user_id, proposal_id)
 
-    @app.post("/api/v1/actions/{proposal_id}/confirm", response_model=ConfirmActionResponse)
-    async def confirm_action(proposal_id: str, user: CurrentUser) -> ConfirmActionResponse:
+    @app.post("/api/v1/actions/{proposal_id}/course-permissions", response_model=PendingAction)
+    async def course_permissions(
+        proposal_id: str, payload: CoursePermissionRequest, user: CurrentUser
+    ) -> PendingAction:
         try:
-            action = store.confirm_proposal(proposal_id, user.user_id)
+            return action_service.course_permissions(user.user_id, proposal_id, payload)
+        except sqlite3.Error as exc:
+            raise CampusFlowError(
+                500, "许可预览结果暂时无法核实，请核对原提案状态。", "ACTION_FAILED"
+            ) from exc
+
+    @app.post("/api/v1/actions/{proposal_id}/confirm", response_model=ConfirmActionResponse)
+    async def confirm_action(
+        proposal_id: str, user: CurrentUser, payload: ActionConfirmRequest | None = None
+    ) -> ConfirmActionResponse:
+        try:
+            action = (
+                store.confirm_proposal(proposal_id, user.user_id, payload.course_acknowledgements)
+                if payload and payload.course_acknowledgements
+                else store.confirm_proposal(proposal_id, user.user_id)
+            )
         except ActionError:
             raise
         except Exception as exc:

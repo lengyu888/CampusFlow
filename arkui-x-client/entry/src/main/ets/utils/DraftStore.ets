@@ -39,6 +39,10 @@ export interface AssistantDraft {
 }
 
 export interface NewTaskDraft {
+  originalText?: string;
+  durationText?: string;
+  durationMinutes?: number | null;
+  allowDuringCourse?: boolean;
   title: string;
   date: string;
   dateChoice: string;
@@ -190,6 +194,15 @@ export const MAX_DRAFT_RECORD_BYTES: number = 2 * 1024 * 1024;
 export const MAX_LOCAL_DRAFTS: number = 20;
 export const MAX_DRAFT_OPERATIONS: number = 40;
 
+function boundedCaptureDuration(value: number): number {
+  if (!Number.isInteger(value) || value < 1 || value > 1440) { throw new Error('invalid capture duration'); }
+  return value;
+}
+function strictCapturePermission(value: boolean): boolean {
+  if (typeof value !== 'boolean') { throw new Error('invalid capture permission'); }
+  return value;
+}
+
 export function draftUtf8Bytes(value: string): number {
   let bytes = 0;
   for (let index = 0; index < value.length; index++) {
@@ -328,7 +341,13 @@ function payload(valueKind: DraftKind, value: DraftPayload): DraftPayload {
   if (valueKind === 'new-task') {
     const item = value as NewTaskDraft;
     return { title: text(item.title, 2048), date: text(item.date, 64), dateChoice: text(item.dateChoice, 64),
-      time: text(item.time, 64), anchorDate: text(item.anchorDate, 32), timezone: timezone(item.timezone) } as NewTaskDraft;
+      time: text(item.time, 64),
+      originalText: item.originalText === undefined ? '' : text(item.originalText, 8000),
+      durationText: item.durationText === undefined ? (typeof item.durationMinutes === 'number' ? `${item.durationMinutes}` : '') : text(item.durationText, 32),
+      durationMinutes: item.durationMinutes === undefined || item.durationMinutes === null ? null :
+        boundedCaptureDuration(item.durationMinutes),
+      allowDuringCourse: item.allowDuringCourse === undefined ? false : strictCapturePermission(item.allowDuringCourse),
+      anchorDate: text(item.anchorDate, 32), timezone: timezone(item.timezone) } as NewTaskDraft;
   }
   if (valueKind === 'onboarding') {
     const item = value as OnboardingDraft;

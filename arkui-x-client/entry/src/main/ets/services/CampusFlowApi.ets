@@ -1,5 +1,6 @@
 import http from '@ohos.net.http';
 import {
+  CourseAcknowledgement,
   AdminUserSummary,
   AuthResponse,
   CampusDataSnapshot,
@@ -244,9 +245,9 @@ export class CampusFlowApi {
     return this.request<PendingAction>('/api/v1/planning/actions', http.RequestMethod.POST, JSON.stringify(payload));
   }
 
-  async confirmAction(proposalId: string): Promise<ConfirmActionResponse> {
+  async confirmAction(proposalId: string, acknowledgements: CourseAcknowledgement[] = []): Promise<ConfirmActionResponse> {
     return this.request<ConfirmActionResponse>(`/api/v1/actions/${encodeURIComponent(proposalId)}/confirm`,
-      http.RequestMethod.POST, '{}');
+      http.RequestMethod.POST, JSON.stringify({ course_acknowledgements: acknowledgements }));
   }
 
   async cancelAction(proposalId: string): Promise<ConfirmActionResponse> {

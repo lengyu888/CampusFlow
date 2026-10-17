@@ -15,8 +15,12 @@ const helperSource = readFileSync(new URL('../entry/src/main/ets/utils/DailyAgen
 const helpers = await import(`data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(helperSource)).toString('base64')}`);
 const feedbackSource = readFileSync(new URL('../entry/src/main/ets/utils/AgentFeedback.ets', import.meta.url), 'utf8').replace(/^import [^\n]+;\r?\n/gm, '');
 const feedback = await import(`data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(feedbackSource)).toString('base64')}`);
+const evidence = await import(`data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(readFileSync(new URL('../entry/src/main/ets/utils/EvidencePresentation.ets', import.meta.url), 'utf8').replace(/^import [^\n]+;\r?\n/gm, ''))).toString('base64')}`);
+const timetableHelpers = await import(`data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(readFileSync(new URL('../entry/src/main/ets/utils/OnboardingTimetable.ets', import.meta.url), 'utf8').replace(/^import [^\n]+;\r?\n/gm, ''))).toString('base64')}`);
+const freeSource = readFileSync(new URL('../entry/src/main/ets/utils/FreeWindows.ets', import.meta.url), 'utf8').replace(/^import [^\n]+;\r?\n/gm, '').replace(/^export /gm, '');
+const free = new Function('buildDailyAgenda', 'shanghaiDate', 'shanghaiTime', 'validateTimetableEntry', stripTypeScriptTypes(freeSource) + '\nreturn { partitionToday, findFreeWindow };')(helpers.buildDailyAgenda, helpers.shanghaiDate, helpers.shanghaiTime, timetableHelpers.validateTimetableEntry);
 const create = new Function('CampusFlowRequestError', 'CampusFlowApi', 'Scroller', 'Date', 'setInterval', 'clearInterval',
-  'buildDailyAgenda', 'shanghaiDate', 'shanghaiTime', stripTypeScriptTypes(controller) + '\nreturn HomePage;');
+  'buildDailyAgenda', 'shanghaiDate', 'shanghaiTime', 'partitionToday', 'findFreeWindow', 'hasFreshEvidence', 'validateTimetableEntry', stripTypeScriptTypes(controller) + '\nreturn HomePage;');
 
 function deferred() {
   let resolve, reject;
@@ -24,6 +28,7 @@ function deferred() {
   return { promise, resolve, reject };
 }
 const flush = async () => { for (let index = 0; index < 6; index++) await Promise.resolve(); };
+const snapshot = (entries) => ({ entries, revision: 'a'.repeat(64), evidence: [{ source_id: 'saved', label: '保存课表', kind: 'user', status: 'fresh', updated_at: '2026-10-18T10:00:00+08:00', expires_at: null, url: null, note: '用户录入' }] });
 const course = (title = '课程') => ({ date: '2026-10-19', title, start_time: '08:05', end_time: '09:40', location: '教研楼', teacher: '' });
 function task(overrides = {}) {
   return { task_id: 'task-1', plan_id: 'plan-1', milestone_id: null, title: '同名任务',
@@ -36,11 +41,11 @@ const overview = (tasks = []) => ({ plans: [], tasks, total_tasks: tasks.length,
 
 function setup(overrides = {}) {
   const calls = [];
-  const hooks = { context: async () => ({ timetable: [course('更新课程')] }),
+  const hooks = { timetable: async () => snapshot([course('更新课程')]),
     planning: async () => overview([task()]), updateTask: async () => ({}), ...overrides };
   class Api {
     constructor(base, token) { this.base = base; this.token = token; }
-    async context() { calls.push(['context', this.token]); return hooks.context(this.token); }
+    async timetable() { calls.push(['timetable', this.token]); return hooks.timetable(this.token); }
     async planning() { calls.push(['planning', this.token]); return hooks.planning(this.token); }
     async updateTask(id, done) { calls.push(['updateTask', id, done, this.token]); return hooks.updateTask(id, done, this.token); }
   }
@@ -48,85 +53,94 @@ function setup(overrides = {}) {
   class ClockDate extends Date { static now() { return clock.now; } }
   const HomePage = create(feedback.CampusFlowRequestError, Api, class Scroller {}, ClockDate,
     (callback) => { const id = clock.nextId++; clock.intervals.set(id, callback); return id; },
-    (id) => clock.intervals.delete(id), helpers.buildDailyAgenda, helpers.shanghaiDate, helpers.shanghaiTime);
+    (id) => clock.intervals.delete(id), helpers.buildDailyAgenda, helpers.shanghaiDate, helpers.shanghaiTime, free.partitionToday, free.findFreeWindow, evidence.hasFreshEvidence, timetableHelpers.validateTimetableEntry);
   const page = new HomePage();
   page.baseUrl = 'https://campus.invalid'; page.token = 'account-a';
-  page.user = { display_name: '同学' };
+  page.user = { display_name: '同学', school: '杭州电子科技大学', campus: '下沙校区' };
+  page.courseReadAt = clock.now - 60000; page.taskReadAt = clock.now - 60000;
   page.courses = [course('原课程')]; page.overview = overview([task({ title: '原任务' })]);
   return { page, calls, hooks, clock };
 }
 
-test('context and planning commit as a coherent snapshot only after both succeed', async () => {
-  const context = deferred(); const planning = deferred();
-  const { page, calls } = setup({ context: () => context.promise, planning: () => planning.promise });
-  const oldCourses = page.courses; const oldOverview = page.overview;
+test('timetable and planning settle independently with explicit source state in one read generation', async () => {
+  const courses = deferred(); const planning = deferred();
+  const { page, calls } = setup({ timetable: () => courses.promise, planning: () => planning.promise });
+  const oldOverview = page.overview;
   const loading = page.loadToday();
-  assert.equal(page.loading, true);
-  context.resolve({ timetable: [course('新课程')] }); await flush();
-  assert.equal(page.courses, oldCourses, 'a partial read must not replace the prior coherent snapshot');
-  assert.equal(page.overview, oldOverview);
+  assert.equal(page.loading, true); assert.equal(page.coursePhase, 'loading'); assert.equal(page.taskPhase, 'loading');
+  courses.resolve(snapshot([course('新课程')])); await flush();
+  assert.equal(page.courses[0].title, '新课程'); assert.equal(page.coursePhase, 'ready');
+  assert.equal(page.overview, oldOverview); assert.equal(page.freeTime().window, null);
   planning.resolve(overview([task({ title: '新任务' })])); await loading;
-  assert.deepEqual(calls.map((call) => call[0]), ['context', 'planning']);
-  assert.equal(page.courses[0].title, '新课程'); assert.equal(page.overview.tasks[0].title, '新任务');
+  assert.deepEqual(calls.map((call) => call[0]), ['timetable', 'planning']);
+  assert.equal(page.overview.tasks[0].title, '新任务'); assert.equal(page.taskPhase, 'ready');
   assert.equal(page.loading, false); assert.equal(page.errorText, '');
 });
 
-test('hiding during the context request prevents its planning follow-up and any data replacement', async () => {
-  const context = deferred(); const { page, calls, clock } = setup({ context: () => context.promise });
+test('hiding during either read prevents late data replacement and stops the clock', async () => {
+  const courses = deferred(); const planning = deferred();
+  const { page, calls, clock } = setup({ timetable: () => courses.promise, planning: () => planning.promise });
   const old = page.overview; const loading = page.loadToday();
   page.active = false; page.activityChanged();
-  context.resolve({ timetable: [course('迟到课程')] }); await loading;
+  courses.resolve(snapshot([course('迟到课程')])); planning.resolve(overview([task({title:'迟到任务'})])); await loading;
   assert.equal(page.overview, old); assert.equal(page.courses[0].title, '原课程');
-  assert.equal(page.loading, false); assert.equal(clock.intervals.size, 0);
-  assert.deepEqual(calls.map((call) => call[0]), ['context']);
+  assert.equal(page.loading, false); assert.equal(clock.intervals.size, 0); assert.equal(page.sourcesReady(), false);
+  assert.deepEqual(calls.map((call) => call[0]), ['timetable', 'planning']);
 });
 
-test('logout/disappearance while planning is pending cannot write old account data or errors', async () => {
+test('logout/disappearance while reads are pending cannot write old account data or errors', async () => {
   for (const fail of [false, true]) {
-    const planning = deferred(); const { page } = setup({ planning: () => planning.promise });
-    const old = page.overview; const loading = page.loadToday(); await flush();
+    const courses = deferred(); const planning = deferred();
+    const { page } = setup({ timetable: () => courses.promise, planning: () => planning.promise });
+    const old = page.overview; const loading = page.loadToday();
     page.token = ''; page.aboutToDisappear(); page.errorText = '已退出';
+    courses.resolve(snapshot([course('旧账号课程')]));
     if (fail) planning.reject(new Error('late private failure')); else planning.resolve(overview([task({ title: '旧账号回包' })]));
     await loading;
-    assert.equal(page.overview, old); assert.equal(page.courses[0].title, '原课程');
-    assert.equal(page.errorText, '已退出');
+    assert.equal(page.overview, old); assert.equal(page.courses[0].title, '原课程'); assert.equal(page.errorText, '已退出');
   }
 });
 
-test('token or server change blocks old reads even before the native disappear callback runs', async () => {
+test('token or server changes block old reads even before the native disappear callback', async () => {
   for (const field of ['token', 'baseUrl']) {
-    const context = deferred(); const { page, calls } = setup({ context: () => context.promise });
+    const courses = deferred(); const planning = deferred();
+    const { page, calls } = setup({ timetable: () => courses.promise, planning: () => planning.promise });
     const old = page.overview; const loading = page.loadToday();
     page[field] = field === 'token' ? 'account-b' : 'https://other.invalid';
-    context.resolve({ timetable: [course('旧账户课程')] }); await loading;
+    courses.resolve(snapshot([course('旧账户课程')])); planning.resolve(overview()); await loading;
     assert.equal(page.overview, old); assert.equal(page.courses[0].title, '原课程');
-    assert.deepEqual(calls.map((call) => call[0]), ['context']);
+    assert.deepEqual(calls.map((call) => call[0]), ['timetable', 'planning']);
   }
 });
 
-test('an older planning response cannot replace a newer completed refresh', async () => {
-  const oldPlanning = deferred(); let reads = 0;
-  const { page } = setup({ planning: () => ++reads === 1 ? oldPlanning.promise : Promise.resolve(overview([task({ title: '最新任务' })])) });
-  const first = page.loadToday(); await flush();
-  await page.loadToday(); assert.equal(page.overview.tasks[0].title, '最新任务');
-  oldPlanning.resolve(overview([task({ title: '过时任务' })])); await first;
-  assert.equal(page.overview.tasks[0].title, '最新任务'); assert.equal(page.loading, false);
+test('older independent responses cannot replace a newer completed refresh', async () => {
+  const oldPlanning = deferred(); const oldCourses = deferred(); let reads = 0, courseReads = 0;
+  const { page } = setup({ timetable: () => ++courseReads === 1 ? oldCourses.promise : Promise.resolve(snapshot([course('最新课程')])),
+    planning: () => ++reads === 1 ? oldPlanning.promise : Promise.resolve(overview([task({ title: '最新任务' })])) });
+  const first = page.loadToday(); await flush(); await page.loadToday();
+  oldPlanning.resolve(overview([task({ title: '过时任务' })])); oldCourses.resolve(snapshot([course('过时课程')])); await first;
+  assert.equal(page.overview.tasks[0].title, '最新任务'); assert.equal(page.courses[0].title, '最新课程'); assert.equal(page.loading, false);
 });
 
-test('context or planning failure preserves prior content and marks it unverified instead of empty', async () => {
-  for (const endpoint of ['context', 'planning']) {
+test('one source failure preserves its own prior data and does not suppress the independently successful source', async () => {
+  for (const endpoint of ['timetable', 'planning']) {
     const { page } = setup({ [endpoint]: async () => { throw new Error('network detail'); } });
     const oldCourses = page.courses; const oldOverview = page.overview;
     await page.loadToday();
-    assert.equal(page.courses, oldCourses); assert.equal(page.overview, oldOverview);
+    if (endpoint === 'timetable') {
+      assert.equal(page.courses, oldCourses); assert.equal(page.coursePhase, 'stale');
+      assert.equal(page.overview.tasks[0].title, '同名任务'); assert.equal(page.taskPhase, 'ready');
+    } else {
+      assert.equal(page.overview, oldOverview); assert.equal(page.taskPhase, 'stale');
+      assert.equal(page.courses[0].title, '更新课程'); assert.equal(page.coursePhase, 'ready');
+    }
     assert.match(page.errorText, /不是最新.*重试/); assert.equal(page.loading, false);
-    assert.doesNotMatch(page.errorText, /network detail/);
+    assert.equal(page.freeTime().window, null); assert.doesNotMatch(page.errorText, /network detail/);
   }
-  const { page } = setup({ context: async () => { throw new Error('offline'); } });
-  page.courses = []; page.overview = overview();
-  await page.loadToday();
-  assert.ok(page.errorText, 'a failed initial request is not a successful empty schedule');
-  assert.equal(page.agenda().next, null);
+  const { page } = setup({ timetable: async () => { throw new Error('offline'); }, planning: async () => overview() });
+  page.courses = []; page.overview = overview(); page.courseReadAt = 0; page.taskReadAt = 0;
+  await page.loadToday(); assert.ok(page.errorText); assert.equal(page.coursePhase, 'error');
+  assert.equal(page.taskPhase, 'ready'); assert.equal(page.freeTime().window, null); assert.equal(page.agenda().next, null);
 });
 
 test('duplicate task completion is locked until the server state is refreshed, with no optimistic mutation', async () => {
@@ -161,7 +175,7 @@ test('successful mutation followed by failed read retains content with a retryab
   const old = page.overview; await page.toggleTask(old.tasks[0]);
   assert.equal(page.overview, old); assert.match(page.errorText, /不是最新.*重试/);
   assert.equal(page.busyTaskId, '');
-  assert.deepEqual(calls.map((call) => call[0]), ['updateTask', 'context', 'planning']);
+  assert.deepEqual(calls.map((call) => call[0]), ['updateTask', 'timetable', 'planning']);
 });
 
 test('refresh started before a task commit cannot suppress its newer authoritative status', async () => {
@@ -217,13 +231,16 @@ test('date, greeting and agenda share the Shanghai clock including local midnigh
 test('same-title tasks use exact IDs for detail and completion callbacks, while courses open the route selector', async () => {
   const { page, calls } = setup(); const opened = [];
   page.overview = overview([task({ task_id: 'one' }), task({ task_id: 'two', plan_id: 'plan-two' })]);
-  page.onOpenTaskDetails = (id) => opened.push(['task', id]); page.onOpenRoute = () => opened.push(['route']);
+  page.onOpenTaskDetails = (id) => opened.push(['task', id]); page.onOpenCourseRoute = (intent) => opened.push(['route', intent]);
   const row = page.agenda().rows.find((item) => item.taskId === 'two');
   page.nextAction(row); page.toggleAgendaTask(row); await flush();
   assert.deepEqual(opened, [['task', 'two']]);
   assert.deepEqual(calls.find((call) => call[0] === 'updateTask'), ['updateTask', 'two', true, 'account-a']);
-  page.nextAction(helpers.buildDailyAgenda([course()], [], page.nowMs).rows[0]);
-  assert.deepEqual(opened, [['task', 'two'], ['route']]);
+  const currentCourse = page.courses[0];
+  page.nextAction(page.agenda().rows.find((item) => item.kind === 'course'));
+  assert.equal(opened[1][0], 'route'); assert.deepEqual(opened[1][1].course, currentCourse);
+  assert.notEqual(opened[1][1].course, currentCourse, 'the intent receives a copy of all six source fields');
+  assert.equal(opened[1][1].school, '杭州电子科技大学'); assert.equal(opened[1][1].campus, '下沙校区');
   const before = calls.length; page.toggleAgendaTask({ ...row, taskId: 'not-found' }); await flush();
   assert.equal(calls.length, before, 'an unknown ID must not fall back to a same-title task');
   assert.match(source, /onClick\(\(\) => this\.onOpenPlanDetails\(plan\.plan_id\)\)/,
@@ -252,4 +269,74 @@ test('a definite conflict on restore explains how to adjust it without inventing
   await page.toggleTask(task({status: 'completed'}));
   assert.equal(page.overview, before); assert.match(page.errorText, /时间冲突/); assert.match(page.errorText, /任务详情/);
   assert.equal(page.busyTaskId, '');
+});
+
+test('plain capture is an explicit draft intent with Shanghai anchor and never calls an API', () => {
+  const { page, calls, clock } = setup(); const opened = [];
+  page.onOpenCapture = intent => opened.push(intent);
+  clock.now = Date.parse('2026-10-19T16:00:00Z'); page.openCapture();
+  assert.deepEqual(opened, [{ text:'',date:'',time:'',durationMinutes:null,anchorDate:'2026-10-20',timezone:'Asia/Shanghai',source:'home' }]);
+  assert.equal(calls.length,0); page.active=false; page.openCapture(); assert.equal(opened.length,1);
+});
+
+test('free-time entry rechecks sources/time and only fills a 25-minute draft once that day', async () => {
+  const { page, calls, clock } = setup({timetable:async()=>snapshot([course()]),planning:async()=>overview()});
+  clock.now=Date.parse('2026-10-19T10:00:20+08:00'); await page.loadToday();
+  const opened=[]; page.onOpenCapture=intent=>opened.push(intent); const before=calls.length;
+  page.setBuffer(5); page.useFreeTime();
+  assert.deepEqual(opened,[{text:'复习',date:'2026-10-19',time:'10:01',durationMinutes:25,anchorDate:'2026-10-19',timezone:'Asia/Shanghai',source:'gap'}]);
+  assert.equal(calls.length,before); page.useFreeTime(); assert.equal(opened.length,1);
+  page.gapDismissedDate=''; page.taskPhase='stale'; page.useFreeTime(); assert.equal(opened.length,1);
+});
+
+test('unknown or expired evidence cannot unlock a free-time action after a successful timetable GET', async () => {
+  const { page, hooks, clock } = setup({planning:async()=>overview()}); const payload=snapshot([]);
+  payload.evidence[0].expires_at='2026-10-19T09:01:00+08:00'; hooks.timetable=async()=>payload;
+  await page.loadToday(); assert.ok(page.freeTime().window);
+  clock.now=Date.parse('2026-10-19T09:01:00+08:00'); page.nowMs=clock.now;
+  assert.equal(page.freeTime().window,null); assert.equal(page.coursePhase,'ready','transport success is distinct from evidence expiry');
+  hooks.timetable=async()=>({...snapshot([]),evidence:[]}); await page.loadToday(); assert.equal(page.freeTime().window,null);
+});
+
+test('connection watcher immediately removes prior account source data, expansion and suggestion state', async () => {
+  const pending=deferred(); const {page}=setup({timetable:()=>pending.promise,planning:async()=>overview()});
+  const old=page.loadToday(); page.sourceExpanded=true; page.earlierExpanded=true; page.bufferMinutes=15;
+  page.gapDismissedDate='2026-10-19'; page.active=false; page.baseUrl='https://other.invalid'; page.connectionChanged();
+  assert.equal(page.courses.length,0); assert.equal(page.overview.tasks.length,0);
+  assert.equal(page.courseReadAt,0); assert.equal(page.taskReadAt,0); assert.equal(page.timetableRevision,'');
+  assert.equal(page.sourceExpanded,false); assert.equal(page.earlierExpanded,false); assert.equal(page.bufferMinutes,0);
+  pending.resolve(snapshot([course('旧回包')])); await old; assert.equal(page.courses.length,0);
+});
+
+test('same-title course routes carry the precise six fields, snapshot, scope and cloned evidence', async () => {
+  const second={...course('同名课'),start_time:'15:00',end_time:'16:30',location:'另一栋教研楼 204',teacher:'另一位老师'};
+  const {page}=setup({timetable:async()=>snapshot([course('同名课'),second])}); await page.loadToday();
+  const opened=[];page.onOpenCourseRoute=intent=>opened.push(intent);
+  page.nextAction(page.agenda().rows.find(row=>row.kind==='course' && row.startTime==='15:00'));
+  assert.deepEqual(opened[0].course,second); assert.equal(opened[0].timetableRevision,'a'.repeat(64));
+  assert.deepEqual(opened[0].evidence,page.courseEvidence); opened[0].evidence[0].note='外部改变'; assert.notEqual(page.courseEvidence[0].note,'外部改变');
+  const row=page.agenda().rows.find(row=>row.kind==='course'); page.courses[0]={...page.courses[0],location:'已修改'};
+  page.nextAction(row); assert.equal(opened.length,1); assert.match(page.errorText,/已变化/);
+});
+
+test('stale course route attribution includes a visible read-status warning instead of silently claiming a current location', async () => {
+  const {page}=setup();await page.loadToday();page.coursePhase='stale';const opened=[];page.onOpenCourseRoute=intent=>opened.push(intent);
+  page.nextAction(page.agenda().rows.find(row=>row.kind==='course'));
+  assert.equal(opened[0].evidence.at(-1).status,'unverified'); assert.match(opened[0].evidence.at(-1).note,/上次成功读取/);
+});
+
+test('invalid timetable rows or revisions cannot replace a last known complete timetable', async () => {
+  for(const payload of [{...snapshot([]),revision:'broken'},snapshot([{...course(),end_time:'07:00'}]),snapshot([{...course(),location:undefined}]),
+    snapshot([{...course(),start_time:' 08:05 '}]),snapshot([{...course(),date:' 2026-10-19 '}])]) {
+    const {page}=setup({timetable:async()=>payload}); const old=page.courses; await page.loadToday();
+    assert.equal(page.courses,old);assert.equal(page.coursePhase,'stale');assert.equal(page.freeTime().window,null);
+  }
+});
+
+test('page groups retain all rows and never collapse incomplete timed work', () => {
+  const {page}=setup(); page.nowMs=Date.parse('2026-10-19T14:10:00+08:00');
+  page.overview=overview([task({task_id:'late'}),task({task_id:'unknown',start_at:'2026-10-19T13:00:00+08:00',end_at:null}),task({task_id:'done',status:'completed'})]);
+  const groups=page.groups(); assert.equal(groups.overdue[0].taskId,'late'); assert.equal(groups.upcoming[0].taskId,'unknown');
+  assert.equal(groups.earlier.length,2); assert.equal(groups.upcoming.length+groups.overdue.length+groups.earlier.length,page.agenda().rows.length);
+  assert.match(source,/TimelineList\(this\.groups\(\)\.overdue\)/); assert.match(source,/if \(this\.earlierExpanded\)/);
 });

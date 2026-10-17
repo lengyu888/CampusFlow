@@ -1,18 +1,20 @@
+import { reliability, courseReview } from './course-review-fixture.mjs';
 import { readFileSync } from 'node:fs';
 import { stripTypeScriptTypes } from 'node:module';
 const read = name => readFileSync(new URL(`../../entry/src/main/ets/utils/${name}.ets`, import.meta.url), 'utf8');
 const noImports = s => s.replace(/^import \{[\s\S]*?\} from '[^']+';\r?\n/gm, '').replace(/^import [^\n]+;\r?\n/gm, '');
 const load = async name => import(`data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(noImports(read(name)))).toString('base64')}`);
-export const reliability = await load('ActionReliability');
+export { reliability, courseReview } from './course-review-fixture.mjs';
+export const quickCapture = await load('QuickCaptureParser');
 export const presentation = await load('PlanPresentation');
 const feedback = await load('AgentFeedback');
 export const CampusFlowRequestError = feedback.CampusFlowRequestError;
 const source = noImports(read('PlanningAction')).replace(/^export /gm, '');
 const loaded = new Function('CampusFlowRequestError', 'validReliableAction', 'validatedActionReceipt', 'sameActionCandidate',
-  'sameActionReceipt', 'decisionDisposition', 'formatPlanDateTime', stripTypeScriptTypes(source) +
+  'sameActionReceipt', 'decisionDisposition', 'formatPlanDateTime', 'validCourseAcknowledgements', stripTypeScriptTypes(source) +
   '\nreturn {PlanningActionController, editedPlanningTime, validPlanningDate, planningTimestamp};')(CampusFlowRequestError,
   reliability.validReliableAction, reliability.validatedActionReceipt, reliability.sameActionCandidate,
-  reliability.sameActionReceipt, reliability.decisionDisposition, presentation.formatPlanDateTime);
+  reliability.sameActionReceipt, reliability.decisionDisposition, presentation.formatPlanDateTime, courseReview.validCourseAcknowledgements);
 export const { PlanningActionController, editedPlanningTime, validPlanningDate, planningTimestamp } = loaded;
 export const clone = value => JSON.parse(JSON.stringify(value));
 export const sampleTask = (id = 'task-a', extra = {}) => ({ task_id: id, plan_id: null, milestone_id: null,

@@ -1,0 +1,235 @@
+<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:; connect-src 'none'; form-action 'none'">
+<title>行简 · 从一句话到一个安排</title><style>
+:root{font:16px/1.65 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;color:#29352F;background:#F6F4EF;--green:#416454;--muted:#626E65;--line:#DCE2D8}*{box-sizing:border-box}body{margin:0}button,input{font:inherit;color:inherit}button{min-height:48px;cursor:pointer;border:0;border-radius:12px;background:#E7EEE6;padding:10px 16px;color:var(--green);text-align:center}button.primary{background:var(--green);color:#FFFEFB}button:disabled{opacity:.55;cursor:default}button:focus-visible,input:focus-visible{outline:3px solid #9B573B;outline-offset:3px}h1,h2,h3,p{margin:0}main{max-width:1260px;margin:auto;padding:40px 28px}header{display:flex;justify-content:space-between;align-items:start;gap:24px;border-bottom:1px solid var(--line);padding-bottom:28px;margin-bottom:32px}.eyebrow{color:var(--green);font-size:14px;margin-bottom:12px}h1{font-weight:600;font-size:30px;letter-spacing:1px}header p{max-width:430px;font-size:14px;color:var(--muted)}.stages{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px}.label{font-size:13px;color:var(--muted);margin-bottom:12px}.phone{background:#F6F4EF;border:1px solid #DCE2D8;border-radius:24px;overflow:hidden;min-height:830px;display:flex;flex-direction:column}.status{display:flex;justify-content:space-between;padding:16px 22px;font-size:12px;color:var(--muted)}.page{padding:16px 20px;flex:1}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:26px}h2{font-size:26px;font-weight:600}.small,.note{font-size:13px;color:var(--muted)}.avatar{display:grid;place-items:center;width:40px;height:40px;border-radius:50%;background:#E7EEE6;color:var(--green)}.next{padding:20px;background:#FFFEFB;border-radius:16px;border-top:3px solid var(--green);margin-bottom:22px}.next h3{font-size:22px;font-weight:500;margin:6px 0}.badge{display:inline-block;font-size:12px;border:1px solid var(--line);border-radius:5px;padding:1px 6px;color:var(--muted)}.row{display:grid;grid-template-columns:52px 1fr;gap:12px;padding:16px 0;border-bottom:1px solid var(--line)}.time{font-size:14px;color:var(--green)}.line-title{font-size:16px}.section{display:flex;justify-content:space-between;align-items:center;margin-top:22px}.section h3{font-size:17px}.full{width:100%;margin-top:16px}.nav{display:flex;justify-content:space-around;border-top:1px solid var(--line);padding:18px 6px;font-size:13px;background:#FFFEFB;color:var(--muted)}.nav b{font-weight:500;color:var(--green)}input{min-height:48px;width:100%;border:1px solid #788578;border-radius:10px;background:#FFFEFB;padding:10px 12px;min-width:0}.formlabel{display:block;font-size:13px;color:var(--muted);margin:16px 0 6px}.split{display:grid;grid-template-columns:1fr 1fr;gap:10px}.plain{background:transparent;text-align:left;padding:8px 0;font-size:14px}.notice{background:#FBF2DF;border-left:3px solid #886023;border-radius:8px;padding:12px;font-size:14px;color:#795321;margin-top:16px}.paper{background:#FFFEFB;padding:18px;border-radius:16px;margin-top:16px}.paper h3{font-size:19px;font-weight:500}.detail{font-size:14px;color:var(--muted);margin-top:8px;overflow-wrap:anywhere}.result{font-size:14px;color:var(--green);margin-top:12px}.hidden{display:none!important}.footer{margin-top:26px;color:var(--muted);font-size:13px}.large{font-size:20px}.large .small,.large .note,.large .formlabel{font-size:16px}.large .line-title,.large .detail{font-size:20px}.large button,.large input{font-size:20px}.large .phone{min-height:900px}@media(max-width:1000px){.stages{grid-template-columns:1fr;max-width:390px;margin:auto}.phone{min-height:auto}header{display:block}header p{margin-top:16px}main{padding:24px 14px}.page{padding:18px}.nav{margin-top:24px}}@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto}}
+</style><main><header><div><div class="eyebrow">行简 / 第四阶段</div><h1>想到一件事，顺手安排好。</h1></div><div><p>交互对照原型 · 合成演示数据。语句解析使用应用同一份逻辑；按钮不会写入账号，不代表原生应用已编译或验收。</p><button class="plain" id="large">切换大字号</button></div></header><div class="stages">
+<section><div class="label">01 / 今日 · 把下一项放在眼前</div><div class="phone"><div class="status"><span>14:10</span><span>离线交互原型</span></div><div class="page"><div class="top"><div><p class="small">10 月 18 日　星期日</p><h2>今日</h2></div><span class="avatar">林</span></div><div class="next"><span class="badge">接下来 · 14:30</span><h3>操作系统</h3><p class="small">第 4 教学楼 305 · 至 16:05</p><button class="plain" id="route">查看课程地点 →</button><p class="note hidden" id="route-note">第 4 教学楼 305。进入导航后仍需选择起点；教室文字不是当前位置。</p></div><button class="primary full" id="capture">＋ 记一件事</button><div class="section"><h3>接下来的安排</h3><span class="small">已录入</span></div><div class="row"><span class="time">14:30</span><div><p class="line-title">操作系统</p><p class="small">课程 · 16:05 结束</p></div></div><div class="row"><span class="time">18:30</span><div><p class="line-title">复习并整理课堂笔记</p><p class="small">待办 · 45 分钟</p></div></div><button class="plain" id="earlier">早些时候 · 1 项　⌄</button><p class="note hidden" id="earlier-note">08:00–09:00　离散数学 · 已结束课程</p><div class="paper"><p class="small">按已知课表和任务计算</p><p>16:05–18:30 有一段空档</p><p class="note">演示选择缓冲 0 分钟，未估算通勤。</p><button class="plain" id="gap">给复习留 25 分钟 →</button></div></div><div class="nav"><b>今日</b><span>助手</span><span>计划</span><span>校园</span></div></div></section>
+<section><div class="label">02 / 轻记录 · 先写下来，再核对</div><div class="phone"><div class="status"><span>14:10</span><span>草稿示意</span></div><div class="page"><div class="top"><h2>记一件事</h2><span class="small">输入保留</span></div><p class="small">基准日期 2026-10-18 · 北京时间</p><label class="formlabel" for="text">待办内容</label><input id="text" value="明晚八点复习一小时"><button class="full" id="parse">从这句话提取时间</button><p class="note" style="margin-top:12px">“下午”“下课后”等不会猜一个时间。</p><label class="formlabel" for="date">日期 · 可留空</label><input id="date" placeholder="YYYY-MM-DD"><div class="split"><div><label class="formlabel" for="time">时刻</label><input id="time" placeholder="HH:mm"></div><div><label class="formlabel" for="duration">分钟</label><input id="duration" inputmode="numeric" placeholder="可留空"></div></div><p id="original" class="detail"></p><div class="notice hidden" id="issues" role="status"></div><button class="full" id="permission" aria-pressed="false">可在上课时完成 · 未开启</button><p class="note" style="margin-top:10px">开启后仍会列出具体重叠，确认后才保存。</p><button class="primary full" id="preview">核对安排预览</button><p class="result" id="draft-status" role="status"></p></div></div></section>
+<section><div class="label">03 / 明确提醒 · 自己决定是否保留</div><div class="phone"><div class="status"><span>14:10</span><span>确认示意</span></div><div class="page"><div class="top"><h2>核对这次安排</h2></div><p class="small">合成候选 · 非账号记录</p><div class="paper"><span class="badge">变更后</span><h3 id="candidate-title" style="margin-top:12px">整理课堂笔记</h3><p class="detail" id="candidate-time">2026-10-18 15:00–15:25</p><p class="detail" id="candidate-permission">可在上课时完成：已开启</p></div><div class="notice" id="overlap"><b>与课程有重叠</b><p style="margin-top:8px">10 月 18 日 · 操作系统<br>课程 14:30–16:05<br>重叠 15:00–15:25</p><p class="note" style="margin-top:10px">演示大学 · 主校区 · 北京时间</p></div><button class="full" id="ack" aria-pressed="false">仍这样安排</button><p class="note" id="ack-note" style="margin-top:10px">只确认上面这项任务与这节课的重叠。</p><button class="primary full" id="confirm" disabled>确认以上变更</button><p class="result" id="result" role="status"></p><button class="plain" id="cancel">取消，保留输入</button><p class="note" style="margin-top:24px">课表或任务变更后会重新提醒。任务之间的冲突与截止限制不会因此放开。</p></div></div></section></div><p class="footer">对应生产实现：HomePage / PlanCenterPage / CourseReviewPanel。此原型用于布局与交互核对；接口与幂等性由实际逻辑和 SQLite 测试另行验证。</p></main><script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+const QUICK_CAPTURE_SUPPORTED           = [
+  '今天、明天、后天及 YYYY-MM-DD 日期',
+  '周几取从输入基准日起最近一次（含当天）；本周、下周按周一开始',
+  '24 小时时刻，或上午/下午/晚上加几点、几点半',
+  '明确分钟或小时（含半小时），最多 24 小时',
+  '例如：明晚八点复习一小时；无日期的事项也可手动保存'
+];
+
+const QUICK_CAPTURE_UNSUPPORTED           = [
+  '循环安排、节假日、下课后等相对事件',
+  '下午、晚点、有空时等没有明确时刻的描述',
+  '一句多项、多个竞争日期或时刻',
+  '没有上午/晚上说明的一至十二点，或八九点等大概时间',
+  '按课程、教室、通勤位置推算时间'
+];
+
+const DAY_MS         = 86400000;
+
+function validDate(value        )          {
+  if (!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(value)) { return false; }
+  const year = Number(value.substring(0, 4));
+  const month = Number(value.substring(5, 7));
+  const day = Number(value.substring(8, 10));
+  if (year < 1 || year > 9999 || month < 1 || month > 12 || day < 1) { return false; }
+  const leap = year % 400 === 0 || (year % 4 === 0 && year % 100 !== 0);
+  const lengths           = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  return day <= lengths[month - 1];
+}
+
+function dateAt(value        )         {
+  const date = new Date(value);
+  return `${date.getUTCFullYear()}`.padStart(4, '0') + '-' +
+    `${date.getUTCMonth() + 1}`.padStart(2, '0') + '-' + `${date.getUTCDate()}`.padStart(2, '0');
+}
+
+function shiftDate(anchor        , days        )         {
+  const value = dateAt(Date.parse(`${anchor}T00:00:00Z`) + days * DAY_MS);
+  return validDate(value) ? value : '';
+}
+
+function numberWord(value        )                {
+  if (/^[0-9]+(?:\.[0-9]+)?$/.test(value)) { return Number(value); }
+  if (value === '半') { return 0.5; }
+  const digits         = '零一二三四五六七八九';
+  const word = value.replace(/两/g, '二').replace(/〇/g, '零');
+  if (word.length === 1 && digits.indexOf(word) >= 0) { return digits.indexOf(word); }
+  const tens = /^([一二三四五六七八九]?)十([一二三四五六七八九]?)$/.exec(word);
+  if (tens !== null) { return (tens[1].length === 0 ? 1 : digits.indexOf(tens[1])) * 10 + (tens[2].length === 0 ? 0 : digits.indexOf(tens[2])); }
+  return null;
+}
+
+function issue(result                       , field        , code        , message        )       {
+  if (!result.issues.some((item                   ) => item.code === code)) {
+    result.issues.push({ field: field, code: code, message: message });
+  }
+}
+
+function matches(text        , pattern        )                {
+  const values                = [];
+  let found = pattern.exec(text);
+  while (found !== null) {
+    values.push({ start: found.index, end: found.index + found[0].length, value: found[0] });
+    found = pattern.exec(text);
+  }
+  return values;
+}
+
+function dateValue(token        , anchor        )         {
+  if (/^[0-9]/.test(token)) { return validDate(token) ? token : ''; }
+  if (/^(明天|明晚|明早|明晨)$/.test(token)) { return shiftDate(anchor, 1); }
+  if (token === '后天') { return shiftDate(anchor, 2); }
+  if (/^(今天|今日|今晚|今早|今晨|今夜)$/.test(token)) { return anchor; }
+  const weekday = '一二三四五六日'.indexOf(token.substring(token.length - 1).replace('天', '日'));
+  const day = new Date(`${anchor}T00:00:00Z`).getUTCDay();
+  const mondayIndex = (day + 6) % 7;
+  if (token.startsWith('下周')) { return shiftDate(anchor, 7 - mondayIndex + weekday); }
+  if (token.startsWith('本周') || token.startsWith('这周')) { return shiftDate(anchor, weekday - mondayIndex); }
+  return shiftDate(anchor, (weekday - mondayIndex + 7) % 7);
+}
+
+function timeValue(token        )         {
+  const colon = /^([0-9]{1,2}):([0-9]{2})$/.exec(token);
+  if (colon !== null) {
+    const hour = Number(colon[1]); const minute = Number(colon[2]);
+    return hour <= 23 && minute <= 59 ? `${hour}`.padStart(2, '0') + ':' + colon[2] : '';
+  }
+  const words = /^(明|今)?(凌晨|早上|上午|中午|下午|晚上|早|晚)?([0-9]+|[零〇一二两三四五六七八九十百]+)点(半|([0-9]+|[零〇一二两三四五六七八九十百]+)分)?$/.exec(token);
+  if (words === null) { return ''; }
+  let hour = numberWord(words[3]);
+  const minute = words[4] === '半' ? 30 : (words[5] === undefined ? 0 : numberWord(words[5]));
+  const period = words[2] ?? '';
+  if (hour === null || minute === null || !Number.isInteger(hour) || !Number.isInteger(minute) || minute > 59 || hour > 23) { return ''; }
+  if (period.length === 0 && hour >= 1 && hour <= 12) { return ''; }
+  if (period === '下午' || period === '晚上' || period === '晚') {
+    if (hour < 1 || hour > 12) { return ''; }
+    if (hour < 12) { hour += 12; }
+    // 十二点晚上可能指次日零点；不悄悄选择日期。
+    if ((period === '晚上' || period === '晚') && hour === 12) { return ''; }
+  } else if (period === '中午') {
+    if (hour !== 12) { return ''; }
+  } else if (period.length > 0 && (hour > 11 || (period !== '凌晨' && hour === 0))) { return ''; }
+  return `${hour}`.padStart(2, '0') + ':' + `${minute}`.padStart(2, '0');
+}
+
+function captureEndAt(date        , time        , durationMinutes               )                {
+  if (!validDate(date) || !/^([01][0-9]|2[0-3]):[0-5][0-9]$/.test(time) || durationMinutes === null ||
+    !Number.isInteger(durationMinutes) || durationMinutes <= 0 || durationMinutes > 1440) { return null; }
+  const end = Date.parse(`${date}T${time}:00+08:00`) + durationMinutes * 60000;
+  const shifted = new Date(end + 8 * 3600000);
+  const endDate = dateAt(shifted.getTime());
+  if (!validDate(endDate)) { return null; }
+  return `${endDate}T${`${shifted.getUTCHours()}`.padStart(2, '0')}:${`${shifted.getUTCMinutes()}`.padStart(2, '0')}:00+08:00`;
+}
+
+function parseQuickCapture(text        , anchorDate        )                        {
+  const result                        = { originalText: text, title: text.trim(), date: '', time: '',
+    durationMinutes: null, anchorDate: anchorDate, timezone: 'Asia/Shanghai', issues: [], unsupported: [], requiresReview: false };
+  if (!validDate(anchorDate)) {
+    issue(result, 'date', 'ANCHOR_INVALID', '输入基准日期无效，请重新选择具体日期。'); result.requiresReview = true; return result;
+  }
+  if (Array.from(text).length > 2048) {
+    issue(result, 'title', 'INPUT_TOO_LONG', '这句话过长，请缩短后再解析；原文仍保留。'); result.requiresReview = true; return result;
+  }
+  const remove                = [];
+  const unsupported                           = [
+    { pattern: /(每周|每天|每月|隔天|工作日|节假日|周末)/, label: '循环或范围日期请手动选择。' },
+    { pattern: /(下课后|上课前|晚点|稍后|有空时|找一天|放学后)/, label: '相对事件或模糊时刻请手动填写。' },
+    { pattern: /([一二三四五六七八九][一二三四五六七八九]点|[0-9]+[到至~～][0-9]+点)/, label: '大概时刻不自动换成某一个整点。' },
+    { pattern: /(然后|以及|同时|；|;|\n)/, label: '一句多项暂不拆分，请一次记录一件事。' }
+  ];
+  unsupported.forEach((rule                        , index        ) => {
+    if (rule.pattern.test(text)) { result.unsupported.push(rule.label); issue(result, 'text', `UNSUPPORTED_${index}`, rule.label); }
+  });
+  const dates = matches(text, /[0-9]{4}-[0-9]{2}-[0-9]{2}|今天|今日|明天|后天|明晚|明早|明晨|今晚|今早|今晨|今夜|(?:本周|下周|这周|周|星期)[一二三四五六日天]/g);
+  if (dates.length > 1) { issue(result, 'date', 'DATE_AMBIGUOUS', '发现多个日期，请选择本次事项的日期。'); }
+  else if (dates.length === 1 && !/(每周|每天|每月|隔天|工作日|节假日|周末)/.test(text)) {
+    result.date = dateValue(dates[0].value, anchorDate);
+    if (/^[0-9]/.test(dates[0].value) && (/[0-9-]/.test(text.substring(Math.max(0, dates[0].start - 1), dates[0].start)) ||
+      /[0-9-]/.test(text.substring(dates[0].end, dates[0].end + 1)))) { result.date = ''; }
+    if (result.date.length === 0) { issue(result, 'date', 'DATE_INVALID', '日期不存在或超出范围，请手动核对。'); }
+    else {
+      remove.push(dates[0]);
+      if (result.date < anchorDate) { issue(result, 'date', 'DATE_IN_PAST', '这个日期早于输入基准日，已保留原日期，请核对。'); }
+    }
+  }
+  const times = matches(text, /[0-9]{1,2}:[0-9]{2}|(?:明|今)?(?:凌晨|早上|上午|中午|下午|晚上|早|晚)?(?:[0-9]+|[零〇一二两三四五六七八九十百]+)点(?:半|(?:[0-9]+|[零〇一二两三四五六七八九十百]+)分)?/g);
+  if (times.length > 1) { issue(result, 'time', 'TIME_AMBIGUOUS', '发现多个时刻，请手动选择开始时间。'); }
+  else if (times.length === 1) {
+    const item = times[0];
+    result.time = timeValue(item.value);
+    const period = /(凌晨|早上|上午|中午|下午|晚上|早|晚)$/.exec(text.substring(0, item.start));
+    if (item.value.includes(':') && period !== null && result.time.length > 0) {
+      const hour = Number(result.time.substring(0, 2));
+      const label = period[1];
+      const consistent = /^(凌晨|早上|上午|早)$/.test(label) ? hour < 12 :
+        (label === '中午' ? hour === 12 : (label === '下午' ? hour >= 12 && hour < 18 : hour >= 18));
+      if (!consistent) { result.time = ''; issue(result, 'time', 'TIME_PERIOD_CONFLICT', '时段和 24 小时时刻不一致，请明确选择开始时间。'); }
+      else { remove.push({ start: item.start - label.length, end: item.start, value: label }); }
+    }
+    if ((item.start > 0 && /[0-9:第约近负\-]/.test(text.substring(item.start - 1, item.start))) ||
+      /[0-9:]/.test(text.substring(item.end, item.end + 1)) || text.substring(item.end, item.end + 2) === '左右') { result.time = ''; }
+    if (result.time.length === 0) { issue(result, 'time', 'TIME_NEEDS_CLARIFICATION', '时刻不明确或无效，请填写 24 小时制时间。'); }
+    else { remove.push(item); }
+  } else if (/(下午|上午|晚上|中午|凌晨|早上|明晚|今晚)/.test(text)) {
+    issue(result, 'time', 'TIME_REQUIRED', '只识别到时段，请填写明确时刻，或主动选择不指定时刻。');
+  }
+  const durations = matches(text, /(?:半|[0-9]+(?:\.[0-9]+)?|[零〇一二两三四五六七八九十百]+)(?:个)?(?:小时|分钟)/g);
+  if (durations.length > 1) { issue(result, 'duration', 'DURATION_AMBIGUOUS', '发现多个时长，请合并后填写本次所需分钟数。'); }
+  else if (durations.length === 1) {
+    const item = durations[0];
+    const parts = /^(半|[0-9]+(?:\.[0-9]+)?|[零〇一二两三四五六七八九十百]+)(?:个)?(小时|分钟)$/.exec(item.value);
+    const value = parts === null ? null : numberWord(parts[1]);
+    const minutes = value === null || parts === null ? 0 : value * (parts[2] === '小时' ? 60 : 1);
+    const previous = text.substring(Math.max(0, item.start - 1), item.start);
+    const adjacentField = remove.some((span             ) => span.end === item.start);
+    if (minutes <= 0 || minutes > 1440 || !Number.isInteger(minutes) || /[第负约近.\-+]/.test(previous) ||
+      (/[0-9]/.test(previous) && !adjacentField) ||
+      text.substring(item.end, item.end + 2) === '左右') {
+      issue(result, 'duration', 'DURATION_INVALID', '时长未能确定，请填写 1–1440 的整分钟数。');
+    } else { result.durationMinutes = minutes; remove.push(item); }
+  }
+  if (result.time.length > 0 && result.date.length === 0) { issue(result, 'date', 'DATE_REQUIRED', '已有时刻，请补上日期；不会自动当作今天。'); }
+  if (result.durationMinutes !== null && result.time.length === 0) { issue(result, 'time', 'TIME_REQUIRED', '已保留时长，请补上明确开始时间。'); }
+  if (result.time === '23:59' && result.durationMinutes === null) {
+    issue(result, 'time', 'TIME_PRECISION_REQUIRED', '23:59 未填写时长会与旧全天记录混淆，请补时长或明确选择全天。');
+  }
+  // Keep the original available; only recognized, unambiguous spans leave the editable title.
+  let title = '';
+  for (let index = 0; index < text.length; index++) {
+    if (!remove.some((span             ) => index >= span.start && index < span.end)) { title += text.substring(index, index + 1); }
+  }
+  result.title = title.replace(/^[\s，,；;：:]+|[\s，,；;：:]+$/g, '').replace(/[ \t]{2,}/g, ' ');
+  if (result.title.length === 0) { issue(result, 'title', 'TITLE_REQUIRED', '还没有事项名称，请补充要做什么。'); }
+  if (Array.from(result.title).length > 120) { issue(result, 'title', 'TITLE_TOO_LONG', '事项名称请控制在 120 字以内，原文没有截断。'); }
+  result.requiresReview = result.issues.length > 0 || result.unsupported.length > 0;
+  return result;
+}
+
+const $=id=>document.getElementById(id);let allowed=false,selected=false,hasOverlap=true,pending=true,candidateAllowed=true;
+$('large').onclick=()=>document.body.classList.toggle('large');$('route').onclick=()=>$('route-note').classList.toggle('hidden');$('earlier').onclick=()=>$('earlier-note').classList.toggle('hidden');$('capture').onclick=()=>{$('text').focus();$('draft-status').textContent='原输入已保留，可以接着编辑。'};
+$('parse').onclick=()=>{const c=parseQuickCapture($('text').value,'2026-10-18');$('original').textContent='解析原文：'+c.originalText;$('text').value=c.title||c.originalText;$('date').value=c.date;$('time').value=c.time;$('duration').value=c.durationMinutes??'';$('issues').textContent=c.issues.map(i=>i.message).join(' ');$('issues').classList.toggle('hidden',!c.issues.length);$('draft-status').textContent='已填入可修改的草稿，尚未提交。';};
+$('permission').onclick=()=>{allowed=!allowed;$('permission').setAttribute('aria-pressed',allowed);$('permission').textContent=allowed?'已允许 · 可在上课时完成':'可在上课时完成 · 未开启';};
+$('gap').onclick=()=>{$('draft-status').textContent='建议时段 16:05，25 分钟。请核对后自行修改，已有输入没有被覆盖。';$('date').focus();};
+$('preview').onclick=()=>{const date=$('date').value,time=$('time').value,duration=$('duration').value?Number($('duration').value):null,end=captureEndAt(date,time,duration);if(duration!==null&&end===null){$('draft-status').textContent='请核对日期、时刻与时长。';return;}if(!$('text').value.trim()){ $('draft-status').textContent='请先写下这件事。';return;}candidateAllowed=allowed;const startMs=Date.parse(date+'T'+time+':00+08:00'),endMs=end===null?NaN:Date.parse(end),courseStart=Date.parse('2026-10-18T14:30:00+08:00'),courseEnd=Date.parse('2026-10-18T16:05:00+08:00');hasOverlap=Number.isFinite(startMs)&&Number.isFinite(endMs)&&startMs<courseEnd&&endMs>courseStart;if(hasOverlap){const hhmm=ms=>new Date(ms+28800000).toISOString().slice(11,16);$('overlap').querySelector('p').textContent='2026-10-18 · 操作系统，课程 14:30–16:05。重叠 '+hhmm(Math.max(startMs,courseStart))+'–'+hhmm(Math.min(endMs,courseEnd));}selected=false;pending=true;$('candidate-title').textContent=$('text').value;$('candidate-time').textContent=(date||'无日期')+' '+(time||'全天 / 未定时')+(duration?' · '+duration+' 分钟':'');$('candidate-permission').textContent='可在上课时完成：'+(allowed?'已开启':'未开启');$('overlap').classList.toggle('hidden',!hasOverlap);$('ack').classList.toggle('hidden',!hasOverlap||!allowed);$('ack-note').textContent=hasOverlap?(allowed?'请核对演示课程重叠后明确选择。':'未允许课内完成，请修改设置或时间。'):(end===null?'起止时间不完整，尚未核对课程重叠。':'这一演示时段不与上述课程重叠。');$('ack').textContent='仍这样安排';$('ack').setAttribute('aria-pressed','false');$('confirm').disabled=hasOverlap;$('result').textContent='草稿预览已更新，尚未确认。';};
+$('ack').onclick=()=>{selected=!selected;$('ack').setAttribute('aria-pressed',selected);$('ack').textContent=selected?'已选择：仍这样安排（可取消）':'仍这样安排';$('confirm').disabled=!pending||(hasOverlap&&(!candidateAllowed||!selected));};$('confirm').onclick=()=>{if(!pending||(hasOverlap&&(!candidateAllowed||!selected)))return;pending=false;$('confirm').disabled=true;$('result').textContent='演示回执：已确认本次安排。没有向账号或服务器写入数据。';};$('cancel').onclick=()=>{pending=false;selected=false;$('confirm').disabled=true;$('result').textContent='演示已取消；左侧输入保持原样。';};
+</script></html>

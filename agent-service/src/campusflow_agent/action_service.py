@@ -19,12 +19,20 @@ from uuid import uuid4
 
 from pydantic import ValidationError
 
+from .course_policy import TASK_FIELDS, course_overlaps, overlap_state, task_content
+from .course_policy import digest as course_digest
 from .schemas import (
     ActionReceipt,
     ActionTaskRequest,
+    CandidateCourseAcknowledgement,
+    CandidateTaskIdentity,
+    CourseAcknowledgement,
+    CoursePermissionRequest,
+    CourseReview,
     PendingAction,
     PlanEditRequest,
     PlanningActionRequest,
+    PlanningStateVersion,
     PlanningTask,
     PlanSummary,
 )
@@ -133,6 +141,9 @@ class ActionService:
                             self.store._proposals,
                             self.store._proposal_owners,
                             self.store._action_snapshots,
+                            self.store._planning_versions,
+                            self.store._course_acknowledgements,
+                            self.store._course_replacements,
                         )
                     )
                 try:
@@ -150,20 +161,41 @@ class ActionService:
                             self.store._proposals,
                             self.store._proposal_owners,
                             self.store._action_snapshots,
+                            self.store._planning_versions,
+                            self.store._course_acknowledgements,
+                            self.store._course_replacements,
                         ) = backup
                     raise
 
     def _snapshot(self, user_id: str) -> dict[str, Any]:
         conn = self.store._connection
-        if self.shared_database and conn is not None:
+        context: dict[str, Any] = {}
+        has_account_table = (
+            conn is not None
+            and conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='users'"
+            ).fetchone()
+            is not None
+        )
+        if conn is not None and (
+            self.shared_database or (self.accounts is None and has_account_table)
+        ):
             row = conn.execute(
-                "SELECT timetable_json FROM users WHERE user_id = ?", (user_id,)
+                "SELECT timetable_json,school,campus,timetable_version "
+                "FROM users WHERE user_id = ?",
+                (user_id,),
             ).fetchone()
             timetable = json.loads(row[0]) if row else []
+            context = dict(row) if row else {}
         elif self.accounts is not None:
             timetable, _ = self.accounts.get_context(user_id)
+            row = self.accounts._connection.execute(
+                "SELECT school,campus,timetable_version FROM users WHERE user_id=?", (user_id,)
+            ).fetchone()
+            context = dict(row) if row else {}
         else:
             timetable = deepcopy(self.store._user_schedules.get(user_id, []))
+            context["timetable_version"] = self.store._timetable_versions.get(user_id, 0)
         if conn is not None:
 
             def rows(table: str, key: str) -> list[dict[str, Any]]:
@@ -178,13 +210,49 @@ class ActionService:
             tasks = rows("planning_tasks", "task_id")
             plans = rows("plans", "plan_id")
             milestones = rows("plan_milestones", "milestone_id")
+            acknowledgements = rows("task_course_acknowledgements", "acknowledgement_id")
+            version = conn.execute(
+                "SELECT version FROM planning_versions WHERE user_id=?", (user_id,)
+            ).fetchone()
+            planning_version = version[0] if version else 0
         else:
             tasks = sorted(deepcopy(self.store._tasks.get(user_id, [])), key=lambda x: x["task_id"])
             plans = sorted(deepcopy(self.store._plans.get(user_id, [])), key=lambda x: x["plan_id"])
             milestones = sorted(
                 deepcopy(self.store._milestones.get(user_id, [])), key=lambda x: x["milestone_id"]
             )
-        return {"timetable": timetable, "tasks": tasks, "plans": plans, "milestones": milestones}
+            acknowledgements = deepcopy(
+                [a for a in self.store._course_acknowledgements if a["user_id"] == user_id]
+            )
+            planning_version = self.store._planning_versions.get(user_id, 0)
+        return {
+            "timetable": timetable,
+            "tasks": tasks,
+            "plans": plans,
+            "milestones": milestones,
+            "school": context.get("school") or "",
+            "campus": context.get("campus") or "",
+            "timetable_version": context.get("timetable_version", 0),
+            "planning_version": planning_version,
+            "acknowledgements": acknowledgements,
+        }
+
+    def tasks(self, user_id: str) -> list[PlanningTask]:
+        with self._transaction():
+            snapshot = self._snapshot(user_id)
+            tasks = [self._project_task(task, snapshot) for task in snapshot["tasks"]]
+            return sorted(
+                tasks,
+                key=lambda task: (
+                    task.status == "completed",
+                    _local(task.start_at or task.created_at),
+                ),
+            )
+
+    def _project_task(self, task: dict[str, Any], snapshot: dict[str, Any]) -> PlanningTask:
+        return PlanningTask.model_validate(
+            {**task, "course_overlap": overlap_state(task, snapshot, self._now())}
+        )
 
     @staticmethod
     def _digest(snapshot: dict[str, Any]) -> str:
@@ -276,10 +344,17 @@ class ActionService:
         action = PendingAction(
             proposal_id=uuid4().hex,
             contract_version=2,
+            course_policy_version=1,
+            state_version=PlanningStateVersion(
+                timetable=snapshot["timetable_version"], planning=snapshot["planning_version"]
+            ),
             created_at=now,
             expires_at=now + timedelta(minutes=15),
             **fields,
         )
+        for task in self._payload_tasks(action):
+            task.setdefault("candidate_id", uuid4().hex)
+        action.course_reviews = self._reviews(user_id, action, snapshot)
         conflicts, warnings = self._check(action, snapshot)
         action.conflicts, action.warnings = conflicts, warnings
         self._save(user_id, action, self._digest(snapshot))
@@ -322,6 +397,18 @@ class ActionService:
                         "修改待办须明确提供标题、起止时间、提醒和地点；清空请显式填 null。"
                     )
                 task = self._task(request.task.model_dump(mode="json"))
+                if before and "allow_during_course" not in request.task.model_fields_set:
+                    task["allow_during_course"] = bool(before.get("allow_during_course", False))
+                if (
+                    source != "manual"
+                    and task["allow_during_course"]
+                    and not (before and before.get("allow_during_course", False))
+                ):
+                    raise ActionError(
+                        409,
+                        "COURSE_PERMISSION_PREVIEW_REQUIRED",
+                        "模型不能开启课内任务许可，请在人工预览中明确设置。",
+                    )
                 payload.update({"task": task, "location": task["location"]})
                 title = task["title"]
             else:
@@ -343,7 +430,7 @@ class ActionService:
                 reminder_minutes=payload.get("task", {}).get("reminder_minutes"),
                 target_task_id=request.task_id,
                 target_plan_id=request.plan_id,
-                before_task=PlanningTask.model_validate(before)
+                before_task=self._project_task(before, snapshot)
                 if before and kind == "task"
                 else None,
                 before_plan=self._plan_summary(snapshot, before)
@@ -420,6 +507,12 @@ class ActionService:
             tasks = milestone.get("tasks", [])
             if not isinstance(tasks, list) or not 1 <= len(tasks) <= 12:
                 raise _invalid("每个里程碑须包含 1 至 12 项具体任务，不能静默省略内容。")
+            if any(task.get("allow_during_course", False) for task in tasks):
+                raise ActionError(
+                    409,
+                    "COURSE_PERMISSION_PREVIEW_REQUIRED",
+                    "模型生成计划不能开启课内任务许可，请在人工预览中逐项设置。",
+                )
             normalized.append(
                 {
                     "title": name,
@@ -469,11 +562,17 @@ class ActionService:
             if before["status"] == "completed":
                 old_times = (_local(before.get("start_at")), _local(before.get("end_at")))
                 new_times = (_local(task.get("start_at")), _local(task.get("end_at")))
-                if old_times == new_times:
+                if old_times == new_times and bool(task.get("allow_during_course", False)) == bool(
+                    before.get("allow_during_course", False)
+                ):
                     return []
                 # An explicit time edit keeps completion state but checks the
                 # new interval. This permits correction before restoring a task.
             task["task_id"] = before["task_id"]
+            task["plan_id"], task["milestone_id"] = (
+                before.get("plan_id"),
+                before.get("milestone_id"),
+            )
             plan = next((p for p in snapshot["plans"] if p["plan_id"] == before.get("plan_id")), {})
             milestone = next(
                 (
@@ -504,6 +603,104 @@ class ActionService:
                 raise _invalid("关联计划的截止日期无效，请先修正计划。") from None
         return min(candidates) if candidates else None
 
+    @staticmethod
+    def _payload_tasks(action: PendingAction) -> list[dict[str, Any]]:
+        if action.action == "delete" or (action.kind == "plan" and action.action == "update"):
+            return []
+        if action.kind == "task":
+            return [action.payload["task"]]
+        return [task for milestone in action.payload["milestones"] for task in milestone["tasks"]]
+
+    def _reviews(
+        self, user_id: str, action: PendingAction, snapshot: dict[str, Any]
+    ) -> list[CourseReview]:
+        reviews = []
+        for raw in self._payload_tasks(action):
+            task = dict(raw)
+            before = None
+            if action.kind == "task" and action.action == "update":
+                before = self._target(snapshot, "task", action.target_task_id)
+                task.update(
+                    {
+                        key: before.get(key)
+                        for key in ("task_id", "plan_id", "milestone_id", "task_version")
+                    }
+                )
+            overlaps, reason = course_overlaps(task, snapshot)
+            allowed = bool(task.get("allow_during_course", False))
+            revoke = bool(
+                before
+                and before.get("allow_during_course", False)
+                and not allowed
+                and all(
+                    task_content(task)[key] == task_content(before)[key]
+                    for key in TASK_FIELDS
+                    if key != "allow_during_course"
+                )
+            )
+            state = (
+                "unchecked"
+                if reason
+                else "none"
+                if not overlaps
+                else "needs_review"
+                if allowed
+                else "blocked"
+            )
+            if before and allowed and task_content(task) == task_content(before):
+                state = overlap_state(before, snapshot, self._now()).state
+            candidate_hash = course_digest(task_content(task))
+            required = bool(overlaps and allowed and state != "accepted")
+            fields = dict(
+                candidate_id=task["candidate_id"],
+                task_id=before["task_id"] if before else None,
+                allow_during_course=allowed,
+                state=state,
+                requires_acknowledgement=required,
+                revoke_only=revoke,
+                school=snapshot["school"],
+                campus=snapshot["campus"],
+                timezone="Asia/Shanghai",
+                timetable_version=snapshot["timetable_version"],
+                planning_version=snapshot["planning_version"],
+                task_version=before.get("task_version", 1) if before else None,
+                candidate_digest=candidate_hash,
+                overlaps=overlaps,
+            )
+            review_hash = course_digest(
+                {
+                    "user_id": user_id,
+                    "proposal_id": action.proposal_id,
+                    **{key: value for key, value in fields.items() if key != "overlaps"},
+                    "overlaps": [item.model_dump(mode="json") for item in overlaps],
+                }
+            )
+            reviews.append(CourseReview(review_digest=review_hash, **fields))
+        return reviews
+
+    @staticmethod
+    def _validate_acknowledgements(
+        reviews: list[CourseReview], acknowledgements: list[CourseAcknowledgement]
+    ) -> None:
+        supplied = {ack.candidate_id: ack.review_digest for ack in acknowledgements}
+        expected = {
+            review.candidate_id: review.review_digest
+            for review in reviews
+            if review.requires_acknowledgement
+        }
+        if len(supplied) != len(acknowledgements) or set(supplied) - set(expected):
+            raise ActionError(
+                422, "COURSE_ACK_INVALID", "课内重叠确认包含重复或非本次需确认的候选，请重新核对。"
+            )
+        if set(expected) - set(supplied):
+            raise ActionError(
+                409, "COURSE_ACK_REQUIRED", "请逐项阅读准确课程与重叠时间，并明确确认本次课内安排。"
+            )
+        if supplied != expected:
+            raise ActionError(
+                409, "COURSE_ACK_STALE", "课内重叠确认与当前候选不一致，请重新核对预览。"
+            )
+
     def _check(
         self, action: PendingAction, snapshot: dict[str, Any]
     ) -> tuple[list[str], list[str]]:
@@ -532,23 +729,37 @@ class ActionService:
                 warnings.append(f"「{task['title']}」未提供完整起止时间，未参与时间冲突核对。")
                 continue
             intervals.append((task, period))
-            for course in snapshot["timetable"]:
-                course_period = _interval(
-                    {
-                        "start_at": f"{course.get('date')}T{course.get('start_time')}",
-                        "end_at": f"{course.get('date')}T{course.get('end_time')}",
-                    }
+            overlaps, invalid = course_overlaps(task, snapshot)
+            review = next(
+                (
+                    item
+                    for item in action.course_reviews
+                    if item.candidate_id == task.get("candidate_id")
+                ),
+                None,
+            )
+            revoke = bool(review and review.revoke_only)
+            if invalid and not revoke:
+                conflicts.append(invalid)
+            elif revoke:
+                warnings.append("仅撤回课内许可，原时间保留。")
+                if overlaps or invalid:
+                    warnings.append("现有课程重叠或未完成的课程核对仍需手动处理。")
+            elif overlaps and not task.get("allow_during_course", False):
+                conflicts.extend(
+                    f"「{task['title']}」与课程「{item.course.title}」 {item.course.date} "
+                    f"{item.course.start_time}–{item.course.end_time} 冲突"
+                    for item in overlaps
                 )
-                if course_period is None:
-                    conflicts.append(
-                        "课表中存在无效时段，无法核验此安排；请先修正课表，不能视为空闲。"
+            elif overlaps:
+                warnings.append(
+                    f"「{task['title']}」将在上课时完成。"
+                    + (
+                        "本次保留已接受的准确课程重叠。"
+                        if review and review.state == "accepted"
+                        else "仅在逐项确认准确重叠后才能写入。"
                     )
-                elif _overlap(period, course_period):
-                    conflicts.append(
-                        f"「{task['title']}」与课程「{course.get('title', '')}」 "
-                        f"{course.get('date')} {course.get('start_time')}"
-                        f"–{course.get('end_time')} 冲突"
-                    )
+                )
             for existing in snapshot["tasks"]:
                 if (
                     existing["status"] == "completed"
@@ -570,17 +781,22 @@ class ActionService:
                     )
         return list(dict.fromkeys(conflicts)), list(dict.fromkeys(warnings))
 
-    def confirm(self, user_id: str, proposal_id: str) -> PendingAction:
+    def confirm(
+        self,
+        user_id: str,
+        proposal_id: str,
+        acknowledgements: list[CourseAcknowledgement] | None = None,
+    ) -> PendingAction:
         with self._transaction(write=True):
             action, digest = self._get(user_id, proposal_id)
-            if action.contract_version != 2 or digest is None:
+            if action.status == "confirmed" and action.receipt is not None:
+                return action
+            if action.contract_version != 2 or digest is None or action.course_policy_version != 1:
                 raise ActionError(
                     409,
                     "ACTION_LEGACY_UNVERIFIED",
                     "旧提案缺少原子执行凭据。请核对当前规划后重新生成，不要重复执行旧提案。",
                 )
-            if action.status == "confirmed" and action.receipt is not None:
-                return action
             if action.status != "pending":
                 raise ActionError(409, "ACTION_RESOLVED", "提案已处理，请核对最新状态。")
             now = self._now()
@@ -593,6 +809,9 @@ class ActionService:
                 raise ActionError(
                     409, "ACTION_STALE", "课表、任务或计划已变化。旧预览未执行，请重新生成并核对。"
                 )
+            reviews = self._reviews(user_id, action, snapshot)
+            if reviews != action.course_reviews:
+                raise ActionError(409, "COURSE_ACK_STALE", "课内核对内容已变化，请重新生成预览。")
             for task in self._candidates(action, snapshot):
                 start = _local(task.get("start_at"))
                 if start and action.created_at and action.created_at < start <= now:
@@ -607,7 +826,10 @@ class ActionService:
                     "提案存在时间或截止日期冲突，未执行。请调整后重新生成："
                     + "；".join(conflicts[:3]),
                 )
+            self._validate_acknowledgements(reviews, acknowledgements or [])
             receipt = self._apply(user_id, action, snapshot, now)
+            self._bump_memory(user_id, snapshot)
+            self._record_acknowledgements(user_id, action, receipt, reviews, now)
             confirmed = action.model_copy(
                 update={"status": "confirmed", "receipt": receipt}, deep=True
             )
@@ -627,6 +849,87 @@ class ActionService:
             self._save(user_id, cancelled)
             return cancelled
 
+    def course_permissions(
+        self, user_id: str, proposal_id: str, request: CoursePermissionRequest
+    ) -> PendingAction:
+        """User-only replacement preview; never registered as a model tool."""
+        choices = {choice.candidate_id: choice.allow_during_course for choice in request.choices}
+        if len(choices) != len(request.choices):
+            raise ActionError(422, "COURSE_ACK_INVALID", "同一候选不能重复设置课内许可。")
+        choices_hash = course_digest(choices)
+        with self._transaction(write=True):
+            action, digest = self._get(user_id, proposal_id)
+            conn = self.store._connection
+            row = (
+                conn.execute(
+                    "SELECT choices_hash,replacement_id FROM course_permission_replacements "
+                    "WHERE proposal_id=? AND user_id=?",
+                    (proposal_id, user_id),
+                ).fetchone()
+                if conn
+                else None
+            )
+            if conn is None:
+                record = self.store._course_replacements.get(proposal_id)
+                row = record[1:] if record and record[0] == user_id else None
+            if row:
+                if row[0] != choices_hash:
+                    raise ActionError(
+                        409, "ACTION_RESOLVED", "此提案已生成另一份许可预览，请使用新的提案 ID。"
+                    )
+                return self._get(user_id, row[1])[0]
+            if action.status != "pending":
+                raise ActionError(409, "ACTION_RESOLVED", "提案已处理，请核对最新状态。")
+            if action.course_policy_version != 1 or action.expires_at is None:
+                raise ActionError(
+                    409, "ACTION_LEGACY_UNVERIFIED", "旧提案需要重新生成后才能设置课内许可。"
+                )
+            if self._now() >= action.expires_at:
+                raise ActionError(410, "ACTION_EXPIRED", "提案已过期，请重新生成。")
+            snapshot = self._snapshot(user_id)
+            if digest != self._digest(snapshot):
+                raise ActionError(409, "ACTION_STALE", "当前课表或任务已变化，请重新生成预览。")
+            candidate_ids = {task["candidate_id"] for task in self._payload_tasks(action)}
+            if set(choices) - candidate_ids:
+                raise ActionError(422, "COURSE_ACK_INVALID", "许可设置包含非本提案的候选。")
+            replacement = action.model_copy(deep=True)
+            for task in self._payload_tasks(replacement):
+                if task["candidate_id"] in choices:
+                    task["allow_during_course"] = choices[task["candidate_id"]]
+            fields = {
+                key: getattr(replacement, key)
+                for key in (
+                    "action",
+                    "kind",
+                    "title",
+                    "reason",
+                    "payload",
+                    "start_at",
+                    "end_at",
+                    "reminder_minutes",
+                    "target_task_id",
+                    "target_plan_id",
+                    "before_task",
+                    "before_plan",
+                )
+            }
+            replacement = self._new(user_id, snapshot, **fields)
+            action.status, action.replacement_proposal_id = "cancelled", replacement.proposal_id
+            self._save(user_id, action)
+            if conn is not None:
+                conn.execute(
+                    "INSERT INTO course_permission_replacements"
+                    "(proposal_id,user_id,choices_hash,replacement_id) VALUES(?,?,?,?)",
+                    (proposal_id, user_id, choices_hash, replacement.proposal_id),
+                )
+            else:
+                self.store._course_replacements[proposal_id] = (
+                    user_id,
+                    choices_hash,
+                    replacement.proposal_id,
+                )
+            return replacement
+
     def _insert_task(
         self,
         user_id: str,
@@ -645,6 +948,7 @@ class ActionService:
             milestone_id=milestone_id,
             **fields,
         ).model_dump(mode="json")
+        task.pop("course_overlap", None)
         conn = self.store._connection
         if conn is not None:
             columns = list(task)
@@ -692,7 +996,8 @@ class ActionService:
                         values = action.payload["task"]
                         conn.execute(
                             "UPDATE planning_tasks SET title=?,start_at=?,end_at=?,"
-                            "reminder_minutes=?,location=? WHERE user_id=? AND task_id=?",
+                            "reminder_minutes=?,location=?,allow_during_course=? "
+                            "WHERE user_id=? AND task_id=?",
                             [
                                 values[key]
                                 for key in (
@@ -701,6 +1006,7 @@ class ActionService:
                                     "end_at",
                                     "reminder_minutes",
                                     "location",
+                                    "allow_during_course",
                                 )
                             ]
                             + [user_id, task_id],
@@ -712,7 +1018,14 @@ class ActionService:
                 else:
                     for task in self.store._tasks[user_id]:
                         if task["task_id"] == task_id:
-                            task.update(action.payload["task"])
+                            task.update({key: action.payload["task"][key] for key in TASK_FIELDS})
+            if action.action != "delete":
+                receipt.candidate_tasks = [
+                    CandidateTaskIdentity(
+                        candidate_id=action.payload["task"]["candidate_id"],
+                        task_id=receipt.task_ids[0],
+                    )
+                ]
             return receipt
         if action.action == "create":
             plan_id = uuid4().hex
@@ -761,8 +1074,8 @@ class ActionService:
                 else:
                     self.store._milestones.setdefault(user_id, []).append(record)
                 receipt.milestone_ids.append(milestone_id)
-                receipt.task_ids.extend(
-                    self._insert_task(
+                for task in milestone["tasks"]:
+                    task_id = self._insert_task(
                         user_id,
                         task,
                         now,
@@ -770,8 +1083,10 @@ class ActionService:
                         plan_id=plan_id,
                         milestone_id=milestone_id,
                     )
-                    for task in milestone["tasks"]
-                )
+                    receipt.task_ids.append(task_id)
+                    receipt.candidate_tasks.append(
+                        CandidateTaskIdentity(candidate_id=task["candidate_id"], task_id=task_id)
+                    )
             return receipt
         plan_id = action.target_plan_id
         self._target(snapshot, "plan", plan_id)
@@ -817,12 +1132,94 @@ class ActionService:
                         task["plan_id"], task["milestone_id"] = None, None
         return receipt
 
+    def _bump_memory(self, user_id: str, before: dict[str, Any]) -> None:
+        if self.store._connection is not None:
+            return
+        old = {task["task_id"]: task for task in before["tasks"]}
+        tasks = self.store._tasks.get(user_id, [])
+        changed = False
+        for task in tasks:
+            prior = old.get(task["task_id"])
+            if prior and any(
+                task.get(key) != prior.get(key)
+                for key in (*TASK_FIELDS, "plan_id", "milestone_id", "status", "completed_at")
+            ):
+                task["task_version"] = prior.get("task_version", 1) + 1
+                changed = True
+            elif not prior:
+                changed = True
+        changed = (
+            changed
+            or len(tasks) != len(old)
+            or before["plans"] != self.store._plans.get(user_id, [])
+            or before["milestones"] != self.store._milestones.get(user_id, [])
+        )
+        if changed:
+            self.store._planning_versions[user_id] = (
+                self.store._planning_versions.get(user_id, 0) + 1
+            )
+
+    def _record_acknowledgements(
+        self,
+        user_id: str,
+        action: PendingAction,
+        receipt: ActionReceipt,
+        reviews: list[CourseReview],
+        now: datetime,
+    ) -> None:
+        snapshot = self._snapshot(user_id)
+        identities = {entry.candidate_id: entry.task_id for entry in receipt.candidate_tasks}
+        for review in reviews:
+            if not review.requires_acknowledgement:
+                continue
+            task_id = identities[review.candidate_id]
+            task = self._target(snapshot, "task", task_id)
+            acknowledgement_id = uuid4().hex
+            payload = {
+                "proposal_id": action.proposal_id,
+                "candidate_id": review.candidate_id,
+                "review_digest": review.review_digest,
+                "acknowledged_at": now.isoformat(),
+                "task_digest": course_digest(task_content(task)),
+                "overlaps": [item.model_dump(mode="json") for item in review.overlaps],
+            }
+            record = dict(
+                acknowledgement_id=acknowledgement_id,
+                user_id=user_id,
+                task_id=task_id,
+                task_version=task.get("task_version", 1),
+                timetable_version=snapshot["timetable_version"],
+                payload_json=_json(payload),
+            )
+            if self.store._connection is not None:
+                self.store._connection.execute(
+                    "INSERT INTO task_course_acknowledgements"
+                    "(acknowledgement_id,user_id,task_id,task_version,"
+                    "timetable_version,payload_json) "
+                    "VALUES(?,?,?,?,?,?)",
+                    tuple(record.values()),
+                )
+            else:
+                self.store._course_acknowledgements.append(record)
+            receipt.course_acknowledgement_ids.append(acknowledgement_id)
+            receipt.course_acknowledgements.append(
+                CandidateCourseAcknowledgement(
+                    candidate_id=review.candidate_id, acknowledgement_id=acknowledgement_id
+                )
+            )
+
     def execute(self, user_id: str, request: PlanningActionRequest) -> PendingAction:
         """Compatibility endpoints use the same preview/confirmation validation.
 
         A concurrent edit between these two transactions yields ACTION_STALE; it
         never silently overwrites the newer data. New clients retain proposal IDs.
         """
+        if request.task and request.task.allow_during_course:
+            raise ActionError(
+                409,
+                "COURSE_PERMISSION_PREVIEW_REQUIRED",
+                "开启课内许可须先预览并由用户确认，旧直接写入接口不能开启。",
+            )
         preview = self.preview(user_id, request)
         return self.confirm(user_id, preview.proposal_id)
 
@@ -830,16 +1227,21 @@ class ActionService:
         """The legacy status endpoint is idempotent and shares the planning lock."""
         with self._transaction(write=True):
             snapshot = self._snapshot(user_id)
-            task = self._target(snapshot, "task", task_id)
+            task = dict(self._target(snapshot, "task", task_id))
             status = "completed" if completed else "pending"
             if task["status"] == status:
-                return PlanningTask.model_validate(task)
+                return self._project_task(task, snapshot)
             if not completed:
+                overlaps, _ = course_overlaps(task, snapshot)
+                if overlaps and task.get("allow_during_course", False):
+                    raise ActionError(
+                        409,
+                        "COURSE_ACK_REQUIRED",
+                        "恢复课内任务前需重新核对课程重叠，请先调整到无冲突时段再恢复。",
+                    )
+                task = dict(task)
                 task["status"] = "pending"
-                fields = {
-                    key: task.get(key)
-                    for key in ("title", "start_at", "end_at", "reminder_minutes", "location")
-                }
+                fields = {key: task.get(key) for key in TASK_FIELDS}
                 probe = PendingAction(
                     proposal_id="status-check",
                     action="update",
@@ -848,7 +1250,9 @@ class ActionService:
                     target_task_id=task_id,
                     payload={"task": fields},
                 )
-                conflicts, _ = self._check(probe, snapshot)
+                check_snapshot = deepcopy(snapshot)
+                self._target(check_snapshot, "task", task_id)["status"] = "pending"
+                conflicts, _ = self._check(probe, check_snapshot)
                 if conflicts:
                     raise ActionError(
                         409,
@@ -869,4 +1273,6 @@ class ActionService:
                     dict(task) if item["task_id"] == task_id else item
                     for item in self.store._tasks.get(user_id, [])
                 ]
-            return PlanningTask.model_validate(task)
+            self._bump_memory(user_id, snapshot)
+            after = self._snapshot(user_id)
+            return self._project_task(self._target(after, "task", task_id), after)

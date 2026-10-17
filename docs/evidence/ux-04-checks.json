@@ -1,0 +1,59 @@
+{
+  "stage": "UX04",
+  "backend": {
+    "passed": 659,
+    "deselected": 2,
+    "command": "PYTHONPATH=src ../../audit-venv/bin/python -m pytest -q -m 'not integration'"
+  },
+  "client": {
+    "tests": 766,
+    "passed": 765,
+    "skipped": 1,
+    "failed": 0,
+    "skip": "existing Java-dependent native source bridge check; no JDK installed"
+  },
+  "static": {
+    "arkts_ts_files": 66,
+    "config_files": 17
+  },
+  "cross_language_contract": {
+    "checks": 8,
+    "passed": true,
+    "basis": "Real offline ASGI/SQLite response validated by actual ArkTS CourseReview and ActionReliability"
+  },
+  "browser": {
+    "checks": 14,
+    "errors": [],
+    "nativeValidation": false,
+    "screenshots": [
+      "wide.png",
+      "narrow-large.png"
+    ]
+  },
+  "visual_review": "Root inspected wide and 360px large text screenshots; browser prototype only",
+  "native_build": false,
+  "device_validation": false,
+  "real_model_calls": false,
+  "logs": [
+    {
+      "file": "ux04-backend-full.log",
+      "sha256": "b2e161ca7f853386e1ece4633696905ff976f627da7d6070c0b203ef16f37061"
+    },
+    {
+      "file": "ux04-client-final.log",
+      "sha256": "912fdc485fc840edabbc06eefc62861c3b5da0d77ac6b385435461169107a116"
+    },
+    {
+      "file": "ux04-static-final.log",
+      "sha256": "1b29081509fb74b1b8769903b26e1224a50d4fbd656ec68d1f55012cbfd13811"
+    },
+    {
+      "file": "ux04-cross-contract-result.json",
+      "sha256": "3f5090960b76eee7b41a72cd35745d481b41ebba24d6d1bbb073a73397108248"
+    },
+    {
+      "file": "ux04-course-contract-fixture.json",
+      "sha256": "17cdcaa103946ff40780a5fdd1c5bb4182d1bfe1f98b0c936bf3ae99173b1b83"
+    }
+  ]
+}

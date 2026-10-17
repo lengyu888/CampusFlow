@@ -89,6 +89,84 @@ class PendingAction(BaseModel):
     before_plan: PlanSummary | None = None
     receipt: ActionReceipt | None = None
     warnings: list[str] = Field(default_factory=list)
+    course_policy_version: int = 0
+    state_version: PlanningStateVersion | None = None
+    course_reviews: list[CourseReview] = Field(default_factory=list)
+    replacement_proposal_id: str | None = None
+
+
+class PlanningStateVersion(BaseModel):
+    timetable: int = 0
+    planning: int = 0
+
+
+class CourseOverlap(BaseModel):
+    course_key: str
+    course: TimetableEntry
+    overlap_start_at: datetime
+    overlap_end_at: datetime
+
+
+class CourseOverlapState(BaseModel):
+    state: Literal["none", "accepted", "needs_review", "blocked", "unchecked"]
+    checked_at: datetime
+    timetable_version: int
+    task_version: int
+    acknowledgement_id: str | None = None
+    overlaps: list[CourseOverlap] = Field(default_factory=list)
+    reason: str = ""
+
+
+class CourseReview(BaseModel):
+    candidate_id: str
+    task_id: str | None = None
+    allow_during_course: bool
+    state: Literal["none", "accepted", "needs_review", "blocked", "unchecked"]
+    review_digest: str
+    requires_acknowledgement: bool
+    revoke_only: bool = False
+    school: str
+    campus: str
+    timezone: Literal["Asia/Shanghai"] = "Asia/Shanghai"
+    timetable_version: int
+    planning_version: int
+    task_version: int | None = None
+    candidate_digest: str
+    overlaps: list[CourseOverlap] = Field(default_factory=list)
+
+
+class CourseAcknowledgement(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    candidate_id: str = Field(min_length=1, max_length=128)
+    review_digest: str = Field(pattern=r"^[a-f0-9]{64}$")
+
+
+class ActionConfirmRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    course_acknowledgements: list[CourseAcknowledgement] = Field(
+        default_factory=list, max_length=96
+    )
+
+
+class CoursePermissionChoice(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    candidate_id: str = Field(min_length=1, max_length=128)
+    allow_during_course: StrictBool
+
+
+class CoursePermissionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    choices: list[CoursePermissionChoice] = Field(min_length=1, max_length=96)
+
+
+class CandidateCourseAcknowledgement(BaseModel):
+    candidate_id: str
+    acknowledgement_id: str
+
+
+class CandidateTaskIdentity(BaseModel):
+    candidate_id: str
+    task_id: str
 
 
 class ActionReceipt(BaseModel):
@@ -101,6 +179,9 @@ class ActionReceipt(BaseModel):
     plan_ids: list[str] = Field(default_factory=list)
     milestone_ids: list[str] = Field(default_factory=list)
     retained_task_ids: list[str] = Field(default_factory=list)
+    candidate_tasks: list[CandidateTaskIdentity] = Field(default_factory=list)
+    course_acknowledgement_ids: list[str] = Field(default_factory=list)
+    course_acknowledgements: list[CandidateCourseAcknowledgement] = Field(default_factory=list)
 
 
 class ChatResponse(BaseModel):
@@ -111,8 +192,14 @@ class ChatResponse(BaseModel):
 
 
 RunStatus = Literal[
-    "queued", "running", "succeeded", "failed", "cancelled", "timed_out",
-    "budget_exceeded", "interrupted",
+    "queued",
+    "running",
+    "succeeded",
+    "failed",
+    "cancelled",
+    "timed_out",
+    "budget_exceeded",
+    "interrupted",
 ]
 
 
@@ -187,6 +274,7 @@ class ConfirmActionResponse(BaseModel):
 
 
 class TaskCreateRequest(BaseModel):
+    allow_during_course: StrictBool = False
     title: str = Field(min_length=1, max_length=120)
     start_at: datetime | None = None
     end_at: datetime | None = None
@@ -220,6 +308,9 @@ class TaskStatusUpdate(BaseModel):
 
 
 class PlanningTask(BaseModel):
+    allow_during_course: bool = False
+    task_version: int = 1
+    course_overlap: CourseOverlapState | None = None
     task_id: str
     plan_id: str | None = None
     milestone_id: str | None = None
@@ -400,6 +491,8 @@ class PlanningConflictsResponse(BaseModel):
     policy: str
     conflicts: list[PlanningConflict] = Field(default_factory=list)
     unchecked: list[ReplanUnresolved] = Field(default_factory=list)
+    accepted_course_overlaps: list[PlanningConflict] = Field(default_factory=list)
+    course_overlap_reviews: list[PlanningConflict] = Field(default_factory=list)
 
 
 class ReplanChange(BaseModel):

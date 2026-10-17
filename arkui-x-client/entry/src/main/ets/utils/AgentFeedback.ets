@@ -78,6 +78,14 @@ function knownErrorMessage(code: string): string {
       return '这份提案已过期，请根据最新日程重新预览后确认。';
     case 'ACTION_LEGACY_UNVERIFIED':
       return '旧版提案缺少可核验的版本记录，请重新生成预览。';
+    case 'COURSE_PERMISSION_PREVIEW_REQUIRED':
+      return '请在任务设置中选择是否可课内完成，再核对新的安排预览。';
+    case 'COURSE_ACK_REQUIRED':
+      return '请核对重叠的课程与时段，并明确选择是否仍这样安排。';
+    case 'COURSE_ACK_STALE':
+      return '课表或任务已经变化，上次课内确认已失效。请重新预览并核对。';
+    case 'COURSE_ACK_INVALID':
+      return '课内确认与当前候选不一致，请重新核对这份预览。';
     case 'ACTION_STALE':
       return '课程或任务已变化，本次没有执行。请根据最新数据重新预览。';
     case 'ACTION_CONFLICT':

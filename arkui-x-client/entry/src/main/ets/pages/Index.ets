@@ -1,3 +1,5 @@
+import { TaskCaptureIntent } from '../utils/TaskCaptureTypes';
+import { CourseRouteIntent } from '../utils/CourseRouteIntent';
 import { KeyboardAvoidMode } from '@ohos.arkui.UIContext';
 import common from '@ohos.app.ability.common';
 import { AuthResponse, UserProfile } from '../model/ApiModels';
@@ -24,6 +26,8 @@ import { FeedbackPanel } from '../components/FeedbackPanel';
 import { PlatformReminderDriver } from '../services/PlatformReminderDriver';
 import { ReminderCoordinator, ReminderState } from '../utils/ReminderCoordinator';
 import { AppNavigationState, createNavigation, currentRoute, selectRoot, openSecondary, backNavigation, isRootRoute, hasBack } from '../utils/AppNavigation';
+
+interface RootCourseIntent { root: number; intent: CourseRouteIntent; }
 
 @Entry
 @Component
@@ -54,6 +58,11 @@ struct Index {
   @State private draftCleanupBusy: boolean = false;
   @State private draftClearConfirm: boolean = false;
   @State private activeTab: number = 0;
+  @State private quickCaptureOpen: boolean = false;
+  @State private captureIntent: TaskCaptureIntent | null = null;
+  @State private captureRevision: number = 0;
+  @State private courseRouteIntents: RootCourseIntent[] = [];
+  private courseRouteRevision: number = 0;
   @State private agentPrompt: string = '';
   @State private promptRevision: number = 0;
   @State private homeRefresh: number = 0;
@@ -188,6 +197,7 @@ struct Index {
   }
 
   onBackPress(): boolean {
+    if (this.quickCaptureOpen) { this.planBackRevision++; return true; }
     if (this.offlineHistory) {
       this.offlineHistory = false;
       this.refreshLocalHistory();
@@ -314,6 +324,7 @@ struct Index {
   }
 
   private resetNavigation(): void {
+    this.quickCaptureOpen = false; this.captureIntent = null; this.courseRouteIntents = [];
     this.navigation = createNavigation();
     this.activeTab = 0;
     this.focusTaskId = '';
@@ -341,7 +352,35 @@ struct Index {
     });
   }
 
+  private openCapture(intent: TaskCaptureIntent): void {
+    if (this.token.length === 0 || this.activeTab !== 0 || this.quickCaptureOpen) { return; }
+    this.captureRevision++;
+    const frozen = JSON.parse(JSON.stringify(intent)) as TaskCaptureIntent;
+    frozen.requestRevision = this.captureRevision;
+    this.captureIntent = frozen;
+    this.quickCaptureOpen = true;
+  }
+
+  private closeCapture(): void {
+    this.quickCaptureOpen = false;
+    this.homeRefresh++;
+  }
+
+  private openCourseRoute(intent: CourseRouteIntent): void {
+    if (this.token.length === 0) { return; }
+    const frozen = JSON.parse(JSON.stringify(intent)) as CourseRouteIntent;
+    frozen.requestId = ++this.courseRouteRevision;
+    this.courseRouteIntents = this.courseRouteIntents.filter((item: RootCourseIntent) => item.root !== this.navigation.root)
+      .concat([{ root: this.navigation.root, intent: frozen }]);
+    this.applyNavigation(openSecondary(this.navigation, 6));
+  }
+
+  private currentCourseRoute(): CourseRouteIntent | null {
+    return this.courseRouteIntents.find((item: RootCourseIntent) => item.root === this.navigation.root)?.intent ?? null;
+  }
+
   private selectTab(tab: number): void {
+    if (tab === 6) { this.courseRouteIntents = this.courseRouteIntents.filter((item: RootCourseIntent) => item.root !== this.navigation.root); }
     this.applyNavigation(isRootRoute(tab) ? selectRoot(this.navigation, tab) : openSecondary(this.navigation, tab));
   }
 
@@ -406,7 +445,9 @@ struct Index {
   private pageContent() {
     Stack({ alignContent: Alignment.TopStart }) {
       HomePage({ baseUrl: this.baseUrl, token: this.token, user: this.user,
-        refreshKey: this.homeRefresh, active: this.activeTab === 0 && this.voiceForeground,
+        refreshKey: this.homeRefresh, active: this.activeTab === 0 && !this.quickCaptureOpen && this.voiceForeground,
+        onOpenCapture: (intent: TaskCaptureIntent) => this.openCapture(intent),
+        onOpenCourseRoute: (intent: CourseRouteIntent) => this.openCourseRoute(intent),
         onOpenAgent: () => this.applyNavigation(selectRoot(this.navigation, 1, true)),
         onOpenPlan: (view) => this.openPlanList(view),
         onOpenTaskDetails: (id) => this.openPlanDetails(id, ''),
@@ -414,7 +455,7 @@ struct Index {
         onPlanningChanged: () => this.timetableChanged(),
         onOpenRoute: () => this.selectTab(6),
         onOpenServices: () => this.selectTab(7), onOpenProfile: () => this.selectTab(4) })
-        .visibility(this.activeTab === 0 ? Visibility.Visible : Visibility.Hidden)
+        .visibility(this.activeTab === 0 && !this.quickCaptureOpen ? Visibility.Visible : Visibility.Hidden)
       AgentPage({ baseUrl: this.baseUrl, token: this.token, draftLease: this.draftLease, initialPrompt: this.agentPrompt,
         voiceActive: this.activeTab === 1 && this.voiceForeground,
         historyScope: this.cacheScope, deletedSessionId: this.deletedSessionId,
@@ -429,14 +470,16 @@ struct Index {
         onOpenPlanDetails: (id) => this.openPlanDetails('', id), onOpenProfile: () => this.selectTab(4) })
         .visibility(this.activeTab === 1 ? Visibility.Visible : Visibility.Hidden)
       PlanCenterPage({ baseUrl: this.baseUrl, token: this.token, draftLease: this.draftLease,
-        refreshKey: this.planRefresh, active: this.activeTab === 2 && this.voiceForeground,
+        refreshKey: this.planRefresh, active: (this.activeTab === 2 || this.quickCaptureOpen) && this.voiceForeground,
+        captureOnly: this.quickCaptureOpen, captureIntent: this.captureIntent, captureRevision: this.captureRevision,
+        onCloseCapture: () => this.closeCapture(),
         focusTaskId: this.focusTaskId, focusPlanId: this.focusPlanId, focusRevision: this.focusRevision,
         requestedView: this.planRequestedView, viewRevision: this.planViewRevision,
         backRevision: this.planBackRevision, onInnerNavigationChanged: (active) => this.planInnerActive = active,
         onCloseFocus: () => this.closePlanFocus(),
         onPlanningChanged: () => this.timetableChanged(),
         onOpenAgent: (prompt) => this.openAgentWithPrompt(prompt) })
-        .visibility(this.activeTab === 2 ? Visibility.Visible : Visibility.Hidden)
+        .visibility(this.activeTab === 2 || this.quickCaptureOpen ? Visibility.Visible : Visibility.Hidden)
       CampusPage({ user: this.user, baseUrl: this.baseUrl, token: this.token, active: this.activeTab === 8 && this.voiceForeground,
         onOpenTimetable: () => this.selectTab(9), onOpenRoute: () => this.selectTab(6),
         onOpenServices: () => this.selectTab(7), onOpenSkills: () => this.selectTab(3),
@@ -471,7 +514,9 @@ struct Index {
           onDeleteBusyChange: (busy, revision) => this.deletionBusyChanged(busy, revision),
           onBack: () => this.goBack() })
       }
-      RoutePage({ baseUrl: this.baseUrl, token: this.token, active: this.activeTab === 6 && this.voiceForeground,
+      RoutePage({ baseUrl: this.baseUrl, token: this.token,
+        routeScope: this.token.length > 0 ? historyScope(this.baseUrl, this.user.user_id) : '',
+        routeContextKey: `${this.navigation.root}`, courseIntent: this.currentCourseRoute(), active: this.activeTab === 6 && this.voiceForeground,
         onBack: () => this.goBack() })
         .visibility(this.activeTab === 6 ? Visibility.Visible : Visibility.Hidden)
       CampusServicesPage({ baseUrl: this.baseUrl, token: this.token, active: this.activeTab === 7 && this.voiceForeground,
@@ -554,7 +599,7 @@ struct Index {
           this.pageContent()
         }.layoutWeight(1).width('100%').clip(true)
           .opacity(this.contentOpacity).translate({ y: this.contentOffset })
-        if (isRootRoute(this.activeTab) && !(this.activeTab === 2 && this.planInnerActive)) {
+        if (!this.quickCaptureOpen && isRootRoute(this.activeTab) && !(this.activeTab === 2 && this.planInnerActive)) {
           Row({ space: 4 }) {
             this.navItem(0, 'home', '今日')
             this.navItem(1, 'assistant', '助手')

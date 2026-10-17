@@ -89,7 +89,50 @@ export interface UserContextResponse {
   campus_map: CampusMapSummary;
 }
 
+export interface CourseOverlap {
+  course_key: string;
+  course: TimetableEntry;
+  overlap_start_at: string;
+  overlap_end_at: string;
+}
+
+export interface CourseOverlapState {
+  state: string;
+  checked_at: string;
+  timetable_version: number;
+  task_version: number;
+  acknowledgement_id: string | null;
+  overlaps: CourseOverlap[];
+  reason: string;
+}
+
+export interface CourseReview {
+  candidate_id: string;
+  task_id: string | null;
+  allow_during_course: boolean;
+  state: string;
+  review_digest: string;
+  requires_acknowledgement: boolean;
+  revoke_only: boolean;
+  school: string;
+  campus: string;
+  timezone: string;
+  timetable_version: number;
+  planning_version: number;
+  task_version: number | null;
+  candidate_digest: string;
+  overlaps: CourseOverlap[];
+}
+
+export interface CourseAcknowledgement { candidate_id: string; review_digest: string; }
+export interface CoursePermissionChoice { candidate_id: string; allow_during_course: boolean; }
+export interface ActionStateVersion { timetable: number; planning: number; }
+export interface CandidateTaskReceipt { candidate_id: string; task_id: string; }
+export interface CourseAcknowledgementReceipt { candidate_id: string; acknowledgement_id: string; }
+
 export interface PendingTaskPreview {
+  candidate_id?: string;
+  allow_during_course?: boolean;
   title: string;
   start_at: string | null;
   end_at: string | null;
@@ -104,6 +147,8 @@ export interface PendingMilestonePreview {
 }
 
 export interface PlanningTaskDraft {
+  candidate_id?: string;
+  allow_during_course?: boolean;
   title: string;
   start_at: string | null;
   end_at: string | null;
@@ -127,6 +172,9 @@ export interface PlanningActionRequest {
 }
 
 export interface ActionReceipt {
+  candidate_tasks?: CandidateTaskReceipt[];
+  course_acknowledgement_ids?: string[];
+  course_acknowledgements?: CourseAcknowledgementReceipt[];
   receipt_id: string;
   proposal_id: string;
   action: string;
@@ -148,6 +196,10 @@ export interface PendingActionPayload {
 }
 
 export interface PendingAction {
+  course_policy_version?: number;
+  state_version?: ActionStateVersion;
+  course_reviews?: CourseReview[];
+  replacement_proposal_id?: string | null;
   warnings?: string[];
   contract_version?: number;
   created_at?: string;
@@ -331,6 +383,9 @@ export interface CampusRoute {
 }
 
 export interface PlanningTask {
+  allow_during_course?: boolean;
+  task_version?: number;
+  course_overlap?: CourseOverlapState;
   task_id: string;
   plan_id: string | null;
   milestone_id: string | null;

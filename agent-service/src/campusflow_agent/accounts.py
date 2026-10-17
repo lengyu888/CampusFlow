@@ -53,6 +53,9 @@ class AccountStore:
         self._connection.row_factory = sqlite3.Row
         self._connection.execute("PRAGMA foreign_keys = ON")
         self._create_schema()
+        from .course_policy import ensure_schema
+
+        ensure_schema(self._connection)
 
     def _create_schema(self) -> None:
         with self._lock, self._connection:
@@ -276,9 +279,14 @@ class AccountStore:
         user_id = uuid4().hex
         try:
             with self._lock, self._connection:
-                role = "admin" if self._connection.execute(
-                    "SELECT COUNT(*) AS count FROM users"
-                ).fetchone()["count"] == 0 else "user"
+                role = (
+                    "admin"
+                    if self._connection.execute("SELECT COUNT(*) AS count FROM users").fetchone()[
+                        "count"
+                    ]
+                    == 0
+                    else "user"
+                )
                 self._connection.execute(
                     """
                     INSERT INTO users (
@@ -655,9 +663,7 @@ class AccountStore:
                     json.dumps(sorted(set(scopes)), ensure_ascii=False),
                     expires_at.isoformat(),
                     identity.get("userId") or identity.get("user_id") or identity.get("id"),
-                    identity.get("name")
-                    or identity.get("nickname")
-                    or identity.get("nickName"),
+                    identity.get("name") or identity.get("nickname") or identity.get("nickName"),
                     identity.get("identityType") or identity.get("identity_type"),
                     now,
                     now,

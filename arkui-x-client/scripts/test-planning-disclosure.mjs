@@ -1,5 +1,5 @@
 import { draftFixture } from './helpers/local-draft-fixture.mjs';
-import { PlanningActionController, candidate, applied } from './helpers/planning-action-fixture.mjs';
+import { PlanningActionController, candidate, applied, validPlanningDate, quickCapture, courseReview } from './helpers/planning-action-fixture.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { stripTypeScriptTypes } from 'node:module';
@@ -13,12 +13,12 @@ const firstBuilder = source.indexOf('\n  @Builder');
 assert.ok(firstBuilder > 0, 'the non-UI method boundary must exist');
 // Run the actual page methods. This does not compile ArkUI builders or validate native layout.
 const controllerSource = source.slice(0, firstBuilder)
-  .replace(/^import \{[\s\S]*?\} from '\.\.\/model\/ApiModels';\r?\n/, '')
+  .replace(/^import \{[\s\S]*?\} from '[^']+';\r?\n/gm, '')
   .replace(/^import [^\n]+;\r?\n/gm, '')
   .replace(/^@Component\r?\n/m, '')
   .replace(/@(Prop|State)\s+|@Watch\('[^']+'\)\s*/g, '')
   .replace('export struct PlanCenterPage', 'class PlanCenterPage') + '\n}\n';
-const createController = new Function('TextInputController', 'AppTheme', 'Curve', 'CampusFlowApi', 'Scroller', 'shanghaiDate', 'buildDailyAgenda', 'PlanningActionController', 'localDrafts',
+const createController = new Function('TextInputController', 'AppTheme', 'Curve', 'CampusFlowApi', 'Scroller', 'shanghaiDate', 'buildDailyAgenda', 'PlanningActionController', 'localDrafts', 'validPlanningDate', 'parseQuickCapture', 'captureEndAt', 'validCourseAcknowledgements',
   stripTypeScriptTypes(controllerSource) + '\nreturn PlanCenterPage;');
 
 async function page({ createError = null } = {}) {
@@ -49,7 +49,7 @@ async function page({ createError = null } = {}) {
     async updateTask(id, completed) { calls.push(['updateTask', id, completed]); }
     async deleteTask(id) { calls.push(['deleteTask', id]); }
   }
-  const Controller = createController(InputController, { motion: () => 0 }, { EaseOut: 'ease-out' }, Api, class {}, agenda.shanghaiDate, agenda.buildDailyAgenda, PlanningActionController, drafts.store);
+  const Controller = createController(InputController, { motion: () => 0 }, { EaseOut: 'ease-out' }, Api, class {}, agenda.shanghaiDate, agenda.buildDailyAgenda, PlanningActionController, drafts.store, validPlanningDate, quickCapture.parseQuickCapture, quickCapture.captureEndAt, courseReview.validCourseAcknowledgements);
   const instance = new Controller();
   instance.draftLease = drafts.lease; instance.draftScopeChanged();
   instance.getUIContext = () => ({ animateTo: (_options, update) => update() });
@@ -137,7 +137,7 @@ test('reopened draft creates the original title and schedule, then retains discl
   instance.toggleTaskForm();
   await instance.addTask();
   assert.deepEqual(calls, [
-    ['preview', { operation: 'create_task', task: { title: '完成课程总结', start_at: '2026-10-22T18:45:00+08:00', end_at: null, reminder_minutes: null, location: null } }]
+    ['preview', { operation: 'create_task', task: { title: '完成课程总结', start_at: '2026-10-22T18:45:00+08:00', end_at: null, reminder_minutes: null, location: null, allow_during_course: false } }]
   ]);
   assert.equal(instance.title, '  完成课程总结  ', 'preview preserves draft');
   await instance.confirmPlanningAction();
@@ -161,7 +161,7 @@ test('no-date and all-day API parameters remain intact after form collapse', asy
     instance.toggleTaskForm();
     instance.toggleTaskForm();
     await instance.addTask();
-    assert.deepEqual(calls[0], ['preview', { operation: 'create_task', task: { title: '整理笔记', start_at: expected, end_at: null, reminder_minutes: null, location: null } }]);
+    assert.deepEqual(calls[0], ['preview', { operation: 'create_task', task: { title: '整理笔记', start_at: expected, end_at: null, reminder_minutes: null, location: null, allow_during_course: false } }]);
   }
 });
 
