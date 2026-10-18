@@ -1,6 +1,6 @@
 import { PendingAction, PendingMilestonePreview, PendingTaskPreview, ToolDisplaySummary } from '../model/ApiModels';
 import { CampusFlowApi } from '../services/CampusFlowApi';
-import { plainMessage } from '../utils/MessageText';
+import { MessageContent } from '../components/MessageContent';
 import { AppTheme } from '../theme/AppTheme';
 import { AppIcon } from '../components/AppIcon';
 import { TaskScheduleDetails } from '../components/TaskScheduleDetails';
@@ -34,6 +34,7 @@ export struct AgentPage {
   onOpenPlan: () => void = () => {};
   onOpenProfile: () => void = () => {};
   @State private prompt: string = '';
+  @State private availableHeight: number = 600;
   @State private model: string = 'deepseek-v4-pro';
   @State private messages: ConversationEntry[] = [
     { id: 'welcome', role: 'assistant', content: '告诉我你的目标，我会结合课表、校园地点和待办，给出可执行的安排。',
@@ -80,9 +81,13 @@ export struct AgentPage {
     return new CampusFlowRequestError(0, 'UNKNOWN', '未取得完整结果，请检查连接后再操作。');
   }
 
+  private inputLength(value: string): number {
+    return Array.from(value.trim()).length;
+  }
+
   private async send(): Promise<void> {
     const text = this.prompt.trim();
-    if (text.length === 0 || this.loading || this.decisionId.length > 0) {
+    if (text.length === 0 || this.inputLength(text) > 8000 || this.loading || this.decisionId.length > 0) {
       return;
     }
     this.appendMessage('user', text);
@@ -241,7 +246,7 @@ export struct AgentPage {
                 Text(item.label).fontSize(13).fontWeight(FontWeight.Medium).fontColor(AppTheme.ink).layoutWeight(1)
                 Text(this.toolStateLabel(item.state)).fontSize(11).fontColor(this.toolStateColor(item.state))
               }.width('100%')
-              Text(item.summary).fontSize(12).lineHeight(19).fontColor(AppTheme.secondary).width('100%')
+              Text(item.summary).fontSize(12).fontColor(AppTheme.secondary).width('100%')
             }.width('100%').alignItems(HorizontalAlign.Start).padding(10)
               .backgroundColor(AppTheme.field).borderRadius(10)
           }, (_item: ToolDisplaySummary, index: number) => `${message.id}-tool-${index}`)
@@ -254,12 +259,12 @@ export struct AgentPage {
   private RequestFailure(message: ConversationEntry) {
     Column({ space: 8 }) {
       Text('请求未完成').fontSize(14).fontWeight(FontWeight.Bold).fontColor(AppTheme.red).width('100%')
-      Text(message.content).fontSize(13).lineHeight(20).fontColor(AppTheme.ink).width('100%')
+      Text(message.content).fontSize(13).fontColor(AppTheme.ink).width('100%')
       Text('原输入已保留在对话中，可复制或恢复后手动发送。若请求曾到达服务端，请先查看历史和已有提案。')
-        .fontSize(12).lineHeight(19).fontColor(AppTheme.secondary).width('100%')
-      Button(this.prompt.trim().length > 0 ? '输入框已有草稿' : '恢复本次输入')
+        .fontSize(12).fontColor(AppTheme.secondary).width('100%')
+      Button(this.inputLength(this.prompt) > 0 ? '输入框已有草稿' : '恢复本次输入')
         .constraintSize({ minHeight: 44 }).fontSize(13).fontColor(AppTheme.blue)
-        .backgroundColor(AppTheme.blueSoft).enabled(!this.loading && this.prompt.trim().length === 0)
+        .backgroundColor(AppTheme.blueSoft).enabled(!this.loading && this.inputLength(this.prompt) === 0)
         .onClick(() => this.prompt = restoreDraft(this.prompt, message.failedPrompt))
       if (message.failureCode === 'LOGIN_REQUIRED' || message.failureCode === 'MODEL_AUTH_INVALID' ||
         message.failureCode === 'MODEL_KEY_REQUIRED') {
@@ -345,8 +350,8 @@ export struct AgentPage {
       AppIcon({ name: icon, iconSize: 22, color: AppTheme.blue })
       Column({ space: 4 }) {
         Text(title).fontSize(16).fontWeight(FontWeight.Medium).fontColor(AppTheme.ink)
-        Text(detail).fontSize(12).fontColor(AppTheme.secondary).maxLines(1)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
+        Text(detail).fontSize(12).fontColor(AppTheme.secondary).width('100%')
+          .wordBreak(WordBreak.BREAK_WORD)
       }.alignItems(HorizontalAlign.Start).layoutWeight(1)
       AppIcon({ name: 'chevron', iconSize: 16, color: AppTheme.muted })
     }.width('100%').padding({ left: 17, right: 16, top: 17, bottom: 17 })
@@ -357,7 +362,7 @@ export struct AgentPage {
     Column() {
       Row({ space: 2 }) {
         Text('CampusFlow').fontSize(17).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
-          .layoutWeight(1)
+          .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).layoutWeight(1)
         Button(this.model === 'deepseek-v4-pro' ? 'V4 Pro' : 'Flash')
           .height(44).fontSize(13).fontWeight(FontWeight.Medium).fontColor(AppTheme.blue)
           .backgroundColor(Color.Transparent).padding({ left: 12, right: 12 })
@@ -368,13 +373,13 @@ export struct AgentPage {
           })
         Button({ type: ButtonType.Normal }) {
           AppIcon({ name: 'route', iconSize: 22, color: AppTheme.blue })
-        }.width(44).height(44).backgroundColor(Color.Transparent).borderRadius(22)
+        }.width(48).height(48).backgroundColor(Color.Transparent).borderRadius(22)
           .accessibilityText('校园路线').onClick(() => this.onOpenRoute())
         Button({ type: ButtonType.Normal }) {
           AppIcon({ name: 'history', iconSize: 22, color: AppTheme.blue })
-        }.width(44).height(44).backgroundColor(Color.Transparent).borderRadius(22)
+        }.width(48).height(48).backgroundColor(Color.Transparent).borderRadius(22)
           .accessibilityText('历史会话').onClick(() => this.onOpenHistory())
-      }.width('100%').height(56).padding({ left: 20, right: 10 })
+      }.width('100%').constraintSize({ minHeight: 56 }).padding({ left: 16, right: 10 })
         .backgroundColor(AppTheme.bg)
 
       Scroll(this.chatScroller) {
@@ -411,15 +416,13 @@ export struct AgentPage {
                   Blank()
                 }
                 Column({ space: 8 }) {
-                  Text(plainMessage(message.content))
-                    .fontSize(16).fontColor(message.role === 'user' ? '#FFFFFF' : AppTheme.ink)
-                    .lineHeight(25).copyOption(CopyOptions.InApp).width('100%')
+                  MessageContent({ content: message.content, isUser: message.role === 'user' })
                   if (message.role === 'assistant' && message.id !== 'welcome') {
                     this.ToolResults(message)
                   }
                 }.alignItems(HorizontalAlign.Start)
                   .padding({ left: 16, right: 16, top: 13, bottom: 13 })
-                  .width('90%')
+                  .width(message.role === 'user' ? '90%' : '100%')
                   .backgroundColor(message.role === 'user' ? AppTheme.blue : AppTheme.surface)
                   .borderRadius(message.role === 'user' ? { topLeft: 20, topRight: 20, bottomLeft: 20, bottomRight: 6 }
                     : { topLeft: 20, topRight: 20, bottomLeft: 6, bottomRight: 20 })
@@ -440,9 +443,10 @@ export struct AgentPage {
                   .fontColor(this.needsReview(action.proposal_id) ? AppTheme.orange : AppTheme.secondary)
               }.width('100%')
               Text(action.title).fontSize(18).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink).width('100%')
+                .wordBreak(WordBreak.BREAK_WORD)
               Text(this.proposalMeta(action)).fontSize(12).fontColor(AppTheme.secondary).width('100%')
               if ((action.payload.summary ?? '').length > 0) {
-                Text(action.payload.summary ?? '').fontSize(14).lineHeight(22).fontColor(AppTheme.secondary).width('100%')
+                Text(action.payload.summary ?? '').fontSize(14).fontColor(AppTheme.secondary).width('100%')
               }
               if (action.kind === 'plan') {
                 if ((action.payload.milestones ?? []).length > 0) {
@@ -471,24 +475,24 @@ export struct AgentPage {
               }
               if (this.feedbackFor(action.proposal_id) !== undefined) {
                 Text(this.feedbackFor(action.proposal_id)?.message ?? '')
-                  .fontSize(13).lineHeight(20).width('100%')
+                  .fontSize(13).width('100%')
                   .fontColor(this.needsReview(action.proposal_id) ? AppTheme.orange : AppTheme.ink)
               }
               if (this.feedbackFor(action.proposal_id)?.code === 'LOGIN_REQUIRED') {
-                Button('前往我的重新登录').height(46).fontSize(13).fontColor(AppTheme.blue)
+                Button('前往我的重新登录').constraintSize({ minHeight: 48 }).fontSize(13).fontColor(AppTheme.blue)
                   .backgroundColor(AppTheme.surface).onClick(() => this.onOpenProfile())
               }
               if (this.needsReview(action.proposal_id)) {
                 Row({ space: 9 }) {
                   Button(this.decisionId === action.proposal_id ? '核对中…' : '核对状态')
-                    .height(46).fontSize(14).fontColor(AppTheme.blue).backgroundColor(AppTheme.surface)
+                    .constraintSize({ minHeight: 48 }).fontSize(14).fontColor(AppTheme.blue).backgroundColor(AppTheme.surface)
                     .layoutWeight(1).enabled(!this.loading && this.decisionId.length === 0)
                     .onClick(() => this.checkDecision(action))
-                  Button('查看规划').height(46).fontSize(14).fontColor('#FFFFFF').backgroundColor(AppTheme.blue)
+                  Button('查看规划').constraintSize({ minHeight: 48 }).fontSize(14).fontColor('#FFFFFF').backgroundColor(AppTheme.blue)
                     .layoutWeight(1).onClick(() => this.onOpenPlan())
                 }.width('100%')
               } else if (action.status === 'confirmed') {
-                Button('查看规划').height(46).fontSize(14).fontColor('#FFFFFF').backgroundColor(AppTheme.blue)
+                Button('查看规划').constraintSize({ minHeight: 48 }).fontSize(14).fontColor('#FFFFFF').backgroundColor(AppTheme.blue)
                   .width('100%').onClick(() => this.onOpenPlan())
               } else if (action.status === 'pending') {
                 if (action.action !== 'create') {
@@ -496,11 +500,11 @@ export struct AgentPage {
                     .fontSize(13).fontColor(AppTheme.secondary).width('100%')
                 }
                 Row({ space: 9 }) {
-                  Button('暂不执行').height(46).fontSize(14).fontColor(AppTheme.secondary)
+                  Button('暂不执行').constraintSize({ minHeight: 48 }).fontSize(14).fontColor(AppTheme.secondary)
                     .backgroundColor(AppTheme.surface).borderRadius(14).layoutWeight(1)
                     .enabled(!this.loading && this.decisionId.length === 0).onClick(() => this.decide(action, false))
                   Button(this.decisionId === action.proposal_id ? '处理中…' : '确认执行')
-                    .height(46).fontSize(14).fontColor('#FFFFFF').backgroundColor(AppTheme.blue).borderRadius(14)
+                    .constraintSize({ minHeight: 48 }).fontSize(14).fontColor('#FFFFFF').backgroundColor(AppTheme.blue).borderRadius(14)
                     .layoutWeight(1).enabled(!this.loading && this.decisionId.length === 0 && action.action === 'create')
                     .onClick(() => this.decide(action, true))
                 }.width('100%')
@@ -523,21 +527,34 @@ export struct AgentPage {
           })
       }.layoutWeight(1).width('100%').clip(true).scrollBar(BarState.Off).align(Alignment.TopStart)
 
+      if (this.inputLength(this.prompt) > 8000) {
+        Text(`当前 ${this.inputLength(this.prompt)} 字，超过 8000 字上限，请精简后发送。原文仍保留在输入框中。`)
+          .fontSize(12).fontColor(AppTheme.red).width('100%')
+          .padding({ left: 18, right: 18, top: 6, bottom: 6 })
+      }
       Row({ space: 8 }) {
         TextArea({ text: this.prompt, placeholder: '描述你的目标或安排…' })
-          .layoutWeight(1).height(this.prompt.length > 36 ? 82 : 48).fontSize(15)
+          .layoutWeight(1).fontSize(16)
+          .constraintSize({ minHeight: 48, maxHeight: Math.max(48, Math.min(160, this.availableHeight * 0.3)) })
+          .accessibilityText('输入目标或安排')
           .fontColor(AppTheme.ink).placeholderColor(AppTheme.muted)
           .backgroundColor(AppTheme.field).borderRadius(22)
           .padding({ left: 15, right: 12, top: 13, bottom: 10 })
           .onChange((value) => this.prompt = value)
-        Button('发送').width(64).height(44).fontSize(14).fontWeight(FontWeight.Medium)
-          .fontColor(this.prompt.trim().length > 0 ? '#FFFFFF' : AppTheme.muted)
-          .backgroundColor(this.prompt.trim().length > 0 ? AppTheme.blue : AppTheme.field).borderRadius(22)
-          .enabled(!this.loading && this.decisionId.length === 0 && this.prompt.trim().length > 0).onClick(() => this.send())
+        Button('发送').constraintSize({ minWidth: 64, minHeight: 48 }).fontSize(14).fontWeight(FontWeight.Medium)
+          .fontColor(this.inputLength(this.prompt) > 0 && this.inputLength(this.prompt) <= 8000 ? '#FFFFFF' : AppTheme.muted)
+          .backgroundColor(this.inputLength(this.prompt) > 0 && this.inputLength(this.prompt) <= 8000 ? AppTheme.blue : AppTheme.field).borderRadius(22)
+          .enabled(!this.loading && this.decisionId.length === 0 && this.inputLength(this.prompt) > 0 && this.inputLength(this.prompt) <= 8000).onClick(() => this.send())
       }.width('100%').alignItems(VerticalAlign.Bottom)
         .padding({ left: 16, right: 16, top: 10, bottom: 10 }).backgroundColor(AppTheme.surface)
         .border({ width: { top: 0.5 }, color: AppTheme.separator })
     }.width('100%').height('100%').alignItems(HorizontalAlign.Start)
       .justifyContent(FlexAlign.Start).backgroundColor(AppTheme.bg)
+      .onAreaChange((_oldArea: Area, newArea: Area) => {
+        const height = Number(newArea.height);
+        if (height > 0 && height !== this.availableHeight) {
+          this.availableHeight = height;
+        }
+      })
   }
 }

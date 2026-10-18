@@ -189,3 +189,27 @@ test('a malformed chat envelope does not replace the session or append a broken 
     assert.equal(page.messages.filter((item) => item.role === 'assistant').length, 1);
   }
 });
+
+
+test('an over-limit draft is retained without making a request', async () => {
+  const { page, calls } = harness();
+  page.prompt = '字'.repeat(8001);
+  await page.send();
+  assert.equal(calls.length, 0);
+  assert.equal(page.prompt.length, 8001);
+  assert.equal(page.messages.length, 1);
+});
+
+
+test('the input limit counts Unicode characters consistently with the API, not UTF-16 units', async () => {
+  const { page, calls } = harness({ chat: async () => ({ session_id: 'unicode-session',
+    message: '已收到', pending_actions: [] }) });
+  page.prompt = '🌱'.repeat(8000);
+  assert.equal(page.inputLength(page.prompt), 8000);
+  await page.send();
+  assert.equal(calls.length, 1);
+  page.prompt = '🌱'.repeat(8001);
+  await page.send();
+  assert.equal(calls.length, 1);
+  assert.equal(Array.from(page.prompt).length, 8001);
+});
