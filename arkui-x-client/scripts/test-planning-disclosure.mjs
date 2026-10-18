@@ -1,3 +1,4 @@
+import { planningPageDependencies, dependencyPrefix, timetableSnapshot, preferenceSnapshot } from './helpers/planning-overview-fixture.mjs';
 import { draftFixture } from './helpers/local-draft-fixture.mjs';
 import { PlanningActionController, candidate, applied, validPlanningDate, quickCapture, courseReview } from './helpers/planning-action-fixture.mjs';
 import assert from 'node:assert/strict';
@@ -18,8 +19,8 @@ const controllerSource = source.slice(0, firstBuilder)
   .replace(/^@Component\r?\n/m, '')
   .replace(/@(Prop|State)\s+|@Watch\('[^']+'\)\s*/g, '')
   .replace('export struct PlanCenterPage', 'class PlanCenterPage') + '\n}\n';
-const createController = new Function('TextInputController', 'AppTheme', 'Curve', 'CampusFlowApi', 'Scroller', 'shanghaiDate', 'buildDailyAgenda', 'PlanningActionController', 'localDrafts', 'validPlanningDate', 'parseQuickCapture', 'captureEndAt', 'validCourseAcknowledgements',
-  stripTypeScriptTypes(controllerSource) + '\nreturn PlanCenterPage;');
+const createController = new Function('TextInputController', 'AppTheme', 'Curve', 'CampusFlowApi', 'Scroller', 'shanghaiDate', 'buildDailyAgenda', 'PlanningActionController', 'localDrafts', 'validPlanningDate', 'parseQuickCapture', 'captureEndAt', 'validCourseAcknowledgements', 'planningPageDependencies',
+  dependencyPrefix + stripTypeScriptTypes(controllerSource) + '\nreturn PlanCenterPage;');
 
 async function page({ createError = null } = {}) {
   const drafts = await draftFixture();
@@ -33,6 +34,8 @@ async function page({ createError = null } = {}) {
   }
   let pending;
   class Api {
+    async timetable() { return timetableSnapshot([]); }
+    async learningPreferences() { return preferenceSnapshot(); }
     async previewPlanningAction(request) {
       calls.push(['preview', request]);
       if (createError) throw createError;
@@ -49,7 +52,7 @@ async function page({ createError = null } = {}) {
     async updateTask(id, completed) { calls.push(['updateTask', id, completed]); }
     async deleteTask(id) { calls.push(['deleteTask', id]); }
   }
-  const Controller = createController(InputController, { motion: () => 0 }, { EaseOut: 'ease-out' }, Api, class {}, agenda.shanghaiDate, agenda.buildDailyAgenda, PlanningActionController, drafts.store, validPlanningDate, quickCapture.parseQuickCapture, quickCapture.captureEndAt, courseReview.validCourseAcknowledgements);
+  const Controller = createController(InputController, { motion: () => 0 }, { EaseOut: 'ease-out' }, Api, class {}, agenda.shanghaiDate, agenda.buildDailyAgenda, PlanningActionController, drafts.store, validPlanningDate, quickCapture.parseQuickCapture, quickCapture.captureEndAt, courseReview.validCourseAcknowledgements, planningPageDependencies);
   const instance = new Controller();
   instance.draftLease = drafts.lease; instance.draftScopeChanged();
   instance.getUIContext = () => ({ animateTo: (_options, update) => update() });

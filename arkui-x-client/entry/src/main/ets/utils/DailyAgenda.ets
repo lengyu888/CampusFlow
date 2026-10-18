@@ -41,7 +41,7 @@ export function shanghaiTime(nowMs: number): string {
   return `${shifted.getUTCHours()}`.padStart(2, '0') + ':' + `${shifted.getUTCMinutes()}`.padStart(2, '0');
 }
 
-function validDate(value: string): boolean {
+export function validDate(value: string): boolean {
   if (!new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$').test(value)) { return false; }
   const year = Number(value.substring(0, 4));
   const month = Number(value.substring(5, 7));
@@ -52,7 +52,7 @@ function validDate(value: string): boolean {
   return day <= lengths[month - 1];
 }
 
-function timestamp(value: string | null): number | null {
+export function timestamp(value: string | null): number | null {
   if (value === null || typeof value !== 'string') { return null; }
   const match = new RegExp('^([0-9]{4}-[0-9]{2}-[0-9]{2})[Tt ]([01][0-9]|2[0-3]):([0-5][0-9])' +
     '(:[0-5][0-9](\\.[0-9]+)?)?([Zz]|[+-]([01][0-9]|2[0-3]):[0-5][0-9])?$').exec(value);
@@ -66,7 +66,7 @@ function timestamp(value: string | null): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function courseTimestamp(date: string, time: string): number | null {
+export function courseTimestamp(date: string, time: string): number | null {
   if (!validDate(date) || !new RegExp('^([01][0-9]|2[0-3]):[0-5][0-9]$').test(time)) { return null; }
   return timestamp(`${date}T${time}:00+08:00`);
 }
@@ -76,7 +76,7 @@ function overlapsDay(start: number, end: number | null, dayStart: number): boole
   return end !== null && end > start ? start < dayEnd && end > dayStart : start >= dayStart && start < dayEnd;
 }
 
-function allDayDate(task: PlanningTask, start: number | null): string {
+export function allDayDate(task: PlanningTask, start: number | null): string {
   if (task.start_at !== null && validDate(task.start_at)) { return task.start_at; }
   if (task.source === 'manual' && task.end_at === null && start !== null && shanghaiTime(start) === '23:59') {
     return shanghaiDate(start);

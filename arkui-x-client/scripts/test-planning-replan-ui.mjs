@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { stripTypeScriptTypes } from 'node:module';
 import { test } from 'node:test';
+import { planningPageDependencies, timetableSnapshot, preferenceSnapshot } from './helpers/planning-overview-fixture.mjs';
 
 const read = path => readFileSync(new URL(`../entry/src/main/ets/${path}`, import.meta.url), 'utf8');
 const withoutImports = source => source.replace(/^import \{[\s\S]*?\} from '[^']+';\r?\n/gm, '')
@@ -13,8 +14,10 @@ const { CampusFlowRequestError } = await utility('AgentFeedback');
 const { validateTimetableEntry } = await utility('OnboardingTimetable');
 const agenda = await utility('DailyAgenda');
 const replanSource = withoutImports(read('utils/PlanningReplan.ets')).replace(/^export /gm, '');
-const Replan = new Function('CampusFlowRequestError', 'validateTimetableEntry',
-  stripTypeScriptTypes(replanSource) + '\nreturn PlanningReplanController;')(CampusFlowRequestError, validateTimetableEntry);
+const replan = new Function('CampusFlowRequestError', 'validateTimetableEntry', 'timestamp', 'courseTimestamp',
+  stripTypeScriptTypes(replanSource) + '\nreturn { PlanningReplanController, hasCourseClassification, conflictCourseOverlap };')(CampusFlowRequestError, validateTimetableEntry, agenda.timestamp, agenda.courseTimestamp);
+const Replan = replan.PlanningReplanController;
+const plan = await utility('PlanPresentation');
 
 function component(path, name, names, values) {
   const source = read(path);
@@ -61,7 +64,7 @@ function panelFixture(handlers = {}, count = 1) {
     constructor(api, changed, applied) { return new Replan(api, changed, applied, () => now); }
   }
   const Panel = component('components/PlanningConflictsPanel.ets', 'PlanningConflictsPanel',
-    ['CampusFlowApi', 'PlanningReplanController'], [Api, ClockedController]);
+    ['CampusFlowApi', 'PlanningReplanController', 'hasCourseClassification', 'conflictCourseOverlap', 'formatPlanTimeRange'], [Api, ClockedController, replan.hasCourseClassification, replan.conflictCourseOverlap, plan.formatPlanTimeRange]);
   const page = new Panel(); page.onApplied = () => applied.push(true);
   return { page, calls, applied };
 }
@@ -85,7 +88,7 @@ test('Panel pagination reaches every item across all four lists, with bounded pa
       assert.equal(f.page.pageFor(kind), page); assert.ok(f.page[method]().length <= 6);
       ids.push(...f.page[method]().map(row => row.task_id)); f.page.movePage(kind, 1, 13);
     }
-    assert.deepEqual(ids, Array.from({ length: 13 }, (_, i) => `${expectedPrefix}${i}`));
+    assert.deepEqual([...ids].sort(), Array.from({ length: 13 }, (_, i) => `${expectedPrefix}${i}`).sort());
     assert.equal(f.page.pageFor(kind), 2); f.page.movePage(kind, -99, 13); assert.equal(f.page.pageFor(kind), 0);
   }
   assert.equal(f.page.validPage(3, 0), 0); assert.equal(f.page.validPage(3, 2), 0);
@@ -172,47 +175,52 @@ test('Profile destroyed during either sync ignores old-account success or failur
 
 const overview = name => ({ plans: [], tasks: [{ task_id: name }], total_tasks: 1, completed_tasks: 0,
   due_today: 0, overdue_tasks: 0, progress: 0 });
-function planFixture(context, planning) {
+const courseSnapshot = title => timetableSnapshot([{date:'2026-10-20',title,start_time:'08:00',end_time:'09:00',location:'一教',teacher:'陈老师'}]);
+function planFixture(timetable, planning, preferences = () => preferenceSnapshot()) {
   const calls = [];
   class Api {
-    async context() { calls.push('context'); return context(); }
+    async timetable() { calls.push('timetable'); return timetable(); }
     async planning() { calls.push('planning'); return planning(); }
+    async learningPreferences() { calls.push('preferences'); return preferences(); }
   }
   const Plan = component('pages/PlanCenterPage.ets', 'PlanCenterPage',
-    ['CampusFlowApi', 'TextInputController', 'AppTheme', 'Curve', 'Scroller', 'shanghaiDate', 'buildDailyAgenda'],
-    [Api, class {}, { motion: () => 0 }, { EaseOut: '' }, class {}, agenda.shanghaiDate, agenda.buildDailyAgenda]);
+    ['CampusFlowApi', 'TextInputController', 'AppTheme', 'Curve', 'Scroller', 'shanghaiDate', 'buildDailyAgenda', ...Object.keys(planningPageDependencies)],
+    [Api, class {}, { motion: () => 0 }, { EaseOut: '' }, class {}, agenda.shanghaiDate, agenda.buildDailyAgenda,...Object.values(planningPageDependencies)]);
   const page = new Plan(); page.getUIContext = () => ({ animateTo: (_options, update) => update() });
   return { page, calls };
 }
 
-test('PlanCenter latest full-refresh generation wins and never applies the older course response', async () => {
+test('PlanCenter latest refresh generation wins independently for each source', async () => {
   const first = deferred(); let reads = 0;
-  const f = planFixture(() => ++reads === 1 ? first.promise : { timetable: [{ title: 'new' }] }, () => overview('new'));
+  const f = planFixture(() => ++reads === 1 ? first.promise : courseSnapshot('new'), () => overview('new'));
   const old = f.page.reload(true); await f.page.reload(true);
-  first.resolve({ timetable: [{ title: 'old' }] }); await old;
+  first.resolve(courseSnapshot('old')); await old;
   assert.equal(f.page.timetable[0].title, 'new'); assert.equal(f.page.overview.tasks[0].task_id, 'new');
-  assert.deepEqual(f.calls, ['context', 'context', 'planning']);
+  assert.equal(f.page.timetableState,'ready'); assert.equal(f.page.planningState,'ready');
+  assert.deepEqual(f.calls, ['planning','preferences','timetable','planning','preferences','timetable']);
 });
 
-test('PlanCenter failed second read keeps both previous snapshots; ordinary refresh preserves outstanding course refresh', async () => {
-  const f = planFixture(() => ({ timetable: [{ title: 'new' }] }), async () => { throw new Error('offline'); });
-  f.page.timetable = [{ title: 'old' }]; f.page.overview = overview('old'); await f.page.reload(true);
-  assert.equal(f.page.timetable[0].title, 'old'); assert.equal(f.page.overview.tasks[0].task_id, 'old');
-  assert.equal(f.page.timetableNeedsRefresh, true);
+test('PlanCenter failed source retains its own snapshot while fresh sources update; next refresh supersedes pending course read', async () => {
+  const f = planFixture(() => courseSnapshot('new'), async () => { throw new Error('offline'); });
+  f.page.timetable = courseSnapshot('old').entries; f.page.overview = overview('old'); await f.page.reload(true);
+  assert.equal(f.page.timetable[0].title, 'new'); assert.equal(f.page.overview.tasks[0].task_id, 'old');
+  assert.equal(f.page.timetableState,'ready'); assert.equal(f.page.planningState,'error'); assert.equal(f.page.sourcesComplete(),false);
   const pending = deferred(); let reads = 0;
-  const g = planFixture(() => ++reads === 1 ? pending.promise : { timetable: [{ title: 'latest' }] }, () => overview('latest'));
-  const old = g.page.reload(true); await g.page.reload(); pending.resolve({ timetable: [{ title: 'older' }] }); await old;
-  assert.deepEqual(g.calls, ['context', 'context', 'planning']); assert.equal(g.page.timetable[0].title, 'latest');
+  const g = planFixture(() => ++reads === 1 ? pending.promise : courseSnapshot('latest'), () => overview('latest'));
+  const old = g.page.reload(true); await g.page.reload(); pending.resolve(courseSnapshot('older')); await old;
+  assert.deepEqual(g.calls, ['planning','preferences','timetable','planning','preferences','timetable']); assert.equal(g.page.timetable[0].title, 'latest');
 });
 
 test('PlanCenter hidden or destroyed during refresh discards late data without affecting draft or disclosure state', async () => {
   for (const leave of ['hidden', 'destroyed']) {
-    const pending = deferred(); const f = planFixture(() => pending.promise, () => overview('late'));
+    const pending = deferred(), planning=deferred(), preferences=deferred();
+    const f = planFixture(() => pending.promise, () => planning.promise, () => preferences.promise);
     f.page.title = '未发送任务草稿'; f.page.taskFormExpanded = true;
     const reading = f.page.reload(true);
     if (leave === 'hidden') { f.page.active = false; f.page.activityChanged(); } else f.page.aboutToDisappear();
-    pending.resolve({ timetable: [{ title: 'late' }] }); await reading;
-    assert.deepEqual(f.page.timetable, []); assert.deepEqual(f.calls, ['context']);
+    pending.resolve(courseSnapshot('late'));planning.resolve(overview('late'));preferences.resolve(preferenceSnapshot());await reading;
+    assert.deepEqual(f.page.timetable, []); assert.deepEqual(f.page.overview.tasks, []); assert.equal(f.page.preferences,null);
+    assert.deepEqual(f.calls, ['planning','preferences','timetable']);
     assert.equal(f.page.title, '未发送任务草稿'); assert.equal(f.page.taskFormExpanded, true);
   }
 });
@@ -253,4 +261,42 @@ test('another unresolved planning write prevents replan preview/confirmation whi
   f.page.writeBlocked = true; f.page.confirmRequested(); await tick(); assert.equal(f.calls.some(x => x.startsWith('confirm:')), false);
   f.page.writeBlocked = false; f.page.confirmRequested(); await tick();
   assert.equal(f.applied.length, 1); assert.equal(writeStates.includes(true), true); assert.equal(writeStates.at(-1), false);
+});
+
+test('panel separates accepted and changed course overlaps, reaches all rows and reports exact intersection', async()=>{
+  const value=report(1);value.conflicts=[];value.unchecked=[];
+  value.accepted_course_overlaps=Array.from({length:13},(_,i)=>({...report().conflicts[0],task_id:`accepted-${String(i).padStart(2,'0')}`,title:'同名任务'}));
+  value.course_overlap_reviews=[{...report().conflicts[0],task_id:'changed-id',title:'同名任务'}];
+  const f=panelFixture({report:async()=>value});f.page.aboutToAppear();await tick();
+  assert.match(f.page.summaryTitle(),/1 项课内安排需要重新核对/);assert.match(f.page.summaryDetail(),/13 项已确认安排保持原时段/);
+  assert.equal(f.page.detailCount(),14);const found=[];
+  for(let i=0;i<3;i++){found.push(...f.page.overlapRows('accepted').map(x=>x.task_id));f.page.movePage('accepted',1,13);}
+  assert.deepEqual(found,value.accepted_course_overlaps.map(x=>x.task_id));assert.equal(f.page.pageFor('accepted'),2);
+  const item=value.course_overlap_reviews[0];assert.match(f.page.overlapText(item,item.courses[0]),/2026-10-20 10:00.*11:00/);
+  const opened=[];f.page.onOpenTask=id=>opened.push(id);f.page.openTask('changed-id');f.page.openTask('absent');
+  assert.deepEqual(opened,['changed-id']);f.page.state.phase='uncertain';f.page.openTask('accepted-00');assert.equal(opened.length,1,'unknown write cannot lose its recovery page');
+  f.page.state.phase='idle';f.page.active=false;f.page.openTask('accepted-00');assert.equal(opened.length,1);
+});
+
+test('legacy no-conflict report is visibly incomplete rather than all course arrangements verified',async()=>{
+  const value=report(0);const f=panelFixture({report:async()=>value});f.page.aboutToAppear();await tick();
+  assert.match(f.page.summaryTitle(),/普通/);assert.match(f.page.summaryDetail(),/未提供课内确认分类/);
+  value.accepted_course_overlaps=[];value.course_overlap_reviews=[];await f.page.replanner().refresh();
+  assert.match(f.page.summaryTitle(),/未发现待处理/);assert.doesNotMatch(f.page.summaryDetail(),/未提供/);
+});
+
+test('course scan pagination is stably ordered by time then exact task ID, including same titles',async()=>{
+  const value=report(0),base=report().conflicts[0];value.accepted_course_overlaps=[{...base,task_id:'z'}, {...base,task_id:'a'},
+    {...base,task_id:'earlier',start_at:'2026-10-20T09:30:00+08:00'}];value.course_overlap_reviews=[];
+  const f=panelFixture({report:async()=>value});f.page.aboutToAppear();await tick();
+  assert.deepEqual(f.page.overlapRows('accepted').map(x=>x.task_id),['earlier','a','z']);
+  assert.deepEqual(value.accepted_course_overlaps.map(x=>x.task_id),['z','a','earlier'],'source snapshot remains unchanged');
+});
+
+
+test('confirmed replan unresolved task remains reachable after controller clears scanner report',async()=>{
+ const f=panelFixture();f.page.aboutToAppear();await tick();await f.page.replanner().preview();await f.page.replanner().confirm();
+ assert.equal(f.page.state.report,null);assert.ok(f.page.state.preview.unresolved.length);
+ const opened=[];f.page.onOpenTask=id=>opened.push(id);f.page.openTask('unresolved-0');f.page.openTask('absent');
+ assert.deepEqual(opened,['unresolved-0']);f.page.state.phase='uncertain';f.page.openTask('unresolved-0');assert.equal(opened.length,1);
 });

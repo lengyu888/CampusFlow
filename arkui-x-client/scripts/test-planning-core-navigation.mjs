@@ -1,3 +1,4 @@
+import { planningPageDependencies, dependencyPrefix, timetableSnapshot, preferenceSnapshot } from './helpers/planning-overview-fixture.mjs';
 import { PlanningActionController, candidate, validPlanningDate, quickCapture, courseReview } from './helpers/planning-action-fixture.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -16,7 +17,7 @@ const controller = noImports(source.slice(0, boundary))
   .replace(/^@Component\r?\n/m, '').replace(/@(Prop|State)\s+|@Watch\('[^']+'\)\s*/g, '')
   .replace('export struct PlanCenterPage', 'class PlanCenterPage') + '\n}\n';
 const factory = new Function('CampusFlowApi', 'TextInputController', 'Scroller', 'AppTheme', 'Curve',
-  'shanghaiDate', 'buildDailyAgenda', 'formatPlanDateTime', 'Date', 'PlanningActionController', 'validPlanningDate', 'parseQuickCapture', 'captureEndAt', 'validCourseAcknowledgements', stripTypeScriptTypes(controller) + '\nreturn PlanCenterPage;');
+  'shanghaiDate', 'buildDailyAgenda', 'formatPlanDateTime', 'Date', 'PlanningActionController', 'validPlanningDate', 'parseQuickCapture', 'captureEndAt', 'validCourseAcknowledgements', 'planningPageDependencies', dependencyPrefix + stripTypeScriptTypes(controller) + '\nreturn PlanCenterPage;');
 const empty = () => ({ plans: [], tasks: [], total_tasks: 0, completed_tasks: 0, due_today: 0, overdue_tasks: 0, progress: 0 });
 const task = (id, extra = {}) => ({ task_id: id, title: '相同标题', plan_id: null, milestone_id: null,
   start_at: '2026-10-20T09:00:00+08:00', end_at: '2026-10-20T10:00:00+08:00',
@@ -26,17 +27,18 @@ function fixture(handlers = {}, now = Date.parse('2026-10-19T23:30:00Z')) {
   const calls = [], navigation = [], closed = [];
   const data = empty();
   class Api {
-    async context() { calls.push('context'); return handlers.context ? handlers.context() : { timetable: [] }; }
+    async timetable() { calls.push('timetable'); return handlers.timetable ? handlers.timetable() : timetableSnapshot([]); }
+    async learningPreferences() { return preferenceSnapshot(); }
     async planning() { calls.push('planning'); return handlers.planning ? handlers.planning() : data; }
     async previewPlanningAction(request) { calls.push(['preview', request]); if (handlers.preview) await handlers.preview(); return candidate(request); }
     async updateTask(id, done) { calls.push(['update', id, done]); return handlers.update?.(); }
     async deleteTask(id) { calls.push(['delete', id]); return handlers.delete?.(); }
   }
   class Input { stopEditing() {} }
-  class Scroller { offset = 0; }
+  class Scroller { offset = 0; scrollTo(value) { this.offset = value.yOffset; } }
   class Clock extends Date { static now() { return now; } }
   const Page = factory(Api, Input, Scroller, { motion: () => 0, pageInset: 20 }, { EaseOut: '' },
-    agenda.shanghaiDate, agenda.buildDailyAgenda, presentation.formatPlanDateTime, Clock, PlanningActionController, validPlanningDate, quickCapture.parseQuickCapture, quickCapture.captureEndAt, courseReview.validCourseAcknowledgements);
+    agenda.shanghaiDate, agenda.buildDailyAgenda, presentation.formatPlanDateTime, Clock, PlanningActionController, validPlanningDate, quickCapture.parseQuickCapture, quickCapture.captureEndAt, courseReview.validCourseAcknowledgements, planningPageDependencies);
   const page = new Page();
   page.getUIContext = () => ({ animateTo: (_options, update) => update() });
   page.onInnerNavigationChanged = active => navigation.push(active);
@@ -158,7 +160,7 @@ test('timeline merges courses and offset-aware tasks, keeps overnight entries, a
     task('overnight', { start_at: '2026-10-19T23:00:00+08:00', end_at: '2026-10-20T01:00:00+08:00' }),
     task('allday', { source: 'manual', start_at: '2026-10-20T23:59:00+08:00', end_at: null }), task('undated', { start_at: null })];
   assert.deepEqual(page.dayTimeline().map(item => item.taskId || 'course'), ['overnight', 'early', 'course', 'late']);
-  assert.match(page.dayTimeline()[0].time, /2026-10-19 23:00/); assert.match(page.dayTimeline()[2].detail, /老师/);
+  assert.equal(page.dayTimeline()[0].time, '00:00–01:00'); assert.match(page.dayTimeline()[0].detail, /2026-10-19 23:00/); assert.match(page.dayTimeline()[2].detail, /老师/);
   assert.deepEqual(page.allDayTasks().map(item => item.task_id), ['allday']);
   assert.equal(page.selectedTasks().length, 4); assert.equal(page.unscheduledCount(), 1);
 });
@@ -173,12 +175,12 @@ test('all task filters retain complete arrays without the old five-row cap', () 
   page.selectTaskFilter('invalid'); assert.equal(page.taskFilter, 'undated');
 });
 
-test('undated filter is pending-only and malformed schedule values remain visible with an explicit warning', () => {
+test('unplaced-date filter is pending-only and malformed schedule values remain visible with an explicit warning', () => {
   const { page } = fixture(); page.selectedDate = '2026-10-20';
   page.overview.tasks = [task('undated', { start_at: null }), task('done', { start_at: null, status: 'completed' }),
     task('number', { start_at: 42 }), task('missing', { start_at: undefined }), task('invalid', { start_at: 'not-a-date' }),
     task('date-only', { start_at: '2026-10-20', end_at: null }), task('end-invalid', { end_at: 42 })];
-  page.selectTaskFilter('undated'); assert.deepEqual(page.filteredTasks().map(item => item.task_id), ['undated']);
+  page.selectTaskFilter('undated'); assert.deepEqual(page.filteredTasks().map(item => item.task_id).sort(), ['invalid', 'missing', 'number', 'undated']);
   page.selectTaskFilter('all'); assert.equal(page.filteredTasks().length, 7);
   for (const id of ['number', 'missing', 'invalid']) {
     assert.match(page.taskScheduleLabel(page.tasksForId(id)[0]), /时间格式异常/);
@@ -206,10 +208,10 @@ test('full plan grouping preserves empty milestones and unknown milestone tasks 
 });
 
 test('refresh cannot replace a newer focus and old hidden response cannot overwrite newer data', async () => {
-  const late = deferred(); const { page } = fixture({ context: () => late.promise });
+  const late = deferred(); const { page } = fixture({ timetable: () => late.promise });
   page.focusTaskId = 'old'; page.focusRevision = 1; page.focusChanged(); const read = page.reload(true);
   page.focusTaskId = 'new'; page.focusRevision = 2; page.focusChanged(); page.active = false; page.activityChanged();
-  late.resolve({ timetable: [{ title: 'stale' }] }); await read;
+  late.resolve(timetableSnapshot([{ title: 'stale' }])); await read;
   assert.equal(page.detailId, 'new'); assert.deepEqual(page.timetable, []);
 });
 

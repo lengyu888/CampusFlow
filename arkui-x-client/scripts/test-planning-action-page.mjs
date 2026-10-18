@@ -1,3 +1,4 @@
+import { planningPageDependencies, dependencyPrefix, timetableSnapshot, preferenceSnapshot } from './helpers/planning-overview-fixture.mjs';
 import { draftFixture } from './helpers/local-draft-fixture.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -19,7 +20,8 @@ async function fixture(handlers = {}) {
   const overview = { plans: [samplePlan()], tasks: [sampleTask()], total_tasks: 1, completed_tasks: 0, due_today: 0, overdue_tasks: 0, progress: 0 };
   class Api {
     async planning() { calls.push(['planning']); return clone(overview); }
-    async context() { return { timetable: [] }; }
+    async timetable() { return timetableSnapshot([]); }
+    async learningPreferences() { return preferenceSnapshot(); }
     async updateTask(id, completed) { calls.push(['toggle', id, completed]); if (handlers.toggle) return handlers.toggle(); }
     async previewPlanningAction(request) { calls.push(['preview', clone(request)]); action = candidate(request); if (handlers.preview) action = await handlers.preview(action); return clone(action); }
     async confirmAction(id, acknowledgements = []) {
@@ -36,9 +38,9 @@ async function fixture(handlers = {}) {
   }
   class Input { stopEditing() {} }
   const Page = new Function('CampusFlowApi', 'TextInputController', 'Scroller', 'AppTheme', 'Curve', 'shanghaiDate', 'buildDailyAgenda',
-    'localDrafts', 'formatPlanDateTime', 'PlanningActionController', 'editedPlanningTime', 'validPlanningDate', 'planningTimestamp', 'CampusFlowRequestError', 'parseQuickCapture', 'captureEndAt', 'validCourseAcknowledgements',
-    stripTypeScriptTypes(methods) + '\nreturn PlanCenterPage;')(Api, Input, class {}, { motion: () => 0 }, { EaseOut: '' },
-    agenda.shanghaiDate, agenda.buildDailyAgenda, drafts.store, presentation.formatPlanDateTime, PlanningActionController, editedPlanningTime, validPlanningDate, planningTimestamp, CampusFlowRequestError, quickCapture.parseQuickCapture, quickCapture.captureEndAt, courseReview.validCourseAcknowledgements);
+    'localDrafts', 'formatPlanDateTime', 'PlanningActionController', 'editedPlanningTime', 'validPlanningDate', 'planningTimestamp', 'CampusFlowRequestError', 'parseQuickCapture', 'captureEndAt', 'validCourseAcknowledgements', 'planningPageDependencies',
+    dependencyPrefix + stripTypeScriptTypes(methods) + '\nreturn PlanCenterPage;')(Api, Input, class {}, { motion: () => 0 }, { EaseOut: '' },
+    agenda.shanghaiDate, agenda.buildDailyAgenda, drafts.store, presentation.formatPlanDateTime, PlanningActionController, editedPlanningTime, validPlanningDate, planningTimestamp, CampusFlowRequestError, quickCapture.parseQuickCapture, quickCapture.captureEndAt, courseReview.validCourseAcknowledgements, planningPageDependencies);
   const page = new Page(); page.draftLease = drafts.lease; page.draftScopeChanged(); page.overview = clone(overview); page.getUIContext = () => ({ animateTo: (_, update) => update() });
   page.onPlanningChanged = () => changed.push(true);
   return { page, calls, changed, drafts, confirmationAcks };

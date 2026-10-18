@@ -1,7 +1,7 @@
 import { validCourseAcknowledgements } from '../utils/CourseReview';
 import { TaskCaptureIntent } from '../utils/TaskCaptureTypes';
 import { QuickCaptureIssue, parseQuickCapture, captureEndAt } from '../utils/QuickCaptureParser';
-import { CourseAcknowledgement } from '../model/ApiModels';
+import { CourseAcknowledgement, CourseOverlap } from '../model/ApiModels';
 import {
   PendingAction,
   PlanningTaskDraft,
@@ -11,7 +11,8 @@ import {
   PlanningOverview,
   PlanningTask,
   TimetableEntry,
-  UserContextResponse
+  DataEvidence,
+  LearningPreferenceSnapshot
 } from '../model/ApiModels';
 import { localDrafts } from '../services/LocalDrafts';
 import { DraftLease, DraftRecord, DraftOperation, DraftSaveState, NewTaskDraft } from '../utils/DraftStore';
@@ -25,7 +26,10 @@ import { PlanningActionPanel } from '../components/PlanningActionPanel';
 import { PlanningConflictsPanel } from '../components/PlanningConflictsPanel';
 import { CampusFlowRequestError } from '../utils/AgentFeedback';
 import { formatPlanDateTime } from '../utils/PlanPresentation';
-import { AgendaRow, DailyAgenda, buildDailyAgenda, shanghaiDate } from '../utils/DailyAgenda';
+import { EvidencePanel } from '../components/EvidencePanel';
+import { validPreferenceSnapshot } from '../utils/LearningPreferences';
+import { TaskQuery, TaskQueryResult, PlanningCourseRef, PlanningWeek, PlanningWeekRow, PlanningWeekDay, PlanningDayLoad, filterPlanningTasks, buildPlanningWeek, resolvePlanningCourse, dailyPlannedLoad, projectPlanningCandidate, validPlanningTimetable } from '../utils/PlanningOverview';
+import { DailyAgenda, buildDailyAgenda, shanghaiDate } from '../utils/DailyAgenda';
 
 interface CalendarDay {
   key: string;
@@ -43,6 +47,12 @@ interface PlanningTimelineItem {
   detail: string;
   taskId: string;
   completed: boolean;
+  courseRef: PlanningCourseRef | null;
+}
+
+interface PlanningCourseDetail {
+  reference: PlanningCourseRef;
+  evidence: DataEvidence[];
 }
 
 interface PlanningDetailFrame {
@@ -54,12 +64,12 @@ interface PlanningDetailFrame {
 
 @Component
 export struct PlanCenterPage {
-  @Prop baseUrl: string;
+  @Prop @Watch('connectionChanged') baseUrl: string;
   @Prop @Watch('captureRequested') captureOnly: boolean = false;
   @Prop @Watch('captureRequested') captureIntent: TaskCaptureIntent | null = null;
   @Prop @Watch('captureRequested') captureRevision: number = 0;
   onCloseCapture: () => void = () => {};
-  @Prop token: string;
+  @Prop @Watch('connectionChanged') token: string;
   @Prop @Watch('draftScopeChanged') draftLease: DraftLease | null = null;
   @Watch('refreshPlanning') @Prop refreshKey: number = 0;
   @Watch('activityChanged') @Prop active: boolean = true;
@@ -73,6 +83,7 @@ export struct PlanCenterPage {
   onInnerNavigationChanged: (active: boolean) => void = () => {};
   onOpenAgent: (prompt: string) => void = () => {};
   onPlanningChanged: () => void = () => {};
+  onOpenTimetable: () => void = () => {};
   @State private overview: PlanningOverview = {
     plans: [], tasks: [], total_tasks: 0, completed_tasks: 0, due_today: 0, overdue_tasks: 0, progress: 0
   };
@@ -88,6 +99,20 @@ export struct PlanCenterPage {
   private captureOpened: boolean = false;
   @State private errorText: string = '';
   @State private timetable: TimetableEntry[] = [];
+  @State private timetableRevision: string = '';
+  @State private timetableEvidence: DataEvidence[] = [];
+  @State private timetableState: string = 'idle';
+  @State private planningState: string = 'idle';
+  @State private preferencesState: string = 'idle';
+  @State private preferences: LearningPreferenceSnapshot | null = null;
+  @State private courseDetails: PlanningCourseDetail[] = [];
+  @State private scheduleMode: string = 'day';
+  @State private queryText: string = '';
+  @State private queryDateMode: string = 'all';
+  @State private queryFromDate: string = '';
+  @State private queryToDate: string = '';
+  @State private querySort: string = 'schedule';
+  @State private queryPage: number = 0;
   @State private calendarMonth: number = new Date(new Date().getFullYear(), new Date().getMonth(), 1).getTime();
   @State private selectedDate: string = '';
   @State private draftTaskDate: string = '';
@@ -188,7 +213,12 @@ export struct PlanCenterPage {
     this.pendingProposals = [];
     const lease = this.draftLease;
     if (this.draftBoundGeneration !== (lease?.generation ?? -1)) {
-      this.lifecycleRevision++;
+      this.lifecycleRevision++; this.requestRevision++;
+      this.clearQuery(); this.scheduleMode = 'day'; this.courseDetails = [];
+      this.timetable = []; this.timetableRevision = ''; this.timetableEvidence = []; this.timetableState = 'idle';
+      this.planningState = 'idle'; this.preferencesState = 'idle'; this.preferences = null; this.loaded = false;
+      this.overview = { plans: [], tasks: [], total_tasks: 0, completed_tasks: 0, due_today: 0, overdue_tasks: 0, progress: 0 };
+      this.clearDetails(); this.selectDay(shanghaiDate(Date.now()));
       this.title = ''; this.durationText = ''; this.allowDuringCourse = false; this.captureOriginalText = ''; this.captureIssues = [];
       this.captureOpened = false; this.capturePreviousStack = []; this.pendingCaptureIntent = null;
       this.draftTaskDate = shanghaiDate(Date.now()); this.draftDateChoice = 'today'; this.draftTaskTime = '';
@@ -442,7 +472,7 @@ export struct PlanCenterPage {
   }
 
   private openDetails(kind: string, id: string = ''): void {
-    if (!['task', 'plan', 'draft', 'conflicts', 'action', 'task-edit', 'plan-edit'].includes(kind)) { return; }
+    if (!['task', 'plan', 'course', 'draft', 'conflicts', 'action', 'task-edit', 'plan-edit'].includes(kind)) { return; }
     if (this.detailKind === kind && this.detailId === id) { return; }
     this.externalDetail = false;
     this.detailKind = kind;
@@ -504,6 +534,7 @@ export struct PlanCenterPage {
   }
 
   private detailTitle(): string {
+    if (this.detailKind === 'course') { return '课程详情'; }
     if (this.detailKind === 'action') { return '变更预览与回执'; }
     if (this.detailKind === 'task-edit') { return '编辑任务'; }
     if (this.detailKind === 'plan-edit') { return '编辑计划'; }
@@ -529,35 +560,46 @@ export struct PlanCenterPage {
     return this.overview.plans.filter((plan: PlanSummary) => plan.plan_id === id);
   }
 
-  private filteredTasks(): PlanningTask[] {
-    if (this.taskFilter === 'pending') {
-      return this.overview.tasks.filter((task: PlanningTask) => task.status === 'pending');
-    }
-    if (this.taskFilter === 'completed') {
-      return this.overview.tasks.filter((task: PlanningTask) => task.status === 'completed');
-    }
-    if (this.taskFilter === 'undated') {
-      return this.overview.tasks.filter((task: PlanningTask) => task.start_at === null && task.status === 'pending');
-    }
-    return this.overview.tasks;
+  private query(): TaskQuery {
+    return { text: this.queryText, status: this.taskFilter === 'completed' ? 'completed' : this.taskFilter === 'pending' || this.taskFilter === 'undated' ? 'pending' : 'all',
+      dateMode: this.taskFilter === 'undated' || this.queryDateMode === 'undated' ? 'undated' : this.queryDateMode === 'day' ? 'day' : this.queryDateMode === 'range' ? 'range' : 'all',
+      fromDate: this.queryDateMode === 'day' ? this.selectedDate : this.queryFromDate,
+      toDate: this.queryToDate, sort: this.querySort === 'created' ? 'created' : 'schedule' };
   }
 
+  private queryResult(): TaskQueryResult { return filterPlanningTasks(this.overview.tasks, this.query()); }
+  private filteredTasks(): PlanningTask[] { return this.queryResult().tasks; }
+  private visibleTasks(): PlanningTask[] {
+    const page = Math.min(this.queryPage, Math.max(0, Math.ceil(this.filteredTasks().length / 20) - 1));
+    return this.filteredTasks().slice(page * 20, page * 20 + 20);
+  }
+  private currentQueryPage(): number { return Math.min(this.queryPage, Math.max(0, Math.ceil(this.filteredTasks().length / 20) - 1)); }
+  private moveQueryPage(offset: number): void {
+    this.queryPage = Math.max(0, Math.min(this.currentQueryPage() + offset, Math.max(0, Math.ceil(this.filteredTasks().length / 20) - 1)));
+    this.tasksScroller.scrollTo({ xOffset: 0, yOffset: 0, animation: false });
+  }
+  private clearQuery(): void { this.taskFilter = 'all'; this.queryText = ''; this.queryDateMode = 'all'; this.queryFromDate = ''; this.queryToDate = ''; this.querySort = 'schedule'; this.queryPage = 0; }
   private selectTaskFilter(filter: string): void {
-    if (['all', 'pending', 'completed', 'undated'].includes(filter)) { this.taskFilter = filter; }
+    if (!['all', 'pending', 'completed', 'undated'].includes(filter)) { return; }
+    if (this.taskFilter === 'undated') { this.queryDateMode = 'all'; }
+    this.taskFilter = filter; this.queryPage = 0;
+  }
+  private selectQueryDate(value: string): void {
+    if (!['all', 'day', 'range', 'undated'].includes(value)) { return; }
+    if (this.taskFilter === 'undated') { this.taskFilter = 'pending'; }
+    this.queryDateMode = value; this.queryPage = 0;
+    if (value === 'range' && this.queryFromDate.length === 0) { this.queryFromDate = this.selectedDate; this.queryToDate = this.selectedDate; }
   }
 
+  private week(): PlanningWeek { return buildPlanningWeek(this.timetable, this.timetableRevision, this.overview.tasks, this.selectedDate); }
   private weekDays(): CalendarDay[] {
-    const parts = this.selectedDate.split('-');
-    const selected = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
-    const result: CalendarDay[] = [];
-    for (let offset = -3; offset <= 3; offset++) {
-      const date = new Date(selected.getFullYear(), selected.getMonth(), selected.getDate() + offset);
-      const key = this.dateKey(date);
-      result.push({ key: key, day: date.getDate(), date: key,
-        courseCount: this.timetable.filter((course: TimetableEntry) => course.date === key).length,
-        taskCount: this.overview.tasks.filter((task: PlanningTask) => this.taskDate(task) === key).length });
-    }
-    return result;
+    return this.week().days.map((day: PlanningWeekDay) => ({ key: day.date, day: Number(day.date.substring(8)), date: day.date,
+      courseCount: day.rows.filter((row: PlanningWeekRow) => row.kind === 'course').length,
+      taskCount: day.rows.filter((row: PlanningWeekRow) => row.kind === 'task').length + day.allDay.length }));
+  }
+  private moveWeek(offset: number): void {
+    const date = shanghaiDate(Date.parse(`${this.selectedDate}T12:00:00+08:00`) + offset * 7 * 86400000);
+    if (validPlanningDate(date)) { this.selectDay(date); }
   }
 
   private selectDay(date: string): void {
@@ -575,18 +617,79 @@ export struct PlanCenterPage {
       task.start_at === null || typeof task.start_at === 'string'), Date.parse(`${this.selectedDate}T12:00:00+08:00`));
   }
 
-  private dayTimeline(): PlanningTimelineItem[] {
-    return this.agendaForDate().rows.map((row: AgendaRow): PlanningTimelineItem => {
-      const start = row.date === this.selectedDate ? row.startTime : `${row.date} ${row.startTime}`;
-      const end = row.endTime.length === 0 ? '' : row.endDate === this.selectedDate ? row.endTime : `${row.endDate} ${row.endTime}`;
-      const course = row.kind === 'course' ? this.timetable.find((item: TimetableEntry) =>
-        item.date === row.date && item.start_time === row.startTime && item.title === row.title && item.location === row.location) : undefined;
-      return { key: row.id, kind: row.kind === 'course' ? '课程' : '任务',
-        time: end.length === 0 ? start : `${start}–${end}`, title: row.title,
-        detail: `${row.location}${course !== undefined && course.teacher.length > 0 ? ` · ${course.teacher}` : ''}`,
-        taskId: row.taskId ?? '', completed: row.done };
+  private timelineFor(date: string): PlanningTimelineItem[] {
+    return (this.week().days.find((day: PlanningWeekDay) => day.date === date)?.rows ?? []).map((row: PlanningWeekRow): PlanningTimelineItem => {
+      const start = row.segmentStartMs > row.startMs ? '00:00' : row.startTime;
+      const end = row.segmentEndMs === null ? '结束未设置' : shanghaiDate(row.segmentEndMs) !== date ? '24:00' : formatPlanDateTime(new Date(row.segmentEndMs).toISOString()).substring(11);
+      const teacher = row.courseRef?.course.teacher ?? '';
+      let detail = row.location + (teacher.length > 0 ? `${row.location.length > 0 ? ' · ' : ''}${teacher}` : '');
+      if (row.endMs !== null && row.date !== row.endDate) {
+        detail += `${detail.length > 0 ? ' · ' : ''}跨日完整时段 ${row.date} ${row.startTime} 至 ${row.endDate} ${row.endTime}`;
+      }
+      return { key: row.id, kind: row.kind === 'course' ? '课程' : '任务', time: `${start}–${end}`, title: row.title,
+        detail: detail, taskId: row.taskId ?? '', completed: row.done, courseRef: row.courseRef };
     });
   }
+  private dayTimeline(): PlanningTimelineItem[] { return this.timelineFor(this.selectedDate); }
+  private openTimeline(item: PlanningTimelineItem): void {
+    if (item.taskId.length > 0) { this.openDetails('task', item.taskId); }
+    else if (item.courseRef !== null) { this.openCourse(item.courseRef); }
+  }
+  private openCourse(reference: PlanningCourseRef): void {
+    this.courseDetails = this.courseDetails.filter((item: PlanningCourseDetail) => item.reference.key !== reference.key)
+      .concat([{ reference: reference, evidence: this.timetableEvidence.slice() }]);
+    this.openDetails('course', reference.key);
+  }
+  private courseFor(id: string): PlanningCourseDetail[] { return this.courseDetails.filter((item: PlanningCourseDetail) => item.reference.key === id); }
+  private courseCurrent(reference: PlanningCourseRef): boolean { return resolvePlanningCourse(reference, this.timetable, this.timetableRevision) !== null; }
+  private sourcesComplete(): boolean { return this.timetableState === 'ready' && this.planningState === 'ready'; }
+  private sourceLabel(state: string, noun: string): string {
+    return state === 'ready' ? `${noun}已读取` : state === 'loading' ? `正在核对${noun}` : state === 'error' ? `${noun}读取失败；已加载内容可能过时` : `${noun}尚未读取`;
+  }
+  private taskSource(task: PlanningTask): string { return task.source === 'manual' ? '手动记录' : task.source === 'agent' ? '助手安排' : '已保存任务'; }
+  private overlapLabel(task: PlanningTask): string {
+    if (task.course_overlap?.state === 'accepted') { return '已确认课内安排'; }
+    if (task.course_overlap?.state === 'needs_review') { return '课程重叠需要重新核对'; }
+    if (task.course_overlap?.state === 'blocked') { return '与课程冲突，请调整'; }
+    if (task.course_overlap?.state === 'unchecked') { return '起止时段尚未完整核对'; }
+    return task.allow_during_course === true ? (task.course_overlap?.state === 'none' ? '允许课内完成；当前没有课程重叠' : '允许课内完成；课程重叠尚未核对') : '';
+  }
+  private dayLoad(date: string): PlanningDayLoad { return dailyPlannedLoad(this.timetable, this.overview.tasks, date); }
+  private previewLoadDate(): string {
+    const action = this.actionState.action;
+    const date = formatPlanDateTime(action?.payload.task?.start_at ?? action?.before_task?.start_at ?? null).substring(0, 10);
+    return validPlanningDate(date) ? date : this.selectedDate;
+  }
+  private projectedTasks(): PlanningTask[] | null {
+    const action = this.actionState.action;
+    if (action === null || action.status !== 'pending' || action.kind !== 'task') { return null; }
+    if (action.action === 'delete') { return this.overview.tasks.some((task: PlanningTask) => task.task_id === action.target_task_id) ? this.overview.tasks.filter((task: PlanningTask) => task.task_id !== action.target_task_id) : null; }
+    if (action.payload.task === undefined) { return null; }
+    // This page creates manual tasks; new servers also echo the exact source in the candidate.
+    const source = action.payload.source ?? 'manual';
+    if (!['manual', 'agent'].includes(source)) { return null; }
+    const result = projectPlanningCandidate(this.overview.tasks, { task: action.payload.task,
+      replaceTaskId: action.action === 'update' ? action.target_task_id ?? null : null, source: source });
+    return result.valid ? result.tasks : null;
+  }
+  private candidateLoad(): PlanningDayLoad { return dailyPlannedLoad(this.timetable, this.projectedTasks() ?? this.overview.tasks, this.previewLoadDate()); }
+  private loadTargetMessage(load: PlanningDayLoad): string {
+    if (!this.sourcesComplete() || this.preferencesState !== 'ready' || this.preferences?.enabled !== true || this.preferences.updated_at === null) { return ''; }
+    return load.taskMinutes > this.preferences.daily_minutes ?
+      `已排任务 ${this.minutes(load.taskMinutes)} 分钟，高于你设置的每日 ${this.preferences.daily_minutes} 分钟学习偏好。可按实际精力调整；不会自动删改任务。` :
+      `每日学习偏好 ${this.preferences.daily_minutes} 分钟；这里只比较已排任务，不计课程。`;
+  }
+
+  private minutes(value: number): string { return Number.isInteger(value) ? `${value}` : value.toFixed(1); }
+  private loadExclusions(load: PlanningDayLoad): string {
+    return `${load.allDayCount} 项全天、${load.undatedCount} 项无日期、${load.incompleteTaskCount} 项缺结束时间未计时长；${load.invalidCourseCount + load.invalidTaskCount} 项时间异常需核对。`;
+  }
+  private taskRowDate(task: PlanningTask): string {
+    const date = this.taskDate(task);
+    return date.length > 0 ? date : task.start_at === null || task.start_at === '' ? '无日期' : '日期需核对';
+  }
+  private openWeekDay(date: string): void { this.selectDay(date); this.scheduleMode = 'day'; }
+  private openUndated(): void { this.taskFilter = 'pending'; this.queryDateMode = 'undated'; this.queryText = ''; this.queryPage = 0; this.selectView('tasks'); }
 
   private dateKey(date: Date): string {
     const month = `${date.getMonth() + 1}`.padStart(2, '0');
@@ -778,39 +881,56 @@ export struct PlanCenterPage {
     });
   }
 
+  private connectionChanged(): void {
+    this.requestRevision++; this.lifecycleRevision++; this.clearQuery(); this.clearDetails(); this.courseDetails = [];
+    this.actionController?.dispose(); this.actionController = null; this.actionState = { phase: 'idle', action: null, message: '' };
+    this.timetable = []; this.timetableRevision = ''; this.timetableEvidence = []; this.timetableState = 'idle';
+    this.overview = { plans: [], tasks: [], total_tasks: 0, completed_tasks: 0, due_today: 0, overdue_tasks: 0, progress: 0 };
+    this.planningState = 'idle'; this.loaded = false; this.preferences = null; this.preferencesState = 'idle';
+    if (this.active && this.pageActive) { this.reload(true); }
+  }
+  private readCurrent(revision: number, base: string, token: string): boolean {
+    return this.pageActive && this.active && revision === this.requestRevision && base === this.baseUrl && token === this.token;
+  }
+  private async readPlanning(api: CampusFlowApi, revision: number, base: string, token: string): Promise<void> {
+    this.planningState = 'loading';
+    try {
+      const overview = await api.planning();
+      if (!this.readCurrent(revision, base, token)) { return; }
+      if (overview === null || !Array.isArray(overview.tasks) || !Array.isArray(overview.plans)) { throw new Error('invalid planning'); }
+      this.overview = overview; this.planningRevision++; this.loaded = true; this.planningState = 'ready'; this.errorText = '';
+      this.expandedPlanIds = this.expandedPlanIds.filter((id: string) => overview.plans.some((plan: PlanSummary) => plan.plan_id === id));
+    } catch { if (this.readCurrent(revision, base, token)) { this.planningState = 'error'; this.errorText = '计划读取失败，已有内容未清除；请重新核对。'; } }
+  }
+  private async readTimetable(api: CampusFlowApi, revision: number, base: string, token: string): Promise<void> {
+    this.timetableState = 'loading';
+    try {
+      const snapshot = await api.timetable();
+      if (!this.readCurrent(revision, base, token)) { return; }
+      if (!validPlanningTimetable(snapshot)) { throw new Error('invalid timetable'); }
+      this.timetable = snapshot.entries; this.timetableRevision = snapshot.revision;
+      this.timetableEvidence = snapshot.evidence ?? []; this.timetableState = 'ready'; this.timetableNeedsRefresh = false;
+    } catch { if (this.readCurrent(revision, base, token)) { this.timetableState = 'error'; } }
+  }
+  private async readPreferences(api: CampusFlowApi, revision: number, base: string, token: string): Promise<void> {
+    this.preferencesState = 'loading';
+    try {
+      const value = await api.learningPreferences();
+      if (!this.readCurrent(revision, base, token)) { return; }
+      if (!validPreferenceSnapshot(value)) { throw new Error('invalid preferences'); }
+      this.preferences = value; this.preferencesState = 'ready';
+    } catch { if (this.readCurrent(revision, base, token)) { this.preferencesState = 'error'; } }
+  }
   private async reload(includeTimetable: boolean = false): Promise<void> {
     if (!this.pageActive || !this.active) { return; }
-    if (includeTimetable) { this.timetableNeedsRefresh = true; }
-    const revision = ++this.requestRevision;
-    this.loading = true;
-    try {
-      const api = new CampusFlowApi(this.baseUrl, this.token);
-      // Apply a navigation refresh as one generation; a failed/older read keeps the previous snapshot.
-      const context: UserContextResponse | null = this.timetableNeedsRefresh ? await api.context() : null;
-      if (!this.pageActive || !this.active || revision !== this.requestRevision) { return; }
-      const overview = await api.planning();
-      if (!this.pageActive || !this.active || revision !== this.requestRevision) { return; }
-      this.getUIContext().animateTo({ duration: AppTheme.motion(180), curve: Curve.EaseOut }, () => {
-        if (!this.pageActive || !this.active || revision !== this.requestRevision) { return; }
-        // 成功刷新后重建计划内容，避免 ForEach 复用旧对象；展开状态仍按计划 ID 保留。
-        this.planningRevision++;
-        this.overview = overview;
-        this.loaded = true;
-        if (context !== null) {
-          this.timetable = context.timetable;
-          this.timetableNeedsRefresh = false;
-        }
-        this.expandedPlanIds = this.expandedPlanIds.filter((id: string) =>
-          overview.plans.some((plan: PlanSummary) => plan.plan_id === id));
-      });
-      this.errorText = '';
-    } catch (error) {
-      if (this.pageActive && this.active && revision === this.requestRevision) {
-        this.errorText = '计划加载失败，请重试；已有内容未被清除。';
-      }
-    } finally {
-      if (this.pageActive && this.active && revision === this.requestRevision) { this.loading = false; }
-    }
+    if (includeTimetable || this.timetableState !== 'ready') { this.timetableNeedsRefresh = true; }
+    const revision = ++this.requestRevision; const base = this.baseUrl; const token = this.token;
+    this.loading = true; const api = new CampusFlowApi(base, token);
+    // Independent sources share a generation, not a false all-or-nothing freshness claim.
+    const reads: Promise<void>[] = [this.readPlanning(api, revision, base, token), this.readPreferences(api, revision, base, token)];
+    if (this.timetableNeedsRefresh) { reads.push(this.readTimetable(api, revision, base, token)); }
+    await Promise.all(reads);
+    if (this.readCurrent(revision, base, token)) { this.loading = false; }
   }
 
   private actionManager(): PlanningActionController {
@@ -1013,11 +1133,11 @@ export struct PlanCenterPage {
   }
 
   private planPrompt(): string {
-    return '请读取我的课表和未完成待办，为未来 7 天制定一份可执行的学习计划。要求避开课程冲突，拆分里程碑和具体任务，为每项任务设置明确时间、地点与提醒；先展示提案，等我确认后再写入规划。';
+    return `请读取我的课表和未完成待办，为北京时间 ${this.week().startDate} 至 ${this.week().endDate} 制定一份可执行的学习计划。要求避开课程冲突，拆分里程碑和具体任务，为每项任务设置明确时间、地点与提醒；先展示提案，等我确认后再写入规划。`;
   }
 
   private reviewPrompt(): string {
-    return '请结合我的近期课程和未完成任务，安排今天晚上的复习计划。先检查时间冲突，给出具体时间段和提醒，等待我确认后再写入。';
+    return `请根据北京时间 ${this.selectedDate} 这一天的课程和未完成任务安排学习。请先核对完整起止时间、课程重叠和已有待办，再给出待确认候选；不假定今天或今晚，不自动执行。`;
   }
 
   private toggleCalendar(): void {
@@ -1039,54 +1159,141 @@ export struct PlanCenterPage {
   }
 
   @Builder
+  private SourceStatus() {
+    Column({ space: 8 }) {
+      Text(`${this.sourceLabel(this.timetableState, '课表')} · ${this.sourceLabel(this.planningState, '任务')}`)
+        .fontSize(AppTheme.metaSize).fontColor(this.sourcesComplete() ? AppTheme.secondary : AppTheme.warning)
+        .width('100%').wordBreak(WordBreak.BREAK_WORD)
+      if (!this.sourcesComplete()) {
+        Text('这里只显示已读到的安排；缺少来源不能据此判断有空。').fontSize(AppTheme.metaSize)
+          .fontColor(AppTheme.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+        Button('重新核对课表与任务').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
+          .fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft).enabled(!this.loading).onClick(() => this.reload(true))
+      }
+      EvidencePanel({ evidence: this.timetableEvidence, active: this.active && this.detailKind.length === 0 && this.currentView === 'schedule' })
+    }.width('100%').alignItems(HorizontalAlign.Start)
+  }
+
+  @Builder
+  private TimelineRow(item: PlanningTimelineItem) {
+    Row({ space: 4 }) {
+      Button({ type: ButtonType.Normal }) {
+        Row({ space: 12 }) {
+          Text(item.time).fontSize(AppTheme.metaSize).fontWeight(FontWeight.Medium).fontColor(AppTheme.accent)
+            .width(76).wordBreak(WordBreak.BREAK_WORD)
+          Column({ space: 4 }) {
+            Text(item.title).fontSize(AppTheme.bodySize).fontWeight(FontWeight.Medium).fontColor(AppTheme.ink)
+              .width('100%').wordBreak(WordBreak.BREAK_WORD)
+              .decoration({ type: item.completed ? TextDecorationType.LineThrough : TextDecorationType.None })
+            Text(`${item.kind}${item.completed ? ' · 已完成' : ''}${item.detail.length > 0 ? ` · ${item.detail}` : ' · 未设置地点'}`)
+              .fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+            ForEach(this.tasksForId(item.taskId), (task: PlanningTask) => {
+              if (this.overlapLabel(task).length > 0) {
+                Text(this.overlapLabel(task)).fontSize(AppTheme.metaSize).fontColor(AppTheme.warning).width('100%').wordBreak(WordBreak.BREAK_WORD)
+              }
+              if (this.taskOverdue(task)) { Text('时间已过 · 尚待处理').fontSize(AppTheme.metaSize).fontColor(AppTheme.danger).width('100%') }
+            }, (task: PlanningTask) => task.task_id)
+          }.layoutWeight(1).alignItems(HorizontalAlign.Start)
+        }.width('100%').alignItems(VerticalAlign.Top)
+      }.layoutWeight(1).constraintSize({ minHeight: 56 }).padding({ top: 12, bottom: 12 })
+        .backgroundColor(Color.Transparent).borderRadius(AppTheme.controlRadius)
+        .accessibilityText(`${item.kind}详情：${item.title}，${item.time}`).onClick(() => this.openTimeline(item))
+      ForEach(this.tasksForId(item.taskId), (task: PlanningTask) => { this.TaskCheck(task) }, (task: PlanningTask) => task.task_id)
+    }.width('100%').alignItems(VerticalAlign.Top)
+  }
+
+  @Builder
   private DayTimeline() {
     Column({ space: 12 }) {
-      Row({ space: 8 }) {
-        Text(this.selectedDate).fontSize(AppTheme.sectionTitle).fontWeight(FontWeight.Medium)
-          .fontColor(AppTheme.ink).layoutWeight(1)
-        Text(`${this.selectedCourses().length} 节课 · ${this.selectedTasks().length} 项任务`)
-          .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet)
+      Text(this.selectedDate).fontSize(AppTheme.sectionTitle).fontWeight(FontWeight.Medium).fontColor(AppTheme.ink).width('100%')
+      Text('北京时间 · 课程与定时任务').fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
+      if (this.dayTimeline().length === 0 && this.sourcesComplete()) {
+        Text('这一天没有已读取的定时安排。全天与无日期待办仍在下方。')
+          .fontSize(AppTheme.bodySize).fontColor(AppTheme.secondary).width('100%')
+      }
+      Column() {
+        ForEach(this.dayTimeline(), (item: PlanningTimelineItem) => {
+          this.TimelineRow(item)
+          Divider().color(AppTheme.outline)
+        }, (item: PlanningTimelineItem) => `${item.key}-${this.planningRevision}`)
       }.width('100%')
-      Text('北京时间 · 课程与定时任务').fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
-      if (this.dayTimeline().length === 0 && !this.loading && this.loaded) {
-        Text('这一天还没有明确时段的安排。全天待办在下方单独列出。')
-          .fontSize(AppTheme.bodySize).fontColor(AppTheme.quiet).width('100%').padding(16)
-          .backgroundColor(AppTheme.surface).borderRadius(AppTheme.cardRadius)
-      }
-      ForEach(this.dayTimeline(), (item: PlanningTimelineItem) => {
-        Column({ space: 8 }) {
-          Row({ space: 8 }) {
-            Text(item.time).fontSize(AppTheme.bodySize).fontWeight(FontWeight.Medium).fontColor(AppTheme.accent)
-              .layoutWeight(1).wordBreak(WordBreak.BREAK_WORD)
-            Text(item.completed ? '任务 · 已完成' : item.kind).fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet)
-          }.width('100%')
-          Text(item.title).fontSize(AppTheme.bodySize).fontWeight(FontWeight.Medium).fontColor(AppTheme.ink)
-            .width('100%').wordBreak(WordBreak.BREAK_WORD)
-            .decoration({ type: item.completed ? TextDecorationType.LineThrough : TextDecorationType.None })
-          Text(item.detail.length > 0 ? item.detail : '未设置地点').fontSize(AppTheme.metaSize)
-            .fontColor(AppTheme.quiet).width('100%').wordBreak(WordBreak.BREAK_WORD)
-          if (item.taskId.length > 0) {
-            Button('查看任务详情').constraintSize({ minHeight: 48 }).width('100%')
-              .fontSize(AppTheme.bodySize).fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft)
-              .borderRadius(AppTheme.controlRadius).onClick(() => this.openDetails('task', item.taskId))
-          }
-        }.width('100%').alignItems(HorizontalAlign.Start).padding(AppTheme.cardInset)
-          .backgroundColor(AppTheme.surface).borderRadius(AppTheme.cardRadius)
-      }, (item: PlanningTimelineItem) => `${item.key}-${this.planningRevision}`)
       if (this.allDayTasks().length > 0) {
-        Text('全天 · 未指定时段').fontSize(AppTheme.sectionTitle).fontWeight(FontWeight.Medium)
-          .fontColor(AppTheme.ink).width('100%')
-        ForEach(this.allDayTasks(), (task: PlanningTask) => {
-          this.TaskRow(task)
-        }, (task: PlanningTask) => `${task.task_id}-${this.planningRevision}`)
+        Text('全天 · 未指定时段').fontSize(AppTheme.sectionTitle).fontWeight(FontWeight.Medium).fontColor(AppTheme.ink).width('100%')
+        ForEach(this.allDayTasks(), (task: PlanningTask) => { this.TaskRow(task) }, (task: PlanningTask) => `${task.task_id}-${this.planningRevision}`)
       }
-      Button(`查看无日期待办（${this.unscheduledCount()} 项待完成）`).width('100%').constraintSize({ minHeight: 48 })
+      Button('查看无日期 / 时间需核对的待办').width('100%').constraintSize({ minHeight: 48 })
         .fontSize(AppTheme.bodySize).fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft)
-        .borderRadius(AppTheme.controlRadius).onClick(() => {
-          this.selectTaskFilter('undated');
-          this.selectView('tasks');
-        })
+        .borderRadius(AppTheme.controlRadius).onClick(() => this.openUndated())
+    }.width('100%').alignItems(HorizontalAlign.Start).padding(AppTheme.cardInset)
+      .backgroundColor(AppTheme.surface).borderRadius(AppTheme.cardRadius)
+  }
+
+  @Builder
+  private WeekOverview() {
+    Column({ space: 16 }) {
+      Text('一周总览 · 周一至周日').fontSize(AppTheme.sectionTitle).fontWeight(FontWeight.Medium).fontColor(AppTheme.ink).width('100%')
+      Text('同一时段的安排逐项列出；全天待办单独显示，不代表可同时完成。')
+        .fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+      if (!this.week().valid) { Text(this.week().message).fontSize(AppTheme.bodySize).fontColor(AppTheme.warning).width('100%') }
+      ForEach(this.week().days, (day: PlanningWeekDay, index: number) => {
+        Column({ space: 8 }) {
+          Button({ type: ButtonType.Normal }) {
+            Row({ space: 8 }) {
+              Text(`周${['一', '二', '三', '四', '五', '六', '日'][index]} · ${day.date}`).fontSize(AppTheme.bodySize)
+                .fontWeight(FontWeight.Medium).fontColor(AppTheme.ink).layoutWeight(1).wordBreak(WordBreak.BREAK_WORD)
+              AppIcon({ name: 'chevron', iconSize: 16, color: AppTheme.accent })
+            }.width('100%')
+          }.width('100%').constraintSize({ minHeight: 48 }).backgroundColor(Color.Transparent).padding(0)
+            .accessibilityText(`打开 ${day.date} 日程`).onClick(() => this.openWeekDay(day.date))
+          if (day.rows.length === 0 && day.allDay.length === 0) {
+            Text(this.sourcesComplete() ? '暂无已排安排' : '尚无已读取安排，来源待核对').fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
+          }
+          ForEach(this.timelineFor(day.date), (item: PlanningTimelineItem) => {
+            this.TimelineRow(item)
+            Divider().color(AppTheme.outline)
+          }, (item: PlanningTimelineItem) => `${item.key}-${this.planningRevision}`)
+          if (day.allDay.length > 0) {
+            Text('全天').fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
+            ForEach(day.allDay, (task: PlanningTask) => { this.TaskRow(task) }, (task: PlanningTask) => `${task.task_id}-${this.planningRevision}`)
+          }
+        }.width('100%').padding(AppTheme.cardInset).backgroundColor(AppTheme.surface).borderRadius(AppTheme.cardRadius)
+      }, (day: PlanningWeekDay) => `${day.date}-${this.planningRevision}-${this.timetableRevision}`)
+      if (this.week().undated.length > 0) {
+        Text(`尚未归入日期 · ${this.week().undated.length} 项`).fontSize(AppTheme.sectionTitle).fontColor(AppTheme.ink).width('100%')
+        Text('包含无日期与时间异常项目，可到全部待办逐项核对。').fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
+        ForEach(this.week().undated, (task: PlanningTask) => { this.TaskRow(task) }, (task: PlanningTask) => `${task.task_id}-${this.planningRevision}`)
+      }
+      if (this.week().unplacedCourses.length > 0) {
+        Text('部分课程时间异常，未纳入周时段，请在课表中核对。').fontSize(AppTheme.bodySize).fontColor(AppTheme.warning).width('100%')
+        Button('打开课表核对').constraintSize({ minHeight: 48 }).onClick(() => this.onOpenTimetable())
+      }
     }.width('100%').alignItems(HorizontalAlign.Start)
+  }
+
+  @Builder
+  private LoadSummary(load: PlanningDayLoad, label: string) {
+    Column({ space: 8 }) {
+      Text(`${label} · ${load.date}`).fontSize(AppTheme.sectionTitle).fontWeight(FontWeight.Medium).fontColor(AppTheme.ink).width('100%')
+      if (!this.sourcesComplete()) {
+        Text('课表或任务尚未完整核对，暂不判断预计负荷。').fontSize(AppTheme.bodySize).fontColor(AppTheme.warning).width('100%')
+      } else if (!load.valid) {
+        Text(load.message).fontSize(AppTheme.bodySize).fontColor(AppTheme.warning).width('100%')
+      } else {
+        Text(`课程 ${this.minutes(load.courseMinutes)} 分钟 · 任务 ${this.minutes(load.taskMinutes)} 分钟`)
+          .fontSize(AppTheme.bodySize).fontColor(AppTheme.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
+        Text(`合计占用 ${this.minutes(load.totalMinutes)} 分钟 · 重叠时段只计一次`)
+          .fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
+        Text(this.loadExclusions(load)).fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+        Text('依据已排起止时段估算，包含已完成安排；不是实际学习时长，也不会自动改动任务。')
+          .fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+        if (this.loadTargetMessage(load).length > 0) {
+          Text(this.loadTargetMessage(load)).fontSize(AppTheme.metaSize).fontColor(AppTheme.warning).width('100%').wordBreak(WordBreak.BREAK_WORD)
+        } else if (this.preferencesState !== 'ready') {
+          Text('学习偏好尚未核对，不套用每日目标。').fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
+        }
+      }
+    }.width('100%').alignItems(HorizontalAlign.Start).padding(AppTheme.cardInset)
+      .backgroundColor(AppTheme.surface).borderRadius(AppTheme.cardRadius)
   }
 
   @Builder
@@ -1152,16 +1359,8 @@ export struct PlanCenterPage {
             Text('这个里程碑下暂无任务。').fontSize(AppTheme.bodySize).fontColor(AppTheme.quiet).width('100%')
           }
           ForEach(this.milestoneTasks(plan.plan_id, milestone.milestone_id), (task: PlanningTask) => {
-            this.PlanTask(task)
-            if (task.allow_during_course === true || (task.course_overlap?.overlaps.length ?? 0) > 0) {
-              Text(task.course_overlap?.state === 'accepted' ? '已确认课内安排；只适用于当前任务和课表' :
-                task.course_overlap?.state === 'none' ? '允许课内完成；当前没有课程重叠' :
-                task.course_overlap?.state === 'unchecked' ? '允许课内完成；起止时间或课表尚未完整核对' :
-                task.allow_during_course === true ? '允许课内完成；当前重叠仍需重新核对' : '当前时段与课程重叠，请调整时间')
-                .fontSize(AppTheme.bodySize).fontColor(AppTheme.warning).width('100%')
-            }
-            this.TaskDetailLink(task)
-          }, (task: PlanningTask) => `${task.task_id}-${task.status}-${task.completed_at ?? ''}`)
+            this.TaskRow(task)
+          }, (task: PlanningTask) => `${task.task_id}-${this.planningRevision}`)
         }.width('100%').alignItems(HorizontalAlign.Start)
       }, (milestone: PlanMilestone) => `${plan.plan_id}-${milestone.milestone_id}`)
       if (this.ungroupedPlanTasks(plan).length > 0) {
@@ -1170,8 +1369,7 @@ export struct PlanCenterPage {
           Text('未归入里程碑的任务').fontSize(AppTheme.bodySize).fontWeight(FontWeight.Medium)
             .fontColor(AppTheme.ink).width('100%')
           ForEach(this.ungroupedPlanTasks(plan), (task: PlanningTask) => {
-            this.PlanTask(task)
-            this.TaskDetailLink(task)
+            this.TaskRow(task)
           }, (task: PlanningTask) => `${task.task_id}-${task.status}-${task.completed_at ?? ''}`)
         }.width('100%').alignItems(HorizontalAlign.Start)
       } else if (plan.milestones.length === 0) {
@@ -1444,58 +1642,104 @@ export struct PlanCenterPage {
 
   @Builder
   private TaskRow(task: PlanningTask) {
-    Row({ space: 8 }) {
-      this.TaskCheck(task)
+    Row({ space: 4 }) {
       Button({ type: ButtonType.Normal }) {
-        Column({ space: 8 }) {
-          Text(task.title).fontSize(AppTheme.bodySize).fontWeight(FontWeight.Medium).fontColor(AppTheme.ink)
-            .decoration({ type: task.status === 'completed' ? TextDecorationType.LineThrough : TextDecorationType.None })
-            .width('100%').wordBreak(WordBreak.BREAK_WORD)
-          Text(`${this.taskScheduleLabel(task)} · ${task.status === 'completed' ? '已完成' : '待完成'}`)
-            .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%').wordBreak(WordBreak.BREAK_WORD)
-          if (this.taskOverdue(task)) {
-            Text('已逾期').fontSize(AppTheme.metaSize).fontColor(AppTheme.danger)
-          }
-        }.width('100%').alignItems(HorizontalAlign.Start)
-      }.layoutWeight(1).constraintSize({ minHeight: 48 }).padding({ top: 8, bottom: 8 })
+        Row({ space: 12 }) {
+          Column({ space: 4 }) {
+            Text(this.taskRowDate(task)).fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+            Text(this.taskTime(task)).fontSize(AppTheme.metaSize).fontWeight(FontWeight.Medium).fontColor(AppTheme.accent).width('100%').wordBreak(WordBreak.BREAK_WORD)
+          }.width(76).alignItems(HorizontalAlign.Start)
+          Column({ space: 4 }) {
+            Text(task.title).fontSize(AppTheme.bodySize).fontWeight(FontWeight.Medium).fontColor(AppTheme.ink)
+              .decoration({ type: task.status === 'completed' ? TextDecorationType.LineThrough : TextDecorationType.None })
+              .width('100%').wordBreak(WordBreak.BREAK_WORD)
+            Text(`${this.taskSource(task)} · ${task.status === 'completed' ? '已完成' : '待完成'}${task.location ? ` · ${task.location}` : ''}`)
+              .fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+            if (this.overlapLabel(task).length > 0) { Text(this.overlapLabel(task)).fontSize(AppTheme.metaSize).fontColor(AppTheme.warning).width('100%').wordBreak(WordBreak.BREAK_WORD) }
+            if (this.taskOverdue(task)) { Text('时间已过 · 尚待处理').fontSize(AppTheme.metaSize).fontColor(AppTheme.danger).width('100%') }
+          }.layoutWeight(1).alignItems(HorizontalAlign.Start)
+        }.width('100%').alignItems(VerticalAlign.Top)
+      }.layoutWeight(1).constraintSize({ minHeight: 56 }).padding({ top: 12, bottom: 12 })
         .backgroundColor(Color.Transparent).borderRadius(AppTheme.controlRadius)
         .accessibilityText(`查看任务详情：${task.title}`).onClick(() => this.openDetails('task', task.task_id))
-      AppIcon({ name: 'chevron', iconSize: 16, color: AppTheme.quiet })
-    }.width('100%').alignItems(VerticalAlign.Top).padding(12)
-      .backgroundColor(AppTheme.surface).borderRadius(AppTheme.cardRadius)
+      this.TaskCheck(task)
+    }.width('100%').alignItems(VerticalAlign.Top).padding({ left: 12, right: 8 })
+      .backgroundColor(AppTheme.surface).borderRadius(AppTheme.controlRadius)
   }
 
   @Builder
   private TaskFilter(label: string, filter: string) {
-    Button(label).layoutWeight(1).constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
-      .fontColor(this.taskFilter === filter ? AppTheme.onAccent : AppTheme.quiet)
-      .backgroundColor(this.taskFilter === filter ? AppTheme.accent : AppTheme.surface)
-      .borderRadius(AppTheme.controlRadius)
-      .accessibilityText(`${label}${this.taskFilter === filter ? '，已选中' : ''}`)
-      .onClick(() => this.selectTaskFilter(filter))
+    Button({ type: ButtonType.Normal }) {
+      Text(label).fontSize(AppTheme.bodySize).textAlign(TextAlign.Center).width('100%').wordBreak(WordBreak.BREAK_WORD)
+        .fontColor(this.taskFilter === filter ? AppTheme.onAccent : AppTheme.secondary)
+    }.layoutWeight(1).constraintSize({ minHeight: 48 }).padding(8)
+      .fontColor(this.taskFilter === filter ? AppTheme.onAccent : AppTheme.secondary)
+      .backgroundColor(this.taskFilter === filter ? AppTheme.accent : AppTheme.surface).borderRadius(AppTheme.controlRadius)
+      .accessibilityText(`${label}${this.taskFilter === filter ? '，已选中' : ''}`).onClick(() => this.selectTaskFilter(filter))
+  }
+
+  @Builder
+  private QueryDate(label: string, value: string) {
+    Button({ type: ButtonType.Normal }) {
+      Text(label).fontSize(AppTheme.bodySize).textAlign(TextAlign.Center).width('100%').wordBreak(WordBreak.BREAK_WORD)
+        .fontColor(this.query().dateMode === value ? AppTheme.onAccent : AppTheme.secondary)
+    }.layoutWeight(1).constraintSize({ minHeight: 48 }).padding(8)
+      .fontColor(this.query().dateMode === value ? AppTheme.onAccent : AppTheme.secondary)
+      .backgroundColor(this.query().dateMode === value ? AppTheme.accent : AppTheme.surface).borderRadius(AppTheme.controlRadius)
+      .accessibilityText(`${label}${this.query().dateMode === value ? '，已选中' : ''}`).onClick(() => this.selectQueryDate(value))
   }
 
   @Builder
   private AllTasks() {
     Column({ space: 12 }) {
-      Row({ space: 8 }) {
-        this.TaskFilter('全部', 'all')
+      TextInput({ text: this.queryText, placeholder: '搜索标题或地点' }).width('100%').constraintSize({ minHeight: 48 })
+        .fontSize(AppTheme.bodySize).fontColor(AppTheme.ink).backgroundColor(AppTheme.surface).borderRadius(AppTheme.controlRadius)
+        .onChange((value: string) => { this.queryText = value; this.queryPage = 0; })
+      Row({ space: 8 }) { this.TaskFilter('全部', 'all')
         this.TaskFilter('待完成', 'pending')
-      }.width('100%')
-      Row({ space: 8 }) {
-        this.TaskFilter('已完成', 'completed')
-        this.TaskFilter('无日期', 'undated')
-      }.width('100%')
-      Text(`当前显示 ${this.filteredTasks().length} 项 · 共 ${this.overview.tasks.length} 项`)
-        .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
-      if (this.filteredTasks().length === 0 && !this.loading && this.loaded) {
-        Text('这个筛选下还没有待办。可以切换筛选，或添加一项新任务。')
-          .fontSize(AppTheme.bodySize).fontColor(AppTheme.quiet).width('100%').padding(16)
-          .backgroundColor(AppTheme.surface).borderRadius(AppTheme.cardRadius)
+        this.TaskFilter('已完成', 'completed') }.width('100%')
+      Text('日期条件 · 与状态、搜索同时生效').fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
+      Row({ space: 8 }) { this.QueryDate('不限日期', 'all')
+        this.QueryDate('日历所选', 'day') }.width('100%')
+      Row({ space: 8 }) { this.QueryDate('日期范围', 'range')
+        this.QueryDate('待定日期', 'undated') }.width('100%')
+      if (this.query().dateMode === 'day') { Text(`所选日期 ${this.selectedDate} · 北京时间`).fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%') }
+      if (this.query().dateMode === 'range') {
+        this.EditField('从哪一天', this.queryFromDate, 'YYYY-MM-DD', (value: string) => { this.queryFromDate = value; this.queryPage = 0; })
+        this.EditField('到哪一天（包含当天）', this.queryToDate, 'YYYY-MM-DD', (value: string) => { this.queryToDate = value; this.queryPage = 0; })
       }
-      ForEach(this.filteredTasks(), (task: PlanningTask) => {
-        this.TaskRow(task)
-      }, (task: PlanningTask) => `${task.task_id}-${this.planningRevision}`)
+      Row({ space: 8 }) {
+        Button(this.querySort === 'schedule' ? '按安排时间 · 已选' : '按安排时间').layoutWeight(1).constraintSize({ minHeight: 48 })
+          .fontSize(AppTheme.metaSize).fontColor(AppTheme.accent).backgroundColor(this.querySort === 'schedule' ? AppTheme.accentSoft : AppTheme.surface)
+          .onClick(() => { this.querySort = 'schedule'; this.queryPage = 0; })
+        Button(this.querySort === 'created' ? '最近创建 · 已选' : '最近创建').layoutWeight(1).constraintSize({ minHeight: 48 })
+          .fontSize(AppTheme.metaSize).fontColor(AppTheme.accent).backgroundColor(this.querySort === 'created' ? AppTheme.accentSoft : AppTheme.surface)
+          .onClick(() => { this.querySort = 'created'; this.queryPage = 0; })
+      }.width('100%')
+      Text(this.querySort === 'created' ? '创建时间由近到远；相同时按稳定编号排序。' : '安排时间由早到晚；无日期与异常日期在末尾，同时间按创建时间与编号排序。')
+        .fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+      Text(`匹配 ${this.queryResult().matched} 项 / 已读取 ${this.queryResult().total} 项 · 本页 ${this.visibleTasks().length} 项`)
+        .fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
+      Text(this.sourceLabel(this.planningState, '任务')).fontSize(AppTheme.metaSize).fontColor(this.planningState === 'ready' ? AppTheme.secondary : AppTheme.warning).width('100%')
+      if (!this.queryResult().valid) { Text(this.queryResult().message).fontSize(AppTheme.bodySize).fontColor(AppTheme.warning).width('100%') }
+      if (this.queryResult().invalidDateCount > 0) {
+        Text(`${this.queryResult().invalidDateCount} 项日期格式需核对；可在“待定日期”中查看，不会计入指定日期。`)
+          .fontSize(AppTheme.metaSize).fontColor(AppTheme.warning).width('100%').wordBreak(WordBreak.BREAK_WORD)
+      }
+      if (this.filteredTasks().length === 0 && this.planningState === 'ready' && this.queryResult().valid) {
+        Text(this.overview.tasks.length === 0 ? '还没有保存的待办。记下第一件事，再慢慢安排时间。' : '没有同时符合这些条件的待办。原有任务未被删除。')
+          .fontSize(AppTheme.bodySize).fontColor(AppTheme.secondary).width('100%')
+      }
+      Button('清除全部筛选').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize).fontColor(AppTheme.accent)
+        .backgroundColor(AppTheme.accentSoft).borderRadius(AppTheme.controlRadius).onClick(() => this.clearQuery())
+      ForEach(this.visibleTasks(), (task: PlanningTask) => { this.TaskRow(task) }, (task: PlanningTask) => `${task.task_id}-${this.planningRevision}`)
+      if (this.filteredTasks().length > 20) {
+        Text(`第 ${this.currentQueryPage() + 1} / ${Math.ceil(this.filteredTasks().length / 20)} 页`).fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
+        Row({ space: 8 }) {
+          Button('上一页').layoutWeight(1).constraintSize({ minHeight: 48 }).enabled(this.currentQueryPage() > 0).onClick(() => this.moveQueryPage(-1))
+          Button('下一页').layoutWeight(1).constraintSize({ minHeight: 48 }).enabled((this.currentQueryPage() + 1) * 20 < this.filteredTasks().length).onClick(() => this.moveQueryPage(1))
+        }.width('100%')
+      }
     }.width('100%').alignItems(HorizontalAlign.Start)
   }
 
@@ -1536,6 +1780,20 @@ export struct PlanCenterPage {
   @Builder
   private ScheduleView() {
     Column({ space: AppTheme.sectionGap }) {
+      this.SourceStatus()
+      Row({ space: 8 }) {
+        Button('上一周').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize).fontColor(AppTheme.accent).backgroundColor(AppTheme.surface).onClick(() => this.moveWeek(-1))
+        Text(`${this.week().startDate} 至 ${this.week().endDate}`).layoutWeight(1).fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).wordBreak(WordBreak.BREAK_WORD)
+        Button('下一周').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize).fontColor(AppTheme.accent).backgroundColor(AppTheme.surface).onClick(() => this.moveWeek(1))
+      }.width('100%')
+      Row({ space: 8 }) {
+        Button('日程').layoutWeight(1).constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
+          .fontColor(this.scheduleMode === 'day' ? AppTheme.onAccent : AppTheme.accent).backgroundColor(this.scheduleMode === 'day' ? AppTheme.accent : AppTheme.surface)
+          .onClick(() => this.scheduleMode = 'day')
+        Button('一周总览').layoutWeight(1).constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
+          .fontColor(this.scheduleMode === 'week' ? AppTheme.onAccent : AppTheme.accent).backgroundColor(this.scheduleMode === 'week' ? AppTheme.accent : AppTheme.surface)
+          .onClick(() => this.scheduleMode = 'week')
+      }.width('100%')
       this.WeekStrip()
       Row({ space: 8 }) {
         Button('回到今天').constraintSize({ minHeight: 48 }).layoutWeight(1).fontSize(AppTheme.bodySize)
@@ -1549,8 +1807,9 @@ export struct PlanCenterPage {
         Column() { this.MonthCalendar() }.width('100%').padding(12)
           .backgroundColor(AppTheme.surface).borderRadius(AppTheme.cardRadius)
       }
-      this.DayTimeline()
-      Button('让助手安排今晚复习').width('100%').constraintSize({ minHeight: 48 })
+      if (this.scheduleMode === 'week') { this.WeekOverview() } else { this.DayTimeline() }
+      this.LoadSummary(this.dayLoad(this.selectedDate), '当前预计负荷')
+      Button(`让助手安排 ${this.selectedDate}`).width('100%').constraintSize({ minHeight: 48 })
         .fontSize(AppTheme.bodySize).fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft)
         .borderRadius(AppTheme.controlRadius).onClick(() => this.onOpenAgent(this.reviewPrompt()))
     }.width('100%').padding({ left: AppTheme.pageInset, right: AppTheme.pageInset, top: 12, bottom: 24 })
@@ -1564,11 +1823,32 @@ export struct PlanCenterPage {
           .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
         this.TaskForm()
       } else if (frame.kind === 'action') {
+        if (this.projectedTasks() !== null) {
+          this.LoadSummary(this.dayLoad(this.previewLoadDate()), '候选前')
+          this.LoadSummary(this.candidateLoad(), '确认后预计')
+          Text('以上只比较当前这份候选；预览不会改动任务，确认时仍会核对最新状态。').fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
+        }
         PlanningActionPanel({ state: this.actionState, active: this.active && !this.mutationBusy && !this.replanWriteBlocked && !this.draftStorageBusy,
           retryIntent: this.actionController?.retryIntent() ?? '', onConfirm: (acks: CourseAcknowledgement[]) => this.confirmPlanningAction(acks),
           onCancel: () => this.writePlanningAction(true), onCheck: () => this.checkPlanningAction(),
           onDismiss: () => this.dismissAction(), onOpenTask: (id: string) => this.openDetails('task', id),
           onOpenPlan: (id: string) => this.openDetails('plan', id) })
+      } else if (frame.kind === 'course') {
+        ForEach(this.courseFor(frame.id), (detail: PlanningCourseDetail) => {
+          Column({ space: 12 }) {
+            Text(detail.reference.course.title).fontSize(AppTheme.sectionTitle).fontWeight(FontWeight.Medium).fontColor(AppTheme.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
+            Text(`${detail.reference.course.date} · ${detail.reference.course.start_time}–${detail.reference.course.end_time} · 北京时间`).fontSize(AppTheme.bodySize).fontColor(AppTheme.accent).width('100%').wordBreak(WordBreak.BREAK_WORD)
+            Text(`地点：${detail.reference.course.location || '未提供'}`).fontSize(AppTheme.bodySize).fontColor(AppTheme.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
+            Text(`教师：${detail.reference.course.teacher || '未提供'}`).fontSize(AppTheme.bodySize).fontColor(AppTheme.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+            Text(this.timetableState !== 'ready' ? '最新课表尚未核对；下方为打开时的只读快照。' : this.courseCurrent(detail.reference) ?
+              '来自当前完整课表；此处只读，编辑请进入课表维护。' : '课表版本已变化；此处保留原课程供核对，请返回日程重新选择。')
+              .fontSize(AppTheme.bodySize).fontColor(this.timetableState === 'ready' && this.courseCurrent(detail.reference) ? AppTheme.secondary : AppTheme.warning).width('100%').wordBreak(WordBreak.BREAK_WORD)
+            Text(`相同完整记录中的第 ${detail.reference.occurrence} 条`).fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
+            EvidencePanel({ evidence: detail.evidence, active: this.active && frame.key === this.topDetailKey() })
+            Button('打开课表维护').width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
+              .fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft).onClick(() => this.onOpenTimetable())
+          }.width('100%').alignItems(HorizontalAlign.Start).padding(AppTheme.cardInset).backgroundColor(AppTheme.surface).borderRadius(AppTheme.cardRadius)
+        }, (detail: PlanningCourseDetail) => detail.reference.key)
       } else if (frame.kind === 'task-edit') {
         this.TaskEditor()
       } else if (frame.kind === 'plan-edit') {
@@ -1577,6 +1857,13 @@ export struct PlanCenterPage {
         ForEach(this.tasksForId(frame.id), (task: PlanningTask) => {
           Column({ space: 12 }) {
             this.PlanTask(task)
+            if (this.overlapLabel(task).length > 0) {
+              Text(this.overlapLabel(task)).fontSize(AppTheme.bodySize).fontColor(AppTheme.warning).width('100%')
+              ForEach(task.course_overlap?.overlaps ?? [], (overlap: CourseOverlap) => {
+                Text(`${overlap.course.title} · ${overlap.course.date} ${overlap.course.start_time}–${overlap.course.end_time}\n重叠：${formatPlanDateTime(overlap.overlap_start_at)} 至 ${formatPlanDateTime(overlap.overlap_end_at)}`)
+                  .fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+              }, (overlap: CourseOverlap) => overlap.course_key)
+            }
             if (task.plan_id !== null) {
               Text('属于已确认计划；完成状态会同步到目标进度。').fontSize(AppTheme.metaSize)
                 .fontColor(AppTheme.quiet).width('100%')
@@ -1613,6 +1900,7 @@ export struct PlanCenterPage {
       }
       if (frame.kind === 'invalid' ||
         (frame.kind === 'task' && this.tasksForId(frame.id).length === 0) ||
+        (frame.kind === 'course' && this.courseFor(frame.id).length === 0) ||
         (frame.kind === 'plan' && this.plansForId(frame.id).length === 0)) {
         Text(this.loading ? '正在读取对应内容…' : this.errorText.length > 0 || !this.loaded ?
           '暂时无法读取对应内容，请重新加载。' : '此项目已不存在，或不属于当前账号。')
@@ -1691,6 +1979,7 @@ export struct PlanCenterPage {
       PlanningConflictsPanel({ baseUrl: this.baseUrl, token: this.token,
         refreshKey: this.conflictRefresh, active: this.active && (this.detailKind.length === 0 || this.detailKind === 'conflicts'),
         compact: this.detailKind !== 'conflicts', onOpenDetails: () => this.openDetails('conflicts'),
+        onOpenTask: (id: string) => this.openDetails('task', id),
         writeBlocked: this.mutationBusy || this.draftStorageBusy || this.pendingProposals.length > 0 || this.actionBlocksWrites(),
         onWriteStateChanged: (blocked: boolean) => this.replanWriteBlocked = blocked,
         onApplied: () => this.replanApplied() })

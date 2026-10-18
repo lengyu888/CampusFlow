@@ -10,12 +10,13 @@ async function loadUtility(name) {
 }
 const feedback = await loadUtility('AgentFeedback');
 const timetable = await loadUtility('OnboardingTimetable');
+const agenda = await loadUtility('DailyAgenda');
 const source = readFileSync(new URL('../entry/src/main/ets/utils/PlanningReplan.ets', import.meta.url), 'utf8')
   .replace(/^import [^\n]+;\r?\n/gm, '').replace(/^export /gm, '');
-const { PlanningReplanController, validConflictReport, validReplanPreview } = new Function(
-  'CampusFlowRequestError', 'validateTimetableEntry', stripTypeScriptTypes(source) +
-  '\nreturn {PlanningReplanController,validConflictReport,validReplanPreview};'
-)(feedback.CampusFlowRequestError, timetable.validateTimetableEntry);
+const { PlanningReplanController, validConflictReport, validReplanPreview, hasCourseClassification, conflictCourseOverlap } = new Function(
+  'CampusFlowRequestError', 'validateTimetableEntry', 'timestamp', 'courseTimestamp', stripTypeScriptTypes(source) +
+  '\nreturn {PlanningReplanController,validConflictReport,validReplanPreview,hasCourseClassification,conflictCourseOverlap};'
+)(feedback.CampusFlowRequestError, timetable.validateTimetableEntry, agenda.timestamp, agenda.courseTimestamp);
 
 const now = Date.parse('2026-10-20T08:00:00+08:00');
 function candidate() {
@@ -277,4 +278,32 @@ test('actual API uses dedicated endpoints, escapes proposal IDs and preserves re
   assert.equal(calls[1].options.extraData, '{}'); assert.equal(calls[3].options.extraData, '{}');
   assert.ok(calls.every(x => x.options.header.Authorization === 'Bearer test-token'));
   assert.equal(destroyed, 4);
+});
+
+test('course classification distinguishes legacy omission, accepted, changed and ordinary overlaps', () => {
+  const legacy=report();assert.equal(validConflictReport(legacy),true);assert.equal(hasCourseClassification(legacy),false);
+  const complete={...report(),accepted_course_overlaps:[{...report().conflicts[0],task_id:'accepted-id'}],
+    course_overlap_reviews:[{...report().conflicts[0],task_id:'changed-id'}],unchecked:[{task_id:'untimed-id',title:'同名安排',reason:'没有结束时间'}]};
+  assert.equal(validConflictReport(complete),true);assert.equal(hasCourseClassification(complete),true);
+  const copy=structuredClone(complete);copy.course_overlap_reviews[0].task_id='accepted-id';assert.equal(validConflictReport(copy),false,'one task cannot be in contradictory groups');
+  for(const value of [null,{},'none'])assert.equal(validConflictReport({...complete,accepted_course_overlaps:value}),false);
+  const partial={...legacy,accepted_course_overlaps:[]};assert.equal(validConflictReport(partial),false);
+  const duplicate=report();duplicate.unchecked=[{task_id:'task-1',title:'复习',reason:'另一个分类'}];assert.equal(validConflictReport(duplicate),false);
+});
+
+test('overlap uses the report own dated intervals, handles offsets and rejects touching or invalid courses', () => {
+  const item={...report().conflicts[0],start_at:'2026-10-20T01:45:00Z',end_at:'2026-10-20T02:15:00Z'};
+  const course={date:'2026-10-20',title:'同名课',start_time:'10:00',end_time:'11:30',location:'不同教室',teacher:'教师'};
+  assert.deepEqual(conflictCourseOverlap(item,course),{start_at:'2026-10-20T02:00:00.000Z',end_at:'2026-10-20T02:15:00.000Z'});
+  assert.equal(conflictCourseOverlap({...item,end_at:'2026-10-20T02:00:00Z'},course),null);
+  assert.equal(conflictCourseOverlap({...item,start_at:'2026-02-30T10:00:00+08:00'},course),null);
+  assert.equal(conflictCourseOverlap(item,{...course,date:'2026-02-30'}),null);
+  const wrong=report();wrong.conflicts[0].courses[0]={...course,start_time:'15:00',end_time:'16:00'};
+  assert.equal(validConflictReport(wrong),false,'unrelated same-title course is not a verified overlap');
+});
+
+test('invalid calendar dates in server reports never become successful scan evidence', async () => {
+  const wrong=report();wrong.checked_at='2026-02-30T10:00:00+08:00';
+  const f=fixture({planningConflicts:async()=>wrong});f.controller.setActive(true);await tick();
+  assert.equal(f.state().phase,'error');assert.equal(f.state().report,null);
 });

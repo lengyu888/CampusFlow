@@ -1,0 +1,108 @@
+{
+  "stage": "UX06",
+  "backend": {
+    "passed": 82,
+    "deselected": 0,
+    "scope": "test_replanning.py test_course_overlap_policy.py test_course_overlap_api.py; backend production unchanged from UX05 (683 passed, 2 deselected)",
+    "command": "PYTHONPATH=src ../../audit-venv/bin/python -m pytest tests/test_replanning.py tests/test_course_overlap_policy.py tests/test_course_overlap_api.py -m 'not integration' -q"
+  },
+  "client": {
+    "tests": 871,
+    "passed": 870,
+    "skipped": 1,
+    "failed": 0,
+    "skip": "Existing JDK unavailable for Pure Java NativePolicy; no installation or native compilation"
+  },
+  "static": {
+    "arkts_ts_files": 69,
+    "config_files": 17
+  },
+  "cross_language_contract": {
+    "checks": 17,
+    "passed": true,
+    "source": "Actual authenticated ASGI/SQLite conflict response through actual ArkTS validator and exact overlap display helper; independent hard-coded course interval oracle; separate GETs are not one snapshot; no native/model call"
+  },
+  "browser": {
+    "checks": 32,
+    "passed": [
+      "Offline production helper bundle matches both current sources and all inline scripts parse",
+      "Prototype and synthetic / nonnative boundary are visible",
+      "Natural week contains all seven Monday–Sunday dates, not seven navigation buttons only",
+      "Union load is 240, not 190 + 125 = 315 minutes; incomplete / all-day / undated remain separate",
+      "Enabled goal compares only task minutes and may be switched off",
+      "Missing end remains explicitly unknown, while cross-day task appears on both intersecting dates",
+      "Current selected date may change without hiding the other six day lists",
+      "Date-to-assistant includes the full selected date and never sends",
+      "Capture draft date survives browsing to another selected day",
+      "Week navigation projects the actual next natural week and supports explicit return",
+      "Selected-day view can return to the complete week",
+      "All 100 stable task IDs are reachable across five pages without truncation",
+      "Title / place, status and range filtering combine with AND and match actual helper output",
+      "No-result filters offer a clear recovery without claiming data are empty",
+      "Task details return to the same search and page, with full text and exact identity",
+      "Completion is its own touch target and does not open task details",
+      "Creation-time sorting and undated filtering remain functional",
+      "Editing projects an exact task replacement without mutating or saving before confirmation",
+      "Goal plan retains all milestones and opens exact linked tasks",
+      "Ordinary conflict preview cancels without writes and accepted in-class task is preserved",
+      "Explicit demo confirmation updates only the target ID and shows a clearly local receipt",
+      "Needs-review flow requires explicit checkbox and preserves its original time",
+      "Course reference uses the full facts and revision, and refuses rebinding after a version change",
+      "Course failure is independent: keeps task rows and does not label unknown data as an empty timetable",
+      "Task failure is independent: restores course rows and offers explicit local retry",
+      "Stale snapshot is visibly labeled and mutation previews stay disabled until refreshed",
+      "360-pixel large-text natural week has no horizontal overflow and all seven dates remain",
+      "Visible active touch buttons have at least 48px height and completion targets are 48×48",
+      "Large-text no-results layout stays within the viewport and remains recoverable",
+      "Large-text long-title detail dialog stays within the viewport with reachable close",
+      "Landscape and reduced-motion presentation do not introduce horizontal overflow",
+      "No page errors and no HTTP requests for the entire interaction run"
+    ],
+    "errors": [],
+    "externalRequests": [],
+    "sourceHashes": {
+      "DailyAgenda": "889b2115d924ba40cf55ee8835d1f1695fc3fa8b88061f717e450736d1ae4709",
+      "PlanningOverview": "1dcf6279d755d2072b2e6c5fc63bd4bcdcb39edd1c41234810175135d6ae5466"
+    },
+    "nativeValidation": false,
+    "browserApproximation": true,
+    "syntheticData": true,
+    "screenshots": [
+      "wide.png",
+      "narrow-large.png",
+      "narrow-search-empty.png",
+      "narrow-detail.png"
+    ]
+  },
+  "visual_review": "Root inspected wide / 360px large text / no-results / detail screenshots; browser approximation only",
+  "independent_review": "Fixed candidate source for manual all-day preview and confirmed replan unresolved task navigation after report clears; production helper review found no further blocker",
+  "native_build": false,
+  "device_validation": false,
+  "real_model_calls": false,
+  "logs": [
+    {
+      "file": "ux06-backend-focused.log",
+      "sha256": "532a6c5a49bde6cb7037335fd5785b46b928ba074760078264f730c139dfa134"
+    },
+    {
+      "file": "ux06-client-final.log",
+      "sha256": "bd0295d912aa81c3298769273fdd247fd782c346521ab2408ac19fc5013beeff"
+    },
+    {
+      "file": "ux06-static-final.log",
+      "sha256": "89bc87f048d870f9826a319aa1e3a95e1a56430c16e0889311202985556e3e7a"
+    },
+    {
+      "file": "ux06-cross-contract-result.json",
+      "sha256": "a3b7b75bbd038e274a2400bfd415bfa89eb5493d7fdcd121723f8587c98002f8"
+    },
+    {
+      "file": "ux06-conflict-fixture.json",
+      "sha256": "3fbaf29f4a0115df5083219142a51d5f582e80c58b7b74be266eb4fdf911e219"
+    },
+    {
+      "file": "ux06-conflict-expected.json",
+      "sha256": "728e21b45f15f26e11a9fa813673d09eb837cecd40760dfd19de90ee3dd60886"
+    }
+  ]
+}

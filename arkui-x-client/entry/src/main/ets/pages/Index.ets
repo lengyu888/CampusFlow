@@ -489,6 +489,7 @@ struct Index {
         backRevision: this.planBackRevision, onInnerNavigationChanged: (active) => this.planInnerActive = active,
         onCloseFocus: () => this.closePlanFocus(),
         onPlanningChanged: () => this.timetableChanged(),
+        onOpenTimetable: () => this.selectTab(9),
         onOpenAgent: (prompt) => this.openAgentWithPrompt(prompt) })
         .visibility(this.activeTab === 2 || this.quickCaptureOpen ? Visibility.Visible : Visibility.Hidden)
       CampusPage({ user: this.user, baseUrl: this.baseUrl, token: this.token, active: this.activeTab === 8 && this.voiceForeground,

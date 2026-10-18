@@ -1,6 +1,7 @@
 import { PlanningConflictReport, ReplanPreview, ReplanUnresolved, ReplanChange, PlanningCourseConflict, TimetableEntry } from '../model/ApiModels';
 import { CampusFlowRequestError } from './AgentFeedback';
 import { validateTimetableEntry } from './OnboardingTimetable';
+import { timestamp, courseTimestamp } from './DailyAgenda';
 
 export interface ReplanGateway {
   planningConflicts(): Promise<PlanningConflictReport>;
@@ -22,7 +23,7 @@ function text(value: string): boolean {
 }
 
 function stamp(value: string): boolean {
-  return text(value) && new RegExp('(Z|[+-][0-9]{2}:[0-9]{2})$').test(value) && Number.isFinite(Date.parse(value));
+  return text(value) && new RegExp('(Z|[+-][0-9]{2}:[0-9]{2})$').test(value) && timestamp(value) !== null;
 }
 
 function validUnresolved(items: ReplanUnresolved[]): boolean {
@@ -30,14 +31,44 @@ function validUnresolved(items: ReplanUnresolved[]): boolean {
     typeof item === 'object' && text(item.task_id) && text(item.title) && text(item.reason));
 }
 
-export function validConflictReport(data: PlanningConflictReport): boolean {
-  return data !== null && typeof data === 'object' && stamp(data.checked_at) && text(data.policy) &&
-    validUnresolved(data.unchecked) && Array.isArray(data.conflicts) &&
-    data.conflicts.every((item: PlanningCourseConflict) => item !== null && typeof item === 'object' &&
+export interface CourseConflictInterval {
+  start_at: string;
+  end_at: string;
+}
+
+// Display only: this interval is not an acknowledgement or permission to execute.
+export function conflictCourseOverlap(item: PlanningCourseConflict, course: TimetableEntry): CourseConflictInterval | null {
+  if (item === null || typeof item !== 'object' || !stamp(item.start_at) || !stamp(item.end_at) ||
+    !validateTimetableEntry(course).valid) { return null; }
+  const courseStart = courseTimestamp(course.date, course.start_time);
+  const courseEnd = courseTimestamp(course.date, course.end_time);
+  if (courseStart === null || courseEnd === null) { return null; }
+  const start = Math.max(Date.parse(item.start_at), courseStart);
+  const end = Math.min(Date.parse(item.end_at), courseEnd);
+  return end > start ? { start_at: new Date(start).toISOString(), end_at: new Date(end).toISOString() } : null;
+}
+
+export function hasCourseClassification(data: PlanningConflictReport | null): boolean {
+  return data !== null && typeof data === 'object' && Array.isArray(data.accepted_course_overlaps) && Array.isArray(data.course_overlap_reviews);
+}
+
+function validConflicts(items: PlanningCourseConflict[]): boolean {
+  return Array.isArray(items) && items.every((item: PlanningCourseConflict) => item !== null && typeof item === 'object' &&
       text(item.task_id) && text(item.title) && stamp(item.start_at) && stamp(item.end_at) &&
       Date.parse(item.end_at) > Date.parse(item.start_at) && Array.isArray(item.courses) && item.courses.length > 0 &&
       item.courses.every((course: TimetableEntry) => validateTimetableEntry(course).valid &&
-        typeof course.location === 'string' && typeof course.teacher === 'string'));
+        typeof course.location === 'string' && typeof course.teacher === 'string' && conflictCourseOverlap(item, course) !== null));
+}
+
+export function validConflictReport(data: PlanningConflictReport): boolean {
+  if (data === null || typeof data !== 'object' || !stamp(data.checked_at) || !text(data.policy) ||
+    !validUnresolved(data.unchecked) || !validConflicts(data.conflicts)) { return false; }
+  const legacy = data.accepted_course_overlaps === undefined && data.course_overlap_reviews === undefined;
+  if (!legacy && (!hasCourseClassification(data) || !validConflicts(data.accepted_course_overlaps ?? []) ||
+    !validConflicts(data.course_overlap_reviews ?? []))) { return false; }
+  const ids = data.conflicts.concat(data.accepted_course_overlaps ?? [], data.course_overlap_reviews ?? [])
+    .map((item: PlanningCourseConflict) => item.task_id).concat(data.unchecked.map((item: ReplanUnresolved) => item.task_id));
+  return new Set<string>(ids).size === ids.length;
 }
 
 export function validReplanPreview(data: ReplanPreview): boolean {

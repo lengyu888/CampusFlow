@@ -187,6 +187,7 @@ export interface ActionReceipt {
 }
 
 export interface PendingActionPayload {
+  source?: string;
   task?: PlanningTaskDraft;
   plan?: PlanningPlanDraft;
   summary?: string;
@@ -464,6 +465,9 @@ export interface PlanningConflictReport {
   policy: string;
   conflicts: PlanningCourseConflict[];
   unchecked: ReplanUnresolved[];
+  // Older servers omit both fields; omission is not evidence of no accepted/review overlaps.
+  accepted_course_overlaps?: PlanningCourseConflict[];
+  course_overlap_reviews?: PlanningCourseConflict[];
 }
 
 export interface ReplanChange {

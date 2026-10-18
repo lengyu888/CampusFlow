@@ -1,0 +1,504 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'none'; form-action 'none'">
+<title>行简 · 计划总览｜UX06 离线交互原型</title>
+<style>
+:root{font:16px/1.55 -apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;color:#29352F;background:#F6F4EF;--ink:#29352F;--green:#416454;--muted:#626E65;--line:#DCE2D8;--paper:#FFFEFB;--soft:#E7EEE6;--ochre:#795321;--warm:#FBF2DF;--red:#923F32;--red-soft:#F9ECE7}*{box-sizing:border-box}body{margin:0}button,input,select,textarea{font:inherit}button{min-height:48px;border:0;border-radius:12px;background:var(--soft);color:var(--green);padding:10px 16px;cursor:pointer;line-height:1.4}button:hover{filter:brightness(.97)}button:active{filter:brightness(.9)}button:disabled{cursor:not-allowed;opacity:.6}button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid #9B573B;outline-offset:3px}.primary{background:var(--green);color:var(--paper)}.quiet{background:transparent;color:var(--muted)}.border{background:var(--paper);border:1px solid var(--line)}.danger{color:var(--red);background:var(--red-soft)}input,select,textarea{border:1px solid #A5B1A5;background:var(--paper);color:var(--ink);border-radius:10px;padding:12px;min-width:0;max-width:100%;min-height:48px}input[type=checkbox]{width:22px;height:22px;min-height:22px;accent-color:var(--green)}textarea{width:100%;resize:vertical;min-height:116px}h1,h2,h3,p{margin:0}h1{font-size:28px;letter-spacing:-.5px}h2{font-size:22px;line-height:1.4}h3{font-size:17px}p+ p{margin-top:8px}small,.meta{font-size:13px;color:var(--muted)}.muted{color:var(--muted)}.eyebrow{font-size:12px;letter-spacing:1.5px;color:var(--green);font-weight:650}.page{max-width:1192px;margin:auto;padding:28px 28px 48px}.intro{display:flex;justify-content:space-between;align-items:flex-start;gap:24px;margin-bottom:24px}.intro p{max-width:610px;margin-top:8px}.demo-tools{display:flex;flex-wrap:wrap;gap:8px}.layout{display:grid;grid-template-columns:minmax(0,740px) minmax(280px,1fr);gap:24px;align-items:start}.app{background:var(--paper);border:1px solid #CCD5CB;border-radius:24px;overflow:hidden;box-shadow:0 8px 24px #29352F06;min-width:0}.app-head{padding:24px 24px 12px}.head-row{display:flex;justify-content:space-between;align-items:center;gap:12px}.brand{display:flex;align-items:center;gap:8px;margin-bottom:12px;font-size:13px;color:var(--muted)}.brand-mark{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;background:var(--soft);border-radius:7px;color:var(--green);font-weight:700}.app-title{font-size:30px;font-weight:700;letter-spacing:1px}.icon{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex:none}.icon-button{width:48px;padding:12px}.segmented{display:flex;gap:4px;padding:4px;background:#F0F1EA;border-radius:13px;margin-top:20px}.segmented button{flex:1;padding:10px 8px;background:transparent;color:var(--muted);border-radius:10px}.segmented button[aria-selected=true]{background:var(--paper);color:var(--green);font-weight:650;box-shadow:0 1px 3px #29352F12}.app-body{padding:16px 24px 24px}.section{margin-top:24px}.section:first-child{margin-top:0}.section-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}.rowline{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.week-tools{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}.week-tools h2{font-size:20px}.week-nav{display:flex;gap:4px;flex:none}.week-nav button{padding:8px;width:48px}.switch{display:flex;gap:4px}.switch button{background:transparent;padding:8px 12px;color:var(--muted)}.switch button[aria-pressed=true]{background:var(--soft);color:var(--green)}.selected-line{border-top:1px solid var(--line);margin-top:12px;padding-top:12px;display:flex;align-items:center;justify-content:space-between;gap:12px}.selected-line button{padding:8px 12px}.notice{border-left:3px solid #886023;padding:12px 14px;background:var(--warm);color:var(--ochre);border-radius:0 10px 10px 0;font-size:14px}.notice.error{background:var(--red-soft);color:var(--red);border-color:var(--red)}.notice.info{background:#EEF1EB;border-color:var(--green);color:var(--green)}.notice button{background:transparent;text-decoration:underline;padding:6px 0;display:block;color:inherit}.load{background:#F4F5EE;border:1px solid #E3E7DB;border-radius:16px;padding:16px;margin-top:16px}.load-total{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin:4px 0}.load-total strong{font-size:28px;font-weight:650;color:var(--green)}.load-breakdown{display:flex;gap:16px;flex-wrap:wrap;font-size:14px}.union-line{height:5px;display:flex;gap:3px;margin:14px 0 10px}.union-line span{background:#577361;border-radius:3px;min-width:3px}.union-line span:nth-child(2){background:#AC8750}.union-line span:nth-child(3){background:#839382}.load .meta{margin-top:8px}.goal-note{font-size:13px;color:var(--ochre);margin-top:8px}.day-block{border-top:1px solid var(--line);margin-top:20px;padding-top:12px}.day-block:first-child{margin-top:12px}.day-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:4px}.day-button{display:flex;gap:10px;align-items:baseline;background:transparent;color:var(--ink);padding:8px 0;text-align:left}.day-button strong{font-size:20px}.day-button[aria-pressed=true]{color:var(--green)}.selected-dot{display:inline-block;width:6px;height:6px;background:var(--green);border-radius:50%;margin:0 6px 3px 0}.agenda-row{display:grid;grid-template-columns:58px minmax(0,1fr) 48px;gap:12px;align-items:center;border-bottom:1px solid #EDF0E8;padding:8px 0}.agenda-row:last-child{border-bottom:0}.agenda-time{font-size:14px;color:var(--muted);align-self:start;padding-top:14px;line-height:1.5;font-variant-numeric:tabular-nums}.agenda-time strong{display:block;font-weight:600;color:var(--ink)}.entry{border-radius:8px;background:transparent;text-align:left;padding:8px 0;color:var(--ink);min-width:0;width:100%;overflow-wrap:anywhere}.entry strong{font-weight:550;display:block}.entry .meta{display:block;margin-top:3px}.entry .pill{margin:6px 4px 0 0}.complete{border-radius:10px;padding:12px;background:transparent;display:flex;align-items:center;justify-content:center;width:48px;height:48px;align-self:start;margin-top:3px;color:var(--green)}.check-circle{width:20px;height:20px;border:1.5px solid #7A8E7B;border-radius:50%;display:flex;align-items:center;justify-content:center}.complete[aria-pressed=true] .check-circle{background:var(--green);color:var(--paper);border-color:var(--green)}.completed .entry strong{text-decoration:line-through;color:var(--muted)}.pill{display:inline-block;font-size:12px;line-height:1.5;padding:2px 7px;border-radius:5px;color:var(--muted);background:#F0F1EA;vertical-align:middle}.pill.course{background:#EDF0E6;color:#5B6650}.pill.conflict{background:var(--red-soft);color:var(--red)}.pill.accepted{background:var(--soft);color:var(--green)}.pill.review{background:var(--warm);color:var(--ochre)}.empty-day{padding:12px 0 10px;color:var(--muted);font-size:14px}.all-day{border-top:1px dashed var(--line);margin-top:8px;padding-top:8px}.mini-label{font-size:12px;color:var(--muted);letter-spacing:.4px}.all-day .agenda-row{grid-template-columns:58px minmax(0,1fr) 48px}.footer-note{font-size:12px;color:var(--muted);padding:12px 24px;border-top:1px solid var(--line);background:#FAFAF4}.sidebar{display:flex;flex-direction:column;gap:20px}.panel{background:var(--paper);border:1px solid var(--line);border-radius:16px;padding:20px;min-width:0}.panel h2{font-size:18px}.panel p{font-size:14px;margin-top:8px}.panel .section-head{margin-bottom:8px}.panel label{display:block;font-size:13px;color:var(--muted);margin-top:12px}.panel select{width:100%;margin-top:4px}.audit-row{padding:14px 0;border-top:1px solid var(--line)}.audit-row:first-of-type{margin-top:12px}.audit-row strong{font-size:15px;display:block;margin-top:8px}.audit-row p{font-size:13px;margin:4px 0 8px}.audit-row button{width:100%;text-align:left;padding:8px 12px}.audit-row .pill{font-size:12px}.method{font-size:13px;color:var(--muted)}details summary{cursor:pointer;min-height:48px;display:flex;align-items:center;color:var(--green);list-style:none}details summary::after{content:'＋';margin-left:auto}details[open] summary::after{content:'−'}.filters{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:16px 0}.filters label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted)}.filters .full{grid-column:1/-1}.filters input,.filters select{width:100%}.search-line{position:relative}.search-line input{width:100%;padding-left:40px}.search-line .icon{position:absolute;left:13px;top:15px;color:var(--muted)}.result-line{display:flex;align-items:center;justify-content:space-between;gap:8px}.result-line button{padding:8px 12px}.task-list .agenda-row{grid-template-columns:minmax(0,1fr) 48px;gap:12px}.pager{display:flex;align-items:center;justify-content:space-between;gap:8px;border-top:1px solid var(--line);padding-top:16px;margin-top:16px}.pager button{padding:8px 12px}.no-results{padding:36px 4px;text-align:center}.no-results h3{font-size:19px}.no-results p{margin:8px 0 20px;color:var(--muted);font-size:14px}.plan-sheet{border-top:1px solid var(--line);padding-top:20px;margin-top:16px}.plan-sheet ol{padding-left:24px}.plan-sheet li{padding:8px 0}.progress{height:5px;border-radius:3px;background:#E7EEE6;margin:12px 0}.progress span{display:block;width:33.33%;height:100%;background:var(--green);border-radius:3px}.bottom-nav{display:flex;justify-content:space-around;padding:8px 8px 12px;border-top:1px solid var(--line)}.bottom-nav button{display:flex;flex-direction:column;gap:2px;align-items:center;justify-content:center;background:transparent;color:var(--muted);font-size:12px;min-width:56px}.bottom-nav button[aria-current=page]{color:var(--green);font-weight:650;background:#F1F4EB}.bottom-nav .icon{width:22px;height:22px}dialog{width:min(560px,calc(100vw - 32px));max-height:calc(100dvh - 32px);border:1px solid var(--line);border-radius:20px;padding:0;color:var(--ink);background:var(--paper);box-shadow:0 16px 60px #182A432A;overflow:auto}dialog::backdrop{background:#25392D55}.dialog-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:20px 20px 8px}.dialog-head h2{padding-top:8px}.dialog-content{padding:8px 20px 24px}.dialog-content p{margin:8px 0}.dialog-content label{display:block;font-size:14px;color:var(--muted);margin:16px 0 4px}.dialog-content input{width:100%}.dialog-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:20px}.dialog-actions button{flex:1}.fact{display:grid;grid-template-columns:76px minmax(0,1fr);gap:12px;padding:12px 0;border-bottom:1px solid var(--line);font-size:14px}.fact span{color:var(--muted)}.fact strong{font-weight:500;overflow-wrap:anywhere}.compare{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:16px 0}.compare>div{background:#F3F4ED;border-radius:12px;padding:12px}.compare .after{background:var(--soft)}.compare strong{display:block;font-size:18px;margin-top:8px}.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);max-width:calc(100% - 32px);background:var(--ink);color:var(--paper);padding:12px 20px;border-radius:12px;box-shadow:0 4px 20px #29352F20;z-index:10;font-size:14px;pointer-events:none}.toast:empty{display:none}.large{font-size:20px}.large .meta,.large small,.large .notice,.large .load-breakdown,.large .empty-day,.large .entry .meta,.large .fact,.large .panel p,.large .panel label{font-size:16px}.large .pill,.large .mini-label,.large .footer-note,.large .method,.large .goal-note{font-size:14px}.large .agenda-time{font-size:16px}.large .agenda-row{grid-template-columns:60px minmax(0,1fr) 48px;gap:8px}.large .task-list .agenda-row{grid-template-columns:minmax(0,1fr) 48px}.large .filters label{font-size:16px}.large .app-title{font-size:34px}.large .panel h2{font-size:22px}.large .audit-row strong{font-size:18px}[hidden]{display:none!important}@media(max-width:850px){.layout{grid-template-columns:minmax(0,1fr)}.sidebar{display:grid;grid-template-columns:1fr 1fr}.intro{flex-direction:column}.page{padding:24px 16px}.app{border-radius:20px}.sidebar .panel:last-child{grid-column:1/-1}}@media(max-width:540px){.page{padding:20px 12px 36px}.intro{gap:16px}.intro h1{font-size:24px}.intro p{font-size:14px}.layout{gap:20px}.sidebar{display:flex}.app-head{padding:20px 16px 12px}.app-body{padding:12px 16px 20px}.week-tools{align-items:flex-start;gap:8px}.week-tools h2{font-size:18px}.selected-line{align-items:flex-start}.selected-line button{max-width:116px;flex:none}.agenda-row{gap:8px;grid-template-columns:52px minmax(0,1fr) 48px}.load{padding:12px}.load-breakdown{gap:8px 16px}.section-head{flex-wrap:wrap}.panel{padding:16px}.filters{gap:10px}.compare{grid-template-columns:1fr}.large .week-tools{flex-wrap:wrap}.large .week-nav{margin-left:auto}.large .selected-line{flex-wrap:wrap}.large .selected-line button{max-width:100%;width:100%}.large .segmented button{padding:10px 4px;font-size:18px}.large .app-head,.large .app-body{padding-left:12px;padding-right:12px}.large .day-heading{align-items:flex-start}.large .day-heading>.meta{text-align:right}.large .filters{grid-template-columns:1fr}.large .filters .full{grid-column:auto}.large .fact{grid-template-columns:1fr;gap:4px}.large .bottom-nav button{font-size:14px}.large .bottom-nav{padding-left:4px;padding-right:4px}.large .bottom-nav button{min-width:52px;padding:8px}.large .pager{flex-wrap:wrap}.large .pager .meta{width:100%;order:-1;text-align:center}}@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
+</style>
+</head>
+<body>
+<main class="page">
+<header class="intro"><div><div class="eyebrow">行简 · UX06</div><h1>安排看得清，也留得下余地</h1><p class="muted">计划总览的离线交互原型。全部为合成示例，不连接账户、不调用 API；浏览器画面不代表 ArkUI 原生渲染或设备验收。</p></div><div class="demo-tools"><button id="large" aria-pressed="false">大字模式</button><button id="reset" class="border">重置示例</button></div></header>
+<div class="layout">
+<section class="app" aria-label="行简计划页近似原型"><header class="app-head"><div class="brand"><span class="brand-mark">行</span><span>行简 / 合成示例</span></div><div class="head-row"><h2 class="app-title">计划</h2><button id="new-task" class="primary">＋ 记一件事</button></div><p class="muted">把课程和自己的安排，放在一起看。</p><nav class="segmented" aria-label="计划视图" role="tablist"><button role="tab" data-tab="schedule" aria-selected="true">日程</button><button role="tab" data-tab="plans" aria-selected="false">目标计划</button><button role="tab" data-tab="tasks" aria-selected="false">全部待办</button></nav></header><div id="app-content" class="app-body"></div><div class="footer-note">校园时区 Asia/Shanghai · 所有确认只修改本页示例，刷新即可还原</div><nav class="bottom-nav" aria-label="原型导航"><button data-nav="today">今日</button><button data-nav="assistant">助手</button><button data-nav="planning" aria-current="page">计划</button><button data-nav="campus">校园</button></nav></section>
+<aside class="sidebar"><section class="panel"><div class="section-head"><h2>检查安排</h2><span class="pill">合成核对结果</span></div><p class="muted">三种重叠有不同处理，不把已确认的安排自动挪走。</p><div id="conflict-panel"></div></section><section class="panel"><h2>分别看待每份数据</h2><p class="muted">切换状态，检查数据不完整时的表达。只是原型开关，不会发起请求。</p><label for="course-source">课程来源</label><select id="course-source"><option value="fresh">课表已读取 · 示例版本 A</option><option value="stale">课表读取失败 · 保留旧快照</option><option value="missing">课表未读取 · 内容未知</option></select><label for="task-source">任务来源</label><select id="task-source"><option value="fresh">任务已读取</option><option value="stale">任务读取失败 · 保留旧快照</option><option value="missing">任务未读取 · 内容未知</option></select><label class="rowline" style="display:flex;min-height:48px"><input id="goal" type="checkbox" checked>已启用任务时长参考：120 分钟 / 天</label><p class="method">只与任务分钟比较，不把课时加进去判断学习超标。</p></section><section class="panel"><details><summary>这个原型可以验证什么</summary><p>100 条任务按真实编号检索、分页和本地完成；周一至周日的实际示例内容；课程完整事实与版本引用；编辑前后预计负荷。</p><p>筛选、自然周、时段并集和候选投影直接使用生产纯函数的去类型副本。冲突分类、来源状态和保存回执为固定示例，不是后端核查结果。</p><p>没有网络、真实账号、模型、系统通知和原生布局测试。这里的界面布局是浏览器近似稿。</p></details></section></aside>
+</div></main>
+<dialog id="detail" aria-labelledby="detail-title"><div class="dialog-head"><h2 id="detail-title"></h2><button class="quiet icon-button" id="close-dialog" aria-label="关闭详情">×</button></div><div class="dialog-content" id="detail-content"></div></dialog>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+<script>
+/* BEGIN PRODUCTION HELPERS */
+/* Generated from the actual pure helpers. Do not edit this block by hand.
+ * DailyAgenda SHA256 889b2115d924ba40cf55ee8835d1f1695fc3fa8b88061f717e450736d1ae4709
+ * PlanningOverview SHA256 1dcf6279d755d2072b2e6c5fc63bd4bcdcb39edd1c41234810175135d6ae5466
+ * No UI / network / native capability is included. */
+const Daily = (() => {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+const SHANGHAI_OFFSET_MS         = 8 * 60 * 60 * 1000;
+const DAY_MS         = 24 * 60 * 60 * 1000;
+
+// Campus timetable dates use Asia/Shanghai, independently of the device timezone.
+function shanghaiDate(nowMs        )         {
+  const shifted = new Date(nowMs + SHANGHAI_OFFSET_MS);
+  const year = `${shifted.getUTCFullYear()}`.padStart(4, '0');
+  const month = `${shifted.getUTCMonth() + 1}`.padStart(2, '0');
+  const day = `${shifted.getUTCDate()}`.padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function shanghaiTime(nowMs        )         {
+  const shifted = new Date(nowMs + SHANGHAI_OFFSET_MS);
+  return `${shifted.getUTCHours()}`.padStart(2, '0') + ':' + `${shifted.getUTCMinutes()}`.padStart(2, '0');
+}
+
+function validDate(value        )          {
+  if (!new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$').test(value)) { return false; }
+  const year = Number(value.substring(0, 4));
+  const month = Number(value.substring(5, 7));
+  const day = Number(value.substring(8, 10));
+  if (year < 1 || year > 9999 || month < 1 || month > 12 || day < 1) { return false; }
+  const leap = year % 400 === 0 || (year % 4 === 0 && year % 100 !== 0);
+  const lengths           = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  return day <= lengths[month - 1];
+}
+
+function timestamp(value               )                {
+  if (value === null || typeof value !== 'string') { return null; }
+  const match = new RegExp('^([0-9]{4}-[0-9]{2}-[0-9]{2})[Tt ]([01][0-9]|2[0-3]):([0-5][0-9])' +
+    '(:[0-5][0-9](\\.[0-9]+)?)?([Zz]|[+-]([01][0-9]|2[0-3]):[0-5][0-9])?$').exec(value);
+  if (match === null || !validDate(match[1])) { return null; }
+  // Naive legacy timestamps follow the same campus timezone as timetable rows.
+  const seconds = match[4] === undefined ? '00' : match[4].substring(1, 3);
+  const fraction = match[5] === undefined ? '000' : match[5].substring(1, 4).padEnd(3, '0');
+  const zone = match[6] === undefined ? '+08:00' : match[6].toUpperCase();
+  const normalized = `${match[1]}T${match[2]}:${match[3]}:${seconds}.${fraction}${zone}`;
+  const parsed = Date.parse(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function courseTimestamp(date        , time        )                {
+  if (!validDate(date) || !new RegExp('^([01][0-9]|2[0-3]):[0-5][0-9]$').test(time)) { return null; }
+  return timestamp(`${date}T${time}:00+08:00`);
+}
+
+function overlapsDay(start        , end               , dayStart        )          {
+  const dayEnd = dayStart + DAY_MS;
+  return end !== null && end > start ? start < dayEnd && end > dayStart : start >= dayStart && start < dayEnd;
+}
+
+function allDayDate(task              , start               )         {
+  if (task.start_at !== null && validDate(task.start_at)) { return task.start_at; }
+  if (task.source === 'manual' && task.end_at === null && start !== null && shanghaiTime(start) === '23:59') {
+    return shanghaiDate(start);
+  }
+  return '';
+}
+
+function taskRow(task              , start        , end               )            {
+  return {
+    id: `task-${task.task_id}`, kind: 'task', title: task.title,
+    date: shanghaiDate(start), startTime: shanghaiTime(start),
+    endTime: end === null ? '' : shanghaiTime(end), endDate: end === null ? '' : shanghaiDate(end),
+    location: task.location ?? '', taskId: task.task_id, planId: task.plan_id,
+    done: task.status === 'completed', startMs: start, endMs: end
+  };
+}
+
+function buildDailyAgenda(courses                  , tasks                , nowMs        )              {
+  const today = shanghaiDate(nowMs);
+  const dayStart = Date.parse(`${today}T00:00:00+08:00`);
+  const rows              = [];
+  const allDay                 = [];
+  const unscheduled                 = [];
+  courses.forEach((course                , index        ) => {
+    const start = courseTimestamp(course.date, course.start_time);
+    const end = courseTimestamp(course.date, course.end_time);
+    if (start === null || end === null || end <= start || !overlapsDay(start, end, dayStart)) { return; }
+    rows.push({
+      id: `course-${index}-${course.date}-${course.start_time}`, kind: 'course', title: course.title,
+      date: course.date, startTime: course.start_time, endTime: course.end_time, endDate: course.date,
+      location: course.location, taskId: null, planId: null, done: false, startMs: start, endMs: end
+    });
+  });
+  tasks.forEach((task              ) => {
+    if (task.status !== 'pending' && task.status !== 'completed') { return; }
+    if (task.start_at === null || (typeof task.start_at === 'string' && task.start_at.trim().length === 0)) {
+      if (task.status === 'pending') { unscheduled.push(task); }
+      return;
+    }
+    if (typeof task.start_at !== 'string') {
+      if (task.status === 'pending') { unscheduled.push(task); }
+      return;
+    }
+    const start = timestamp(task.start_at);
+    const dateOnly = allDayDate(task, start);
+    if (dateOnly.length > 0) {
+      if (dateOnly === today) { allDay.push(task); }
+      return;
+    }
+    if (start === null) {
+      // Preserve pending items with malformed legacy dates for explicit time review.
+      if (task.status === 'pending') { unscheduled.push(task); }
+      return;
+    }
+    const parsedEnd = timestamp(task.end_at);
+    const end = parsedEnd !== null && parsedEnd > start ? parsedEnd : null;
+    if (overlapsDay(start, end, dayStart)) { rows.push(taskRow(task, start, end)); }
+  });
+  rows.sort((left           , right           ) => {
+    if (left.startMs !== right.startMs) { return left.startMs - right.startMs; }
+    if (left.kind !== right.kind) { return left.kind === 'course' ? -1 : 1; }
+    return left.id < right.id ? -1 : (left.id > right.id ? 1 : 0);
+  });
+  const next = rows.find((row           ) => !row.done &&
+    (row.startMs >= nowMs || (row.endMs !== null && row.endMs > nowMs)));
+  return { today: today, rows: rows, allDay: allDay, unscheduled: unscheduled, next: next ?? null };
+}
+
+function labelNext(row           , nowMs        )         {
+  if (row.done) { return '已完成'; }
+  if (row.endMs !== null && row.endMs <= nowMs) { return '已结束'; }
+  if (row.startMs <= nowMs) {
+    return row.endMs !== null ? '正在进行' : (row.startMs === nowMs ? '现在开始' : '已到开始时间');
+  }
+  const minutes = Math.ceil((row.startMs - nowMs) / 60000);
+  if (minutes < 60) { return `${minutes} 分钟后开始`; }
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+  return remainder === 0 ? `${hours} 小时后开始` : `${hours} 小时 ${remainder} 分钟后开始`;
+}
+
+return {buildDailyAgenda,shanghaiDate,shanghaiTime,validDate,timestamp,courseTimestamp,allDayDate};
+})();
+const Overview = (() => {
+const {buildDailyAgenda,shanghaiDate,validDate,timestamp,courseTimestamp,allDayDate} = Daily;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+const DAY_MS         = 86400000;
+const OFFSET_MS         = 28800000;
+
+function timeOf(task              )           {
+  const start = timestamp(task.start_at);
+  const allDay = typeof task.start_at === 'string' || task.start_at === null ? allDayDate(task, start) : '';
+  const rawEnd = timestamp(task.end_at);
+  const end = start !== null && rawEnd !== null && rawEnd > start ? rawEnd : null;
+  const missingStart = task.start_at === null || typeof task.start_at === 'string' && task.start_at.trim().length === 0;
+  const missingEnd = task.end_at === null || typeof task.end_at === 'string' && task.end_at.trim().length === 0;
+  return { start: start, end: end, allDay: allDay,
+    invalidStart: !missingStart && start === null && allDay.length === 0,
+    invalidEnd: allDay.length === 0 && !missingEnd && end === null };
+}
+
+function shownTask(task              )          { return task.status === 'pending' || task.status === 'completed'; }
+function compareText(left        , right        )         { return left < right ? -1 : left > right ? 1 : 0; }
+function dayStart(date        )                { return typeof date === 'string' ? courseTimestamp(date, '00:00') : null; }
+function sortStart(task              )         {
+  const value = timeOf(task);
+  return value.allDay.length > 0 ? dayStart(value.allDay) ?? Number.POSITIVE_INFINITY : value.start ?? Number.POSITIVE_INFINITY;
+}
+function compareTasks(left              , right              , sort        )         {
+  if (sort === 'schedule') {
+    const a = sortStart(left); const b = sortStart(right);
+    if (a !== b) { return a < b ? -1 : 1; }
+  }
+  const a = timestamp(left.created_at); const b = timestamp(right.created_at);
+  if (a !== b) {
+    if (a === null) { return 1; } if (b === null) { return -1; }
+    return sort === 'created' ? b - a : a - b;
+  }
+  return compareText(left.task_id, right.task_id);
+}
+
+function filterPlanningTasks(tasks                , query           )                  {
+  const result                  = { tasks: [], total: tasks.length, matched: 0,
+    invalidDateCount: tasks.filter((task              ) => timeOf(task).invalidStart).length, valid: true, message: '' };
+  const start = dayStart(query.fromDate);
+  const finish = dayStart(query.dateMode === 'day' ? query.fromDate : query.toDate);
+  if (!['all', 'pending', 'completed'].includes(query.status) || !['all', 'day', 'range', 'undated'].includes(query.dateMode) ||
+    !['schedule', 'created'].includes(query.sort) || typeof query.text !== 'string' ||
+    ['day', 'range'].includes(query.dateMode) && (start === null || finish === null || finish < start)) {
+    result.valid = false; result.message = '筛选日期或条件无效，请重新选择。'; return result;
+  }
+  const search = query.text.trim().toLowerCase();
+  result.tasks = tasks.filter((task              )          => {
+    if (query.status !== 'all' && task.status !== query.status) { return false; }
+    if (search.length > 0 && !task.title.toLowerCase().includes(search) && !(task.location ?? '').toLowerCase().includes(search)) { return false; }
+    const value = timeOf(task);
+    if (query.dateMode === 'all') { return true; }
+    if (query.dateMode === 'undated') { return value.start === null && value.allDay.length === 0; }
+    if (start === null || finish === null) { return false; }
+    const rangeEnd = finish + DAY_MS;
+    if (value.allDay.length > 0) {
+      const date = dayStart(value.allDay); return date !== null && date >= start && date < rangeEnd;
+    }
+    if (value.start === null) { return false; }
+    return value.end !== null ? value.start < rangeEnd && value.end > start : value.start >= start && value.start < rangeEnd;
+  }).sort((left              , right              ) => compareTasks(left, right, query.sort));
+  result.matched = result.tasks.length;
+  return result;
+}
+
+function courseFields(course                )         {
+  return JSON.stringify([course.date, course.title, course.start_time, course.end_time, course.location, course.teacher]);
+}
+function copyCourse(course                )                 {
+  return { date: course.date, title: course.title, start_time: course.start_time, end_time: course.end_time,
+    location: course.location, teacher: course.teacher };
+}
+function validCourse(course                )          {
+  if (course === null || typeof course !== 'object' || Array.isArray(course) ||
+    typeof course.date !== 'string' || typeof course.title !== 'string' || course.title.trim().length === 0 ||
+    typeof course.start_time !== 'string' || typeof course.end_time !== 'string' ||
+    typeof course.location !== 'string' || typeof course.teacher !== 'string') { return false; }
+  const start = courseTimestamp(course.date, course.start_time); const end = courseTimestamp(course.date, course.end_time);
+  return start !== null && end !== null && end > start;
+}
+
+function validPlanningTimetable(snapshot                   )          {
+  return snapshot !== null && typeof snapshot === 'object' && !Array.isArray(snapshot) &&
+    typeof snapshot.revision === 'string' && /^[a-f0-9]{64}$/.test(snapshot.revision) &&
+    Array.isArray(snapshot.entries) && snapshot.entries.length <= 500 && snapshot.entries.every((course                ) => validCourse(course));
+}
+
+function courseReferences(courses                  , revision        )                      {
+  const seen           = [];
+  return courses.map((course                )                    => {
+    const fields = courseFields(course);
+    const occurrence = seen.filter((value        ) => value === fields).length + 1;
+    seen.push(fields);
+    return { key: JSON.stringify([revision, fields, occurrence]), revision: revision, course: copyCourse(course), occurrence: occurrence };
+  });
+}
+
+function resolvePlanningCourse(reference                   , courses                  , currentRevision        )                        {
+  if (reference === null || typeof reference !== 'object' || typeof currentRevision !== 'string' ||
+    !/^[a-f0-9]{64}$/.test(currentRevision) || reference.revision !== currentRevision || !validCourse(reference.course) ||
+    !Number.isInteger(reference.occurrence) || reference.occurrence < 1) { return null; }
+  const fields = courseFields(reference.course);
+  if (reference.key !== JSON.stringify([currentRevision, fields, reference.occurrence])) { return null; }
+  const matches = courses.filter((course                ) => validCourse(course) && courseFields(course) === fields);
+  const found = matches[reference.occurrence - 1];
+  return found === undefined ? null : copyCourse(found);
+}
+
+function weekRow(row           , date        , start        , reference                          )                  {
+  return { id: reference === null ? `${row.id}-${date}` : reference.key, kind: row.kind, title: row.title, date: row.date,
+    startTime: row.startTime, endTime: row.endTime, endDate: row.endDate, location: row.location,
+    taskId: row.taskId, planId: row.planId, done: row.done, startMs: row.startMs, endMs: row.endMs,
+    courseRef: reference, displayDate: date, segmentStartMs: Math.max(start, row.startMs),
+    segmentEndMs: row.endMs === null ? null : Math.min(start + DAY_MS, row.endMs) };
+}
+
+function buildPlanningWeek(courses                  , revision        , tasks                , anchorDate        )               {
+  const result               = { startDate: '', endDate: '', days: [], undated: [], unplacedCourses: [], valid: true, message: '' };
+  const anchor = dayStart(anchorDate);
+  if (anchor === null) { result.valid = false; result.message = '所选日期无效，尚未生成周总览。'; return result; }
+  const weekday = new Date(anchor + OFFSET_MS).getUTCDay();
+  const monday = anchor - ((weekday + 6) % 7) * DAY_MS;
+  result.startDate = shanghaiDate(monday); result.endDate = shanghaiDate(monday + 6 * DAY_MS);
+  if (!validDate(result.startDate) || !validDate(result.endDate)) {
+    result.valid = false; result.message = '所选周超出支持的日期范围。'; return result;
+  }
+  const references = courseReferences(courses, revision);
+  result.unplacedCourses = references.filter((reference                   ) => !validCourse(reference.course));
+  result.undated = tasks.filter((task              )          => {
+    const value = timeOf(task); return shownTask(task) && value.start === null && value.allDay.length === 0;
+  }).sort((left              , right              ) => compareTasks(left, right, 'schedule'));
+  for (let index = 0; index < 7; index++) {
+    const start = monday + index * DAY_MS; const date = shanghaiDate(start);
+    const agenda = buildDailyAgenda([], tasks, start);
+    const rows = agenda.rows.map((row           ) => weekRow(row, date, start, null));
+    references.forEach((reference                   ) => {
+      if (!validCourse(reference.course)) { return; }
+      const courseRows = buildDailyAgenda([reference.course], [], start).rows;
+      if (courseRows.length > 0) { rows.push(weekRow(courseRows[0], date, start, reference)); }
+    });
+    rows.sort((left                 , right                 )         => {
+      if (left.startMs !== right.startMs) { return left.startMs - right.startMs; }
+      if (left.kind !== right.kind) { return left.kind === 'course' ? -1 : 1; }
+      return compareText(left.id, right.id);
+    });
+    result.days.push({ date: date, rows: rows, allDay: agenda.allDay.slice().sort((left              , right              ) => compareTasks(left, right, 'schedule')) });
+  }
+  return result;
+}
+
+function unionMinutes(intervals            )         {
+  const sorted = intervals.slice().sort((left          , right          ) => left.start - right.start || left.end - right.end);
+  let start = 0; let end = 0; let total = 0; let hasInterval = false;
+  sorted.forEach((interval          ) => {
+    if (!hasInterval) { start = interval.start; end = interval.end; hasInterval = true; }
+    else if (interval.start <= end) { end = Math.max(end, interval.end); }
+    else { total += end - start; start = interval.start; end = interval.end; }
+  });
+  if (hasInterval) { total += end - start; }
+  return total / 60000;
+}
+
+// This measures scheduled occupancy, including completed scheduled tasks; never actual study time.
+// A user-enabled daily_minutes goal should be compared with taskMinutes only, not totalMinutes.
+function dailyPlannedLoad(courses                  , tasks                , date        )                  {
+  const result                  = { date: date, valid: true, message: '', courseMinutes: 0, taskMinutes: 0, totalMinutes: 0,
+    timedCourseCount: 0, timedTaskCount: 0, allDayCount: 0, undatedCount: 0, incompleteTaskCount: 0,
+    invalidCourseCount: 0, invalidTaskCount: 0 };
+  const start = dayStart(date);
+  if (start === null) { result.valid = false; result.message = '所选日期无效，尚未计算预计负荷。'; return result; }
+  const end = start + DAY_MS; const courseIntervals             = []; const taskIntervals             = [];
+  courses.forEach((course                ) => {
+    if (!validCourse(course)) {
+      if (!validDate(course.date) || course.date === date) { result.invalidCourseCount++; }
+      return;
+    }
+    const from = courseTimestamp(course.date, course.start_time); const to = courseTimestamp(course.date, course.end_time);
+    if (from !== null && to !== null && from < end && to > start) {
+      courseIntervals.push({ start: Math.max(start, from), end: Math.min(end, to) }); result.timedCourseCount++;
+    }
+  });
+  tasks.forEach((task              ) => {
+    if (!shownTask(task)) { return; }
+    const value = timeOf(task);
+    if (value.allDay.length > 0) { if (value.allDay === date) { result.allDayCount++; } return; }
+    if (value.start === null) {
+      if (value.invalidStart) { result.invalidTaskCount++; } else { result.undatedCount++; }
+      return;
+    }
+    if (value.end === null) {
+      if (value.start >= start && value.start < end) {
+        if (value.invalidEnd) { result.invalidTaskCount++; } else { result.incompleteTaskCount++; }
+      }
+      return;
+    }
+    if (value.start < end && value.end > start) {
+      taskIntervals.push({ start: Math.max(start, value.start), end: Math.min(end, value.end) }); result.timedTaskCount++;
+    }
+  });
+  result.courseMinutes = unionMinutes(courseIntervals); result.taskMinutes = unionMinutes(taskIntervals);
+  result.totalMinutes = unionMinutes(courseIntervals.concat(taskIntervals));
+  if (result.invalidCourseCount + result.invalidTaskCount + result.incompleteTaskCount + result.allDayCount + result.undatedCount > 0) {
+    result.message = '仅合计明确时段；全天、未定时及时间待核对事项未计入分钟。';
+  }
+  return result;
+}
+
+function projectPlanningCandidate(tasks                , candidate                       )                              {
+  const result                              = { tasks: tasks.slice(), valid: true, message: '' };
+  const existing = candidate.replaceTaskId === null ? [] : tasks.filter((task              ) => task.task_id === candidate.replaceTaskId);
+  if (candidate.replaceTaskId !== null && (candidate.replaceTaskId.length === 0 || existing.length !== 1)) {
+    result.valid = false; result.message = '原任务已变化或编号不唯一，未计算编辑后的负荷，请刷新。'; return result;
+  }
+  let localId = 'planning-preview';
+  while (tasks.some((task              ) => task.task_id === localId)) { localId += '-new'; }
+  const old = existing[0]; const draft = candidate.task;
+  const projected               = { task_id: old?.task_id ?? localId, plan_id: old?.plan_id ?? null,
+    milestone_id: old?.milestone_id ?? null, title: draft.title, start_at: draft.start_at, end_at: draft.end_at,
+    reminder_minutes: draft.reminder_minutes, location: draft.location, status: old?.status ?? 'pending',
+    source: old?.source ?? candidate.source, created_at: old?.created_at ?? '', completed_at: old?.completed_at ?? null,
+    allow_during_course: draft.allow_during_course ?? old?.allow_during_course ?? false };
+  if (old === undefined) { result.tasks.push(projected); }
+  else { result.tasks = tasks.map((task              ) => task.task_id === old.task_id ? projected : task); }
+  return result;
+}
+
+return {filterPlanningTasks,buildPlanningWeek,resolvePlanningCourse,validPlanningTimetable,dailyPlannedLoad,projectPlanningCandidate};
+})();
+/* END PRODUCTION HELPERS */
+</script>
+<script>
+'use strict';
+const $=id=>document.getElementById(id),escapeHtml=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const icons={calendar:'<rect x="4" y="6" width="16" height="15" rx="2"/><path d="M8 3v6m8-6v6M4 11h16m-12 4h3m2 0h3"/>',search:'<circle cx="10" cy="10" r="6"/><path d="m15 15 5 5"/>',chevron:'<path d="m9 5 7 7-7 7"/>',home:'<path d="m3 11 9-8 9 8M5 10v11h14V10m-10 11v-7h6v7"/>',assistant:'<path d="M20 14a3 3 0 0 1-3 3H9l-5 4V6a3 3 0 0 1 3-3h10a3 3 0 0 1 3 3Z"/><path d="M8 8h8m-8 4h5"/>',campus:'<path d="m3 9 9-6 9 6M5 10v11m14-11v11M3 21h18M8 12h2m4 0h2m-8 4h2m4 0h2"/>',check:'<path d="m5 12 4 4L19 6"/>'};
+const icon=name=>`<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">${icons[name]||icons.calendar}</svg>`;
+const stamp=(date,time)=>`${date}T${time}:00+08:00`,R='a'.repeat(64),dayNames=['周一','周二','周三','周四','周五','周六','周日'];
+const course=(date,title,start,end,location='第 7 教学楼北 406',teacher='陈老师')=>({date,title,start_time:start,end_time:end,location,teacher});
+const courses=[course('2026-10-19','操作系统','08:20','09:55'),course('2026-10-19','软件工程','14:00','15:35','第 4 教学楼 311','杨老师'),course('2026-10-20','数据结构','14:00','15:35','第 6 教学楼 208','李老师'),course('2026-10-21','计算机网络','10:00','11:35'),course('2026-10-22','线性代数','08:20','09:55','第 3 教学楼 201','沈老师'),course('2026-10-23','英语读写','10:00','11:35','第 1 教学楼 112','林老师')];
+const makeTask=(id,title,date,start,end,extra={})=>({task_id:id,title,plan_id:null,milestone_id:null,start_at:date?start?stamp(date,start):date:null,end_at:end?stamp(date,end):null,reminder_minutes:10,location:'图书馆 3 楼',status:'pending',source:'manual',created_at:'2026-10-18T18:00:00+08:00',completed_at:null,allow_during_course:false,...extra});
+const initialTasks=[makeTask('demo-001','整理操作系统错题','2026-10-19','09:00','10:00',{source:'agent',plan_id:'plan-os'}),makeTask('demo-002','随堂记录：进程与线程','2026-10-19','08:40','09:10',{location:'第 7 教学楼北 406',allow_during_course:true}),makeTask('demo-003','小组汇报提纲','2026-10-20','14:30','15:00',{location:'第 6 教学楼 208',allow_during_course:true}),makeTask('demo-004','英语阅读，留 5 分钟写一句总结','2026-10-19','19:00','19:45',{status:'completed',completed_at:'2026-10-19T19:45:00+08:00'}),makeTask('demo-005','提交奖学金申请材料','2026-10-19',null,null,{location:'学生事务大厅'}),makeTask('demo-006','读完项目说明，再决定需要多少时间','2026-10-19','16:00',null),makeTask('demo-007','和社团同学约一个碰面时间',null,null,null,{location:'待商量'}),makeTask('demo-008','整理线性代数笔记','2026-10-22','11:00','12:00'),makeTask('demo-009','实验报告校对','2026-10-23','18:00','19:00',{plan_id:'plan-os'}),makeTask('demo-010','整理参考资料（跨日示例）','2026-10-24','23:40',null,{end_at:stamp('2026-10-25','00:20')}),makeTask('demo-011','章节练习与错题回顾','2026-10-21','15:00','15:40',{plan_id:'plan-os'}),makeTask('demo-012','散步后写一小段周记','2026-10-25','17:00','17:20',{location:'生活区'})];
+for(let i=13;i<=100;i++){const date=`2026-11-${String((i-13)%28+1).padStart(2,'0')}`;initialTasks.push(makeTask(`demo-${String(i).padStart(3,'0')}`,`${i%3===0?'英语阅读':i%3===1?'课程复习':'实验资料'} · ${String(i).padStart(3,'0')}`,date,'18:00','18:30',{location:i%2?'图书馆 3 楼':'寝室',status:i%4===0?'completed':'pending',created_at:`2026-10-${String(1+(i%17)).padStart(2,'0')}T18:00:00+08:00`}));}
+let tasks=structuredClone(initialTasks),state={tab:'schedule',view:'week',selectedDate:'2026-10-19',anchor:'2026-10-19',page:0,query:{text:'',status:'all',dateMode:'all',fromDate:'2026-10-19',toDate:'2026-10-25',sort:'schedule'},courseSource:'fresh',taskSource:'fresh',goal:true,revision:R,draft:'',draftDate:'2026-10-19',conflictMoved:false,reviewAccepted:false},currentWeek=null,dialogTask=null,dialogCourse=null,projection=null,toastTimer=null;
+const activeCourses=()=>state.courseSource==='missing'?[]:courses,activeTasks=()=>state.taskSource==='missing'?[]:tasks;
+const formatDate=date=>`${Number(date.slice(5,7))} 月 ${Number(date.slice(8,10))} 日`,time=v=>v?String(v).slice(11,16):'',minutes=n=>`${Math.round(n)} 分钟`,exactDate=date=>`${date}（校园时区）`;
+function toast(message){$('toast').textContent=message;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').textContent='',4500)}
+function openDialog(title,html){$('detail-title').textContent=title;$('detail-content').innerHTML=html;if(!$('detail').open)$('detail').showModal();}
+function closeDialog(){$('detail').close();dialogTask=null;dialogCourse=null;projection=null;}
+function badge(task){if(task.task_id==='demo-001'&&!state.conflictMoved)return '<span class="pill conflict">与课程重叠</span>';if(task.task_id==='demo-002'||task.task_id==='demo-003'&&state.reviewAccepted)return '<span class="pill accepted">已确认课内安排</span>';if(task.task_id==='demo-003')return '<span class="pill review">课表变化，需核对</span>';return '';}
+function completeButton(task){return `<button class="complete" data-complete="${task.task_id}" aria-label="${task.status==='completed'?'恢复待办':'完成'}：${escapeHtml(task.title)}" aria-pressed="${task.status==='completed'}"><span class="check-circle">${task.status==='completed'?icon('check'):''}</span></button>`}
+function taskDescription(task){const start=Daily.timestamp(task.start_at),all=Daily.allDayDate(task,start);return all?`${all} · 全天`:start===null?'日期未定':`${Daily.shanghaiDate(start)} · ${Daily.shanghaiTime(start)}${task.end_at?'–'+time(task.end_at):' · 结束时间未定'}`;}
+function taskRow(task,compact=false){return `<div class="agenda-row ${task.status==='completed'?'completed':''}" data-task-id="${task.task_id}">${compact?`<div class="agenda-time"><strong>全天</strong></div>`:''}<button class="entry" data-task="${task.task_id}"><strong>${escapeHtml(task.title)}</strong><span class="meta">${compact?'':escapeHtml(taskDescription(task))+' · '}${escapeHtml(task.location||'地点未定')}</span>${badge(task)}${task.plan_id?'<span class="pill">来自目标计划</span>':''}</button>${completeButton(task)}</div>`;}
+function weekRow(row,index){const isCourse=row.kind==='course',task=isCourse?null:tasks.find(t=>t.task_id===row.taskId),cross=row.date!==row.displayDate||row.endDate&&row.endDate!==row.displayDate;const from=Daily.shanghaiTime(row.segmentStartMs),end=row.segmentEndMs===null?'未定':row.segmentEndMs===Daily.courseTimestamp(row.displayDate,'00:00')+86400000?'24:00':Daily.shanghaiTime(row.segmentEndMs);return `<div class="agenda-row ${row.done?'completed':''}" data-row-id="${escapeHtml(row.id)}"><div class="agenda-time"><strong>${from}</strong>${end}</div><button class="entry" ${isCourse?`data-course="${index}" data-course-day="${row.displayDate}"`:`data-task="${row.taskId}"`}><strong>${escapeHtml(row.title)}</strong><span class="meta">${escapeHtml(row.location||'地点未定')}${cross?' · 跨日时段':''}</span>${isCourse?'<span class="pill course">课程</span>':badge(task)}${!isCourse&&!badge(task)?'<span class="pill">待办</span>':''}</button>${isCourse?'<span></span>':completeButton(task)}</div>`;}
+function notices(){let html='';for(const [key,label] of [['courseSource','课程'],['taskSource','任务']]){if(state[key]==='fresh')continue;html+=`<div class="notice ${state[key]==='missing'?'error':''}" data-source-notice="${key}" style="margin-bottom:10px"><strong>${label}${state[key]==='stale'?'读取失败，下面保留旧快照':'尚未读取，内容未知'}</strong><p>${state[key]==='stale'?'旧内容不能证明当前无冲突。':'这不表示没有'+label+'。'} 预计负荷仅能作为不完整参考。</p><button data-retry-source="${key}">重新读取（演示）</button></div>`;}return html;}
+function loadHTML(date,sourceTasks=activeTasks(),candidate=false){const load=Overview.dailyPlannedLoad(activeCourses(),sourceTasks,date),incomplete=state.courseSource!=='fresh'||state.taskSource!=='fresh';return `<section class="load" data-load-date="${date}" data-total="${load.totalMinutes}" data-task-minutes="${load.taskMinutes}"><div class="meta">${formatDate(date)} · ${candidate?'候选确认后':'预计安排'}${incomplete?'（来源不完整）':''}</div><div class="load-total"><strong>${minutes(load.totalMinutes)}</strong><span class="meta">明确时段去重后</span></div><div class="load-breakdown"><span>课程 ${minutes(load.courseMinutes)}</span><span>任务 ${minutes(load.taskMinutes)}</span></div><div class="union-line" aria-hidden="true"><span style="flex:${load.courseMinutes||1}"></span><span style="flex:${load.taskMinutes||1}"></span></div><p class="meta">课程与任务重叠的部分只算一次。这是安排占用，不是实际学习时长。</p><p class="meta">${load.allDayCount} 项全天 · ${load.incompleteTaskCount} 项结束未定 · ${load.undatedCount} 项无日期，未计入分钟。</p>${state.goal?`<p class="goal-note">你的任务时长参考为 120 分钟；当前任务 ${minutes(load.taskMinutes)}${load.taskMinutes>120?'，多出 '+minutes(load.taskMinutes-120)+'，可自行留一点余量。':'。课程时长不参与比较。'}</p>`:''}</section>`;}
+function scheduleHTML(){currentWeek=Overview.buildPlanningWeek(activeCourses(),state.revision,activeTasks(),state.anchor);const days=state.view==='week'?currentWeek.days:currentWeek.days.filter(d=>d.date===state.selectedDate);return `${notices()}<div class="week-tools"><div><div class="eyebrow">2026 · 校园日程</div><h2>${formatDate(currentWeek.startDate)}—${formatDate(currentWeek.endDate)}</h2></div><div class="week-nav"><button id="previous-week" class="quiet" aria-label="上一周">‹</button><button id="this-week" class="border" aria-label="回到示例所在周">本周</button><button id="next-week" class="quiet" aria-label="下一周">›</button></div></div><div class="rowline" style="justify-content:space-between"><div class="switch"><button data-view="week" aria-pressed="${state.view==='week'}">整周</button><button data-view="day" aria-pressed="${state.view==='day'}">所选日</button></div><span class="meta">周一至周日 · 按开始时间排序</span></div><div class="selected-line"><div><div class="mini-label">当前选中</div><strong id="selected-date">${state.selectedDate}</strong></div><button id="date-to-assistant" class="border">交给助手规划</button></div>${loadHTML(state.selectedDate)}<div id="week-days">${days.map((day,i)=>`<section class="day-block" data-date="${day.date}"><div class="day-heading"><button class="day-button" data-select-date="${day.date}" aria-pressed="${state.selectedDate===day.date}"><strong>${state.selectedDate===day.date?'<i class="selected-dot"></i>':''}${formatDate(day.date)}</strong><span>${dayNames[currentWeek.days.indexOf(day)]}</span></button><span class="meta">${day.rows.length} 个定时安排${day.allDay.length?' · '+day.allDay.length+' 项全天':''}</span></div>${day.rows.map((r,index)=>weekRow(r,index)).join('')}${day.rows.length===0?`<p class="empty-day">${state.courseSource!=='fresh'||state.taskSource!=='fresh'?'当前已读内容中没有定时安排；来源不完整。':'这天还没有定时安排，留白也很好。'}</p>`:''}${day.allDay.length?`<div class="all-day"><div class="mini-label">全天事项 · 不估算时长</div>${day.allDay.map(t=>taskRow(t,true)).join('')}</div>`:''}</section>`).join('')}</div><div class="section"><div class="section-head"><h3>日期还没定</h3><span class="meta">${currentWeek.undated.length} 项</span></div><div class="task-list">${currentWeek.undated.map(t=>taskRow(t)).join('')||'<p class="empty-day">没有未定日期的事项。</p>'}</div></div>`;}
+function tasksHTML(){const result=Overview.filterPlanningTasks(activeTasks(),state.query),pages=Math.max(1,Math.ceil(result.matched/20));state.page=Math.min(state.page,pages-1);const shown=result.tasks.slice(state.page*20,(state.page+1)*20);return `${notices()}<h2>所有小事，都找得到</h2><div class="filters"><label class="full" for="search">标题或地点<div class="search-line">${icon('search')}<input id="search" placeholder="例如：图书馆、英语阅读" value="${escapeHtml(state.query.text)}" autocomplete="off"></div></label><label for="filter-status">状态<select id="filter-status"><option value="all">全部状态</option><option value="pending">待完成</option><option value="completed">已完成</option></select></label><label for="filter-date">日期<select id="filter-date"><option value="all">全部日期</option><option value="day">指定日期</option><option value="range">日期范围</option><option value="undated">没有日期</option></select></label>${['day','range'].includes(state.query.dateMode)?`<label for="filter-from">${state.query.dateMode==='range'?'从':'日期'}<input type="date" id="filter-from" value="${state.query.fromDate}"></label>`:''}${state.query.dateMode==='range'?`<label for="filter-to">到<input type="date" id="filter-to" value="${state.query.toDate}"></label>`:''}<label class="full" for="filter-sort">排序<select id="filter-sort"><option value="schedule">安排时间：从早到晚，无日期在后</option><option value="created">创建时间：最新在前</option></select></label></div><div class="result-line"><span class="meta" id="result-count">${result.matched} / ${result.total} 项</span><button id="clear-filters" class="quiet">清除筛选</button></div><p class="meta">标题 / 地点、状态与日期需同时满足；同名事项仍按各自编号区分。</p>${!result.valid?`<div class="notice error">${escapeHtml(result.message)}</div>`:result.matched===0?`<div class="no-results"><h3>${result.total===0?'当前没有已读取的任务':'没有符合条件的事项'}</h3><p>${result.total===0?'来源状态见上方；未读取不代表没有任务。':'可以放宽日期或状态，不必重新录入。'}</p><button data-clear-filters>查看全部事项</button></div>`:`<div class="task-list" id="task-results">${shown.map(t=>taskRow(t)).join('')}</div><div class="pager"><button id="previous-page" class="border" ${state.page===0?'disabled':''}>上一页</button><span class="meta" id="page-count">第 ${state.page+1} / ${pages} 页 · 每页 20 项</span><button id="next-page" class="border" ${state.page>=pages-1?'disabled':''}>下一页</button></div>`}`;}
+function plansHTML(){return `${notices()}<div class="section-head"><h2>先看目标，再看下一步</h2><span class="meta">1 个示例计划</span></div><section class="plan-sheet"><div class="rowline"><span class="pill">到 10 月 30 日</span><span class="pill">学习计划</span></div><h3 style="margin-top:12px">操作系统 · 梳理进程与内存</h3><p class="muted" style="margin-top:8px">从错题出发，把课堂知识串成可以复述的脉络。</p><div class="progress"><span></span></div><p class="meta">3 个阶段 · 1 个阶段已完成（合成进度）</p><details><summary>展开完整阶段与事项</summary><ol><li><strong>回顾概念</strong><p class="meta">10 月 18 日 · 已完成 · 进程与线程概念卡</p></li><li><strong>整理错题</strong><div class="task-list">${taskRow(tasks.find(t=>t.task_id==='demo-001'))}${taskRow(tasks.find(t=>t.task_id==='demo-011'))}</div></li><li><strong>整理表达</strong><div class="task-list">${taskRow(tasks.find(t=>t.task_id==='demo-009'))}</div></li></ol></details><button id="plan-assistant" class="border" style="width:100%">把这个目标放进助手草稿</button></section>`;}
+function render(){document.querySelectorAll('[data-tab]').forEach(b=>b.setAttribute('aria-selected',b.dataset.tab===state.tab));$('app-content').innerHTML=state.tab==='schedule'?scheduleHTML():state.tab==='tasks'?tasksHTML():plansHTML();if(state.tab==='tasks'){for(const [id,key] of [['filter-status','status'],['filter-date','dateMode'],['filter-sort','sort']])$(id).value=state.query[key];}renderConflicts();}
+function renderConflicts(){const unavailable=state.courseSource!=='fresh'||state.taskSource!=='fresh';$('conflict-panel').innerHTML=`${unavailable?'<div class="notice" style="margin-top:12px">来源不完整。保留的分类只是旧示例，先重新读取，再核对或预览。</div>':''}<div class="audit-row"><span class="pill conflict">普通冲突${state.conflictMoved?' · 已演示调整':''}</span><strong>整理操作系统错题</strong><p>${state.conflictMoved?'已按编号移动到 10:10–11:10。原任务身份不变。':'09:00–10:00 与操作系统 08:20–09:55 重叠 55 分钟。'}</p><button data-open-conflict ${unavailable||state.conflictMoved?'disabled':''}>${state.conflictMoved?'本地示例已调整':'查看改前 / 改后'}</button></div><div class="audit-row"><span class="pill accepted">已确认课内安排</span><strong>随堂记录：进程与线程</strong><p>已针对这份课表确认，保持原 08:40–09:10；不会进入自动改期。</p><button data-task="demo-002">查看确认范围</button></div><div class="audit-row"><span class="pill ${state.reviewAccepted?'accepted':'review'}">${state.reviewAccepted?'已重新核对（演示）':'课表变化，需重新核对'}</span><strong>小组汇报提纲</strong><p>原许可不代表适用于新课表。与数据结构重叠 30 分钟。</p><button data-review ${unavailable||state.reviewAccepted?'disabled':''}>${state.reviewAccepted?'保持原时段，不自动挪动':'查看新的重叠事实'}</button></div>`;}
+function showTask(id){const task=tasks.find(t=>t.task_id===id);if(!task)return;dialogTask=id;openDialog('事项详情',`${badge(task)}<h3 style="margin:12px 0">${escapeHtml(task.title)}</h3><div class="fact"><span>时间</span><strong>${escapeHtml(taskDescription(task))}</strong></div><div class="fact"><span>地点</span><strong>${escapeHtml(task.location||'未定')}</strong></div><div class="fact"><span>来源</span><strong>${task.source==='agent'?'助手提案（合成）':'手动记录（合成）'}</strong></div><div class="fact"><span>精确编号</span><strong>${task.task_id}</strong></div>${id==='demo-002'?'<p class="notice info">当前示例许可只覆盖操作系统 2026-10-19 08:20–09:55。记录与课程重叠 30 分钟，不改变安排。</p>':''}<p class="meta">编辑只投影这一编号；预览不会直接修改任务。</p><div class="dialog-actions"><button id="edit-task" class="primary">编辑并预览</button><button id="detail-back" class="border">返回列表</button></div>`);}
+function editTask(id){const task=tasks.find(t=>t.task_id===id);dialogTask=id;openDialog('编辑事项 · 先预览',`<p class="meta">${id} · 保留原任务身份与计划归属</p><label for="edit-title">标题</label><input id="edit-title" value="${escapeHtml(task.title)}"><label for="edit-start">开始（校园时区）</label><input id="edit-start" type="datetime-local" value="${task.start_at&&task.start_at.includes('T')?task.start_at.slice(0,16):''}"><label for="edit-end">结束（可留空，不估算时长）</label><input id="edit-end" type="datetime-local" value="${task.end_at?task.end_at.slice(0,16):''}"><label for="edit-location">地点</label><input id="edit-location" value="${escapeHtml(task.location||'')}"><div id="edit-error" role="alert"></div><div class="dialog-actions"><button id="preview-edit" class="primary">预览预计负荷</button><button id="detail-back" class="border">返回，不修改</button></div>`);}
+function previewEdit(){const old=tasks.find(t=>t.task_id===dialogTask),start=$('edit-start').value,end=$('edit-end').value,title=$('edit-title').value.trim();if(!title||start&&!Daily.timestamp(`${start}:00+08:00`)||end&&!start||end&&end<=start){$('edit-error').innerHTML='<p class="notice error">请填写标题，并核对开始与结束时间；结束需晚于开始。</p>';return;}const draft={title,start_at:start?`${start}:00+08:00`:null,end_at:end?`${end}:00+08:00`:null,location:$('edit-location').value,reminder_minutes:old.reminder_minutes,allow_during_course:old.allow_during_course};projection=Overview.projectPlanningCandidate(tasks,{task:draft,replaceTaskId:old.task_id,source:old.source});const date=start?start.slice(0,10):state.selectedDate;openDialog('确认前，再看一眼',`<p class="meta">修改 ${old.task_id} · 尚未保存</p><div class="compare"><div><span class="mini-label">修改前</span><strong>${escapeHtml(old.title)}</strong><p>${escapeHtml(taskDescription(old))}</p></div><div class="after"><span class="mini-label">修改后</span><strong>${escapeHtml(draft.title)}</strong><p>${start?start.replace('T',' '):'无日期'}${end?' 至 '+end.replace('T',' '):' · 结束未定'}</p></div></div>${loadHTML(date,tasks)}${loadHTML(date,projection.tasks,true)}<p class="notice">这只是本地负荷投影，未执行服务端冲突检查。原型不开放保存编辑；真实页面仍须取得权威提案并确认。</p><div class="dialog-actions"><button id="edit-task" class="border">继续编辑</button><button id="detail-back" class="primary">返回原事项</button></div>`);}
+function openConflict(){projection=Overview.projectPlanningCandidate(tasks,{task:{title:'整理操作系统错题',start_at:stamp('2026-10-19','10:10'),end_at:stamp('2026-10-19','11:10'),location:'图书馆 3 楼',reminder_minutes:10},replaceTaskId:'demo-001',source:'agent'});openDialog('普通冲突 · 改期示例',`<p class="meta">固定合成候选，不是实时重排结果</p><h3>整理操作系统错题</h3><p>操作系统：2026-10-19 08:20–09:55<br>原任务：09:00–10:00 · 重叠 55 分钟</p><div class="compare"><div><span class="mini-label">改前</span><strong>09:00–10:00</strong><p>2026-10-19 · 60 分钟</p></div><div class="after"><span class="mini-label">改后</span><strong>10:10–11:10</strong><p>同一天 · 保持 60 分钟</p></div></div>${loadHTML('2026-10-19',tasks)}${loadHTML('2026-10-19',projection.tasks,true)}<p class="notice info">去除重叠后，占用分钟可能增加。它不代表任务变长，也不代表排程最优。</p><p class="meta">只改 demo-001；已确认课内安排 demo-002 保留。本例不模拟期限、7 天候选搜索或真实回执。</p><div class="dialog-actions"><button id="apply-demo-replan" class="primary">确认这个示例改期</button><button id="cancel-demo" class="border">取消，保持原样</button></div>`);}
+function openCourse(date,index){const day=currentWeek.days.find(d=>d.date===date),row=day?.rows[index];if(!row?.courseRef)return;dialogCourse=row.courseRef;const found=Overview.resolvePlanningCourse(dialogCourse,courses,state.revision);if(!found){openDialog('课表已变化','<p class="notice">旧引用不再绑定当前课程，请回到日程重新选择。</p>');return;}openDialog('课程详情',`<h3>${escapeHtml(found.title)}</h3>${[['日期',found.date],['时段',`${found.start_time}–${found.end_time}`],['地点',found.location],['教师',found.teacher],['来源','课表 A · 同事实第 '+dialogCourse.occurrence+' 条']].map(([k,v])=>`<div class="fact"><span>${k}</span><strong>${escapeHtml(v)}</strong></div>`).join('')}<p class="meta">完整课程事实、课表版本和重复序号共同关联；不会按标题找另一门课。</p><div class="dialog-actions"><button id="change-course-version" class="border">模拟课表版本变化</button><button id="detail-close" class="primary">看完了</button></div>`);}
+function openReview(){openDialog('重新核对课内安排',`<span class="pill review">旧许可已不覆盖新课表</span><h3 style="margin-top:12px">小组汇报提纲</h3><div class="fact"><span>任务时段</span><strong>2026-10-20 14:30–15:00</strong></div><div class="fact"><span>当前课程</span><strong>数据结构 · 14:00–15:35<br>第 6 教学楼 208 · 李老师</strong></div><div class="fact"><span>实际重叠</span><strong>14:30–15:00，共 30 分钟</strong></div><label class="rowline" style="display:flex;min-height:48px"><input id="review-ack" type="checkbox">我已核对新课表，仍要保留这个时段</label><p class="meta">仅演示明确确认的流程，不是有效的后端许可或授权。</p><div class="dialog-actions"><button id="confirm-review" class="primary" disabled>确认保留（演示）</button><button id="cancel-demo" class="border">暂不确认</button></div>`);}
+function openAssistant(text){if(!state.draft)state.draft=text;openDialog('助手草稿 · 手动发送前可编辑',`<p class="meta">这段文字尚未发送。浏览其他日期不会覆盖已写草稿。</p><label for="assistant-draft">草稿内容</label><textarea id="assistant-draft">${escapeHtml(state.draft)}</textarea>${state.draft!==text?`<p class="notice info">已保留原草稿。新建议：${escapeHtml(text)}</p><button id="append-date" data-suggestion="${escapeHtml(text)}" class="border">追加这条建议</button>`:''}<div class="dialog-actions"><button id="save-draft" class="primary">保留草稿并返回</button></div><p class="meta">本原型不提供发送；不会调用模型。草稿仅保留于当前浏览器页面内存。</p>`);}
+function openCapture(){openDialog('记一件事',`<p class="meta">浏览周历不会改变这里已选的草稿日期。</p><label for="capture-title">事项</label><input id="capture-title" placeholder="例如：整理一页课堂笔记" value="${escapeHtml(state.captureTitle||'')}"><label for="capture-date">草稿日期</label><input id="capture-date" type="date" value="${state.draftDate}"><p class="notice info" style="margin-top:16px">这里仅演示保留输入，真实创建须由服务端生成提案并确认。</p><div class="dialog-actions"><button id="keep-capture" class="primary">保留输入</button></div>`);}
+function clearFilters(){state.query={text:'',status:'all',dateMode:'all',fromDate:state.selectedDate,toDate:state.selectedDate,sort:'schedule'};state.page=0;render();}
+function setTab(tab){state.tab=tab;render();}
+document.addEventListener('click',e=>{const b=e.target.closest('button');if(!b||b.disabled)return;if(b.dataset.tab){setTab(b.dataset.tab);return;}if(b.dataset.task){showTask(b.dataset.task);return;}if(b.dataset.complete){const task=tasks.find(t=>t.task_id===b.dataset.complete);if(task.task_id==='demo-001'||task.task_id==='demo-002'||task.task_id==='demo-003'){toast('这条示例涉及课内许可；原型未实现服务端完成 / 恢复校验，请用普通事项演示。');return;}task.status=task.status==='completed'?'pending':'completed';render();toast('已在本页'+(task.status==='completed'?'标记完成':'恢复待办')+'，没有发送请求。');return;}if(b.dataset.view){state.view=b.dataset.view;render();return;}if(b.dataset.selectDate){state.selectedDate=b.dataset.selectDate;render();return;}if(b.dataset.course){openCourse(b.dataset.courseDay,Number(b.dataset.course));return;}if(b.hasAttribute('data-open-conflict')){openConflict();return;}if(b.hasAttribute('data-review')){openReview();return;}if(b.dataset.retrySource){state[b.dataset.retrySource]='fresh';$(b.dataset.retrySource==='courseSource'?'course-source':'task-source').value='fresh';render();toast('已恢复固定合成快照，未发起网络请求。');return;}if(b.dataset.nav){if(b.dataset.nav==='planning')setTab('schedule');else if(b.dataset.nav==='assistant')openAssistant(`请帮我安排 ${state.selectedDate} 的空闲时间。`);else openDialog(b.dataset.nav==='today'?'今日入口':'校园入口',`<p>本页专注 UX06 计划体验，${b.dataset.nav==='today'?'首页时间线':'校园课表与地点入口'}未在此重复模拟。</p><button id="detail-close" class="primary" style="margin-top:16px">返回计划</button>`);return;}
+switch(b.id){case 'large':document.body.classList.toggle('large');b.setAttribute('aria-pressed',document.body.classList.contains('large'));break;case 'reset':location.reload();break;case 'previous-week':case 'next-week':state.anchor=Daily.shanghaiDate(Daily.courseTimestamp(state.anchor,'00:00')+(b.id==='next-week'?7:-7)*86400000);state.selectedDate=Overview.buildPlanningWeek([],R,[],state.anchor).startDate;render();break;case 'this-week':state.anchor=state.selectedDate='2026-10-19';render();break;case 'date-to-assistant':openAssistant(`请帮我规划 ${state.selectedDate}，结合当天的课程和待办；先给建议，不直接添加。`);break;case 'plan-assistant':openAssistant('请帮我检查“操作系统 · 梳理进程与内存”的下一步，先给建议，不直接修改。');break;case 'clear-filters':clearFilters();break;case 'next-page':state.page++;render();break;case 'previous-page':state.page--;render();break;case 'close-dialog':case 'detail-close':case 'cancel-demo':closeDialog();break;case 'detail-back':showTask(dialogTask);break;case 'edit-task':editTask(dialogTask);break;case 'preview-edit':previewEdit();break;case 'apply-demo-replan':tasks=projection.tasks;state.conflictMoved=true;render();openDialog('示例回执',`<p class="notice info">已在本页把 demo-001 改为 10:10–11:10。</p><p>demo-002 仍为 08:40–09:10。没有创建新任务，没有提交到服务器。</p><div class="dialog-actions"><button id="detail-close" class="primary">返回日程</button></div>`);break;case 'confirm-review':state.reviewAccepted=true;render();openDialog('示例已核对','<p class="notice info">保留小组汇报提纲 14:30–15:00，未改期。这里只是本地流程演示。</p><button id="detail-close" class="primary" style="margin-top:16px">返回日程</button>');break;case 'change-course-version':state.revision='b'.repeat(64);if(Overview.resolvePlanningCourse(dialogCourse,courses,state.revision)===null)openDialog('课表版本已变化','<p class="notice">旧课程引用已失效。没有把它重新绑定到同名课，请返回日程重新选择。</p><button id="detail-close" class="primary" style="margin-top:16px">返回日程</button>');render();break;case 'save-draft':state.draft=$('assistant-draft').value;closeDialog();toast('草稿已保留在本页，尚未发送。');break;case 'append-date':$('assistant-draft').value+='\n'+b.dataset.suggestion;state.draft=$('assistant-draft').value;break;case 'new-task':openCapture();break;case 'keep-capture':state.captureTitle=$('capture-title').value;state.draftDate=$('capture-date').value;closeDialog();toast('输入已留在本页，未创建任务。');break;default:if(b.hasAttribute('data-clear-filters'))clearFilters();}});
+document.addEventListener('input',e=>{if(e.target.id==='search'){const position=e.target.selectionStart;state.query.text=e.target.value;state.page=0;render();$('search').focus();$('search').setSelectionRange(position,position);}if(e.target.id==='assistant-draft')state.draft=e.target.value;});
+document.addEventListener('change',e=>{const id=e.target.id;if(id==='course-source'||id==='task-source'){state[id==='course-source'?'courseSource':'taskSource']=e.target.value;render();}else if(id==='goal'){state.goal=e.target.checked;render();}else if(id==='review-ack')$('confirm-review').disabled=!e.target.checked;else {const map={'filter-status':'status','filter-date':'dateMode','filter-sort':'sort','filter-from':'fromDate','filter-to':'toDate'};if(map[id]){state.query[map[id]]=e.target.value;state.page=0;render();}}});
+$('detail').addEventListener('cancel',()=>{dialogTask=null;dialogCourse=null;projection=null;});
+document.querySelectorAll('[data-nav]').forEach(b=>{const name={today:'home',assistant:'assistant',planning:'calendar',campus:'campus'}[b.dataset.nav];b.innerHTML=icon(name)+`<span>${b.textContent}</span>`;});
+window.__ux06={getState:()=>structuredClone(state),getTasks:()=>structuredClone(tasks),getCourses:()=>structuredClone(courses),overview:Overview,daily:Daily};render();
+</script>
+</body></html>
