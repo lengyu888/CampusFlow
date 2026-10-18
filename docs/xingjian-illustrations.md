@@ -2,17 +2,21 @@
 
 2026-10-18 使用内置 `image_gen` 逐张生成。A1 经定向修订作为笔触和配色母版；A2–A7 的调用均引用已查看的 A1 本地图片。没有搜索下载图片、远端图片依赖或把手绘 SVG 充作这些七张插图。应用结构图标继续使用可编辑的既有向量系统。
 
-原始生成PNG共 **10,701,122字节（约10.21 MiB）**。本轮保留原始尺寸与alpha，UI使用Contain缩放，不拉伸。仅4张接入当前页面，专注/复盘3张预备图尚不表示后续功能已实现；相关功能在UX09–10落地时消费。
+原始生成PNG共 **10,701,122字节（约10.21 MiB）**，保留原始尺寸与alpha，UI使用Contain缩放，不拉伸。
 
-|ID|文件|尺寸/格式|使用位置|
+**UX02历史状态：** 当时仅A1、A2、A3、A5接入页面；A4、A6为UX09专注准备，A7为UX10回看准备，预备素材不代表当时已有这些功能。下面的生成提示、修订和浏览器观察保留原始记录。
+
+**UX12当前状态：** 以UX11已发布代码 `fce0e1d2f46329d1d3552924be890ca0653866d3` 核对，7张均已有生产页面引用。逐图实际PNG解码、尺寸、模式、alpha、字节与SHA-256均符合原登记，详见[本次核验记录](evidence/ux-12-artwork-checks.json)。本次没有重新生成、下载或压缩素材；源码引用不代表原生设备加载已验收。
+
+|ID|文件|尺寸/格式|UX12当前使用位置|
 |---|---|---|---|
-|A1|xj_onboarding.png|1448×1086 / RGB|引导第1步，188×140，已接入|
-|A2|xj_empty_day.png|1536×1024 / RGBA|今日成功读取后的空安排，128×96，已接入|
-|A3|xj_course_entry.png|1254×1254 / RGBA|校园课表入口，44×44，已接入|
-|A4|xj_focus_entry.png|1254×1254 / RGBA|为UX09专注入口准备，本阶段不提供虚假入口|
-|A5|xj_campus_entry.png|1254×1254 / RGBA|校园导航入口，44×44，已接入|
-|A6|xj_focus_end.png|1536×1024 / RGBA|为UX09真实专注结束态准备|
-|A7|xj_review_empty.png|1536×1024 / RGBA|为UX10真实复盘空态准备|
+|A1|xj_onboarding.png|1448×1086 / RGB|[首次录课引导](../arkui-x-client/entry/src/main/ets/pages/OnboardingPage.ets#L901)，188×140|
+|A2|xj_empty_day.png|1536×1024 / RGBA|[今日](../arkui-x-client/entry/src/main/ets/pages/HomePage.ets#L591)两类来源成功且日程/全天/待安排均为空，128×96|
+|A3|xj_course_entry.png|1254×1254 / RGBA|[校园课表入口](../arkui-x-client/entry/src/main/ets/pages/CampusPage.ets#L191)，44×44|
+|A4|xj_focus_entry.png|1254×1254 / RGBA|[专注开始视图](../arkui-x-client/entry/src/main/ets/pages/FocusPage.ets#L187)，72×72；已在UX09接入|
+|A5|xj_campus_entry.png|1254×1254 / RGBA|[校园导航入口](../arkui-x-client/entry/src/main/ets/pages/CampusPage.ets#L192)，44×44|
+|A6|xj_focus_end.png|1536×1024 / RGBA|[本机专注已结束视图](../arkui-x-client/entry/src/main/ets/pages/FocusPage.ets#L221)，100×67；同步状态单列，已在UX09接入|
+|A7|xj_review_empty.png|1536×1024 / RGBA|[回看](../arkui-x-client/entry/src/main/ets/pages/ReviewPage.ets#L438)快照无本期完成/专注记录，120×80；已在UX10接入|
 
 ## 生成提示与修订
 
@@ -52,10 +56,12 @@
 
 沿用参考图的同一系列风格，原创绘制两张干净的记录纸与一枚墨绿书签，纸上只允许两三条非常淡的非文字短线，线条不能组成字符或统计图。横向3:2，透明背景，主体简洁，暖白墨绿和一处陶土。表达可以从第一条记录开始；不要空洞的机器人、数据仪表盘、柱状图、完成百分比、时钟数字、人物或品牌标记。避免与空日程图完全相同的构图。
 
-## 实际检查与边界
+## UX02实际检查记录与当前边界
 
 七张均经文件解码。A1为RGB；A2–A7为RGBA且透明通道包含0。A2/A6/A7最大alpha为254，是生成文件的原始值，不宣称全像素完全不透明。Chrome暖白与surface背景实看边缘，没有可见黑底或外部光晕。40/48像素下，课表夹、书和校园地图仍能区分；关键操作继续用文本表达。
 
 浏览器验收页直接读取项目PNG，测试缺图时仍可按文字入口继续，并恢复图片。`AppIllustration`实际客户端同样使用本地Resource、onError回退AppIcon且不读屏；原生资源加载事件和平台渲染尚未设备验收。
 
 这组插图不是实际校园照片、地图数据或学习成果。页面文字全部由真实控件渲染。
+
+UX12重新核验的是仓内文件与原生成登记一致、以及当前源码中的引用位置，没有重放七次原始生成过程，也没有作第三方版权审定。[原始登记](xingjian-illustrations.json)保留生成工具、日期、文件标识和完整提示词；当前[AppIllustration](../arkui-x-client/entry/src/main/ets/components/AppIllustration.ets#L17)仍只接本地Resource，Contain缩放，加载失败回退向量图标，装饰图不读屏。可点击含义仍由独立文字和触区承担。

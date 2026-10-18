@@ -1,9 +1,9 @@
-# CampusFlow ArkUI-X 客户端
+# 行简（CampusFlow）ArkUI-X 客户端
 
-这是 CampusFlow 的 ArkUI-X/ArkTS 原生客户端，工程已按官方 ACE Tools 转换为 HarmonyOS、Android、iOS 三端结构，并升级到 ArkUI-X 6.1.1 / API 24。共享 ArkTS 代码覆盖以下核心流程：
+这是行简的 ArkUI-X/ArkTS 客户端。仓库保留 HarmonyOS、Android、iOS 宿主工程及 ArkUI-X 6.1.1 / API 24 配置；包名和路径继续使用 CampusFlow。本轮 UX01–UX12 未安装原生环境，也未执行三端构建或设备验证，工程配置不能当作运行证据。先看[本轮交接入口](../docs/ux-12-handoff.md)与[设备验收表](../docs/ux-12-competition-acceptance.md)。共享代码覆盖以下核心流程：
 
-- 登录与注册（注册时提交 DeepSeek API Key，后续登录不再填写）
-- 首次学校、校区、学期和 HDUHelp 课表订阅配置
+- 登录与注册（无需模型密钥也可录课、管理任务与查看回看；使用模型前另行配置）
+- 首次学校、校区、学期配置，手动连续录课和逐行导入预览；订阅是可选路径
 - 今日课程和 Agent 快捷入口
 - DeepSeek V4 Pro / Flash 多轮对话与操作确认
 - 基于杭电校园数据包的原生 Canvas 路线图
@@ -12,8 +12,10 @@
 - 个人设置、API Key 更新和课表同步
 - HDUHelp OAuth 授权、个人校园数据同步与断开清理
 - HDUHelp 空闲教室、教室占用详情与寝室电费实时查询
-- 校园实时服务四入口：空闲教室、寝室电费、图书馆、校园卡；“我的校园档案”仅保留账户、学籍与成绩
-- 统一浅色界面、线性图标与轻量交互动画；今日、Agent、计划、校园四个主入口保留草稿、日历和浏览状态
+- 校园服务四入口：空闲教室、寝室电费、图书馆、校园卡；数据时效以页面来源为准，“我的校园档案”保留账户、学籍与成绩
+- 纸白墨绿界面、原创插图与轻量交互；今日、助手、计划、校园四个主入口保留草稿、日历和浏览状态
+- 按任务选择允许课内完成，提示课程重叠并绑定本次版本；课表变化后重新核对与改期
+- 完成与预览恢复、本机专注片段及同步、按可靠记录生成日周回看
 
 从头像进入的个人设置页面底部提供“减少动态效果”开关，关闭页面切换与选择动画；偏好仅保存在本机。
 
@@ -36,7 +38,9 @@ arkui-x-client/
 └── scripts/                  # 静态验收与可复现 HAP 构建脚本
 ```
 
-## 本机运行准备
+## 已有原生环境的队友运行指引
+
+以下是仓库已有工具链的操作参考，由负责设备验收的队友在已有环境使用；本轮交付不要求当前用户下载这些环境。
 
 1. 安装 DevEco Studio 6.1.1 Release，并配置 ArkUI-X SDK 6.1.1 / API 24。
 2. 在 DevEco Studio 中打开本目录，等待 Hvigor 同步。
@@ -49,7 +53,7 @@ arkui-x-client/
 - Android 模拟器：`http://10.0.2.2:8000`
 - iOS 模拟器与本机预览：`http://127.0.0.1:8000`
 
-Android/iOS 宿主目前仅为本地联调开启了 HTTP 明文访问；发布版本应改用 HTTPS，并移除 Android `usesCleartextTraffic` 与 iOS `NSAllowsArbitraryLoads`。当前阶段 Token 只保存在进程内存，重启 App 后需要重新登录，不会明文写入文件。下一子阶段会接入各平台安全凭据存储与本地通知。
+Android/iOS 宿主为本地联调保留 HTTP 明文配置；正式发布需结合实际部署使用 HTTPS 并收紧相应配置，本轮没有执行部署。登录 Token 只保存在进程内存，重启 App 后需要重新登录，不写入本机历史文件。提醒协调器和三端能力适配代码已存在，权限、受理和实际送达仍需设备核验；未实现系统安全凭据自动登录。
 
 ## 命令行构建与验收
 
@@ -115,7 +119,7 @@ hdc rport tcp:8000 tcp:8000
 
 调试 HAP 输出到 `entry/build/default/outputs/default/`。未配置签名证书时会生成 `entry-default-unsigned.hap`，可以完成编译验收，但真机安装前仍需在 DevEco Studio 中配置自动签名。
 
-ACE 开发环境可用 `ace check -v` 检查。当前 Windows 阶段已验证 HarmonyOS 与 ArkUI-X 工具链；构建 Android APK 还需安装 Android Studio/Android SDK，iOS 构建需在 macOS/Xcode 上进行。
+已有 ACE 开发环境可用 `ace check -v` 检查。历史 Windows 工具链记录不代表本轮 UX 代码已经编译通过；Android 与 iOS 仍分别由具有对应工具链的队友构建验收，保存本次提交和实际日志。
 
 ## 逻辑回归与静态验收
 
@@ -126,5 +130,7 @@ npm run check
 ```
 
 `npm test` 使用已有 Node.js 执行共享逻辑和页面控制器测试，不安装依赖，不启动原生应用。
+
+现有后端测试 Python 可通过 `CAMPUSFLOW_TEST_PYTHON=/path/to/python npm run test:journey` 运行 UX11 连续旅程。它经实际 API 访问同一进程 FastAPI/SQLite，模型供应商和系统能力明确使用替身；缺依赖时失败，不自动安装。最终结果和复现边界见[UX11说明](../docs/ux-11-experience-polish.md)。
 
 静态检查脚本检查工程必需文件、JSON/JSON5 语法、ArkTS 相对导入、密钥泄漏、网络权限，以及客户端与 FastAPI 的关键接口契约。依赖目录和构建产物会被排除。它不能替代 DevEco Studio 的 ArkTS 类型检查和真机安装测试。

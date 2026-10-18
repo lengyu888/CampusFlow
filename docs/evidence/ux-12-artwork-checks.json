@@ -1,0 +1,368 @@
+{
+  "schema_version": 1,
+  "stage": "UX12",
+  "checked_at_utc": "2026-10-18T02:41:56.271048+00:00",
+  "source_commit": "fce0e1d2f46329d1d3552924be890ca0653866d3",
+  "manifest": {
+    "file": "docs/xingjian-illustrations.json",
+    "sha256": "9dbf9942423280b9f3c6d2aa4af38c9e32774c3e0d3b099b6ad544d1b7523158"
+  },
+  "method": [
+    "Python standard library SHA-256 and file byte count",
+    "Pillow PNG open/load, dimensions, mode and alpha extrema",
+    "Exact app.media resource references scanned in production ETS sources; usage conditions and display sizes read from corresponding builders"
+  ],
+  "result": {
+    "asset_count": 7,
+    "png_decoded": 7,
+    "all_manifest_attributes_match": true,
+    "assets_with_production_references": 7,
+    "total_bytes": 10701122
+  },
+  "component": {
+    "file": "arkui-x-client/entry/src/main/ets/components/AppIllustration.ets",
+    "sha256": "41912db9f94e0a14e1f80e77770288ac77c8b508d3c4187385ec543edd897c32",
+    "source_verified": [
+      "local Resource only",
+      "ImageFit.Contain",
+      "onError uses AppIcon fallback",
+      "decorative accessibilityLevel no"
+    ],
+    "native_execution_verified": false
+  },
+  "boundaries": [
+    "No image files were changed, regenerated, downloaded or compressed during this check.",
+    "Provenance fields reproduce the existing generation registration; original image-generation calls were not replayed.",
+    "No third-party copyright determination is implied by matching file hashes.",
+    "Source references are not native rendering, device resource loading or accessibility acceptance.",
+    "These illustrations are decorative artwork, not campus facts, photographs or runtime screenshots."
+  ],
+  "assets": [
+    {
+      "id": "A1",
+      "file": "arkui-x-client/entry/src/main/resources/base/media/xj_onboarding.png",
+      "observed": {
+        "format": "PNG",
+        "width": 1448,
+        "height": 1086,
+        "mode": "RGB",
+        "bytes": 1842715,
+        "sha256": "0fa293db0d8b2fa672e10cf8f87c82615ceee4951f16f445d451cd6271713bd6",
+        "alpha_extrema": null
+      },
+      "matches_manifest": {
+        "width": true,
+        "height": true,
+        "mode": true,
+        "bytes": true,
+        "sha256": true,
+        "alpha_extrema": true
+      },
+      "png_decode_passed": true,
+      "provenance_registration": {
+        "manifest": "docs/xingjian-illustrations.json",
+        "generated_date": "2026-10-18",
+        "tool": "built-in image_gen",
+        "source_file_id": "exec-cfa387bf-af2f-4f5c-89bd-b0f3fff7d848.png",
+        "transparent_background_requested": false
+      },
+      "current_usage": {
+        "purpose": "首次录课引导第1步",
+        "display_width_vp": 188,
+        "display_height_vp": 140,
+        "first_integrated_stage": "UX02",
+        "references": [
+          {
+            "file": "arkui-x-client/entry/src/main/ets/pages/OnboardingPage.ets",
+            "line": 901,
+            "source_sha256": "20f4e74189acb4baa84541e28ee0ee1d5bc90a621338f3ce658fe2398f65b41d",
+            "resource": "app.media.xj_onboarding",
+            "source_line": "AppIllustration({ source: $r('app.media.xj_onboarding'), imageWidth: 188, imageHeight: 140 })"
+          }
+        ]
+      }
+    },
+    {
+      "id": "A2",
+      "file": "arkui-x-client/entry/src/main/resources/base/media/xj_empty_day.png",
+      "observed": {
+        "format": "PNG",
+        "width": 1536,
+        "height": 1024,
+        "mode": "RGBA",
+        "bytes": 1682313,
+        "sha256": "938ddefad745d4be5df52e9a3aecc64e28523ad042eef4ea9f0957623431998c",
+        "alpha_extrema": [
+          0,
+          254
+        ]
+      },
+      "matches_manifest": {
+        "width": true,
+        "height": true,
+        "mode": true,
+        "bytes": true,
+        "sha256": true,
+        "alpha_extrema": true
+      },
+      "png_decode_passed": true,
+      "provenance_registration": {
+        "manifest": "docs/xingjian-illustrations.json",
+        "generated_date": "2026-10-18",
+        "tool": "built-in image_gen",
+        "source_file_id": "exec-029d87b6-c31b-4d06-b619-2e5df4b7c94f.png",
+        "transparent_background_requested": true
+      },
+      "current_usage": {
+        "purpose": "今日课程与任务来源成功，日程、全天与待安排均为空",
+        "display_width_vp": 128,
+        "display_height_vp": 96,
+        "first_integrated_stage": "UX02",
+        "references": [
+          {
+            "file": "arkui-x-client/entry/src/main/ets/pages/HomePage.ets",
+            "line": 591,
+            "source_sha256": "ef35bb179efb53e48779db308fad6bf8e1b67d197f3d451aa814ebfc1085c0ce",
+            "resource": "app.media.xj_empty_day",
+            "source_line": "AppIllustration({ source: $r('app.media.xj_empty_day'), imageWidth: 128, imageHeight: 96,"
+          }
+        ]
+      }
+    },
+    {
+      "id": "A3",
+      "file": "arkui-x-client/entry/src/main/resources/base/media/xj_course_entry.png",
+      "observed": {
+        "format": "PNG",
+        "width": 1254,
+        "height": 1254,
+        "mode": "RGBA",
+        "bytes": 1004028,
+        "sha256": "f05015851a1e63d0065f863fe69a59733d76966be7ae268e02d563b7dfe6c516",
+        "alpha_extrema": [
+          0,
+          255
+        ]
+      },
+      "matches_manifest": {
+        "width": true,
+        "height": true,
+        "mode": true,
+        "bytes": true,
+        "sha256": true,
+        "alpha_extrema": true
+      },
+      "png_decode_passed": true,
+      "provenance_registration": {
+        "manifest": "docs/xingjian-illustrations.json",
+        "generated_date": "2026-10-18",
+        "tool": "built-in image_gen",
+        "source_file_id": "exec-6ba75f10-3cf0-4486-a129-62f828d3423a.png",
+        "transparent_background_requested": true
+      },
+      "current_usage": {
+        "purpose": "校园页我的课表文字入口装饰",
+        "display_width_vp": 44,
+        "display_height_vp": 44,
+        "first_integrated_stage": "UX02",
+        "references": [
+          {
+            "file": "arkui-x-client/entry/src/main/ets/pages/CampusPage.ets",
+            "line": 191,
+            "source_sha256": "7b64c346d1f1b156f0776a5029e2aca2ba547302c2f701ba40d40f304fa394d6",
+            "resource": "app.media.xj_course_entry",
+            "source_line": "this.Entry('calendar', '我的课表', '手动维护、预览导入与检查变更', () => this.onOpenTimetable(), $r('app.media.xj_course_entry'))"
+          }
+        ]
+      }
+    },
+    {
+      "id": "A4",
+      "file": "arkui-x-client/entry/src/main/resources/base/media/xj_focus_entry.png",
+      "observed": {
+        "format": "PNG",
+        "width": 1254,
+        "height": 1254,
+        "mode": "RGBA",
+        "bytes": 1558531,
+        "sha256": "666ee6d10ee6c8e6a8a833072bbe250bfb0f83ad43a0b2ed482016c9d9ab9914",
+        "alpha_extrema": [
+          0,
+          255
+        ]
+      },
+      "matches_manifest": {
+        "width": true,
+        "height": true,
+        "mode": true,
+        "bytes": true,
+        "sha256": true,
+        "alpha_extrema": true
+      },
+      "png_decode_passed": true,
+      "provenance_registration": {
+        "manifest": "docs/xingjian-illustrations.json",
+        "generated_date": "2026-10-18",
+        "tool": "built-in image_gen",
+        "source_file_id": "exec-33a15010-f2fe-41ac-b6c0-f933062e9be1.png",
+        "transparent_background_requested": true
+      },
+      "current_usage": {
+        "purpose": "专注开始视图",
+        "display_width_vp": 72,
+        "display_height_vp": 72,
+        "first_integrated_stage": "UX09",
+        "references": [
+          {
+            "file": "arkui-x-client/entry/src/main/ets/pages/FocusPage.ets",
+            "line": 187,
+            "source_sha256": "92651dce87e363cc8bd85f97f4b3dc5a86ea59ebb5b3879c48c7fa5eb1ccbd90",
+            "resource": "app.media.xj_focus_entry",
+            "source_line": "AppIllustration({ source: $r('app.media.xj_focus_entry'), imageWidth: 72, imageHeight: 72, fallbackIcon: 'book' })"
+          }
+        ]
+      }
+    },
+    {
+      "id": "A5",
+      "file": "arkui-x-client/entry/src/main/resources/base/media/xj_campus_entry.png",
+      "observed": {
+        "format": "PNG",
+        "width": 1254,
+        "height": 1254,
+        "mode": "RGBA",
+        "bytes": 1340472,
+        "sha256": "c819a08e845ad6db0faec999f825d75f30559018691761a10e5bdbdded25092d",
+        "alpha_extrema": [
+          0,
+          255
+        ]
+      },
+      "matches_manifest": {
+        "width": true,
+        "height": true,
+        "mode": true,
+        "bytes": true,
+        "sha256": true,
+        "alpha_extrema": true
+      },
+      "png_decode_passed": true,
+      "provenance_registration": {
+        "manifest": "docs/xingjian-illustrations.json",
+        "generated_date": "2026-10-18",
+        "tool": "built-in image_gen",
+        "source_file_id": "exec-80f2c7c3-4fa4-4657-b3ef-45715242bd1a.png",
+        "transparent_background_requested": true
+      },
+      "current_usage": {
+        "purpose": "校园页校园导航文字入口装饰",
+        "display_width_vp": 44,
+        "display_height_vp": 44,
+        "first_integrated_stage": "UX02",
+        "references": [
+          {
+            "file": "arkui-x-client/entry/src/main/ets/pages/CampusPage.ets",
+            "line": 192,
+            "source_sha256": "7b64c346d1f1b156f0776a5029e2aca2ba547302c2f701ba40d40f304fa394d6",
+            "resource": "app.media.xj_campus_entry",
+            "source_line": "this.Entry('route', '校园导航', '选择地点，查看路线和步行估算', () => this.onOpenRoute(), $r('app.media.xj_campus_entry'))"
+          }
+        ]
+      }
+    },
+    {
+      "id": "A6",
+      "file": "arkui-x-client/entry/src/main/resources/base/media/xj_focus_end.png",
+      "observed": {
+        "format": "PNG",
+        "width": 1536,
+        "height": 1024,
+        "mode": "RGBA",
+        "bytes": 1576293,
+        "sha256": "7a6d78908c17554f5baec2a9395ffef9f8d10da3cc508b60f59ac08866ab9fec",
+        "alpha_extrema": [
+          0,
+          254
+        ]
+      },
+      "matches_manifest": {
+        "width": true,
+        "height": true,
+        "mode": true,
+        "bytes": true,
+        "sha256": true,
+        "alpha_extrema": true
+      },
+      "png_decode_passed": true,
+      "provenance_registration": {
+        "manifest": "docs/xingjian-illustrations.json",
+        "generated_date": "2026-10-18",
+        "tool": "built-in image_gen",
+        "source_file_id": "exec-8a474f19-8c4a-4db5-ba8c-4cb677174f32.png",
+        "transparent_background_requested": true
+      },
+      "current_usage": {
+        "purpose": "本机专注已结束视图；同步状态另行说明",
+        "display_width_vp": 100,
+        "display_height_vp": 67,
+        "first_integrated_stage": "UX09",
+        "references": [
+          {
+            "file": "arkui-x-client/entry/src/main/ets/pages/FocusPage.ets",
+            "line": 221,
+            "source_sha256": "92651dce87e363cc8bd85f97f4b3dc5a86ea59ebb5b3879c48c7fa5eb1ccbd90",
+            "resource": "app.media.xj_focus_end",
+            "source_line": "if (local.localState === 'ended') { AppIllustration({ source: $r('app.media.xj_focus_end'), imageWidth: 100, imageHeight: 67, fallbackIcon: 'check' }) }"
+          }
+        ]
+      }
+    },
+    {
+      "id": "A7",
+      "file": "arkui-x-client/entry/src/main/resources/base/media/xj_review_empty.png",
+      "observed": {
+        "format": "PNG",
+        "width": 1536,
+        "height": 1024,
+        "mode": "RGBA",
+        "bytes": 1696770,
+        "sha256": "4bae2e30a628de9fa0a0f932fc3704463ded5ff73e5a3fd118f9c53afe6db090",
+        "alpha_extrema": [
+          0,
+          254
+        ]
+      },
+      "matches_manifest": {
+        "width": true,
+        "height": true,
+        "mode": true,
+        "bytes": true,
+        "sha256": true,
+        "alpha_extrema": true
+      },
+      "png_decode_passed": true,
+      "provenance_registration": {
+        "manifest": "docs/xingjian-illustrations.json",
+        "generated_date": "2026-10-18",
+        "tool": "built-in image_gen",
+        "source_file_id": "exec-193c92e9-d289-4247-a1f2-380da8e7f8a1.png",
+        "transparent_background_requested": true
+      },
+      "current_usage": {
+        "purpose": "回看快照无本期完成任务和专注片段；不代表没有学习",
+        "display_width_vp": 120,
+        "display_height_vp": 80,
+        "first_integrated_stage": "UX10",
+        "references": [
+          {
+            "file": "arkui-x-client/entry/src/main/ets/pages/ReviewPage.ets",
+            "line": 438,
+            "source_sha256": "799fedbf67ec496403c39b20f82729f78976c303251026aa9c8872c9ab169aef",
+            "resource": "app.media.xj_review_empty",
+            "source_line": "AppIllustration({ source: $r('app.media.xj_review_empty'), imageWidth: 120, imageHeight: 80, fallbackIcon: 'history' })"
+          }
+        ]
+      }
+    }
+  ]
+}

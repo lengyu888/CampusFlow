@@ -1,0 +1,379 @@
+{
+  "boundary": "Both UI sides are handwritten Web approximations of pinned ArkUI source, not native screenshots. Only specified data projection helpers execute actual stripped source; no business writes.",
+  "versions": {
+    "before": {
+      "commit": "c09446bb7b561f1dae1f0967c7932bb7ab4bb8eb",
+      "sources": [
+        {
+          "path": "arkui-x-client/entry/src/main/ets/pages/HomePage.ets",
+          "sha256": "8cbd6900923e67852879c87c0dd49a0d287ae50765b3b2dec0f544fa64988795",
+          "bytes": 23516,
+          "anchors": [
+            {
+              "text": "build()",
+              "line": 323
+            },
+            {
+              "text": "private agenda",
+              "line": 68
+            }
+          ]
+        },
+        {
+          "path": "arkui-x-client/entry/src/main/ets/pages/AgentPage.ets",
+          "sha256": "a8fbc29844438605bd4c169f8b67373caa09d9a6e3a8ffdc83c8ef96f6de95a0",
+          "bytes": 101823,
+          "anchors": [
+            {
+              "text": "build()",
+              "line": 1600
+            },
+            {
+              "text": "TextArea",
+              "line": 1210
+            },
+            {
+              "text": "ProposalCard",
+              "line": 1463
+            }
+          ]
+        },
+        {
+          "path": "arkui-x-client/entry/src/main/ets/pages/PlanCenterPage.ets",
+          "sha256": "f6e8c9ca868c31cc9c988f9776671ac2b5f00d13c346cfda8f73d67617895551",
+          "bytes": 72531,
+          "anchors": [
+            {
+              "text": "WeekStrip",
+              "line": 1201
+            },
+            {
+              "text": "ScheduleView",
+              "line": 1223
+            },
+            {
+              "text": "AllTasks",
+              "line": 1165
+            }
+          ]
+        },
+        {
+          "path": "arkui-x-client/entry/src/main/ets/pages/OnboardingPage.ets",
+          "sha256": "3e200b8fd97eb91f85f514690c3ab0cd744a0c2891f23273a0dbce0ef85e9e4a",
+          "bytes": 40417,
+          "anchors": [
+            {
+              "text": "Editor()",
+              "line": 61
+            },
+            {
+              "text": "build()",
+              "line": 591
+            }
+          ]
+        },
+        {
+          "path": "arkui-x-client/entry/src/main/ets/pages/Index.ets",
+          "sha256": "17942e8b6655631065ac106db85a70e3bdbbdfb54ea3fbb0cce8d7fae6cba9cd",
+          "bytes": 21464,
+          "anchors": []
+        },
+        {
+          "path": "arkui-x-client/entry/src/main/ets/theme/AppTheme.ets",
+          "sha256": "2d73a3c7c5c464c9afc50985d576db4fdf85aa7a8b683958ac3488530575209f",
+          "bytes": 1577,
+          "anchors": []
+        },
+        {
+          "path": "arkui-x-client/entry/src/main/ets/utils/DailyAgenda.ets",
+          "sha256": "abd84f252c6f7feec37f8f0d8c900529a95bc2ecdb6bd84f0a13194531656c9c",
+          "bytes": 7102,
+          "anchors": []
+        }
+      ],
+      "absentPages": [
+        "FocusPage",
+        "ReviewPage"
+      ]
+    },
+    "after": {
+      "commit": "fce0e1d2f46329d1d3552924be890ca0653866d3",
+      "sources": [
+        {
+          "path": "arkui-x-client/entry/src/main/ets/pages/HomePage.ets",
+          "sha256": "ef35bb179efb53e48779db308fad6bf8e1b67d197f3d451aa814ebfc1085c0ce",
+          "bytes": 41074,
+          "anchors": [
+            {
+              "text": "build()",
+              "line": 557
+            },
+            {
+              "text": "private groups",
+              "line": 167
+            },
+            {
+              "text": "private agenda",
+              "line": 97
+            }
+          ]
+        },
+        {
+          "path": "arkui-x-client/entry/src/main/ets/pages/AgentPage.ets",
+          "sha256": "6d4ef3af6ad59ba95f4d8c2ce0ec44df8ec32207940b0d83d1fcca323f33dd17",
+          "bytes": 172719,
+          "anchors": [
+            {
+              "text": "build()",
+              "line": 2565
+            },
+            {
+              "text": "TextArea",
+              "line": 1861
+            },
+            {
+              "text": "ProposalCard",
+              "line": 2415
+            }
+          ]
+        },
+        {
+          "path": "arkui-x-client/entry/src/main/ets/pages/PlanCenterPage.ets",
+          "sha256": "4f8c11d107ad3fd78225a1eb291858a03ba164051e26e1e0dc744ea3618beaaf",
+          "bytes": 125544,
+          "anchors": [
+            {
+              "text": "WeekStrip",
+              "line": 1782
+            },
+            {
+              "text": "ScheduleView",
+              "line": 1804
+            },
+            {
+              "text": "WeekOverview",
+              "line": 1251
+            },
+            {
+              "text": "AllTasks",
+              "line": 1716
+            }
+          ]
+        },
+        {
+          "path": "arkui-x-client/entry/src/main/ets/pages/OnboardingPage.ets",
+          "sha256": "20f4e74189acb4baa84541e28ee0ee1d5bc90a621338f3ce658fe2398f65b41d",
+          "bytes": 63000,
+          "anchors": [
+            {
+              "text": "Editor()",
+              "line": 92
+            },
+            {
+              "text": "TimetableEntryEditor",
+              "line": 11
+            },
+            {
+              "text": "build()",
+              "line": 874
+            }
+          ]
+        },
+        {
+          "path": "arkui-x-client/entry/src/main/ets/pages/FocusPage.ets",
+          "sha256": "92651dce87e363cc8bd85f97f4b3dc5a86ea59ebb5b3879c48c7fa5eb1ccbd90",
+          "bytes": 30989,
+          "anchors": [
+            {
+              "text": "Current(",
+              "line": 209
+            },
+            {
+              "text": "targetReached",
+              "line": 64
+            },
+            {
+              "text": "build()",
+              "line": 296
+            }
+          ]
+        },
+        {
+          "path": "arkui-x-client/entry/src/main/ets/pages/ReviewPage.ets",
+          "sha256": "799fedbf67ec496403c39b20f82729f78976c303251026aa9c8872c9ab169aef",
+          "bytes": 37625,
+          "anchors": [
+            {
+              "text": "readingTime",
+              "line": 258
+            },
+            {
+              "text": "current_unscheduled_count",
+              "line": 436
+            },
+            {
+              "text": "build()",
+              "line": 400
+            }
+          ]
+        },
+        {
+          "path": "arkui-x-client/entry/src/main/ets/components/TimetableEntryEditor.ets",
+          "sha256": "ed8d8d0adeb09cf58ce1d402b77ed06a7746b8a6f6dd2fd79cc88781f159dbfe",
+          "bytes": 13442,
+          "anchors": [
+            {
+              "text": "build()",
+              "line": 141
+            }
+          ]
+        },
+        {
+          "path": "arkui-x-client/entry/src/main/ets/components/AgentProposalSummary.ets",
+          "sha256": "ab01ee542548012acd310035b3fa988ea02fd0594c20ba4e76ae7ccfba43ee72",
+          "bytes": 2835,
+          "anchors": [
+            {
+              "text": "build()",
+              "line": 13
+            }
+          ]
+        },
+        {
+          "path": "arkui-x-client/entry/src/main/ets/theme/AppTheme.ets",
+          "sha256": "1e0613f871e3209878d208709148992fcebff066fc4d8251086a7f09187ebb19",
+          "bytes": 2599,
+          "anchors": []
+        },
+        {
+          "path": "arkui-x-client/entry/src/main/ets/utils/DailyAgenda.ets",
+          "sha256": "889b2115d924ba40cf55ee8835d1f1695fc3fa8b88061f717e450736d1ae4709",
+          "bytes": 7130,
+          "anchors": []
+        },
+        {
+          "path": "arkui-x-client/entry/src/main/ets/utils/FreeWindows.ets",
+          "sha256": "c0e5e6ff83e4ee169a8159f7be896c8e9009d12d2c377addbe2028aebca5947c",
+          "bytes": 5348,
+          "anchors": []
+        },
+        {
+          "path": "arkui-x-client/entry/src/main/ets/utils/PlanningOverview.ets",
+          "sha256": "1dcf6279d755d2072b2e6c5fc63bd4bcdcb39edd1c41234810175135d6ae5466",
+          "bytes": 16158,
+          "anchors": []
+        },
+        {
+          "path": "arkui-x-client/entry/src/main/ets/utils/OnboardingTimetable.ets",
+          "sha256": "64fddbf9a48fc493f2f2c87a02d2bcdf4cb6bc80ef52ff6c9adb14f25c97313f",
+          "bytes": 11153,
+          "anchors": []
+        },
+        {
+          "path": "arkui-x-client/entry/src/main/ets/utils/PlanPresentation.ets",
+          "sha256": "bc7b89a2eee9473a4f49817ec72fc75e6b5736a65ae9906bc2659d849b1e6a7a",
+          "bytes": 1565,
+          "anchors": []
+        }
+      ]
+    }
+  },
+  "compiledHelpers": [
+    {
+      "label": "OldAgenda",
+      "path": "arkui-x-client/entry/src/main/ets/utils/DailyAgenda.ets",
+      "commit": "c09446bb7b561f1dae1f0967c7932bb7ab4bb8eb",
+      "sha256": "abd84f252c6f7feec37f8f0d8c900529a95bc2ecdb6bd84f0a13194531656c9c",
+      "exports": [
+        "shanghaiDate",
+        "shanghaiTime",
+        "buildDailyAgenda",
+        "labelNext"
+      ]
+    },
+    {
+      "label": "Agenda",
+      "path": "arkui-x-client/entry/src/main/ets/utils/DailyAgenda.ets",
+      "commit": "fce0e1d2f46329d1d3552924be890ca0653866d3",
+      "sha256": "889b2115d924ba40cf55ee8835d1f1695fc3fa8b88061f717e450736d1ae4709",
+      "exports": [
+        "shanghaiDate",
+        "shanghaiTime",
+        "validDate",
+        "timestamp",
+        "courseTimestamp",
+        "allDayDate",
+        "buildDailyAgenda",
+        "labelNext"
+      ]
+    },
+    {
+      "label": "Rules",
+      "path": "arkui-x-client/entry/src/main/ets/utils/OnboardingTimetable.ets",
+      "commit": "fce0e1d2f46329d1d3552924be890ca0653866d3",
+      "sha256": "64fddbf9a48fc493f2f2c87a02d2bcdf4cb6bc80ef52ff6c9adb14f25c97313f",
+      "exports": [
+        "normalizeTimetableEntry",
+        "validateTimetableEntry",
+        "validateTimetableList",
+        "parseTimetablePreview",
+        "expandWeeklyEntry"
+      ]
+    },
+    {
+      "label": "Free",
+      "path": "arkui-x-client/entry/src/main/ets/utils/FreeWindows.ets",
+      "commit": "fce0e1d2f46329d1d3552924be890ca0653866d3",
+      "sha256": "c0e5e6ff83e4ee169a8159f7be896c8e9009d12d2c377addbe2028aebca5947c",
+      "exports": [
+        "partitionToday",
+        "findFreeWindow"
+      ]
+    },
+    {
+      "label": "Planning",
+      "path": "arkui-x-client/entry/src/main/ets/utils/PlanningOverview.ets",
+      "commit": "fce0e1d2f46329d1d3552924be890ca0653866d3",
+      "sha256": "1dcf6279d755d2072b2e6c5fc63bd4bcdcb39edd1c41234810175135d6ae5466",
+      "exports": [
+        "filterPlanningTasks",
+        "validPlanningTimetable",
+        "resolvePlanningCourse",
+        "buildPlanningWeek",
+        "dailyPlannedLoad",
+        "projectPlanningCandidate"
+      ]
+    },
+    {
+      "label": "Presentation",
+      "path": "arkui-x-client/entry/src/main/ets/utils/PlanPresentation.ets",
+      "commit": "fce0e1d2f46329d1d3552924be890ca0653866d3",
+      "sha256": "bc7b89a2eee9473a4f49817ec72fc75e6b5736a65ae9906bc2659d849b1e6a7a",
+      "exports": [
+        "formatPlanDateTime",
+        "formatPlanTimeRange",
+        "formatPlanReminder"
+      ]
+    },
+    {
+      "label": "ReviewText",
+      "path": "arkui-x-client/entry/src/main/ets/pages/ReviewPage.ets",
+      "commit": "fce0e1d2f46329d1d3552924be890ca0653866d3",
+      "sha256": "799fedbf67ec496403c39b20f82729f78976c303251026aa9c8872c9ab169aef",
+      "methods": [
+        "duration",
+        "readingTime"
+      ]
+    },
+    {
+      "label": "FocusText",
+      "path": "arkui-x-client/entry/src/main/ets/pages/FocusPage.ets",
+      "commit": "fce0e1d2f46329d1d3552924be890ca0653866d3",
+      "sha256": "92651dce87e363cc8bd85f97f4b3dc5a86ea59ebb5b3879c48c7fa5eb1ccbd90",
+      "methods": [
+        "duration",
+        "targetReached"
+      ]
+    }
+  ]
+}

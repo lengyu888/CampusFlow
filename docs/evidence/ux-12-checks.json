@@ -1,0 +1,32 @@
+{
+  "stage": "UX12",
+  "scope": "Final delivery, source-based Web comparison, original artwork and documents; no production code changes after UX11",
+  "production_baseline": "fce0e1d2f46329d1d3552924be890ca0653866d3",
+  "reused_production_evidence": {
+    "report": "ux-11-checks.json",
+    "backend_passed": 943,
+    "backend_integration_deselected": 2,
+    "client_passed": 1119,
+    "client_jdk_skipped": 1,
+    "journey_steps": 14,
+    "journey_http_requests": 88,
+    "native_or_real_model": false
+  },
+  "new_browser_checks": 17,
+  "new_browser_screenshots": 15,
+  "browser_report": "ux-12-browser-checks.json",
+  "source_manifest": "ux-12-comparison-sources.json",
+  "original_art_report": "ux-12-artwork-checks.json",
+  "relative_document_links": {
+    "checked": 99,
+    "missing": 0
+  },
+  "visual_review": "Root inspected all six same-390 comparisons, 320 large-type review and both directory layouts. Agent inspected all 15 screenshots. Review natural-time capture was inspected again after exact-source formatting correction. No new blocking crop or text loss found in these Web captures.",
+  "independent_source_review": "Preserved old voice/multiline/three views/manual entry capabilities. Corrected unverified zero-warning proposal label, three incomplete-time items, all-day date-strip count, and unsupported cross-page live focus detail. Old missing Focus/Review pages are explicit absences, not fabricated old screens.",
+  "preserved_artifacts": "Eight previously published HTML chapters remain byte-for-byte identical to UX11 objects; original seven PNG hashes unchanged.",
+  "remote_verification": "Run after publication and preserve exact 24 branch/PR checks plus main baselines in the final user artifact, separate from self-referential commit contents.",
+  "native_build": false,
+  "device_validation": false,
+  "real_model_calls": false,
+  "deployment": false
+}

@@ -1,0 +1,205 @@
+{
+  "schema_version": 1,
+  "synthetic": true,
+  "boundary": "Public synthetic comparison data; no account, server, model or native device. Both renderings use identical input. New-only evidence facts are explicitly additions, not old-version measurements.",
+  "timezone": "Asia/Shanghai",
+  "now": "2030-10-21T14:10:00+08:00",
+  "date": "2030-10-21",
+  "timetable_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "courses": [
+    {
+      "date": "2030-10-21",
+      "title": "操作系统：进程同步与死锁分析",
+      "start_time": "08:05",
+      "end_time": "09:40",
+      "location": "第7教研楼北406",
+      "teacher": "叶老师"
+    },
+    {
+      "date": "2030-10-21",
+      "title": "软件工程课程设计：校园协作系统的需求评审与迭代规划",
+      "start_time": "14:30",
+      "end_time": "16:05",
+      "location": "第4教研楼311–313",
+      "teacher": "穆老师"
+    },
+    {
+      "date": "2030-10-21",
+      "title": "深度学习",
+      "start_time": "18:30",
+      "end_time": "20:05",
+      "location": "第3教研楼215",
+      "teacher": "杨老师"
+    }
+  ],
+  "week_extra_courses": [
+    {
+      "date": "2030-10-22",
+      "title": "离散数学",
+      "start_time": "10:00",
+      "end_time": "11:35",
+      "location": "第6教研楼206",
+      "teacher": "陈老师"
+    },
+    {
+      "date": "2030-10-25",
+      "title": "计算机网络实验",
+      "start_time": "14:00",
+      "end_time": "15:35",
+      "location": "实验楼302",
+      "teacher": "林老师"
+    }
+  ],
+  "tasks": [
+    {
+      "task_id": "demo-task-1",
+      "title": "整理昨天的操作系统笔记",
+      "status": "completed",
+      "source": "manual",
+      "plan_id": null,
+      "milestone_id": null,
+      "start_at": "2030-10-21T09:45:00+08:00",
+      "end_at": "2030-10-21T10:10:00+08:00",
+      "location": null,
+      "reminder_minutes": null,
+      "created_at": "2030-10-20T18:00:00+08:00",
+      "completed_at": "2030-10-21T09:30:00+08:00"
+    },
+    {
+      "task_id": "demo-task-2",
+      "title": "发出小组会议纪要",
+      "status": "pending",
+      "source": "manual",
+      "plan_id": null,
+      "milestone_id": null,
+      "start_at": "2030-10-21T11:00:00+08:00",
+      "end_at": "2030-10-21T11:20:00+08:00",
+      "location": null,
+      "reminder_minutes": null,
+      "created_at": "2030-10-20T18:00:00+08:00",
+      "completed_at": null
+    },
+    {
+      "task_id": "demo-task-3",
+      "title": "和同学核对课程设计分工",
+      "status": "pending",
+      "source": "manual",
+      "plan_id": null,
+      "milestone_id": null,
+      "start_at": "2030-10-21T13:00:00+08:00",
+      "end_at": null,
+      "location": null,
+      "reminder_minutes": null,
+      "created_at": "2030-10-20T18:00:00+08:00",
+      "completed_at": null
+    },
+    {
+      "task_id": "demo-task-4",
+      "title": "检查课程设计提交材料",
+      "status": "pending",
+      "source": "manual",
+      "plan_id": null,
+      "milestone_id": null,
+      "start_at": "2030-10-21T15:30:00+08:00",
+      "end_at": "2030-10-21T16:15:00+08:00",
+      "location": "图书馆二楼",
+      "reminder_minutes": null,
+      "created_at": "2030-10-20T18:00:00+08:00",
+      "completed_at": null
+    },
+    {
+      "task_id": "demo-task-5",
+      "title": "复习操作系统：把进程同步与死锁练习中的错题整理成一页说明",
+      "status": "pending",
+      "source": "manual",
+      "plan_id": null,
+      "milestone_id": null,
+      "start_at": "2030-10-21T20:30:00+08:00",
+      "end_at": "2030-10-21T21:15:00+08:00",
+      "location": "图书馆二楼",
+      "reminder_minutes": null,
+      "created_at": "2030-10-20T18:00:00+08:00",
+      "completed_at": null
+    },
+    {
+      "task_id": "demo-task-6",
+      "title": "提交奖学金申请材料",
+      "status": "pending",
+      "source": "manual",
+      "plan_id": null,
+      "milestone_id": null,
+      "start_at": "2030-10-21T23:59:00+08:00",
+      "end_at": null,
+      "location": null,
+      "reminder_minutes": null,
+      "created_at": "2030-10-20T18:00:00+08:00",
+      "completed_at": null
+    },
+    {
+      "task_id": "demo-task-7",
+      "title": "整理本周阅读清单",
+      "status": "pending",
+      "source": "manual",
+      "plan_id": null,
+      "milestone_id": null,
+      "start_at": null,
+      "end_at": null,
+      "location": null,
+      "reminder_minutes": null,
+      "created_at": "2030-10-20T18:00:00+08:00",
+      "completed_at": null
+    }
+  ],
+  "conversation": {
+    "title": "今天的操作系统复习",
+    "question": "结合课表，今天帮我留两段时间复习操作系统，每段25分钟。",
+    "answer": "可以先安排两段各25分钟的复习，分别整理同步机制和回顾错题。请核对下面的时间，再决定是否加入。",
+    "tool_count": 2,
+    "tools": [
+      "课表查询已完成",
+      "待办查询已完成"
+    ],
+    "candidates": [
+      {
+        "id": "candidate-a",
+        "title": "整理进程同步机制",
+        "start_at": "2030-10-21T16:30:00+08:00",
+        "end_at": "2030-10-21T16:55:00+08:00",
+        "location": "图书馆二楼"
+      },
+      {
+        "id": "candidate-b",
+        "title": "回顾死锁与调度错题",
+        "start_at": "2030-10-21T21:30:00+08:00",
+        "end_at": "2030-10-21T21:55:00+08:00",
+        "location": "宿舍"
+      }
+    ]
+  },
+  "editor": {
+    "date": "2030-10-21",
+    "title": "软件工程课程设计：校园协作系统的需求评审与迭代规划",
+    "start_time": "14:30",
+    "end_time": "16:05",
+    "location": "第4教研楼311–313",
+    "teacher": "穆老师"
+  },
+  "focus": {
+    "task_id": "demo-task-7",
+    "local_state": "running",
+    "started_at": "2030-10-21T13:45:00+08:00",
+    "elapsed_ms": 1500000,
+    "target_ms": 1500000,
+    "confirmed_elapsed_ms": 0,
+    "has_complete_receipt": false
+  },
+  "review": {
+    "read_at": "2030-10-21T14:10:00+08:00",
+    "completion_count": 1,
+    "confirmed_elapsed_ms": 0,
+    "local_pending_count": 1,
+    "note": "",
+    "boundary": "One completion receipt for demo-task-1; running focus has no ended confirmed interval and contributes zero confirmed time. Synthetic new-only receipt facts; old baseline has no review screen.",
+    "current_unscheduled_count": 1
+  }
+}
