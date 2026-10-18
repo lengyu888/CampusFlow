@@ -11,6 +11,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemClock;
 import android.speech.RecognitionListener;
 import android.speech.RecognizerIntent;
 import android.speech.SpeechRecognizer;
@@ -128,7 +129,8 @@ public final class CampusFlowPlatformBridge extends BridgePlugin {
         if ((voiceOperation && operation.isEmpty()) || (scoped && !NativePolicy.scope(scope))) throw new JSONException("INVALID_REQUEST");
         if (op.equals("speech.start") && text.trim().isEmpty()) throw new JSONException("INVALID_REQUEST");
         if (!(voiceOperation || scoped || op.equals("capabilities") || op.equals("speech.stop")
-                || op.equals("voice.dispose") || op.equals("reminders.status"))) throw new JSONException("INVALID_REQUEST");
+                || op.equals("voice.dispose") || op.equals("reminders.status") || op.equals("clock.sample"))) throw new JSONException("INVALID_REQUEST");
+        if (op.equals("clock.sample") && json.length() != 3) throw new JSONException("INVALID_REQUEST");
         List<CampusFlowReminderStore.Item> items = new ArrayList<>();
         if (op.equals("reminders.replace")) {
             Object rawItems = json.opt("reminders");
@@ -163,6 +165,10 @@ public final class CampusFlowPlatformBridge extends BridgePlugin {
         if (destroyed) { reply(request, false, "OPERATION_CANCELLED", null); return; }
         try {
             switch (request.op) {
+                case "clock.sample":
+                    reply(request, true, "", new JSONObject().put("wall_ms", System.currentTimeMillis())
+                            .put("monotonic_ms", SystemClock.elapsedRealtime()));
+                    break;
                 case "capabilities":
                     ensureTts(() -> {
                         try {

@@ -1,0 +1,149 @@
+{
+  "stage": "UX09",
+  "backend": {
+    "passed": 883,
+    "deselected": 2,
+    "ruff": "passed",
+    "command": "PYTHONPATH=src ../../audit-venv/bin/python -m pytest -q -m 'not integration'"
+  },
+  "client": {
+    "tests": 1045,
+    "pass": 1044,
+    "fail": 0,
+    "skipped": 1
+  },
+  "skip_reason": "Existing Pure Java NativePolicy check requires unavailable JDK; no installation",
+  "static": {
+    "arkts_ts_files": 85,
+    "config_files": 20
+  },
+  "cross_layer": {
+    "passed": 34,
+    "checks": [
+      "actual ASGI start",
+      "actual ASGI active-running",
+      "actual ASGI running-detail",
+      "actual ASGI pause",
+      "actual ASGI paused-detail",
+      "actual ASGI resume",
+      "actual ASGI end-local",
+      "actual ASGI ended-detail",
+      "actual ASGI start-remote-running",
+      "actual ASGI end-remote-running",
+      "actual ASGI detail-remote-running",
+      "actual ASGI start-remote-paused",
+      "actual ASGI pause-empty",
+      "actual ASGI end-remote-paused",
+      "actual ASGI detail-remote-paused",
+      "actual ASGI history-first",
+      "actual ASGI history-second",
+      "actual ASGI active-empty",
+      "actual ASGI detail-task-deleted",
+      "actual ASGI delete-record",
+      "actual ASGI replay-old-start-after-delete",
+      "actual ASGI get-old-receipt-after-delete",
+      "receipt binds complete frozen body, not only operation ID",
+      "cross-owner, injected raw uptime and changed total fail closed",
+      "remote end adds a gap only to a previously running record",
+      "task deletion keeps record evidence while record deletion returns 410",
+      "history pages share a frozen token; stale continuation is a controlled 409",
+      "actual cold unknown receipt plus cold current running stays interrupted",
+      "actual cold unknown receipt plus newer ended current",
+      "actual cold unknown receipt plus deleted current",
+      "actual frozen offline queue on first device",
+      "second sync on first device cannot double count",
+      "actual frozen offline queue on second device",
+      "second sync on second device cannot double count"
+    ],
+    "source": "Authenticated ASGI / real SQLite fixture → production ArkTS digest, validators, controller and durable store",
+    "native": false
+  },
+  "browser": {
+    "checks": 19,
+    "passed": [
+      "All actual ASGI/SQLite synthetic focus projections pass unmodified production validation",
+      "Blank goal starts forward timing only after receipt; no goal default and no task completion",
+      "Switching Today/Plan keeps one active record; five seconds uses actual production monotonic difference",
+      "Pause excludes elapsed clock movement; resume is an explicit recorded transition",
+      "Explicit end keeps task pending, then separate completion uses production UX08 receipt",
+      "Exactly reaching the optional goal only displays a notice and timing continues past it",
+      "320px large type retains all controls and no horizontal overflow",
+      "Explicit local-only start/end stays visibly unsynced and sends nothing until user chooses sync",
+      "Ordered sync posts frozen start/end then shows confirmed time without duplicate accumulation",
+      "Ambiguous response exposes read-only original-ID check and hides replay before definite 404",
+      "Recovered original receipt starts trusted timing without another POST or invented network wait",
+      "Definite 404 enables explicit retry of exactly the same ID and full frozen request",
+      "Application background pauses the record; no background duration is silently added",
+      "Another device active record blocks new start and requires an explicit end confirmation",
+      "Completing a different selected record reads and updates its exact task, leaving the original task unchanged",
+      "Unavailable reliable clock never falls back to Date elapsed or writes a start; explicit retry can recover",
+      "Deleted task keeps its focus history and removes completion; dark/reduced-motion remains readable",
+      "Deleting an ended record requires explicit confirmation and does not mutate the task",
+      "Offline self-contained prototype uses no HTTP request or browser runtime error"
+    ],
+    "errors": [],
+    "httpRequests": [],
+    "sourceHashes": {
+      "DailyAgenda": "889b2115d924ba40cf55ee8835d1f1695fc3fa8b88061f717e450736d1ae4709",
+      "AgentFeedback": "36ab5ad776928d2b9bd275f54675a1007b1a67e69ae4964dc4615cbfec625d10",
+      "FocusDigest": "abc35ad919b4848188e8c252796851c51b45dbb4addc114a0b3044a02e42480a",
+      "FocusValidation": "e4f253589ed2622b926ff7176026750343792e8b34032ccdef5ae256b5060383",
+      "FocusTimer": "05ec726c071374e0f0962d7ba3eb984d62d77401ab41dd732a3981fef15b6cdc",
+      "FocusStore": "7a28b7d19fa2f3d12cec46750e8d79f3babafc6bde365e28cc364902b9ff6474",
+      "FocusController": "4ade357e57896b5e4b8593408114517258f70d9bc253cda44f330e0cd5e93fc5",
+      "DraftStore": "2e4afd681d568da8bbd1fbfac780558d90b6f84678a266897938edcddfe68d77",
+      "TaskStatusValidation": "03c227d2714291d7942984cf325ff2b420a298e428d52c7a0e97fb27c410c170",
+      "TaskStatusController": "45533a8a249e69160bda220f237056b9321d9150bd0fd146acc1090d3b9e53bc"
+    },
+    "fixtureSHA256": "0d724001c5961e1847820409080faa46435076e5a3e7ecf83903d8055e5ec710",
+    "fixtureCount": 22,
+    "syntheticData": true,
+    "actualProductionController": true,
+    "nativeValidation": false,
+    "browserApproximation": true,
+    "memoryDriverOnly": true,
+    "simulatedClock": true,
+    "screenshots": [
+      "01-wide-optional-target-web.png",
+      "02-390-forward-timer.png",
+      "03-390-ended-and-separate-completion.png",
+      "04-320-large-goal-reached.png",
+      "05-320-large-local-unsynced.png",
+      "06-430-unknown-query.png",
+      "07-430-remote-end-gap.png",
+      "08-430-dark-deleted-task-history.png"
+    ]
+  },
+  "visual_review": "Root inspected actual wide, 320px large goal reached, and 390px end plus separate task completion; prototype task titles and event date labels were made consistent with the synthetic task/clock. Web approximation only.",
+  "independent_review": "Receipt must match the full frozen canonical request and current server record before timer start. Fixed record selection during clock await, background crossing an atomic anchor write, service change during login/explicit account cleanup. Backend independent queue and page review found no remaining concrete blocker.",
+  "native_source_checks": "Shared clock bridge, Android elapsedRealtime, Harmony getUptime isolation, Apple systemUptime plus 35F9.1 resource; plist and pbxproj syntax verified. No native compile.",
+  "native_build": false,
+  "device_validation": false,
+  "real_model_calls": false,
+  "logs": [
+    {
+      "file": "ux09-backend-full.log",
+      "sha256": "20a76e53430d2a7ec944c6a91cc181131eee7d6a5fc8a84647cc3bf8aa68b804"
+    },
+    {
+      "file": "ux09-backend-ruff.log",
+      "sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18"
+    },
+    {
+      "file": "ux09-client-full.log",
+      "sha256": "227c5f978d060fb5d99b438c009e87d9eb8dbef351b4202373ff0d4f1431e9ac"
+    },
+    {
+      "file": "ux09-static.log",
+      "sha256": "f33c3d3149a55ff45a577e8bd8a2cbca8a77dea68d9ba4d57538ec5cb0ca1d4e"
+    },
+    {
+      "file": "ux09-cross-contract-result.json",
+      "sha256": "73fbe899a1f059fd833fac4932af7a12d76322e6edd87be3d7c67a0cd5484291"
+    },
+    {
+      "file": "ux09-root-protocol.log",
+      "sha256": "611cb9e0826a17acc3e8b3286c9bf21357f4aeb5028f61de2418deff210ae5bf"
+    }
+  ]
+}

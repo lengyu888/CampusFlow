@@ -44,7 +44,7 @@ test('static: all frozen operations dispatch through the main looper', () => {
   assert.match(bridge, /new Handler\(Looper\.getMainLooper\(\)\)/);
   assert.match(method(bridge, 'public String dispatch('), /main\.post\(\(\) -> execute\(request\)\)/);
   const operations = [...bridge.matchAll(/case "([^"]+)":/g)].map(match => match[1]);
-  assert.deepEqual(operations.sort(), ['capabilities', 'recognition.start', 'recognition.finish',
+  assert.deepEqual(operations.sort(), ['capabilities', 'clock.sample', 'recognition.start', 'recognition.finish',
     'recognition.cancel', 'speech.start', 'speech.stop', 'voice.dispose', 'reminders.status',
     'reminders.authorize', 'reminders.replace', 'reminders.clear'].sort());
   assert.match(method(bridge, 'private void reply('), /if \(request\.replied\) return;[\s\S]*request\.replied = true/);

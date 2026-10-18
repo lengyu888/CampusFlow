@@ -1,3 +1,4 @@
+import { focusEntryFixture } from './helpers/focus-entry-fixture.mjs';
 import { TaskStatusController, statusIds, statusTask, completeOperation, tick as statusTick } from './helpers/task-status-fixture.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -11,7 +12,7 @@ const navigation=await import(`data:text/javascript;base64,${Buffer.from(stripTy
 const names=['createNavigation','currentRoute','selectRoot','openSecondary','backNavigation','isRootRoute','hasBack'];
 const {DraftStore}=await import(`data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(read('utils/DraftStore'))).toString('base64')}`);
 const indexSource=read('pages/Index');
-const create=new Function('localHistory','historyScope','CampusFlowApi','AppStorage','AppTheme','Curve','ReminderCoordinator','PlatformReminderDriver','localDrafts','TaskStatusController','timetableOperationId',...names,
+const create=new Function('localHistory','historyScope','CampusFlowApi','AppStorage','AppTheme','Curve','ReminderCoordinator','PlatformReminderDriver','localDrafts','TaskStatusController','timetableOperationId','FocusController','emptyFocusState','localFocus','PlatformFocusClock',...names,
   methods(indexSource,'Index')+'\nreturn Index;');
 const deferred=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return{promise,resolve,reject};};
 function setup({activate=async()=>{},load=async()=>({tasks:[]}),cleanup=async()=>{},disable=async()=>{},statusStart=async(_id,request)=>completeOperation(statusTask(),request,{user_id:'a'})}={}) {
@@ -30,7 +31,7 @@ function setup({activate=async()=>{},load=async()=>({tasks:[]}),cleanup=async()=
  class Api{constructor(base,token){this.base=base;this.token=token;}async planning(){calls.push(['planning',this.base,this.token]);return load();}async logout(){calls.push(['revoke',this.token]);}async startTaskStatus(id,request){calls.push(['status',id,request]);return statusStart(id,request);}}
  const store={activate,clear:async()=>calls.push(['clear-cache']),info:()=>({scope:'cache',displayName:'a',count:0})};
  let draftText;const drafts=new DraftStore({read:async()=>draftText,write:async value=>{draftText=value;},remove:async()=>{draftText=undefined;}});drafts.initialize();
- const Index=create(store,(base,id)=>`${base}|${id}`,Api,{setOrCreate(){}},{motion:()=>0},{EaseOut:0},Coordinator,Driver,drafts,TaskStatusController,()=>statusIds.complete,...names.map(n=>navigation[n]));
+ const Index=create(store,(base,id)=>`${base}|${id}`,Api,{setOrCreate(){}},{motion:()=>0},{EaseOut:0},Coordinator,Driver,drafts,TaskStatusController,()=>statusIds.complete,...Object.values(focusEntryFixture().dependencies),...names.map(n=>navigation[n]));
  const page=new Index();page.baseUrl='https://example.test';page.getUIContext=()=>({getHostContext:()=> 'context',animateTo:(_o,f)=>f()});
  return{page,calls,manager:()=>manager,publish:s=>published(s)};
 }
@@ -48,12 +49,16 @@ test('foreground updates and authoritative planning callbacks refresh the one co
  assert.deepEqual(f.calls,[['active',false],['active',true],['refresh']]);
  assert.equal(f.page.homeRefresh,home+1);assert.equal(f.page.planRefresh,plan+1);
 });
-test('service changes reject stale task reads and log out instead of forwarding old credentials',async()=>{
+test('service changes require explicit cleanup while retaining the old authenticated service until confirmation',async()=>{
  const read=deferred(),f=setup({load:()=>read.promise});await f.page.authenticated(auth('a'));
  const old=f.manager().loader();f.page.baseUrl='https://other.test';f.page.reminderAccountChanged();
- read.resolve({tasks:[]});await assert.rejects(old,/ACCOUNT_CHANGED/);assert.equal(f.page.token,'');
+ read.resolve({tasks:[]});await old;assert.equal(f.page.token,'token-a');
+ assert.equal(f.page.baseUrl,'https://example.test');assert.equal(f.page.serviceBaseUrl(),'https://example.test');
+ assert.equal(f.page.pendingServiceUrl,'https://other.test');assert.equal(f.page.pendingLogoutConfirm,true);
  assert.equal(f.manager().scope,'https://example.test|a');
  assert.equal(f.calls.some(c=>c[0]==='configure'&&c[1]==='https://other.test|a'),false);
+ await f.page.confirmAccountExit();assert.equal(f.page.token,'');assert.equal(f.page.baseUrl,'https://other.test');
+ assert.equal(f.calls.some(c=>c[0]==='planning'&&c[1]==='https://other.test'),false);
 });
 test('logout closes auth immediately, still clears cache/revokes token, and failed OS cleanup is explicit and retryable',async()=>{
  const pending=deferred();const f=setup({cleanup:()=>pending.promise});await f.page.authenticated(auth('a'));f.calls.length=0;

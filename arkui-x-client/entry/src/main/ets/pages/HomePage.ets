@@ -32,6 +32,8 @@ export struct HomePage {
   @Prop statusLockedTaskIds: string[] = [];
   onTaskStatus: (task: PlanningTask) => void = () => {};
   onOpenStatus: (taskId: string) => void = () => {};
+  onOpenFocus: (task: PlanningTask) => void = () => {};
+  onOpenFocusRecords: () => void = () => {};
   @State private courses: TimetableEntry[] = [];
   @State private overview: PlanningOverview = {
     plans: [], tasks: [], total_tasks: 0, completed_tasks: 0, due_today: 0, overdue_tasks: 0, progress: 0
@@ -230,6 +232,15 @@ export struct HomePage {
     }
     if (typeof task.start_at !== 'string') { return '时间数据异常，请在详情核对。'; }
     return `待核对时间 · ${task.start_at}`;
+  }
+
+  private focusCandidates(): PlanningTask[] {
+    return this.taskPhase === 'ready' ? this.overview.tasks.filter((task: PlanningTask) => task.status === 'pending').slice(0, 3) : [];
+  }
+  private focusRequested(task: PlanningTask): void {
+    if (!this.active || !this.pageActive || this.taskPhase !== 'ready') { return; }
+    const current = this.overview.tasks.find((item: PlanningTask) => item.task_id === task.task_id);
+    if (current !== undefined) { this.onOpenFocus(current); }
   }
 
   private statusLabel(task: PlanningTask): string {
@@ -514,6 +525,29 @@ export struct HomePage {
     }.width('100%')
   }
 
+  @Builder
+  private FocusEntry() {
+    Column({ space: 12 }) {
+      Row({ space: 8 }) {
+        Text('专注一件事').fontSize(AppTheme.sectionTitle).fontWeight(FontWeight.Medium).fontColor(AppTheme.ink).layoutWeight(1)
+        Button('查看记录').constraintSize({ minHeight: 48 }).fontColor(AppTheme.accent).backgroundColor(Color.Transparent)
+          .onClick(() => this.onOpenFocusRecords())
+      }.width('100%')
+      ForEach(this.focusCandidates(), (task: PlanningTask) => {
+        Button({ type: ButtonType.Normal }) {
+          Column({ space: 5 }) {
+            Text(task.title).fontSize(AppTheme.bodySize).fontColor(AppTheme.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
+            Text('为这项待办开始专注记录').fontSize(AppTheme.metaSize).fontColor(AppTheme.accent).width('100%')
+          }.width('100%').alignItems(HorizontalAlign.Start)
+        }.width('100%').constraintSize({ minHeight: 64 }).padding(14).backgroundColor(AppTheme.surface).borderRadius(AppTheme.controlRadius)
+          .onClick(() => this.focusRequested(task))
+      }, (task: PlanningTask) => `${task.task_id}-${this.refreshKey}`)
+      Text(this.focusCandidates().length > 0 ? '先列出 3 项以内的待办；其他任务可从计划详情开始。记录结束后，再决定是否标记完成。' :
+        this.taskPhase === 'ready' ? '当前没有未完成待办。可从计划中选择具体任务，或回看专注记录。' : '任务尚未核对成功，先查看已有记录或重试读取任务。')
+        .fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+    }.width('100%').alignItems(HorizontalAlign.Start)
+  }
+
   build() {
     Scroll(this.scroller) {
       Column({ space: AppTheme.sectionGap }) {
@@ -633,6 +667,7 @@ export struct HomePage {
           }.width('100%')
         }.width('100%').constraintSize({ minHeight: 76 }).padding(AppTheme.cardInset)
           .backgroundColor(AppTheme.accentSoft).borderRadius(AppTheme.cardRadius).onClick(() => this.onOpenAgent())
+        this.FocusEntry()
         Column({ space: 12 }) {
           this.SectionTitle('目标进展', '查看全部', 'goals')
           if (this.activePlans().length > 0) {

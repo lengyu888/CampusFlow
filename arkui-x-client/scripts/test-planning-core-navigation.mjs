@@ -230,3 +230,10 @@ test('inactive system back cannot pop an unrelated root page', () => {
 
 // These execute actual page methods with mocked I/O. Scroller identity checks do not prove
 // native scroll retention, ArkUI layout, keyboard, accessibility or three-platform compilation.
+
+test('task detail focus entry keeps exact current ID and existing detail stack without creating or completing anything',()=>{
+ const {page,calls}=fixture(),opened=[];const original=task('focus-a');page.overview.tasks=[{...original,title:'最新任务标题'}];
+ page.detailKind='task';page.detailId='focus-a';page.detailStack=[{kind:'plan',id:'parent',external:false}];const before=structuredClone(page.detailStack);
+ page.onOpenFocus=value=>opened.push(value);page.focusRequested(original);assert.equal(opened[0],page.overview.tasks[0]);assert.equal(opened[0].title,'最新任务标题');
+ assert.deepEqual(page.detailStack,before);assert.deepEqual(calls,[]);page.focusRequested(task('missing'));page.active=false;page.focusRequested(original);assert.equal(opened.length,1);
+});

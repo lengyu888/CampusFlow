@@ -86,6 +86,7 @@ export struct PlanCenterPage {
   @Prop statusLockedTaskIds: string[] = [];
   onTaskStatus: (task: PlanningTask) => void = () => {};
   onOpenStatus: (taskId: string) => void = () => {};
+  onOpenFocus: (task: PlanningTask) => void = () => {};
   onOpenTimetable: () => void = () => {};
   @State private overview: PlanningOverview = {
     plans: [], tasks: [], total_tasks: 0, completed_tasks: 0, due_today: 0, overdue_tasks: 0, progress: 0
@@ -1113,6 +1114,12 @@ export struct PlanCenterPage {
     await this.previewAction({ operation: 'delete_plan', plan_id: plan.plan_id });
   }
 
+  private focusRequested(task: PlanningTask): void {
+    if (!this.active || !this.pageActive) { return; }
+    const current = this.overview.tasks.find((item: PlanningTask) => item.task_id === task.task_id);
+    if (current !== undefined) { this.onOpenFocus(current); }
+  }
+
   private statusLabel(task: PlanningTask): string {
     if (this.statusLockedTaskIds.includes(task.task_id)) { return '状态结果待核对'; }
     if (task.status !== 'completed') { return '标记完成'; }
@@ -1881,6 +1888,9 @@ export struct PlanCenterPage {
                 .fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft).borderRadius(AppTheme.controlRadius)
                 .onClick(() => this.openDetails('plan', task.plan_id ?? ''))
             }
+            Button('为这项任务开始专注记录').width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
+              .fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft).borderRadius(AppTheme.controlRadius)
+              .enabled(this.active).onClick(() => this.focusRequested(task))
             Button('编辑任务与时间').width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
               .fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft).borderRadius(AppTheme.controlRadius)
               .enabled(!this.writesBlocked()).onClick(() => this.beginTaskEdit(task))

@@ -317,3 +317,13 @@ test('page groups retain all rows and never collapse incomplete timed work', () 
   assert.equal(groups.earlier.length,2); assert.equal(groups.upcoming.length+groups.overdue.length+groups.earlier.length,page.agenda().rows.length);
   assert.match(source,/TimelineList\(this\.groups\(\)\.overdue\)/); assert.match(source,/if \(this\.earlierExpanded\)/);
 });
+
+test('focus entry uses an exact current task and a bounded honest shortcut list without task mutation',()=>{
+ const {page,calls}=setup(),opened=[];page.taskPhase='ready';page.onOpenFocus=value=>opened.push(value);
+ page.overview=overview(Array.from({length:5},(_,i)=>task({task_id:`focus-${i}`,title:'同名任务',status:i===4?'completed':'pending'})));
+ assert.deepEqual(page.focusCandidates().map(t=>t.task_id),['focus-0','focus-1','focus-2']);
+ const old=page.overview.tasks[1];page.overview.tasks[1]={...old,title:'最新标题'};page.focusRequested(old);
+ assert.equal(opened[0],page.overview.tasks[1]);assert.equal(opened[0].title,'最新标题');assert.deepEqual(calls,[]);
+ page.taskPhase='stale';page.focusRequested(old);assert.deepEqual(page.focusCandidates(),[]);assert.equal(opened.length,1);
+ page.taskPhase='ready';page.active=false;page.focusRequested(old);assert.equal(opened.length,1);
+});

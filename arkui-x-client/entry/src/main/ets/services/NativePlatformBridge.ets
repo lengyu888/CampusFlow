@@ -9,6 +9,8 @@ export interface NativeCommandArguments {
 }
 interface NativeCommand extends NativeCommandArguments { v: number; request_id: string; op: string; }
 export interface NativePlatformResult {
+  wall_ms?: number;
+  monotonic_ms?: number;
   recognition?: boolean;
   synthesis?: boolean;
   reminders?: boolean;
@@ -158,7 +160,7 @@ export class NativePlatformBridge {
 
   request(op: string, args: NativeCommandArguments = {}): Promise<NativePlatformResult> {
     if (args === null || typeof args !== 'object' || Array.isArray(args)) { return Promise.reject(new NativeBridgeError('INVALID_REQUEST')); }
-    if (!['capabilities', 'recognition.start', 'recognition.finish', 'recognition.cancel', 'speech.start', 'speech.stop',
+    if (!['clock.sample', 'capabilities', 'recognition.start', 'recognition.finish', 'recognition.cancel', 'speech.start', 'speech.stop',
       'voice.dispose', 'reminders.status', 'reminders.authorize', 'reminders.replace', 'reminders.clear'].includes(op)) {
       return Promise.reject(new NativeBridgeError('INVALID_REQUEST'));
     }
@@ -168,6 +170,7 @@ export class NativePlatformBridge {
       op === 'reminders.replace' && args.reminders === undefined) {
       return Promise.reject(new NativeBridgeError('INVALID_REQUEST'));
     }
+    if (op === 'clock.sample' && Object.keys(args).length !== 0) { return Promise.reject(new NativeBridgeError('INVALID_REQUEST')); }
     const id = `${this.prefix}-${++this.sequence}`;
     const command: NativeCommand = { v: 1, request_id: id, op: op };
     if (args.operation_id !== undefined) {

@@ -1,3 +1,4 @@
+import { focusEntryFixture } from './helpers/focus-entry-fixture.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { stripTypeScriptTypes } from 'node:module';
@@ -50,7 +51,7 @@ async function fixture(handlers = {}, driver = new DraftMemoryDriver()) {
     constructor(store, changed, applied, makeId) { return new TaskStatusController(store, changed, applied, makeId, () => statusNow); }
   }
   const Page = component('pages/Index.ets', 'Index', { ...navigation,
-    historyScope: history.historyScope, localDrafts: drafts.store,
+    historyScope: history.historyScope, localDrafts: drafts.store, ...focusEntryFixture().dependencies,
     localHistory: { clear: async () => {}, info: () => ({scope:'',count:0,displayName:''}) },
     TaskStatusController: ClockedController, timetableOperationId: () => ids[id++], CampusFlowApi: Api,
     AppStorage: {setOrCreate(){}}, AppTheme: {motion:()=>0}, Curve:{EaseOut:0} });

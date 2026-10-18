@@ -39,8 +39,9 @@ NSDictionary *CFNativeCommand(NSString *json, NSTimeInterval nowMS) {
     NSString *op = command[@"op"];
     NSSet *ops = [NSSet setWithArray:@[@"capabilities", @"recognition.start", @"recognition.finish",
         @"recognition.cancel", @"speech.start", @"speech.stop", @"voice.dispose", @"reminders.status",
-        @"reminders.authorize", @"reminders.replace", @"reminders.clear"]];
+        @"reminders.authorize", @"reminders.replace", @"reminders.clear", @"clock.sample"]];
     if (![op isKindOfClass:NSString.class] || ![ops containsObject:op]) return nil;
+    if ([op isEqualToString:@"clock.sample"] && [command count] != 3) return nil;
     if ([op hasPrefix:@"recognition."] || [op isEqualToString:@"speech.start"]) {
         if (!CFNativeIdentifier(command[@"operation_id"], 128)) return nil;
     } else if (command[@"operation_id"] && !CFNativeIdentifier(command[@"operation_id"], 128)) return nil;

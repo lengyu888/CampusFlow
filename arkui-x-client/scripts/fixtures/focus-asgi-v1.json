@@ -1,0 +1,941 @@
+{
+  "contract_version": 1,
+  "synthetic": true,
+  "user_id": "2bb70703ea2f46cabd74e976c440afa2",
+  "cases": [
+    {
+      "label": "start",
+      "type": "operation",
+      "path": "/api/v1/focus-records/6734feff-d3cb-4bd5-a1dc-2b743e5bfc80/operations",
+      "method": "POST",
+      "request": {
+        "operation_id": "f185081c-d9a6-4a02-ad33-d9944532b13d",
+        "kind": "start",
+        "expected_revision": 0,
+        "device_id": "10000000-0000-4000-8000-000000000001",
+        "occurred_at": "2030-10-19T09:00:00.123456+08:00",
+        "task_id": "e760958f21fb4612aa09c8d2bab70f8a",
+        "clock_session_id": "10000000-0000-4000-8000-000000000002",
+        "target_ms": 60000
+      },
+      "status_code": 200,
+      "response": {
+        "contract_version": 1,
+        "user_id": "2bb70703ea2f46cabd74e976c440afa2",
+        "operation_id": "f185081c-d9a6-4a02-ad33-d9944532b13d",
+        "record_id": "6734feff-d3cb-4bd5-a1dc-2b743e5bfc80",
+        "kind": "start",
+        "request_digest": "3f91d159b0e917912aa17de9884d31fa2d6118dfa5930982badb83439d285329",
+        "receipt": {
+          "before_revision": 0,
+          "after_revision": 1,
+          "before_state": null,
+          "after_state": "running",
+          "accepted_interval_ids": [],
+          "accepted_gap_ids": [],
+          "added_elapsed_ms": 0,
+          "applied_at": "2030-10-19T01:00:00Z"
+        }
+      }
+    },
+    {
+      "label": "active-running",
+      "type": "active",
+      "path": "/api/v1/focus-records/active",
+      "method": "GET",
+      "request": null,
+      "status_code": 200,
+      "response": {
+        "contract_version": 1,
+        "user_id": "2bb70703ea2f46cabd74e976c440afa2",
+        "record": {
+          "contract_version": 1,
+          "user_id": "2bb70703ea2f46cabd74e976c440afa2",
+          "record_id": "6734feff-d3cb-4bd5-a1dc-2b743e5bfc80",
+          "task_id": "e760958f21fb4612aa09c8d2bab70f8a",
+          "task_title": "合成同名专注待办",
+          "task_missing": false,
+          "state": "running",
+          "revision": 1,
+          "creator_device_id": "10000000-0000-4000-8000-000000000001",
+          "current_device_id": "10000000-0000-4000-8000-000000000001",
+          "clock_session_id": "10000000-0000-4000-8000-000000000002",
+          "segment_id": "f185081c-d9a6-4a02-ad33-d9944532b13d",
+          "started_at": "2030-10-19T01:00:00.123456Z",
+          "ended_at": null,
+          "target_ms": 60000,
+          "confirmed_elapsed_ms": 0,
+          "interval_count": 0,
+          "unknown_gap_count": 0,
+          "created_at": "2030-10-19T01:00:00Z",
+          "updated_at": "2030-10-19T01:00:00Z"
+        }
+      }
+    },
+    {
+      "label": "running-detail",
+      "type": "detail",
+      "path": "/api/v1/focus-records/6734feff-d3cb-4bd5-a1dc-2b743e5bfc80",
+      "method": "GET",
+      "request": null,
+      "status_code": 200,
+      "response": {
+        "contract_version": 1,
+        "user_id": "2bb70703ea2f46cabd74e976c440afa2",
+        "record": {
+          "contract_version": 1,
+          "user_id": "2bb70703ea2f46cabd74e976c440afa2",
+          "record_id": "6734feff-d3cb-4bd5-a1dc-2b743e5bfc80",
+          "task_id": "e760958f21fb4612aa09c8d2bab70f8a",
+          "task_title": "合成同名专注待办",
+          "task_missing": false,
+          "state": "running",
+          "revision": 1,
+          "creator_device_id": "10000000-0000-4000-8000-000000000001",
+          "current_device_id": "10000000-0000-4000-8000-000000000001",
+          "clock_session_id": "10000000-0000-4000-8000-000000000002",
+          "segment_id": "f185081c-d9a6-4a02-ad33-d9944532b13d",
+          "started_at": "2030-10-19T01:00:00.123456Z",
+          "ended_at": null,
+          "target_ms": 60000,
+          "confirmed_elapsed_ms": 0,
+          "interval_count": 0,
+          "unknown_gap_count": 0,
+          "created_at": "2030-10-19T01:00:00Z",
+          "updated_at": "2030-10-19T01:00:00Z"
+        },
+        "record_revision": 1,
+        "intervals": [],
+        "unknown_gaps": []
+      }
+    },
+    {
+      "label": "pause",
+      "type": "operation",
+      "path": "/api/v1/focus-records/6734feff-d3cb-4bd5-a1dc-2b743e5bfc80/operations",
+      "method": "POST",
+      "request": {
+        "operation_id": "a464342c-0d3b-4a3d-b693-e9727d7cf1e7",
+        "kind": "pause",
+        "expected_revision": 1,
+        "device_id": "10000000-0000-4000-8000-000000000001",
+        "occurred_at": "2030-10-19T09:01:00.123456+08:00",
+        "segment_id": "f185081c-d9a6-4a02-ad33-d9944532b13d",
+        "clock_session_id": "10000000-0000-4000-8000-000000000002",
+        "intervals": [
+          {
+            "interval_id": "7a76474b-c284-44a0-9eb7-d286e7793909",
+            "segment_id": "f185081c-d9a6-4a02-ad33-d9944532b13d",
+            "clock_session_id": "10000000-0000-4000-8000-000000000002",
+            "sequence": 1,
+            "started_at": "2030-10-19T09:00:00.123456+08:00",
+            "ended_at": "2030-10-19T09:01:00.123456+08:00",
+            "elapsed_ms": 60000
+          }
+        ],
+        "unknown_gaps": [
+          {
+            "gap_id": "716e135e-d242-41b8-8ef3-dffcb6108c83",
+            "segment_id": "f185081c-d9a6-4a02-ad33-d9944532b13d",
+            "reason": "clock_changed",
+            "observed_start_at": "2030-10-19T09:01:00.123456+08:00",
+            "observed_end_at": "2030-10-19T08:59:59+08:00"
+          }
+        ]
+      },
+      "status_code": 200,
+      "response": {
+        "contract_version": 1,
+        "user_id": "2bb70703ea2f46cabd74e976c440afa2",
+        "operation_id": "a464342c-0d3b-4a3d-b693-e9727d7cf1e7",
+        "record_id": "6734feff-d3cb-4bd5-a1dc-2b743e5bfc80",
+        "kind": "pause",
+        "request_digest": "84d6e48adae076ba9b411552f4d569f593b3b7dcb50717298d7742ddfc3d419f",
+        "receipt": {
+          "before_revision": 1,
+          "after_revision": 2,
+          "before_state": "running",
+          "after_state": "paused",
+          "accepted_interval_ids": [
+            "7a76474b-c284-44a0-9eb7-d286e7793909"
+          ],
+          "accepted_gap_ids": [
+            "716e135e-d242-41b8-8ef3-dffcb6108c83"
+          ],
+          "added_elapsed_ms": 60000,
+          "applied_at": "2030-10-19T01:00:00Z"
+        }
+      }
+    },
+    {
+      "label": "paused-detail",
+      "type": "detail",
+      "path": "/api/v1/focus-records/6734feff-d3cb-4bd5-a1dc-2b743e5bfc80",
+      "method": "GET",
+      "request": null,
+      "status_code": 200,
+      "response": {
+        "contract_version": 1,
+        "user_id": "2bb70703ea2f46cabd74e976c440afa2",
+        "record": {
+          "contract_version": 1,
+          "user_id": "2bb70703ea2f46cabd74e976c440afa2",
+          "record_id": "6734feff-d3cb-4bd5-a1dc-2b743e5bfc80",
+          "task_id": "e760958f21fb4612aa09c8d2bab70f8a",
+          "task_title": "合成同名专注待办",
+          "task_missing": false,
+          "state": "paused",
+          "revision": 2,
+          "creator_device_id": "10000000-0000-4000-8000-000000000001",
+          "current_device_id": "10000000-0000-4000-8000-000000000001",
+          "clock_session_id": null,
+          "segment_id": null,
+          "started_at": "2030-10-19T01:00:00.123456Z",
+          "ended_at": null,
+          "target_ms": 60000,
+          "confirmed_elapsed_ms": 60000,
+          "interval_count": 1,
+          "unknown_gap_count": 1,
+          "created_at": "2030-10-19T01:00:00Z",
+          "updated_at": "2030-10-19T01:00:00Z"
+        },
+        "record_revision": 2,
+        "intervals": [
+          {
+            "interval_id": "7a76474b-c284-44a0-9eb7-d286e7793909",
+            "segment_id": "f185081c-d9a6-4a02-ad33-d9944532b13d",
+            "clock_session_id": "10000000-0000-4000-8000-000000000002",
+            "sequence": 1,
+            "started_at": "2030-10-19T01:00:00.123456Z",
+            "ended_at": "2030-10-19T01:01:00.123456Z",
+            "elapsed_ms": 60000
+          }
+        ],
+        "unknown_gaps": [
+          {
+            "gap_id": "716e135e-d242-41b8-8ef3-dffcb6108c83",
+            "segment_id": "f185081c-d9a6-4a02-ad33-d9944532b13d",
+            "reason": "clock_changed",
+            "observed_start_at": "2030-10-19T01:01:00.123456Z",
+            "observed_end_at": "2030-10-19T00:59:59Z"
+          }
+        ]
+      }
+    },
+    {
+      "label": "resume",
+      "type": "operation",
+      "path": "/api/v1/focus-records/6734feff-d3cb-4bd5-a1dc-2b743e5bfc80/operations",
+      "method": "POST",
+      "request": {
+        "operation_id": "3eae382e-4ffd-4996-a007-97fea11aea24",
+        "kind": "resume",
+        "expected_revision": 2,
+        "device_id": "10000000-0000-4000-8000-000000000003",
+        "occurred_at": "2030-10-19T10:00:00+08:00",
+        "clock_session_id": "10000000-0000-4000-8000-000000000004"
+      },
+      "status_code": 200,
+      "response": {
+        "contract_version": 1,
+        "user_id": "2bb70703ea2f46cabd74e976c440afa2",
+        "operation_id": "3eae382e-4ffd-4996-a007-97fea11aea24",
+        "record_id": "6734feff-d3cb-4bd5-a1dc-2b743e5bfc80",
+        "kind": "resume",
+        "request_digest": "c737e553aea8b46b7a9a870ce43410a4200fb7b6d3f9e61a571fa27343f7c3b6",
+        "receipt": {
+          "before_revision": 2,
+          "after_revision": 3,
+          "before_state": "paused",
+          "after_state": "running",
+          "accepted_interval_ids": [],
+          "accepted_gap_ids": [],
+          "added_elapsed_ms": 0,
+          "applied_at": "2030-10-19T01:00:00Z"
+        }
+      }
+    },
+    {
+      "label": "end-local",
+      "type": "operation",
+      "path": "/api/v1/focus-records/6734feff-d3cb-4bd5-a1dc-2b743e5bfc80/operations",
+      "method": "POST",
+      "request": {
+        "operation_id": "bbe6a8d6-775e-4e59-a4ae-b54121f9c990",
+        "kind": "end",
+        "expected_revision": 3,
+        "device_id": "10000000-0000-4000-8000-000000000003",
+        "occurred_at": "2030-10-19T10:00:30+08:00",
+        "reason": "local_end",
+        "segment_id": "3eae382e-4ffd-4996-a007-97fea11aea24",
+        "clock_session_id": "10000000-0000-4000-8000-000000000004",
+        "intervals": [
+          {
+            "interval_id": "73c02da9-df63-42b2-86a3-fd6d730a2dc7",
+            "segment_id": "3eae382e-4ffd-4996-a007-97fea11aea24",
+            "clock_session_id": "10000000-0000-4000-8000-000000000004",
+            "sequence": 1,
+            "started_at": "2030-10-19T02:00:00+00:00",
+            "ended_at": "2030-10-19T02:00:30+00:00",
+            "elapsed_ms": 30000
+          }
+        ],
+        "unknown_gaps": []
+      },
+      "status_code": 200,
+      "response": {
+        "contract_version": 1,
+        "user_id": "2bb70703ea2f46cabd74e976c440afa2",
+        "operation_id": "bbe6a8d6-775e-4e59-a4ae-b54121f9c990",
+        "record_id": "6734feff-d3cb-4bd5-a1dc-2b743e5bfc80",
+        "kind": "end",
+        "request_digest": "81a58d2387c45c99a47ba222fcf2bd80c8e068062e399d6e4648c8bc47924b1a",
+        "receipt": {
+          "before_revision": 3,
+          "after_revision": 4,
+          "before_state": "running",
+          "after_state": "ended",
+          "accepted_interval_ids": [
+            "73c02da9-df63-42b2-86a3-fd6d730a2dc7"
+          ],
+          "accepted_gap_ids": [],
+          "added_elapsed_ms": 30000,
+          "applied_at": "2030-10-19T01:00:00Z"
+        }
+      }
+    },
+    {
+      "label": "ended-detail",
+      "type": "detail",
+      "path": "/api/v1/focus-records/6734feff-d3cb-4bd5-a1dc-2b743e5bfc80",
+      "method": "GET",
+      "request": null,
+      "status_code": 200,
+      "response": {
+        "contract_version": 1,
+        "user_id": "2bb70703ea2f46cabd74e976c440afa2",
+        "record": {
+          "contract_version": 1,
+          "user_id": "2bb70703ea2f46cabd74e976c440afa2",
+          "record_id": "6734feff-d3cb-4bd5-a1dc-2b743e5bfc80",
+          "task_id": "e760958f21fb4612aa09c8d2bab70f8a",
+          "task_title": "合成同名专注待办",
+          "task_missing": false,
+          "state": "ended",
+          "revision": 4,
+          "creator_device_id": "10000000-0000-4000-8000-000000000001",
+          "current_device_id": "10000000-0000-4000-8000-000000000003",
+          "clock_session_id": null,
+          "segment_id": null,
+          "started_at": "2030-10-19T01:00:00.123456Z",
+          "ended_at": "2030-10-19T02:00:30Z",
+          "target_ms": 60000,
+          "confirmed_elapsed_ms": 90000,
+          "interval_count": 2,
+          "unknown_gap_count": 1,
+          "created_at": "2030-10-19T01:00:00Z",
+          "updated_at": "2030-10-19T01:00:00Z"
+        },
+        "record_revision": 4,
+        "intervals": [
+          {
+            "interval_id": "7a76474b-c284-44a0-9eb7-d286e7793909",
+            "segment_id": "f185081c-d9a6-4a02-ad33-d9944532b13d",
+            "clock_session_id": "10000000-0000-4000-8000-000000000002",
+            "sequence": 1,
+            "started_at": "2030-10-19T01:00:00.123456Z",
+            "ended_at": "2030-10-19T01:01:00.123456Z",
+            "elapsed_ms": 60000
+          },
+          {
+            "interval_id": "73c02da9-df63-42b2-86a3-fd6d730a2dc7",
+            "segment_id": "3eae382e-4ffd-4996-a007-97fea11aea24",
+            "clock_session_id": "10000000-0000-4000-8000-000000000004",
+            "sequence": 1,
+            "started_at": "2030-10-19T02:00:00Z",
+            "ended_at": "2030-10-19T02:00:30Z",
+            "elapsed_ms": 30000
+          }
+        ],
+        "unknown_gaps": [
+          {
+            "gap_id": "716e135e-d242-41b8-8ef3-dffcb6108c83",
+            "segment_id": "f185081c-d9a6-4a02-ad33-d9944532b13d",
+            "reason": "clock_changed",
+            "observed_start_at": "2030-10-19T01:01:00.123456Z",
+            "observed_end_at": "2030-10-19T00:59:59Z"
+          }
+        ]
+      }
+    },
+    {
+      "label": "start-remote-running",
+      "type": "operation",
+      "path": "/api/v1/focus-records/7c03371e-2542-45ae-9a25-9ba1a93bc2fb/operations",
+      "method": "POST",
+      "request": {
+        "operation_id": "ab399e38-8bc4-44dc-abbf-1f50b54f3456",
+        "kind": "start",
+        "expected_revision": 0,
+        "device_id": "10000000-0000-4000-8000-000000000001",
+        "occurred_at": "2030-10-19T01:00:00+00:00",
+        "task_id": "e760958f21fb4612aa09c8d2bab70f8a",
+        "clock_session_id": "10000000-0000-4000-8000-000000000002",
+        "target_ms": null
+      },
+      "status_code": 200,
+      "response": {
+        "contract_version": 1,
+        "user_id": "2bb70703ea2f46cabd74e976c440afa2",
+        "operation_id": "ab399e38-8bc4-44dc-abbf-1f50b54f3456",
+        "record_id": "7c03371e-2542-45ae-9a25-9ba1a93bc2fb",
+        "kind": "start",
+        "request_digest": "83a3b9099b95e4d098871a0a70f3e6563e2882f2f164b63aaed664cd002da9af",
+        "receipt": {
+          "before_revision": 0,
+          "after_revision": 1,
+          "before_state": null,
+          "after_state": "running",
+          "accepted_interval_ids": [],
+          "accepted_gap_ids": [],
+          "added_elapsed_ms": 0,
+          "applied_at": "2030-10-19T01:00:00Z"
+        }
+      }
+    },
+    {
+      "label": "end-remote-running",
+      "type": "operation",
+      "path": "/api/v1/focus-records/7c03371e-2542-45ae-9a25-9ba1a93bc2fb/operations",
+      "method": "POST",
+      "request": {
+        "operation_id": "180743f2-ccd1-4836-a278-3aac02296cf9",
+        "kind": "end",
+        "expected_revision": 1,
+        "device_id": "10000000-0000-4000-8000-000000000003",
+        "occurred_at": "2030-10-19T01:00:00+00:00",
+        "reason": "remote_end",
+        "segment_id": null,
+        "clock_session_id": null,
+        "intervals": [],
+        "unknown_gaps": []
+      },
+      "status_code": 200,
+      "response": {
+        "contract_version": 1,
+        "user_id": "2bb70703ea2f46cabd74e976c440afa2",
+        "operation_id": "180743f2-ccd1-4836-a278-3aac02296cf9",
+        "record_id": "7c03371e-2542-45ae-9a25-9ba1a93bc2fb",
+        "kind": "end",
+        "request_digest": "911ab9ec9e3d8fa213f81ec775f57bb86cb0b3b35de19508316772cb3adcbd94",
+        "receipt": {
+          "before_revision": 1,
+          "after_revision": 2,
+          "before_state": "running",
+          "after_state": "ended",
+          "accepted_interval_ids": [],
+          "accepted_gap_ids": [
+            "549040e8-7d4a-4256-931b-a5ace7f5e90c"
+          ],
+          "added_elapsed_ms": 0,
+          "applied_at": "2030-10-19T01:00:00Z"
+        }
+      }
+    },
+    {
+      "label": "detail-remote-running",
+      "type": "detail",
+      "path": "/api/v1/focus-records/7c03371e-2542-45ae-9a25-9ba1a93bc2fb",
+      "method": "GET",
+      "request": null,
+      "status_code": 200,
+      "response": {
+        "contract_version": 1,
+        "user_id": "2bb70703ea2f46cabd74e976c440afa2",
+        "record": {
+          "contract_version": 1,
+          "user_id": "2bb70703ea2f46cabd74e976c440afa2",
+          "record_id": "7c03371e-2542-45ae-9a25-9ba1a93bc2fb",
+          "task_id": "e760958f21fb4612aa09c8d2bab70f8a",
+          "task_title": "合成同名专注待办",
+          "task_missing": false,
+          "state": "ended",
+          "revision": 2,
+          "creator_device_id": "10000000-0000-4000-8000-000000000001",
+          "current_device_id": "10000000-0000-4000-8000-000000000001",
+          "clock_session_id": null,
+          "segment_id": null,
+          "started_at": "2030-10-19T01:00:00Z",
+          "ended_at": "2030-10-19T01:00:00Z",
+          "target_ms": null,
+          "confirmed_elapsed_ms": 0,
+          "interval_count": 0,
+          "unknown_gap_count": 1,
+          "created_at": "2030-10-19T01:00:00Z",
+          "updated_at": "2030-10-19T01:00:00Z"
+        },
+        "record_revision": 2,
+        "intervals": [],
+        "unknown_gaps": [
+          {
+            "gap_id": "549040e8-7d4a-4256-931b-a5ace7f5e90c",
+            "segment_id": "ab399e38-8bc4-44dc-abbf-1f50b54f3456",
+            "reason": "remote_end",
+            "observed_start_at": "2030-10-19T01:00:00Z",
+            "observed_end_at": "2030-10-19T01:00:00Z"
+          }
+        ]
+      }
+    },
+    {
+      "label": "start-remote-paused",
+      "type": "operation",
+      "path": "/api/v1/focus-records/d1aabb27-3a68-4c1d-a101-2f857b73c7a7/operations",
+      "method": "POST",
+      "request": {
+        "operation_id": "7f68d9a1-b306-49cf-8368-b609cc321394",
+        "kind": "start",
+        "expected_revision": 0,
+        "device_id": "10000000-0000-4000-8000-000000000001",
+        "occurred_at": "2030-10-19T01:00:00+00:00",
+        "task_id": "e760958f21fb4612aa09c8d2bab70f8a",
+        "clock_session_id": "10000000-0000-4000-8000-000000000002",
+        "target_ms": null
+      },
+      "status_code": 200,
+      "response": {
+        "contract_version": 1,
+        "user_id": "2bb70703ea2f46cabd74e976c440afa2",
+        "operation_id": "7f68d9a1-b306-49cf-8368-b609cc321394",
+        "record_id": "d1aabb27-3a68-4c1d-a101-2f857b73c7a7",
+        "kind": "start",
+        "request_digest": "1a76d861dbf7708cdc8ad3eb5fe03884fe55fcc087d7d3fbf6991c6bdfb35464",
+        "receipt": {
+          "before_revision": 0,
+          "after_revision": 1,
+          "before_state": null,
+          "after_state": "running",
+          "accepted_interval_ids": [],
+          "accepted_gap_ids": [],
+          "added_elapsed_ms": 0,
+          "applied_at": "2030-10-19T01:00:00Z"
+        }
+      }
+    },
+    {
+      "label": "pause-empty",
+      "type": "operation",
+      "path": "/api/v1/focus-records/d1aabb27-3a68-4c1d-a101-2f857b73c7a7/operations",
+      "method": "POST",
+      "request": {
+        "operation_id": "580a221c-b698-48c5-8dbc-1fae0c5b06ff",
+        "kind": "pause",
+        "expected_revision": 1,
+        "device_id": "10000000-0000-4000-8000-000000000001",
+        "occurred_at": "2030-10-19T01:00:00+00:00",
+        "segment_id": "7f68d9a1-b306-49cf-8368-b609cc321394",
+        "clock_session_id": "10000000-0000-4000-8000-000000000002",
+        "intervals": [],
+        "unknown_gaps": []
+      },
+      "status_code": 200,
+      "response": {
+        "contract_version": 1,
+        "user_id": "2bb70703ea2f46cabd74e976c440afa2",
+        "operation_id": "580a221c-b698-48c5-8dbc-1fae0c5b06ff",
+        "record_id": "d1aabb27-3a68-4c1d-a101-2f857b73c7a7",
+        "kind": "pause",
+        "request_digest": "6d9ed925a5c635bcb82750f23f5554c7d4ef566f9c5bdd20b197c265de9257a4",
+        "receipt": {
+          "before_revision": 1,
+          "after_revision": 2,
+          "before_state": "running",
+          "after_state": "paused",
+          "accepted_interval_ids": [],
+          "accepted_gap_ids": [],
+          "added_elapsed_ms": 0,
+          "applied_at": "2030-10-19T01:00:00Z"
+        }
+      }
+    },
+    {
+      "label": "end-remote-paused",
+      "type": "operation",
+      "path": "/api/v1/focus-records/d1aabb27-3a68-4c1d-a101-2f857b73c7a7/operations",
+      "method": "POST",
+      "request": {
+        "operation_id": "2090381d-1d03-4ba0-ba9a-14c46b84bf5d",
+        "kind": "end",
+        "expected_revision": 2,
+        "device_id": "10000000-0000-4000-8000-000000000003",
+        "occurred_at": "2030-10-19T01:00:00+00:00",
+        "reason": "remote_end",
+        "segment_id": null,
+        "clock_session_id": null,
+        "intervals": [],
+        "unknown_gaps": []
+      },
+      "status_code": 200,
+      "response": {
+        "contract_version": 1,
+        "user_id": "2bb70703ea2f46cabd74e976c440afa2",
+        "operation_id": "2090381d-1d03-4ba0-ba9a-14c46b84bf5d",
+        "record_id": "d1aabb27-3a68-4c1d-a101-2f857b73c7a7",
+        "kind": "end",
+        "request_digest": "294bb25a9e6b7be9f14194dc513a542f3483b55c58382f623c5264d9a125d28f",
+        "receipt": {
+          "before_revision": 2,
+          "after_revision": 3,
+          "before_state": "paused",
+          "after_state": "ended",
+          "accepted_interval_ids": [],
+          "accepted_gap_ids": [],
+          "added_elapsed_ms": 0,
+          "applied_at": "2030-10-19T01:00:00Z"
+        }
+      }
+    },
+    {
+      "label": "detail-remote-paused",
+      "type": "detail",
+      "path": "/api/v1/focus-records/d1aabb27-3a68-4c1d-a101-2f857b73c7a7",
+      "method": "GET",
+      "request": null,
+      "status_code": 200,
+      "response": {
+        "contract_version": 1,
+        "user_id": "2bb70703ea2f46cabd74e976c440afa2",
+        "record": {
+          "contract_version": 1,
+          "user_id": "2bb70703ea2f46cabd74e976c440afa2",
+          "record_id": "d1aabb27-3a68-4c1d-a101-2f857b73c7a7",
+          "task_id": "e760958f21fb4612aa09c8d2bab70f8a",
+          "task_title": "合成同名专注待办",
+          "task_missing": false,
+          "state": "ended",
+          "revision": 3,
+          "creator_device_id": "10000000-0000-4000-8000-000000000001",
+          "current_device_id": "10000000-0000-4000-8000-000000000001",
+          "clock_session_id": null,
+          "segment_id": null,
+          "started_at": "2030-10-19T01:00:00Z",
+          "ended_at": "2030-10-19T01:00:00Z",
+          "target_ms": null,
+          "confirmed_elapsed_ms": 0,
+          "interval_count": 0,
+          "unknown_gap_count": 0,
+          "created_at": "2030-10-19T01:00:00Z",
+          "updated_at": "2030-10-19T01:00:00Z"
+        },
+        "record_revision": 3,
+        "intervals": [],
+        "unknown_gaps": []
+      }
+    },
+    {
+      "label": "history-first",
+      "type": "list",
+      "path": "/api/v1/focus-records?limit=1",
+      "method": "GET",
+      "request": null,
+      "status_code": 200,
+      "response": {
+        "contract_version": 1,
+        "user_id": "2bb70703ea2f46cabd74e976c440afa2",
+        "records": [
+          {
+            "contract_version": 1,
+            "user_id": "2bb70703ea2f46cabd74e976c440afa2",
+            "record_id": "d1aabb27-3a68-4c1d-a101-2f857b73c7a7",
+            "task_id": "e760958f21fb4612aa09c8d2bab70f8a",
+            "task_title": "合成同名专注待办",
+            "task_missing": false,
+            "state": "ended",
+            "revision": 3,
+            "creator_device_id": "10000000-0000-4000-8000-000000000001",
+            "current_device_id": "10000000-0000-4000-8000-000000000001",
+            "clock_session_id": null,
+            "segment_id": null,
+            "started_at": "2030-10-19T01:00:00Z",
+            "ended_at": "2030-10-19T01:00:00Z",
+            "target_ms": null,
+            "confirmed_elapsed_ms": 0,
+            "interval_count": 0,
+            "unknown_gap_count": 0,
+            "created_at": "2030-10-19T01:00:00Z",
+            "updated_at": "2030-10-19T01:00:00Z"
+          }
+        ],
+        "next_cursor": "eyJjcmVhdGVkX2F0IjoiMjAzMC0xMC0xOVQwMTowMDowMCswMDowMCIsInJlY29yZF9pZCI6ImQxYWFiYjI3LTNhNjgtNGMxZC1hMTAxLTJmODU3YjczYzdhNyIsInNuYXBzaG90X3Rva2VuIjoiNjc2M2MzOTU1YjU2ZjE3YTk2OWY4ZDNjMTY3Y2RkMmVlNmUwYjg1ODg3ZTk4MmI0ZDZmZDQ2MTM1YzRhMzQ1ZCIsInVzZXJfaWQiOiIyYmI3MDcwM2VhMmY0NmNhYmQ3NGU5NzZjNDQwYWZhMiJ9",
+        "snapshot_token": "6763c3955b56f17a969f8d3c167cdd2ee6e0b85887e982b4d6fd46135c4a345d"
+      }
+    },
+    {
+      "label": "history-second",
+      "type": "list",
+      "path": "/api/v1/focus-records?limit=1&cursor=eyJjcmVhdGVkX2F0IjoiMjAzMC0xMC0xOVQwMTowMDowMCswMDowMCIsInJlY29yZF9pZCI6ImQxYWFiYjI3LTNhNjgtNGMxZC1hMTAxLTJmODU3YjczYzdhNyIsInNuYXBzaG90X3Rva2VuIjoiNjc2M2MzOTU1YjU2ZjE3YTk2OWY4ZDNjMTY3Y2RkMmVlNmUwYjg1ODg3ZTk4MmI0ZDZmZDQ2MTM1YzRhMzQ1ZCIsInVzZXJfaWQiOiIyYmI3MDcwM2VhMmY0NmNhYmQ3NGU5NzZjNDQwYWZhMiJ9&snapshot_token=6763c3955b56f17a969f8d3c167cdd2ee6e0b85887e982b4d6fd46135c4a345d",
+      "method": "GET",
+      "request": null,
+      "status_code": 200,
+      "response": {
+        "contract_version": 1,
+        "user_id": "2bb70703ea2f46cabd74e976c440afa2",
+        "records": [
+          {
+            "contract_version": 1,
+            "user_id": "2bb70703ea2f46cabd74e976c440afa2",
+            "record_id": "7c03371e-2542-45ae-9a25-9ba1a93bc2fb",
+            "task_id": "e760958f21fb4612aa09c8d2bab70f8a",
+            "task_title": "合成同名专注待办",
+            "task_missing": false,
+            "state": "ended",
+            "revision": 2,
+            "creator_device_id": "10000000-0000-4000-8000-000000000001",
+            "current_device_id": "10000000-0000-4000-8000-000000000001",
+            "clock_session_id": null,
+            "segment_id": null,
+            "started_at": "2030-10-19T01:00:00Z",
+            "ended_at": "2030-10-19T01:00:00Z",
+            "target_ms": null,
+            "confirmed_elapsed_ms": 0,
+            "interval_count": 0,
+            "unknown_gap_count": 1,
+            "created_at": "2030-10-19T01:00:00Z",
+            "updated_at": "2030-10-19T01:00:00Z"
+          }
+        ],
+        "next_cursor": "eyJjcmVhdGVkX2F0IjoiMjAzMC0xMC0xOVQwMTowMDowMCswMDowMCIsInJlY29yZF9pZCI6IjdjMDMzNzFlLTI1NDItNDVhZS05YTI1LTliYTFhOTNiYzJmYiIsInNuYXBzaG90X3Rva2VuIjoiNjc2M2MzOTU1YjU2ZjE3YTk2OWY4ZDNjMTY3Y2RkMmVlNmUwYjg1ODg3ZTk4MmI0ZDZmZDQ2MTM1YzRhMzQ1ZCIsInVzZXJfaWQiOiIyYmI3MDcwM2VhMmY0NmNhYmQ3NGU5NzZjNDQwYWZhMiJ9",
+        "snapshot_token": "6763c3955b56f17a969f8d3c167cdd2ee6e0b85887e982b4d6fd46135c4a345d"
+      }
+    },
+    {
+      "label": "active-empty",
+      "type": "active",
+      "path": "/api/v1/focus-records/active",
+      "method": "GET",
+      "request": null,
+      "status_code": 200,
+      "response": {
+        "contract_version": 1,
+        "user_id": "2bb70703ea2f46cabd74e976c440afa2",
+        "record": null
+      }
+    },
+    {
+      "label": "detail-task-deleted",
+      "type": "detail",
+      "path": "/api/v1/focus-records/6734feff-d3cb-4bd5-a1dc-2b743e5bfc80",
+      "method": "GET",
+      "request": null,
+      "status_code": 200,
+      "response": {
+        "contract_version": 1,
+        "user_id": "2bb70703ea2f46cabd74e976c440afa2",
+        "record": {
+          "contract_version": 1,
+          "user_id": "2bb70703ea2f46cabd74e976c440afa2",
+          "record_id": "6734feff-d3cb-4bd5-a1dc-2b743e5bfc80",
+          "task_id": "e760958f21fb4612aa09c8d2bab70f8a",
+          "task_title": null,
+          "task_missing": true,
+          "state": "ended",
+          "revision": 4,
+          "creator_device_id": "10000000-0000-4000-8000-000000000001",
+          "current_device_id": "10000000-0000-4000-8000-000000000003",
+          "clock_session_id": null,
+          "segment_id": null,
+          "started_at": "2030-10-19T01:00:00.123456Z",
+          "ended_at": "2030-10-19T02:00:30Z",
+          "target_ms": 60000,
+          "confirmed_elapsed_ms": 90000,
+          "interval_count": 2,
+          "unknown_gap_count": 1,
+          "created_at": "2030-10-19T01:00:00Z",
+          "updated_at": "2030-10-19T01:00:00Z"
+        },
+        "record_revision": 4,
+        "intervals": [
+          {
+            "interval_id": "7a76474b-c284-44a0-9eb7-d286e7793909",
+            "segment_id": "f185081c-d9a6-4a02-ad33-d9944532b13d",
+            "clock_session_id": "10000000-0000-4000-8000-000000000002",
+            "sequence": 1,
+            "started_at": "2030-10-19T01:00:00.123456Z",
+            "ended_at": "2030-10-19T01:01:00.123456Z",
+            "elapsed_ms": 60000
+          },
+          {
+            "interval_id": "73c02da9-df63-42b2-86a3-fd6d730a2dc7",
+            "segment_id": "3eae382e-4ffd-4996-a007-97fea11aea24",
+            "clock_session_id": "10000000-0000-4000-8000-000000000004",
+            "sequence": 1,
+            "started_at": "2030-10-19T02:00:00Z",
+            "ended_at": "2030-10-19T02:00:30Z",
+            "elapsed_ms": 30000
+          }
+        ],
+        "unknown_gaps": [
+          {
+            "gap_id": "716e135e-d242-41b8-8ef3-dffcb6108c83",
+            "segment_id": "f185081c-d9a6-4a02-ad33-d9944532b13d",
+            "reason": "clock_changed",
+            "observed_start_at": "2030-10-19T01:01:00.123456Z",
+            "observed_end_at": "2030-10-19T00:59:59Z"
+          }
+        ]
+      }
+    },
+    {
+      "label": "delete-record",
+      "type": "operation",
+      "path": "/api/v1/focus-records/6734feff-d3cb-4bd5-a1dc-2b743e5bfc80/operations",
+      "method": "POST",
+      "request": {
+        "operation_id": "e502a1c0-208f-44a7-8715-401231f0c0b4",
+        "kind": "delete",
+        "expected_revision": 4,
+        "device_id": "10000000-0000-4000-8000-000000000001",
+        "occurred_at": "2030-10-19T01:00:00+00:00"
+      },
+      "status_code": 200,
+      "response": {
+        "contract_version": 1,
+        "user_id": "2bb70703ea2f46cabd74e976c440afa2",
+        "operation_id": "e502a1c0-208f-44a7-8715-401231f0c0b4",
+        "record_id": "6734feff-d3cb-4bd5-a1dc-2b743e5bfc80",
+        "kind": "delete",
+        "request_digest": "29cf559638b0f5a08899c2dd12ee0e4005aadb607c29806f6e434bf7c546693d",
+        "receipt": {
+          "before_revision": 4,
+          "after_revision": 5,
+          "before_state": "ended",
+          "after_state": "deleted",
+          "accepted_interval_ids": [],
+          "accepted_gap_ids": [],
+          "added_elapsed_ms": 0,
+          "applied_at": "2030-10-19T01:00:00Z"
+        }
+      }
+    },
+    {
+      "label": "replay-old-start-after-delete",
+      "type": "operation",
+      "path": "/api/v1/focus-records/6734feff-d3cb-4bd5-a1dc-2b743e5bfc80/operations",
+      "method": "POST",
+      "request": {
+        "operation_id": "f185081c-d9a6-4a02-ad33-d9944532b13d",
+        "kind": "start",
+        "expected_revision": 0,
+        "device_id": "10000000-0000-4000-8000-000000000001",
+        "occurred_at": "2030-10-19T09:00:00.123456+08:00",
+        "task_id": "e760958f21fb4612aa09c8d2bab70f8a",
+        "clock_session_id": "10000000-0000-4000-8000-000000000002",
+        "target_ms": 60000
+      },
+      "status_code": 200,
+      "response": {
+        "contract_version": 1,
+        "user_id": "2bb70703ea2f46cabd74e976c440afa2",
+        "operation_id": "f185081c-d9a6-4a02-ad33-d9944532b13d",
+        "record_id": "6734feff-d3cb-4bd5-a1dc-2b743e5bfc80",
+        "kind": "start",
+        "request_digest": "3f91d159b0e917912aa17de9884d31fa2d6118dfa5930982badb83439d285329",
+        "receipt": {
+          "before_revision": 0,
+          "after_revision": 1,
+          "before_state": null,
+          "after_state": "running",
+          "accepted_interval_ids": [],
+          "accepted_gap_ids": [],
+          "added_elapsed_ms": 0,
+          "applied_at": "2030-10-19T01:00:00Z"
+        }
+      }
+    },
+    {
+      "label": "get-old-receipt-after-delete",
+      "type": "operation",
+      "path": "/api/v1/focus-operations/f185081c-d9a6-4a02-ad33-d9944532b13d",
+      "method": "GET",
+      "request": null,
+      "status_code": 200,
+      "response": {
+        "contract_version": 1,
+        "user_id": "2bb70703ea2f46cabd74e976c440afa2",
+        "operation_id": "f185081c-d9a6-4a02-ad33-d9944532b13d",
+        "record_id": "6734feff-d3cb-4bd5-a1dc-2b743e5bfc80",
+        "kind": "start",
+        "request_digest": "3f91d159b0e917912aa17de9884d31fa2d6118dfa5930982badb83439d285329",
+        "receipt": {
+          "before_revision": 0,
+          "after_revision": 1,
+          "before_state": null,
+          "after_state": "running",
+          "accepted_interval_ids": [],
+          "accepted_gap_ids": [],
+          "added_elapsed_ms": 0,
+          "applied_at": "2030-10-19T01:00:00Z"
+        }
+      }
+    }
+  ],
+  "errors": {
+    "record-deleted": {
+      "label": "record-deleted",
+      "type": "error",
+      "path": "/api/v1/focus-records/6734feff-d3cb-4bd5-a1dc-2b743e5bfc80",
+      "method": "GET",
+      "request": null,
+      "status_code": 410,
+      "response": {
+        "detail": "这条专注记录已删除，旧操作不能重建记录。",
+        "code": "FOCUS_DELETED"
+      }
+    },
+    "operation-not-found": {
+      "label": "operation-not-found",
+      "type": "error",
+      "path": "/api/v1/focus-operations/82481695-d418-46f3-bdc0-74f7c5f6b286",
+      "method": "GET",
+      "request": null,
+      "status_code": 404,
+      "response": {
+        "detail": "当前账号中未找到这次专注操作。",
+        "code": "FOCUS_OPERATION_NOT_FOUND"
+      }
+    },
+    "history-stale": {
+      "label": "history-stale",
+      "type": "error",
+      "path": "/api/v1/focus-records?cursor=eyJjcmVhdGVkX2F0IjoiMjAzMC0xMC0xOVQwMTowMDowMCswMDowMCIsInJlY29yZF9pZCI6ImQxYWFiYjI3LTNhNjgtNGMxZC1hMTAxLTJmODU3YjczYzdhNyIsInNuYXBzaG90X3Rva2VuIjoiNjc2M2MzOTU1YjU2ZjE3YTk2OWY4ZDNjMTY3Y2RkMmVlNmUwYjg1ODg3ZTk4MmI0ZDZmZDQ2MTM1YzRhMzQ1ZCIsInVzZXJfaWQiOiIyYmI3MDcwM2VhMmY0NmNhYmQ3NGU5NzZjNDQwYWZhMiJ9&snapshot_token=6763c3955b56f17a969f8d3c167cdd2ee6e0b85887e982b4d6fd46135c4a345d",
+      "method": "GET",
+      "request": null,
+      "status_code": 409,
+      "response": {
+        "detail": "记录列表已变化，请从第一页重新读取。",
+        "code": "FOCUS_SNAPSHOT_STALE"
+      }
+    },
+    "offline-task-deleted": {
+      "label": "offline-task-deleted",
+      "type": "error",
+      "path": "/api/v1/focus-records/d7558e4c-908a-4932-8097-edd5823040b1/operations",
+      "method": "POST",
+      "request": {
+        "operation_id": "b56dbb02-ef5a-42d9-b514-66635ff06153",
+        "kind": "start",
+        "expected_revision": 0,
+        "device_id": "10000000-0000-4000-8000-000000000001",
+        "occurred_at": "2030-10-19T01:00:00+00:00",
+        "task_id": "e760958f21fb4612aa09c8d2bab70f8a",
+        "clock_session_id": "10000000-0000-4000-8000-000000000002",
+        "target_ms": null
+      },
+      "status_code": 404,
+      "response": {
+        "detail": "原待办不存在或不属于当前账号。",
+        "code": "FOCUS_TASK_NOT_FOUND"
+      }
+    }
+  }
+}

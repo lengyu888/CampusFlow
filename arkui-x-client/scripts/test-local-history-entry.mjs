@@ -1,3 +1,4 @@
+import { focusEntryFixture } from './helpers/focus-entry-fixture.mjs';
 import { TaskStatusController, statusIds, statusTask, completeOperation, tick as statusTick } from './helpers/task-status-fixture.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -18,7 +19,7 @@ const controller = source.slice(0, source.indexOf('\n  @Builder'))
   .replace(/^@(Entry|Component)\r?\n/gm, '')
   .replace(/@(State|Prop)\s+|@(StorageLink|Watch)\('[^']+'\)\s*/g, '')
   .replace('struct Index', 'class Index') + '\n}\n';
-const create = new Function('localHistory', 'historyScope', 'CampusFlowApi', 'AppStorage', 'AppTheme', 'Curve', 'localDrafts', 'TaskStatusController', 'timetableOperationId', ...navNames,
+const create = new Function('localHistory', 'historyScope', 'CampusFlowApi', 'AppStorage', 'AppTheme', 'Curve', 'localDrafts', 'TaskStatusController', 'timetableOperationId', 'FocusController', 'emptyFocusState', 'localFocus', 'PlatformFocusClock', ...navNames,
   stripTypeScriptTypes(controller) + '\nreturn Index;');
 const auth = (name = 'a') => ({ access_token: `${name}-token`, user: { user_id: name, display_name: name } });
 const deferred = () => {
@@ -47,7 +48,7 @@ function setup(overrides = {}, draftOverrides = {}) {
   const drafts = new DraftStore(draftDriver, { now: () => Date.UTC(2026, 9, 18), set: () => 1, clear() {} });
   const draftReady = drafts.initialize().catch(() => {});
   const Index = create(store, (base, id) => `${base}|${id}`, Api, { setOrCreate: () => {} },
-    { motion: () => 0 }, { EaseOut: 0 }, drafts, TaskStatusController, () => statusIds.complete, ...navNames.map(name => navigation[name]));
+    { motion: () => 0 }, { EaseOut: 0 }, drafts, TaskStatusController, () => statusIds.complete, ...Object.values(focusEntryFixture().dependencies), ...navNames.map(name => navigation[name]));
   const page = new Index();
   page.reminders = { configure() {}, setActive() {}, refresh() {}, async logout() {}, dispose() {} };
   page.getUIContext = () => ({ animateTo: (_options, update) => update() });

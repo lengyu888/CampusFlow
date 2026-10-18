@@ -21,6 +21,7 @@
 		CF1510000000000000000002 /* Speech.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = CF1510000000000000000001 /* Speech.framework */; };
 		CF1510010000000000000002 /* AVFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = CF1510010000000000000001 /* AVFoundation.framework */; };
 		CF1510020000000000000002 /* UserNotifications.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = CF1510020000000000000001 /* UserNotifications.framework */; };
+		CF0900000000000000000002 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = CF0900000000000000000001 /* PrivacyInfo.xcprivacy */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -58,6 +59,7 @@
 		CF1510000000000000000001 /* Speech.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Speech.framework; path = System/Library/Frameworks/Speech.framework; sourceTree = SDKROOT; };
 		CF1510010000000000000001 /* AVFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVFoundation.framework; path = System/Library/Frameworks/AVFoundation.framework; sourceTree = SDKROOT; };
 		CF1510020000000000000001 /* UserNotifications.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UserNotifications.framework; path = System/Library/Frameworks/UserNotifications.framework; sourceTree = SDKROOT; };
+		CF0900000000000000000001 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -109,6 +111,7 @@
 				F0AF1ADC27D36856008C55DD /* Assets.xcassets */,
 				F0AF1ADE27D36856008C55DD /* LaunchScreen.storyboard */,
 				F0AF1AE127D36856008C55DD /* Info.plist */,
+				CF0900000000000000000001 /* PrivacyInfo.xcprivacy */,
 				F0AF1AE227D36856008C55DD /* main.m */,
 			);
 			path = app;
@@ -185,6 +188,7 @@
 				F0AF1AE027D36856008C55DD /* LaunchScreen.storyboard in Resources */,
 				DF9C1B6128B9FC4B005DCF58 /* arkui-x in Resources */,
 				F0AF1ADD27D36856008C55DD /* Assets.xcassets in Resources */,
+				CF0900000000000000000002 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

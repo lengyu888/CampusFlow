@@ -4,6 +4,7 @@
 #import <Speech/Speech.h>
 #import <AVFoundation/AVFoundation.h>
 #import <UIKit/UIKit.h>
+#import <math.h>
 
 @interface CFPlatformBridge () <AVSpeechSynthesizerDelegate, IMethodResult>
 @property(nonatomic, strong) NSMutableSet<NSString *> *pendingReplies;
@@ -67,6 +68,14 @@
         if ([self.pendingReplies containsObject:requestID]) return;
         [self.pendingReplies addObject:requestID];
         NSString *op = command[@"op"];
+        if ([op isEqualToString:@"clock.sample"]) {
+            // Only interval differences leave the device. The raw uptime stays in local checkpoints.
+            [self reply:requestID ok:YES code:@"" result:@{
+                @"wall_ms": @(floor(NSDate.date.timeIntervalSince1970 * 1000.0)),
+                @"monotonic_ms": @(floor(NSProcessInfo.processInfo.systemUptime * 1000.0))
+            }];
+            return;
+        }
         if ([op hasPrefix:@"reminders."]) {
             [[CFReminderService sharedService] handle:command completion:^(BOOL ok, NSString *code, NSDictionary *result) {
                 [self reply:requestID ok:ok code:code result:result];

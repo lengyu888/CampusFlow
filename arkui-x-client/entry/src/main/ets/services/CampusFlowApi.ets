@@ -1,4 +1,6 @@
 import http from '@ohos.net.http';
+import { validFocusRequest } from '../utils/FocusValidation';
+import { FocusRequest, FocusOperation, FocusActive, FocusDetail, FocusList } from '../model/FocusModels';
 import {
   CourseAcknowledgement,
   CoursePermissionChoice,
@@ -157,6 +159,7 @@ export class CampusFlowApi {
           throw this.importFailure(response.responseCode, text);
         }
         if (path === '/api/v1/sessions' || path.startsWith('/api/v1/sessions/') || path === '/api/v1/onboarding' || path.startsWith('/api/v1/onboarding/') || path === '/api/v1/models' || path === '/api/v1/learning-preferences' || path.startsWith('/api/v1/knowledge/') || path === '/api/v1/chat' || path.startsWith('/api/v1/agent-runs') || path.startsWith('/api/v1/actions/') || path.startsWith('/api/v1/planning/') ||
+          path.startsWith('/api/v1/focus-records') || path.startsWith('/api/v1/focus-operations/') ||
           path === '/api/v1/tasks' || path.startsWith('/api/v1/tasks/') || path.startsWith('/api/v1/task-status-operations/') ||
           path === '/api/v1/me/timetable' || path.startsWith('/api/v1/me/timetable/') || path.startsWith('/api/v1/weather?')) {
           throw requestFailure(response.responseCode, text);
@@ -356,6 +359,32 @@ export class CampusFlowApi {
   async updateTask(taskId: string, completed: boolean): Promise<PlanningTask> {
     return this.request<PlanningTask>(`/api/v1/tasks/${encodeURIComponent(taskId)}`, PATCH_METHOD,
       JSON.stringify({ completed: completed }));
+  }
+
+  async submitFocusOperation(recordId: string, request: FocusRequest): Promise<FocusOperation> {
+    // Keep local checkpoints (including raw uptime) outside the network boundary.
+    if (!validFocusRequest(request)) { throw new CampusFlowRequestError(422, 'FOCUS_INVALID', '这次计时内容未通过核对，尚未发送。'); }
+    return this.request<FocusOperation>(`/api/v1/focus-records/${encodeURIComponent(recordId)}/operations`,
+      http.RequestMethod.POST, JSON.stringify(request));
+  }
+
+  async focusOperation(operationId: string): Promise<FocusOperation> {
+    return this.request<FocusOperation>(`/api/v1/focus-operations/${encodeURIComponent(operationId)}`, http.RequestMethod.GET);
+  }
+
+  async focusActive(): Promise<FocusActive> {
+    return this.request<FocusActive>('/api/v1/focus-records/active', http.RequestMethod.GET);
+  }
+
+  async focusDetail(recordId: string): Promise<FocusDetail> {
+    return this.request<FocusDetail>(`/api/v1/focus-records/${encodeURIComponent(recordId)}`, http.RequestMethod.GET);
+  }
+
+  async focusList(cursor: string = '', snapshotToken: string = '', limit: number = 20): Promise<FocusList> {
+    let path = `/api/v1/focus-records?limit=${limit}`;
+    if (cursor.length > 0) { path += `&cursor=${encodeURIComponent(cursor)}`; }
+    if (snapshotToken.length > 0) { path += `&snapshot_token=${encodeURIComponent(snapshotToken)}`; }
+    return this.request<FocusList>(path, http.RequestMethod.GET);
   }
 
   async startTaskStatus(taskId: string, request: TaskStatusRequest): Promise<TaskStatusOperation> {

@@ -48,6 +48,34 @@ function knownErrorMessage(code: string): string {
       return '请求超时，结果尚未确认。请先核对记录，再决定是否重试。';
     case 'ACTION_NOT_FOUND':
       return '未找到此提案，请刷新核对。';
+    case 'FOCUS_NOT_FOUND':
+      return '当前账号中未找到这次专注记录。';
+    case 'FOCUS_OPERATION_NOT_FOUND':
+      return '尚未查到这次记录操作；请保留原编号，需要重试时仍使用原内容。';
+    case 'FOCUS_TASK_NOT_FOUND':
+      return '原待办已不存在或不可读取，本机计时仍保留，暂未同步为服务器记录。';
+    case 'FOCUS_DELETED':
+      return '这次专注记录已删除，旧操作不会把它恢复。';
+    case 'FOCUS_OPERATION_REUSED':
+      return '这次操作编号已用于其他内容，请先核对原记录。';
+    case 'FOCUS_STALE':
+      return '专注记录已在另一处改变，本机未同步片段仍保留，请查看当前状态。';
+    case 'FOCUS_ACTIVE_EXISTS':
+      return '还有一次未结束的专注，请先核对它，再开始新的记录。';
+    case 'FOCUS_STATE_INVALID':
+      return '当前状态不能执行此操作，请重新读取这次记录。';
+    case 'FOCUS_SEGMENT_MISMATCH':
+      return '这段计时不再属于当前记录状态，本机内容保留，未覆盖另一端的结果。';
+    case 'FOCUS_INTERVAL_REUSED':
+      return '有一段计时的编号与已有内容不一致，本次没有重复累计。';
+    case 'FOCUS_LIMIT_REACHED':
+      return '本次记录已达到保存上限，请先结束或整理记录；未自动删去已有片段。';
+    case 'FOCUS_SNAPSHOT_STALE':
+      return '记录列表已经变化，请刷新后继续查看。';
+    case 'FOCUS_INVALID':
+      return '这次计时内容未通过核对，原记录与本机内容仍保留。';
+    case 'FOCUS_FAILED':
+      return '暂时不能确认这次记录结果，请保留原编号后查询。';
     case 'TASK_NOT_FOUND':
       return '这项任务已不存在，请读取最新安排；不会从旧回执重建任务。';
     case 'TASK_STATUS_OPERATION_NOT_FOUND':

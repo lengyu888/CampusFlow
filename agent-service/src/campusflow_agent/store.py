@@ -54,6 +54,18 @@ class CampusStore:
     _task_status_operations: dict[tuple[str, str], dict[str, Any]] = field(
         default_factory=dict, init=False, repr=False
     )
+    _focus_records: dict[tuple[str, str], dict[str, Any]] = field(
+        default_factory=dict, init=False, repr=False
+    )
+    _focus_fragments: dict[tuple[str, str], dict[str, Any]] = field(
+        default_factory=dict, init=False, repr=False
+    )
+    _focus_operations: dict[tuple[str, str], dict[str, Any]] = field(
+        default_factory=dict, init=False, repr=False
+    )
+    _focus_tombstones: dict[tuple[str, str], dict[str, Any]] = field(
+        default_factory=dict, init=False, repr=False
+    )
 
     def __post_init__(self) -> None:
         self._campus_data = CampusDataStore(self.database_path)

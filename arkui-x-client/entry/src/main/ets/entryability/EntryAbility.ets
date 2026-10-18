@@ -4,6 +4,7 @@ import Want from '@ohos.app.ability.Want';
 import window from '@ohos.window';
 import { initializeLocalHistory } from '../services/LocalHistory';
 import { initializeLocalDrafts } from '../services/LocalDrafts';
+import { initializeLocalFocus } from '../services/LocalFocus';
 
 export default class EntryAbility extends UIAbility {
   onCreate(want: Want, launchParam: AbilityConstant.LaunchParam): void {
@@ -24,12 +25,15 @@ export default class EntryAbility extends UIAbility {
   }
 
   onWindowStageCreate(windowStage: window.WindowStage): void {
+    const focusReady = initializeLocalFocus(this.context.filesDir).catch(() => {
+      AppStorage.setOrCreate<string>('localFocusError', '本机专注记录读取失败，原文件保留。清除会丢失未同步记录，请明确确认后再操作。');
+    });
     const draftsReady = initializeLocalDrafts(this.context.filesDir).catch(() => {
       AppStorage.setOrCreate<string>('localDraftsError', '本机草稿读取失败，原文件仍保留。可在设置中明确清除后重试。');
     });
     initializeLocalHistory(this.context.filesDir).catch(() => {
       AppStorage.setOrCreate<string>('localHistoryError', '本机对话读取失败，暂不覆盖已有记录。联网登录仍可使用。');
-    }).then(() => draftsReady).then(() => windowStage.loadContent('pages/Index')).catch((error: Error) => {
+    }).then(() => draftsReady).then(() => focusReady).then(() => windowStage.loadContent('pages/Index')).catch((error: Error) => {
       console.error(`Failed to load CampusFlow content: ${error.message}`);
     });
   }

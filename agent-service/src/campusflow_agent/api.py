@@ -12,6 +12,8 @@ from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response, status
+from fastapi.exception_handlers import request_validation_exception_handler
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -37,6 +39,15 @@ from .campus_services import (
 )
 from .config import Settings, get_settings
 from .evidence import campus_supported, hdu_evidence
+from .focus_schemas import (
+    FocusActive,
+    FocusDetail,
+    FocusList,
+    FocusOperation,
+    FocusRequest,
+    FocusUUID,
+)
+from .focus_service import FocusError, FocusService
 from .hduhelp import HDUHelpError, HDUHelpService, TokenSet
 from .hduhelp_access import HDUHelpAccess
 from .hduhelp_presenter import build_hduhelp_presentation
@@ -248,6 +259,7 @@ def create_app(
     timetable_service = timetable_service or TimetableService(account_store, store)
     action_service = action_service or ActionService(account_store, store)
     task_status_service = action_service.task_status_service()
+    focus_service = FocusService(action_service)
     skill_store = skill_store or SkillStore(settings.database_path)
     api_key_vault = api_key_vault or ApiKeyVault(settings)
     hduhelp_service = hduhelp_service or HDUHelpService(settings)
@@ -284,6 +296,21 @@ def create_app(
         lifespan=lifespan,
     )
     app.state.run_service = run_service
+
+    @app.exception_handler(FocusError)
+    async def focus_error_handler(request: Request, exc: FocusError) -> JSONResponse:
+        return JSONResponse(
+            status_code=exc.status_code, content={"detail": exc.detail, "code": exc.code}
+        )
+
+    @app.exception_handler(RequestValidationError)
+    async def request_error_handler(request: Request, exc: RequestValidationError):
+        if request.url.path.startswith(("/api/v1/focus-records", "/api/v1/focus-operations")):
+            return JSONResponse(
+                status_code=422,
+                content={"detail": "专注操作参数无效，未修改记录。", "code": "FOCUS_INVALID"},
+            )
+        return await request_validation_exception_handler(request, exc)
 
     @app.exception_handler(RunError)
     async def run_error_handler(request: Request, exc: RunError) -> JSONResponse:
@@ -334,6 +361,7 @@ def create_app(
 
     app.state.action_service = action_service
     app.state.task_status_service = task_status_service
+    app.state.focus_service = focus_service
     app.state.replanning_service = replanning_service
     app.state.timetable_service = timetable_service
 
@@ -1363,6 +1391,35 @@ def create_app(
             raise CampusFlowError(
                 500, "保存结果暂时无法核实，请先读取规划核对。", "ACTION_FAILED"
             ) from exc
+
+    @app.post("/api/v1/focus-records/{record_id}/operations", response_model=FocusOperation)
+    async def submit_focus_operation(
+        record_id: FocusUUID, payload: FocusRequest, user: CurrentUser
+    ) -> FocusOperation:
+        return focus_service.submit(user.user_id, record_id, payload)
+
+    @app.get("/api/v1/focus-operations/{operation_id}", response_model=FocusOperation)
+    async def focus_operation(operation_id: FocusUUID, user: CurrentUser) -> FocusOperation:
+        return focus_service.operation(user.user_id, operation_id)
+
+    @app.get("/api/v1/focus-records/active", response_model=FocusActive)
+    async def focus_active(user: CurrentUser) -> FocusActive:
+        return focus_service.active(user.user_id)
+
+    @app.get("/api/v1/focus-records", response_model=FocusList)
+    async def focus_list(
+        user: CurrentUser,
+        cursor: Annotated[str, Query(max_length=2048)] = "",
+        snapshot_token: Annotated[str, Query(pattern=r"^(?:[0-9a-f]{64})?$")] = "",
+        limit: Annotated[int, Query(ge=1, le=100)] = 20,
+    ) -> FocusList:
+        return focus_service.list(
+            user.user_id, cursor=cursor, snapshot_token=snapshot_token, limit=limit
+        )
+
+    @app.get("/api/v1/focus-records/{record_id}", response_model=FocusDetail)
+    async def focus_detail(record_id: FocusUUID, user: CurrentUser) -> FocusDetail:
+        return focus_service.detail(user.user_id, record_id)
 
     @app.post("/api/v1/tasks/{task_id}/status-operations", response_model=TaskStatusOperation)
     async def create_task_status_operation(
