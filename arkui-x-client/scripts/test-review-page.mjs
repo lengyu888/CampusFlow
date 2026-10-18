@@ -5,12 +5,13 @@ import { test } from 'node:test';
 import { time, summary, ReviewController, emptyReviewState, reviewNoteKey, DraftStore, DraftMemoryDriver, populatedReview, reviewSnapshot, reviewTask, deferred, tick } from './helpers/review-fixture.mjs';
 const read=name=>readFileSync(new URL(`../entry/src/main/ets/${name}.ets`,import.meta.url),'utf8');
 const history=await import(`data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(read('utils/LocalHistoryStore').replace(/^import [^\n]+;\r?\n/gm,''))).toString('base64')}`);
+const presentation=await import(`data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(read('utils/PlanPresentation'))).toString('base64')}`);
 const source=read('pages/ReviewPage');
 const methods=source.slice(0,source.indexOf('\n  @Builder')).replace(/^import [^\n]+;\r?\n/gm,'').replace(/^@Component\r?\n/gm,'').replace(/@(State|Prop)\s+|@Watch\('[^']+'\)\s*/g,'').replace('export struct ReviewPage','class ReviewPage')+'\n}';
 async function fixture(options={}){
  const driver=options.driver??new DraftMemoryDriver();const store=new DraftStore(driver,{now:()=>Date.now(),set:()=>1,clear(){}});await store.initialize();const scope=history.historyScope('https://example.test','account-a');const lease=await store.activate(scope);const calls=[],navigation=[];
  class Api{constructor(base,token){this.base=base;this.token=token;}async review(period,anchor){calls.push([this.base,this.token,period,anchor]);return options.review?options.review(period,anchor,this.token):period==='day'&&anchor==='2030-10-19'?populatedReview():reviewSnapshot(period,anchor);}}
- const deps={...time,...summary,ReviewController,emptyReviewState,reviewNoteKey,localDrafts:store,historyScope:history.historyScope,CampusFlowApi:Api};
+ const deps={...time,...summary,...presentation,ReviewController,emptyReviewState,reviewNoteKey,localDrafts:store,historyScope:history.historyScope,CampusFlowApi:Api};
  const Page=new Function(...Object.keys(deps),stripTypeScriptTypes(methods)+'\nreturn ReviewPage')(...Object.values(deps));const page=new Page();Object.assign(page,{baseUrl:'https://example.test',token:'token-a',userId:'account-a',draftLease:lease,accountRevision:7,active:true,initialPeriod:'day',initialAnchor:'2030-10-19'});
  page.onBack=(...args)=>navigation.push(['back',...args]);page.onOpenTask=(...args)=>navigation.push(['task',...args]);page.onOpenFocus=(...args)=>navigation.push(['focus',...args]);page.onOfferSummary=(...args)=>navigation.push(['summary',...args]);
  page.aboutToAppear();await tick();return {page,store,driver,lease,calls,navigation};
@@ -78,4 +79,8 @@ test('discard of staged failed write must durably restore prior text before navi
 
 test('old back/task/summary callback cannot close a new explicit entry during note flush',async()=>{
  for(const kind of ['back','task','focus','summary']){const f=await fixture(),delay=deferred();f.page.noteChanged('旧页需要保护');f.page.previewSummary();f.driver.beforeWrite=()=>delay.promise;const leaving=f.page.navigate(kind,'task-a');await tick();f.page.initialPeriod='week';f.page.initialAnchor='2030-10-23';f.page.entryRevision++;f.page.initialChanged();await tick();delay.resolve();await leaving;await tick();assert.deepEqual(f.navigation,[]);assert.equal(f.page.state.period,'week');assert.equal(f.page.state.anchor,'2030-10-23');f.page.aboutToDisappear();}
+});
+
+test('main reading time is natural fixed campus time and exact ISO/digest remain opt-in evidence',async()=>{
+ const f=await fixture();f.page.state.snapshot.as_of='2030-10-19T23:05:12.123456Z';assert.equal(f.page.readingTime(),'2030年10月20日 07:05（校园时间）');assert.equal(f.page.expandedEvidence.includes('snapshot'),false);f.page.toggleEvidence('snapshot');assert.equal(f.page.expandedEvidence.includes('snapshot'),true);assert.equal(f.page.state.snapshot.as_of,'2030-10-19T23:05:12.123456Z');assert.equal(f.page.state.snapshot.snapshot_digest,'a'.repeat(64));f.page.aboutToDisappear();
 });

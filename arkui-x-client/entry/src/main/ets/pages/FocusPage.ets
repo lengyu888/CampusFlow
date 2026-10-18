@@ -38,10 +38,16 @@ export struct FocusPage {
   @State private intervalPage: number = 0;
   @State private gapPage: number = 0;
   @State private expandedOperations: string[] = [];
+  @State private detailExpanded: boolean = false;
+  @State private startExpanded: boolean = false;
+  private selectedKey: string = '';
   private detailKey: string = '';
 
   aboutToAppear(): void { this.stateChanged(); }
   private stateChanged(): void {
+    if (this.selectedKey !== this.state.selectedRecordId) {
+      this.selectedKey = this.state.selectedRecordId; this.detailExpanded = false; this.startExpanded = false;
+    }
     const key = `${this.state.selectedRecordId}:${this.state.record?.revision ?? ''}`;
     if (key !== this.detailKey) {
       this.detailKey = key; this.intervalPage = 0; this.gapPage = 0;
@@ -81,6 +87,34 @@ export struct FocusPage {
   }
   private toggleOperationDetails(id: string): void {
     this.expandedOperations = this.expandedOperations.includes(id) ? this.expandedOperations.filter((value: string) => value !== id) : this.expandedOperations.concat([id]);
+  }
+  private otherLocalRecords(): FocusLocalView[] {
+    return this.state.localRecords.filter((record: FocusLocalView): boolean => record.recordId !== this.state.local?.recordId);
+  }
+  private otherHistoryRecords(): FocusRecord[] {
+    return this.state.history.filter((record: FocusRecord): boolean => record.record_id !== this.state.record?.record_id);
+  }
+  private showStartCard(): boolean {
+    return this.startExpanded || this.state.local === null && this.state.record === null && this.state.activeRecord === null;
+  }
+  private toggleRecordDetails(id: string): void {
+    if (this.state.record?.record_id === id) { this.detailExpanded = !this.detailExpanded; }
+  }
+  private synchronizedLabel(local: FocusLocalView): string {
+    return local.confirmedElapsedMs === 0 ? '尚无已确认的计时片段；本机显示仍保留，进行中的片段不会立即计入已同步时长。' :
+      `已确认片段 ${this.duration(local.confirmedElapsedMs)}；与本机时长分别核对，不相加。`;
+  }
+  private messageIsWarning(): boolean {
+    if ((this.state.message === '本机已暂停；服务器是否已记录以同步结果为准。' ||
+      this.state.message === '本机已结束计时；记录保存与任务完成分别核对。') &&
+      this.state.pendingOperations.length === 0 && this.state.errorCode.length === 0) { return false; }
+    return this.state.message !== '这次记录操作已取得回执，当前记录将单独读取。' &&
+      this.state.message !== '本机专注缓存已清理；这不取消已发往服务器的操作。';
+  }
+  private noticeIsWarning(): boolean {
+    return this.notice !== '本机专注记录已清除，服务端已确认的记录不受影响。' &&
+      this.notice !== '退出后本机专注记录已清除。' &&
+      this.notice !== '最新任务已经完成，不重复提交，也不会把它恢复为未完成。';
   }
   private startAllowed(): boolean {
     return this.active && this.taskId.trim().length > 0 && this.state.phase !== 'loading' &&
@@ -179,7 +213,7 @@ export struct FocusPage {
       Text(this.duration(local.elapsedMs)).fontSize('42fp').fontWeight(FontWeight.Medium).fontColor(AppTheme.ink).width('100%')
       Text(`本机已核实时长${local.targetMs === null ? ' · 不设目标' : ` · 目标 ${Math.floor(local.targetMs / 60000)} 分钟`}`).fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
       if (this.targetReached(local)) { Text('已到设定时长，计时继续；何时结束由你决定。').fontSize(AppTheme.bodySize).fontColor(AppTheme.accent).width('100%').wordBreak(WordBreak.BREAK_WORD) }
-      Text(`已同步 ${this.duration(local.confirmedElapsedMs)}；与本机时长分别显示，不相加。`).fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+      Text(this.synchronizedLabel(local)).fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
       if (local.unknownGapCount > 0) { Text(`还有 ${local.unknownGapCount} 段无法核实时长，不作补算。`).fontSize(AppTheme.bodySize).fontColor(AppTheme.warning).width('100%') }
       if (local.canPause) { Button('暂停').width('100%').constraintSize({ minHeight: 48 }).enabled(this.active).onClick(() => this.onPause()) }
       if (local.canResume) { Button('继续这条记录').width('100%').constraintSize({ minHeight: 48 }).enabled(this.active).onClick(() => this.onResume()) }
@@ -208,8 +242,17 @@ export struct FocusPage {
   @Builder
   private Detail(record: FocusRecord) {
     Column({ space: 12 }) {
-      Text(this.recordTitle(record)).fontSize(AppTheme.sectionTitle).fontColor(AppTheme.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
-      Text(`${this.recordLabel(record)} · ${this.duration(record.confirmed_elapsed_ms)}`).fontSize(AppTheme.bodySize).fontColor(AppTheme.accent).width('100%')
+      if (this.state.local?.recordId !== record.record_id) {
+        Text(this.recordTitle(record)).fontSize(AppTheme.sectionTitle).fontColor(AppTheme.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
+        Text(this.duration(record.confirmed_elapsed_ms)).fontSize('32fp').fontWeight(FontWeight.Medium).fontColor(AppTheme.ink).width('100%')
+        Text(`${this.recordLabel(record)} · 已确认片段，不代表有效学习时长`).fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+      }
+      if (this.state.intervalError.length > 0 || this.state.unknownGaps.length > 0) {
+        Text(this.state.intervalError || `还有 ${this.state.unknownGaps.length} 段待核对，不补算时长。`).fontSize(AppTheme.bodySize).fontColor(AppTheme.warning).width('100%').wordBreak(WordBreak.BREAK_WORD)
+      }
+      Button(this.detailExpanded ? '收起已同步区间与核对依据' : '查看已同步区间与核对依据').width('100%').constraintSize({ minHeight: 48 }).fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft)
+        .onClick(() => this.toggleRecordDetails(record.record_id))
+      if (this.detailExpanded) {
       Text(`开始于 ${formatPlanDateTime(record.started_at)}${record.ended_at === null ? '' : `\n结束标注 ${formatPlanDateTime(record.ended_at)}`}`).fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
       Text('时间标注用于核对；总时长来自已确认区间，不是开始与结束日期之差，也不代表有效学习时长。').fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
       if (this.state.intervalLoading) { Text('正在读取完整区间…').fontSize(AppTheme.bodySize).fontColor(AppTheme.secondary) }
@@ -236,7 +279,11 @@ export struct FocusPage {
           Button('下一页').layoutWeight(1).constraintSize({ minHeight: 48 }).enabled((this.gapPage + 1) * 20 < this.state.unknownGaps.length).onClick(() => this.gapPage++)
         }.width('100%')
       }
+      }
       if (!record.task_missing) { Button('查看当前任务').width('100%').constraintSize({ minHeight: 48 }).onClick(() => this.onOpenTask(record.task_id)) }
+      if (record.state !== 'ended' && this.state.local === null && this.state.activeRecord?.record_id === record.record_id) {
+        Button('结束账号中的这条记录').width('100%').constraintSize({ minHeight: 48 }).enabled(this.active).onClick(() => this.askRemoteEnd(record))
+      }
       if (record.state === 'paused' && this.state.local === null) {
         Button('继续这条已暂停记录').width('100%').constraintSize({ minHeight: 48 }).enabled(this.active && this.state.pendingOperations.length === 0)
           .onClick(() => this.resumeRemoteRecord(record))
@@ -256,11 +303,15 @@ export struct FocusPage {
         Column({ space: 16 }) {
           Text('专心做一件事，完成与否由你决定。').fontSize(AppTheme.bodySize).fontColor(AppTheme.secondary).width('100%')
           if (this.state.phase === 'loading') { Text('正在读取本机专注记录…').fontSize(AppTheme.bodySize).fontColor(AppTheme.secondary).width('100%') }
-          if (this.notice.length > 0) { Text(this.notice).fontSize(AppTheme.bodySize).fontColor(AppTheme.warning).width('100%').wordBreak(WordBreak.BREAK_WORD) }
-          if (this.state.message.length > 0) { Text(this.state.message).fontSize(AppTheme.bodySize).fontColor(AppTheme.warning).width('100%').wordBreak(WordBreak.BREAK_WORD) }
+          if (this.notice.length > 0) { Text(this.notice).fontSize(AppTheme.bodySize).fontColor(this.noticeIsWarning() ? AppTheme.warning : AppTheme.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD) }
+          if (this.state.message.length > 0) { Text(this.state.message).fontSize(AppTheme.bodySize).fontColor(this.messageIsWarning() ? AppTheme.warning : AppTheme.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD) }
           if (this.state.local !== null) { this.Current(this.state.local) }
-          if (this.state.local === null || this.state.local.localState === 'ended') { this.StartCard() }
-          if (this.state.activeRecord !== null && this.state.activeRecord.record_id !== this.state.local?.recordId) {
+          if (this.state.record !== null) { this.Detail(this.state.record) }
+          if (this.showStartCard()) { this.StartCard() }
+          else if (this.state.local === null || this.state.local.localState === 'ended') {
+            Button('另开一条专注记录').width('100%').constraintSize({ minHeight: 48 }).fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft).onClick(() => this.startExpanded = true)
+          }
+          if (this.state.activeRecord !== null && this.state.activeRecord.record_id !== this.state.local?.recordId && this.state.activeRecord.record_id !== this.state.record?.record_id) {
             Column({ space: 10 }) {
               Text('账号还有一条尚未结束的记录').fontSize(AppTheme.sectionTitle).fontColor(AppTheme.ink).width('100%')
               Text(this.recordTitle(this.state.activeRecord)).fontSize(AppTheme.bodySize).fontColor(AppTheme.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
@@ -284,9 +335,9 @@ export struct FocusPage {
               Button('确认执行此项操作').width('100%').constraintSize({ minHeight: 48 }).enabled(this.active).onClick(() => this.confirmAction())
             }.width('100%').padding(16).backgroundColor(AppTheme.warningSoft).borderRadius(AppTheme.cardRadius)
           }
-          if (this.state.localRecords.length > 0) {
-            Text('本机记录').fontSize(AppTheme.sectionTitle).fontColor(AppTheme.ink).width('100%')
-            ForEach(this.state.localRecords, (local: FocusLocalView) => {
+          if (this.otherLocalRecords().length > 0) {
+            Text('其他本机记录').fontSize(AppTheme.sectionTitle).fontColor(AppTheme.ink).width('100%')
+            ForEach(this.otherLocalRecords(), (local: FocusLocalView) => {
               Button({ type: ButtonType.Normal }) {
                 Column({ space: 4 }) {
                   Text(this.localTitle(local)).fontSize(AppTheme.bodySize).fontColor(AppTheme.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
@@ -296,13 +347,14 @@ export struct FocusPage {
             }, (local: FocusLocalView) => `${local.recordId}-${local.localState}-${local.saveState}`)
           }
           Row({ space: 8 }) {
-            Text('已同步记录').fontSize(AppTheme.sectionTitle).fontColor(AppTheme.ink).layoutWeight(1)
+            Text(this.state.record === null ? '已同步记录' : '其他已同步记录').fontSize(AppTheme.sectionTitle).fontColor(AppTheme.ink).layoutWeight(1)
             Button('刷新记录').constraintSize({ minHeight: 48 }).enabled(this.active && !this.state.historyLoading).onClick(() => this.onRefresh())
           }.width('100%')
           if (this.state.historyLoading) { Text('正在读取记录…').fontSize(AppTheme.bodySize).fontColor(AppTheme.secondary) }
           if (this.state.historyError.length > 0) { Text(this.state.historyError).fontSize(AppTheme.bodySize).fontColor(AppTheme.warning).width('100%').wordBreak(WordBreak.BREAK_WORD) }
           if (!this.state.historyLoading && this.state.historyError.length === 0 && this.state.history.length === 0) { Text('还没有已读取的同步记录。').fontSize(AppTheme.bodySize).fontColor(AppTheme.secondary).width('100%') }
-          ForEach(this.state.history, (record: FocusRecord) => {
+          if (this.state.record !== null) { Text('当前所选记录已在上方展示；这里列出其他已读取记录。').fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%') }
+          ForEach(this.otherHistoryRecords(), (record: FocusRecord) => {
             Button({ type: ButtonType.Normal }) {
               Column({ space: 4 }) {
                 Text(this.recordTitle(record)).fontSize(AppTheme.bodySize).fontColor(AppTheme.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
@@ -311,7 +363,7 @@ export struct FocusPage {
             }.width('100%').constraintSize({ minHeight: 64 }).padding(12).backgroundColor(AppTheme.surface).onClick(() => this.onSelect(record.record_id))
           }, (record: FocusRecord) => `${record.record_id}-${record.revision}`)
           if (this.state.historyHasMore) { Button('加载更多记录').width('100%').constraintSize({ minHeight: 48 }).enabled(this.active && !this.state.historyLoading).onClick(() => this.onLoadMore()) }
-          if (this.state.record !== null) { this.Detail(this.state.record) }
+
           Button('清除本机专注记录与待同步内容').width('100%').constraintSize({ minHeight: 48 }).fontColor(AppTheme.danger).backgroundColor(AppTheme.dangerSoft)
             .enabled(this.active).onClick(() => this.confirmation = 'clear')
         }.width('100%').alignItems(HorizontalAlign.Start)

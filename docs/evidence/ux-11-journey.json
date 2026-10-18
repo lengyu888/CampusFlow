@@ -1,0 +1,736 @@
+{
+  "contract_version": 1,
+  "synthetic": true,
+  "boundary": "Actual ETS methods + native adapter shims + real ASGI/SQLite + scripted provider stream; no native rendering or real model.",
+  "steps": [
+    {
+      "name": "register-two-owners",
+      "input": "Two synthetic accounts without model keys",
+      "output": {
+        "user_a": "7a079cd5ac014aa19ac12170e5e84964",
+        "user_b": "f4c1d2fc5504487c839345a232a21ed1"
+      },
+      "assertions": [
+        "Distinct real authenticated owners",
+        "No preseeded account or timetable"
+      ]
+    },
+    {
+      "name": "first-guided-course",
+      "input": "Actual OnboardingPage editor → confirm → durable operation → real PUT",
+      "output": {
+        "course_count": 1,
+        "revision": "a74c3d11b97a02a6f48d6a733645d44f6ae4218e46dc1e871854af971432ebd9",
+        "onboarding_completed": true
+      },
+      "assertions": [
+        "Editor did not write server before finish",
+        "One exact six-field course persisted",
+        "Onboarding callback followed a valid operation receipt"
+      ]
+    },
+    {
+      "name": "quick-capture-confirm",
+      "input": "今晚八点复习一小时",
+      "output": {
+        "proposal_id": "54d9efdc6bad4ca1b572ab2228a269a9",
+        "task_id": "de49f59c2cdb438aa09426c10e736799",
+        "start_at": "2030-10-21T20:00:00+08:00",
+        "end_at": "2030-10-21T21:00:00+08:00"
+      },
+      "assertions": [
+        "Actual deterministic parser",
+        "Preview wrote no task",
+        "Explicit confirmation produced exact receipt task ID"
+      ]
+    },
+    {
+      "name": "mixed-import-explicit-review",
+      "input": "3 real parsed synthetic ICS rows",
+      "output": {
+        "classifications": [
+          "duplicate",
+          "new",
+          "invalid"
+        ],
+        "excluded_source_index": 2,
+        "operation_id": "c40b3b7b-6a69-41ef-bbc7-3dbf8d6b9c39",
+        "saved_courses": 2
+      },
+      "assertions": [
+        "Six-field duplicate not repeated",
+        "Invalid row blocked assembly until explicit exclusion",
+        "Preview and local assembly did not save server data",
+        "Real maintenance wrote original revision with durable operation ID"
+      ]
+    },
+    {
+      "name": "agent-actual-tools-offline-provider",
+      "input": "Read schedule → propose task → final response",
+      "output": {
+        "session_id": "cfa328f1-2330-4ac6-97fa-8ff8e5129a47",
+        "run_id": "8729e46f-b286-46ea-a8ab-fc08de44b07c",
+        "proposal_id": "ee8df22925ef4e64b5d10b38b3900831",
+        "event_count": 16,
+        "history_messages": 2,
+        "tools": [
+          {
+            "name": "get_schedule",
+            "status": "success"
+          },
+          {
+            "name": "propose_task_change",
+            "status": "success"
+          }
+        ]
+      },
+      "assertions": [
+        "Real run scheduler and Agent tool loop",
+        "Provider stream alone replaced",
+        "Both actual tools report success",
+        "Tool produced pending proposal without task write",
+        "Authoritative history contains one user/assistant pair"
+      ]
+    },
+    {
+      "name": "confirm-loss-and-original-id-recovery",
+      "input": "Explicit confirmation; drop actual committed response",
+      "output": {
+        "proposal_id": "ee8df22925ef4e64b5d10b38b3900831",
+        "task_id": "25b43ab507c047ed87df91f6f724d23f",
+        "receipt_id": "c1aa1931027b4357ad7fab8aea3fda95"
+      },
+      "assertions": [
+        "Response loss enters uncertain, not success",
+        "Fresh store/controller recovered durable original-ID pointer with GET only",
+        "Idempotent replay created no duplicate task",
+        "Unsent assistant and unrelated task drafts remain intact"
+      ]
+    },
+    {
+      "name": "course-change-conflict-and-replan",
+      "input": "Save 19:00–19:45 course over actual proposed task",
+      "output": {
+        "task_id": "25b43ab507c047ed87df91f6f724d23f",
+        "replan_id": "e4b2aecfb4f94096be49bd817e3641d4",
+        "old_start": "2030-10-21T19:00:00+08:00",
+        "new_start": "2030-10-21T21:00:00+08:00",
+        "course_revision": "d43162226e8c5b80cb8c76202d96e5f3ef5608051d2e4da650d1055cb651d7c6"
+      },
+      "assertions": [
+        "Confirmed timetable change produced real conflict",
+        "Replan preview did not mutate task",
+        "Confirmation preserved task ID and duration",
+        "Fresh conflict read has no ordinary conflict"
+      ]
+    },
+    {
+      "name": "complete-and-reviewed-restore",
+      "input": "Complete exact agent task, then explicitly restore; complete quick task",
+      "output": {
+        "agent_task_id": "25b43ab507c047ed87df91f6f724d23f",
+        "complete_operation": "1f76d05e-8212-42d1-a5df-3fa4412ede42",
+        "restore_operation": "825b56b0-7b34-4ac6-971f-b27336fed929",
+        "agent_status": "pending",
+        "quick_task_id": "de49f59c2cdb438aa09426c10e736799",
+        "quick_status": "completed"
+      },
+      "assertions": [
+        "Restore preview leaves current task completed",
+        "Confirmation uses original completion provenance and current revision",
+        "All durable status pointers settled"
+      ]
+    },
+    {
+      "name": "focus-confirmed-intervals",
+      "input": "Online 60s target; 65s → pause → resume → 5s → end",
+      "output": {
+        "record_id": "607a594d-fe91-43eb-b64e-63637563ccf4",
+        "task_id": "25b43ab507c047ed87df91f6f724d23f",
+        "elapsed_ms": 70000,
+        "intervals": 2,
+        "unknown_gaps": 0
+      },
+      "assertions": [
+        "Native clock boundary replaced by deterministic samples",
+        "Timer starts after durable receipt/current-state checks",
+        "Only elapsed differences sent; raw monotonic stays local",
+        "Target does not complete task",
+        "Pause/end travel through real FocusService"
+      ]
+    },
+    {
+      "name": "review-three-evidence-facts",
+      "input": "Read same SQLite day/week; select summary without private note",
+      "output": {
+        "day_totals": {
+          "current_completed_count": 1,
+          "current_unscheduled_count": 0,
+          "confirmed_elapsed_ms": 70000,
+          "unknown_gap_count": 0
+        },
+        "week_totals": {
+          "current_completed_count": 1,
+          "current_unscheduled_count": 0,
+          "confirmed_elapsed_ms": 70000,
+          "unknown_gap_count": 0
+        },
+        "snapshot_digest": "e79e714e8727f04a25f1554e146bab396861e4a127d5e5bf6aa941ad42bd43cf",
+        "history_messages": 2,
+        "unsent_draft_preserved": true
+      },
+      "assertions": [
+        "Actual strict validator recalculates source totals",
+        "Completion counted by real receipt provenance",
+        "Focus totals from real sealed intervals",
+        "Summary generation made no run/action request and omitted private note"
+      ]
+    },
+    {
+      "name": "offline-prefix-crash-recovery",
+      "input": "Start offline; sample 6s; dispose without sealing; hydrate actual disk",
+      "output": {
+        "local_record_id": "b7f70992-ee79-4e3c-bcbe-9d93d81ef943",
+        "durable_elapsed_ms": 5000,
+        "unknown_local_gaps": 1,
+        "pending_operations": 2,
+        "server_record_found": false,
+        "server_review_ms": 70000
+      },
+      "assertions": [
+        "No HTTP checkpoint while offline",
+        "Only persisted 5s prefix survives; unproved tail is not guessed",
+        "Cold recovery pauses with explicit gap and retains original ordered operation IDs",
+        "Unsent local fragments are excluded from server review facts"
+      ]
+    },
+    {
+      "name": "local-durable-failure-before-http",
+      "input": "Fail actual atomic file rename before run submission",
+      "output": {
+        "http_requests": 0,
+        "phase": "local_error",
+        "draft_retained": true
+      },
+      "assertions": [
+        "Real FileDraftDriver fails safely",
+        "No model or run POST before durable barrier",
+        "Raw input remains recoverable; retrying local save does not send"
+      ]
+    },
+    {
+      "name": "late-read-owner-isolation",
+      "input": "Delay real A review response; switch to B before delivery",
+      "output": {
+        "visible_user": "f4c1d2fc5504487c839345a232a21ed1",
+        "visible_focus_ms": 0
+      },
+      "assertions": [
+        "Production generation guard rejects late A snapshot",
+        "No A completion or focus facts shown to B"
+      ]
+    },
+    {
+      "name": "restart-logout-and-account-boundary",
+      "input": "Fresh actual stores → explicit logout/clear → B → fresh stores",
+      "output": {
+        "restored_a_drafts": 3,
+        "revoked_a_token": true,
+        "b_tasks": 0,
+        "b_drafts": 1,
+        "a_server_tasks_preserved": 2,
+        "a_focus_ms_preserved": 70000
+      },
+      "assertions": [
+        "Cold restart restores exact unsent draft/date/notes before logout",
+        "Explicit cleanup invalidates old lease and removes local A content",
+        "B cannot read A proposal/run/focus exact IDs",
+        "Server A facts survive logout; no local A draft resurrects",
+        "B draft survives its own cold restart"
+      ]
+    }
+  ],
+  "requests": [
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/register",
+      "status": 201
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/register",
+      "status": 201
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/me",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/onboarding",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/me/timetable",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/onboarding/campus-data",
+      "status": 200
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/onboarding",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/onboarding",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/me/timetable",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/planning/actions",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/planning",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/actions/54d9efdc6bad4ca1b572ab2228a269a9/confirm",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/planning",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/schedule-subscriptions/preview",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/me/timetable",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/me/timetable",
+      "status": 200
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/me/timetable",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/me/timetable",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/me/timetable",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/models",
+      "status": 200
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/me/settings",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/skills",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/skills/timetable-planner/install",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/skills/ddl-guardian/install",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/agent-runs",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/agent-runs/8729e46f-b286-46ea-a8ab-fc08de44b07c",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/agent-runs/8729e46f-b286-46ea-a8ab-fc08de44b07c",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/planning",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/sessions/cfa328f1-2330-4ac6-97fa-8ff8e5129a47/history",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/agent-runs/8729e46f-b286-46ea-a8ab-fc08de44b07c/events",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/actions/ee8df22925ef4e64b5d10b38b3900831",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/actions/ee8df22925ef4e64b5d10b38b3900831/confirm",
+      "status": null,
+      "transport_error": "SIMULATED_RESPONSE_LOSS"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/planning",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/actions/ee8df22925ef4e64b5d10b38b3900831",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/actions/ee8df22925ef4e64b5d10b38b3900831/confirm",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/planning",
+      "status": 200
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/me/timetable",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/me/timetable",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/planning/conflicts",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/planning",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/planning/replans",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/planning",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/planning/replans/e4b2aecfb4f94096be49bd817e3641d4/confirm",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/planning",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/planning/conflicts",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/me/timetable",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/tasks/25b43ab507c047ed87df91f6f724d23f/status-operations",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/planning",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/task-status-operations/1f76d05e-8212-42d1-a5df-3fa4412ede42",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/tasks/25b43ab507c047ed87df91f6f724d23f/status-operations",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/planning",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/task-status-operations/825b56b0-7b34-4ac6-971f-b27336fed929/confirm",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/planning",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/planning",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/tasks/de49f59c2cdb438aa09426c10e736799/status-operations",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/focus-records/active",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/focus-records/607a594d-fe91-43eb-b64e-63637563ccf4/operations",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/focus-records/607a594d-fe91-43eb-b64e-63637563ccf4",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/focus-records/active",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/focus-records/607a594d-fe91-43eb-b64e-63637563ccf4",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/focus-records/607a594d-fe91-43eb-b64e-63637563ccf4/operations",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/focus-records/active",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/focus-records/607a594d-fe91-43eb-b64e-63637563ccf4",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/focus-records/607a594d-fe91-43eb-b64e-63637563ccf4/operations",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/focus-records/607a594d-fe91-43eb-b64e-63637563ccf4",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/focus-records/active",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/focus-records/607a594d-fe91-43eb-b64e-63637563ccf4",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/focus-records/607a594d-fe91-43eb-b64e-63637563ccf4/operations",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/focus-records/active",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/focus-records/607a594d-fe91-43eb-b64e-63637563ccf4",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/focus-records/607a594d-fe91-43eb-b64e-63637563ccf4",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/planning",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/reviews",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/reviews",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/sessions/cfa328f1-2330-4ac6-97fa-8ff8e5129a47/history",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/focus-records/b7f70992-ee79-4e3c-bcbe-9d93d81ef943",
+      "status": 404
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/reviews",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/reviews",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/reviews",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/logout",
+      "status": 204
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/planning",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/actions/ee8df22925ef4e64b5d10b38b3900831",
+      "status": 404
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/agent-runs/8729e46f-b286-46ea-a8ab-fc08de44b07c",
+      "status": 404
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/focus-records/607a594d-fe91-43eb-b64e-63637563ccf4",
+      "status": 404
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/me",
+      "status": 401
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/login",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/planning",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/focus-records/607a594d-fe91-43eb-b64e-63637563ccf4",
+      "status": 200
+    }
+  ],
+  "status": "passed",
+  "database_counts": {
+    "tasks": 2,
+    "runs": 1,
+    "messages": 2,
+    "focus_records": 1,
+    "focus_operations": 4,
+    "task_status_operations": 3
+  },
+  "source_hashes": {
+    "utils/AgentFeedback": "7ed8420f310c3f318d050479b9df8484f4337f6b6bdbdec8c24b8e58c8dbaf0e",
+    "utils/DailyAgenda": "889b2115d924ba40cf55ee8835d1f1695fc3fa8b88061f717e450736d1ae4709",
+    "utils/OnboardingTimetable": "64fddbf9a48fc493f2f2c87a02d2bcdf4cb6bc80ef52ff6c9adb14f25c97313f",
+    "utils/PlanPresentation": "bc7b89a2eee9473a4f49817ec72fc75e6b5736a65ae9906bc2659d849b1e6a7a",
+    "utils/DraftStore": "09b8d2ff403461f7a54a32b78619ab28f40ea711a349c3861277ca251ca9561a",
+    "utils/LocalHistoryStore": "bf12ecde88c5a5ad4382518a27a15f8c6f9f2cab3b3ae8d3e919123295ddba10",
+    "utils/QuickCaptureParser": "4722912cfafad366b8561e062f3305cc11f9b9f17ee13bdb045a7f74055de7bb",
+    "utils/TimetableImportReview": "eb7e3d6005f75f782784f10ed63e7016d73f9f2252c5c1416364147680494dc1",
+    "utils/CourseReview": "bc4e3f24f568638ba10e0f6d28daad17f1c12f7c26a0fdf97fd8ff1c7fcf8174",
+    "utils/ActionReliability": "d9e2036e093b2360173f105c11467bb16b83aea1665517c912b87efafc38c0fa",
+    "utils/PlanningAction": "7b72e6bc014541165f44f1e4c7d29a92f3ec94dc10b2868bf868be3b17315d57",
+    "utils/PlanningReplan": "3a483e1bf38e6e1690b18407fb9d7dbd99491b9160a90b156fb50d8ec9bed3ea",
+    "utils/TimetableMaintenance": "7bdbdcf8cdf2a39cdab4a78022744f43a809b7529e65bbac6a51dec27e7a19d2",
+    "utils/AgentRun": "35c154bc8308a94c83e33804e0aa829ff213c6400dc9915dde6482815fee3126",
+    "utils/TaskStatusValidation": "03c227d2714291d7942984cf325ff2b420a298e428d52c7a0e97fb27c410c170",
+    "utils/TaskStatusController": "45533a8a249e69160bda220f237056b9321d9150bd0fd146acc1090d3b9e53bc",
+    "utils/FocusDigest": "abc35ad919b4848188e8c252796851c51b45dbb4addc114a0b3044a02e42480a",
+    "utils/FocusValidation": "e4f253589ed2622b926ff7176026750343792e8b34032ccdef5ae256b5060383",
+    "utils/FocusTimer": "05ec726c071374e0f0962d7ba3eb984d62d77401ab41dd732a3981fef15b6cdc",
+    "utils/FocusStore": "7a28b7d19fa2f3d12cec46750e8d79f3babafc6bde365e28cc364902b9ff6474",
+    "utils/FocusController": "4ade357e57896b5e4b8593408114517258f70d9bc253cda44f330e0cd5e93fc5",
+    "utils/ReviewTime": "59d49a2b5ad27fbdff83ecd6eebfdb843619f5fb65f3304379c71d14a3ef33a7",
+    "utils/ReviewValidation": "95e562fd617f89d7d009d21f1f1b5f36b5ce04fb57ed0efc534907528422937f",
+    "utils/ReviewController": "29bb70de52d3325ecdbcdac3f9f917f0a2160149f183650bfcd440544c88b80f",
+    "utils/ReviewSummary": "feb04a7c4e651ecddcb7180cab8d727bbd7acc356ad829506fcefa62873f9172",
+    "services/CampusFlowApi": "2be0dd2042c454440dde259e0ed5ca135b983a1d6f762e7065d814cd7f7679cb",
+    "services/LocalDrafts": "ea65ef174eaa803f2de191bc05d3d79407037dc88aedeef1b6da0a15040abd65",
+    "services/LocalFocus": "8124f019d32d380af5ffbf9c9364fe3aadfaa5f18027a9bebab90c9ab14866fe",
+    "pages/OnboardingPage": "20f4e74189acb4baa84541e28ee0ee1d5bc90a621338f3ce658fe2398f65b41d"
+  }
+}

@@ -255,6 +255,11 @@ export struct ReviewPage {
     const seconds = Math.floor(ms / 1000); const minutes = Math.floor(seconds / 60);
     return minutes >= 60 ? `${Math.floor(minutes / 60)} 小时 ${minutes % 60} 分钟` : `${minutes} 分 ${seconds % 60} 秒`;
   }
+  private readingTime(): string {
+    const value = formatPlanDateTime(this.state.snapshot?.as_of ?? null);
+    if (!/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(value)) { return value; }
+    return `${value.slice(0, 4)}年${Number(value.slice(5, 7))}月${Number(value.slice(8, 10))}日 ${value.slice(11)}（校园时间）`;
+  }
   private rangeLabel(): string {
     const range = reviewRange(this.state.period, this.state.anchor);
     return range === null ? this.state.anchor : this.state.period === 'day' ? range.noteAnchor : `${range.noteAnchor} — ${reviewShiftAnchor(range.noteAnchor, 6)}`;
@@ -421,7 +426,11 @@ export struct ReviewPage {
           if (this.state.phase === 'loading') { FeedbackPanel({ kind: 'loading', title: '正在核对这段时间', message: '只读取任务与计时记录，不会调整你的安排。' }) }
           if (this.state.phase === 'error' || this.state.phase === 'stale') { FeedbackPanel({ kind: this.state.phase === 'stale' ? 'warning' : 'error', title: this.state.phase === 'stale' ? '目前显示上次读取的资料' : '暂时无法读取回看', message: this.state.message, actionLabel: '重新读取', onAction: () => this.controller?.refresh() }) }
           if (this.state.snapshot !== null) {
-            Text(`资料读取于 ${formatPlanDateTime(this.state.snapshot.as_of)}`).fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
+            Text(`资料读取于 ${this.readingTime()}`).fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
+            Button(this.expandedEvidence.includes('snapshot') ? '收起资料核对信息' : '资料核对信息').constraintSize({ minHeight: 48 }).width('100%').fontColor(AppTheme.accent).backgroundColor(Color.Transparent).onClick(() => this.toggleEvidence('snapshot'))
+            if (this.expandedEvidence.includes('snapshot')) {
+              Text(`读取标注 ${this.state.snapshot.as_of}\n范围 ${this.state.snapshot.period_start} 至 ${this.state.snapshot.period_end}（不含结束时刻）\n快照标识 ${this.state.snapshot.snapshot_digest}`).fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+            }
             this.Fact(`${this.state.snapshot.totals.current_completed_count} 项`, '本期完成，当前仍完成', '按已记录的完成时间归期；恢复未完成和删除后，刷新会重新计算。')
             this.Fact(this.duration(this.state.snapshot.totals.confirmed_elapsed_ms), '已确认专注记录时长', '只计已同步的确认片段，不等于有效学习时长。')
             this.Fact(`${this.state.snapshot.totals.current_unscheduled_count} 项`, '当前待安排', '当前尚未安排开始时间的待办，不是历史期末状态。')

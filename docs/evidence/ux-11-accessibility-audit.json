@@ -1,0 +1,149 @@
+{
+  "kind": "source audit and arithmetic measurements, not native accessibility certification",
+  "source_sha256": {
+    "theme/AppTheme.ets": "1e0613f871e3209878d208709148992fcebff066fc4d8251086a7f09187ebb19",
+    "components/AppIcon.ets": "4b394371500e3451fec156f79e17c730d9b92b42cb73b6a532f63d04849966db",
+    "components/AppIllustration.ets": "41912db9f94e0a14e1f80e77770288ac77c8b508d3c4187385ec543edd897c32",
+    "components/TaskStatusPanel.ets": "99f9f8cbf10451b40465065993b7d8b6ec1c8b0879e4b3e655b7aa04353f5b6f",
+    "pages/Index.ets": "b755063f03c6696c6d5cb8792bfc591af56b2232b2759256d0057d8811582e64",
+    "pages/HomePage.ets": "ef35bb179efb53e48779db308fad6bf8e1b67d197f3d451aa814ebfc1085c0ce",
+    "pages/AgentPage.ets": "6d4ef3af6ad59ba95f4d8c2ce0ec44df8ec32207940b0d83d1fcca323f33dd17",
+    "pages/PlanCenterPage.ets": "4f8c11d107ad3fd78225a1eb291858a03ba164051e26e1e0dc744ea3618beaaf",
+    "pages/OnboardingPage.ets": "20f4e74189acb4baa84541e28ee0ee1d5bc90a621338f3ce658fe2398f65b41d",
+    "pages/TimetablePage.ets": "4e0f944bc35aeaa0050510fa004cb7688e56de2f62d2ba1ed32cdce2c96a904f",
+    "pages/FocusPage.ets": "92651dce87e363cc8bd85f97f4b3dc5a86ea59ebb5b3879c48c7fa5eb1ccbd90",
+    "pages/ReviewPage.ets": "799fedbf67ec496403c39b20f82729f78976c303251026aa9c8872c9ab169aef"
+  },
+  "text_color_pairs": [
+    {
+      "foreground": "ink",
+      "background": "canvas",
+      "ratio": 11.62
+    },
+    {
+      "foreground": "ink",
+      "background": "surface",
+      "ratio": 12.66
+    },
+    {
+      "foreground": "secondary",
+      "background": "canvas",
+      "ratio": 4.85
+    },
+    {
+      "foreground": "secondary",
+      "background": "surface",
+      "ratio": 5.29
+    },
+    {
+      "foreground": "accent",
+      "background": "surface",
+      "ratio": 6.56
+    },
+    {
+      "foreground": "onAccent",
+      "background": "accent",
+      "ratio": 6.56
+    },
+    {
+      "foreground": "warning",
+      "background": "warningSoft",
+      "ratio": 5.04
+    },
+    {
+      "foreground": "danger",
+      "background": "dangerSoft",
+      "ratio": 5.26
+    },
+    {
+      "foreground": "success",
+      "background": "successSoft",
+      "ratio": 5.14
+    },
+    {
+      "foreground": "secondary",
+      "background": "accentSoft",
+      "ratio": 4.51
+    }
+  ],
+  "source_checks": [
+    {
+      "name": "decorative_icons_and_illustrations",
+      "passed": true
+    },
+    {
+      "name": "reduced_motion_path",
+      "passed": true
+    },
+    {
+      "name": "calendar_touch_width_and_horizontal_scroll",
+      "passed": true
+    },
+    {
+      "name": "input_keyboard_resize",
+      "passed": true
+    },
+    {
+      "name": "voice_explicit_label_and_editable_input",
+      "passed": true
+    },
+    {
+      "name": "status_labels_include_text",
+      "passed": true
+    },
+    {
+      "name": "core_task_controls_minimum_size",
+      "passed": true
+    }
+  ],
+  "original_art": [
+    {
+      "path": "arkui-x-client/entry/src/main/resources/base/media/xj_campus_entry.png",
+      "bytes": 1340472,
+      "sha256": "c819a08e845ad6db0faec999f825d75f30559018691761a10e5bdbdded25092d"
+    },
+    {
+      "path": "arkui-x-client/entry/src/main/resources/base/media/xj_course_entry.png",
+      "bytes": 1004028,
+      "sha256": "f05015851a1e63d0065f863fe69a59733d76966be7ae268e02d563b7dfe6c516"
+    },
+    {
+      "path": "arkui-x-client/entry/src/main/resources/base/media/xj_empty_day.png",
+      "bytes": 1682313,
+      "sha256": "938ddefad745d4be5df52e9a3aecc64e28523ad042eef4ea9f0957623431998c"
+    },
+    {
+      "path": "arkui-x-client/entry/src/main/resources/base/media/xj_focus_end.png",
+      "bytes": 1576293,
+      "sha256": "7a6d78908c17554f5baec2a9395ffef9f8d10da3cc508b60f59ac08866ab9fec"
+    },
+    {
+      "path": "arkui-x-client/entry/src/main/resources/base/media/xj_focus_entry.png",
+      "bytes": 1558531,
+      "sha256": "666ee6d10ee6c8e6a8a833072bbe250bfb0f83ad43a0b2ed482016c9d9ab9914"
+    },
+    {
+      "path": "arkui-x-client/entry/src/main/resources/base/media/xj_onboarding.png",
+      "bytes": 1842715,
+      "sha256": "0fa293db0d8b2fa672e10cf8f87c82615ceee4951f16f445d451cd6271713bd6"
+    },
+    {
+      "path": "arkui-x-client/entry/src/main/resources/base/media/xj_review_empty.png",
+      "bytes": 1696770,
+      "sha256": "4bae2e30a628de9fa0a0f932fc3704463ded5ff73e5a3fd118f9c53afe6db090"
+    }
+  ],
+  "original_art_bytes": 10701122,
+  "native_pending": [
+    "Actual system text scaling and layout at large font sizes",
+    "Platform screen reader labels, focus order and announcements",
+    "Physical touch targets, keyboard, safe areas and device back gesture",
+    "Real startup/frame/memory measurements"
+  ],
+  "observations": [
+    "Source contains textual task statuses and confirmations; color is not the only state cue.",
+    "Month calendar keeps seven 48 vp columns by horizontal scrolling on narrow widths; optional month view remains separate from daily list.",
+    "Decorative artwork has a source-level fallback and no accessibility name; functional text remains in normal controls.",
+    "Prototype timings and sizes are reported separately and cannot establish native performance."
+  ]
+}

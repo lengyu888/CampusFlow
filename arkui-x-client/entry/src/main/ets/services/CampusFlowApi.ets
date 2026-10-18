@@ -305,6 +305,11 @@ export class CampusFlowApi {
     );
   }
 
+  async onboardingCampusData(school: string, campus: string): Promise<CampusDataSnapshot> {
+    return this.request<CampusDataSnapshot>(`/api/v1/onboarding/campus-data?school=${encodeURIComponent(school)}&campus=${encodeURIComponent(campus)}`,
+      http.RequestMethod.GET);
+  }
+
   async campusData(): Promise<CampusDataSnapshot> {
     return this.request<CampusDataSnapshot>('/api/v1/campus-data', http.RequestMethod.GET);
   }

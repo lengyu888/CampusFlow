@@ -36,7 +36,7 @@ function course(overrides = {}) {
     location: '第7教研楼北406', teacher: '叶老师', ...overrides };
 }
 function preview(entries = [course()]) { return diagnosticPreview(entries); }
-function campusData() {
+function onboardingCampusData() {
   return { package: { package_id: 'fixture-hdu', school: '杭州电子科技大学', campus: '下沙校区', version: 'fixture' },
     places: [{ place_id: 'fixture-library', name: '图书馆', category: '学习', zone: '中区', aliases: ['馆'],
       open_now: true, open_hours: '测试示例' }], notices: [], corrections: [] };
@@ -66,7 +66,7 @@ async function fixture(handlers = {}) {
     invoke(name, args) {
       (name === 'onboardingSnapshot' ? reads : calls).push({ name, args: structuredClone(args) });
       if (handlers[name]) return handlers[name](...args);
-      if (name === 'campusData') return Promise.resolve(campusData());
+      if (name === 'onboardingCampusData') return Promise.resolve(onboardingCampusData());
       if (name === 'onboardingSnapshot') return Promise.resolve(structuredClone(snapshot));
       if (name === 'onboardingOperation') return Promise.resolve(receipt(snapshot.timetable, snapshot.campus_map).receipt);
       if (name === 'completeOnboarding') { snapshot = { revision: revisionB, user: { ...user }, timetable: structuredClone(args[3]), campus_map: structuredClone(args[4]) }; return Promise.resolve(receipt(args[3], args[4])); }
@@ -75,7 +75,7 @@ async function fixture(handlers = {}) {
     onboardingSnapshot(...args) { return this.invoke('onboardingSnapshot', args); }
     onboardingOperation(...args) { return this.invoke('onboardingOperation', args); }
     previewSubscription(...args) { return this.invoke('previewSubscription', args); }
-    campusData(...args) { return this.invoke('campusData', args); }
+    onboardingCampusData(...args) { return this.invoke('onboardingCampusData', args); }
     completeOnboarding(...args) { return this.invoke('completeOnboarding', args); }
     saveSubscription(...args) { return this.invoke('saveSubscription', args); }
     syncSubscription(...args) { return this.invoke('syncSubscription', args); }
@@ -217,7 +217,7 @@ test('preview is read-only until explicit acceptance, which merges courses and d
   assert.match(f.page.importedNotice, /不保存订阅链接/);
   f.page.nextStep();
   await f.page.finish();
-  assert.deepEqual(f.calls.map(call => call.name), ['previewSubscription', 'campusData', 'completeOnboarding']);
+  assert.deepEqual(f.calls.map(call => call.name), ['previewSubscription', 'onboardingCampusData', 'completeOnboarding']);
   assert.deepEqual(f.calls.at(-1).args[3], [course(), imported]);
   assert.equal(f.completed.length, 1);
 });
@@ -386,7 +386,7 @@ test('preview failures use safe status messages and only authentication failure 
 test('finish freezes confirmed courses and semester, blocks competing edits and submits exactly once', async () => {
   const data = deferred();
   const saved = deferred();
-  const f = await fixture({ campusData: () => data.promise, completeOnboarding: () => saved.promise });
+  const f = await fixture({ onboardingCampusData: () => data.promise, completeOnboarding: () => saved.promise });
   readyToConfirm(f);
   const finishing = f.page.finish();
   const revision = f.page.requestRevision;
@@ -399,11 +399,11 @@ test('finish freezes confirmed courses and semester, blocks competing edits and 
   assert.equal(f.page.step, 2);
   assert.equal(f.page.requestRevision, revision, 'saving cannot be cancelled as though it were a read-only preview');
   assert.equal(f.page.pendingDelete, -1);
-  assert.deepEqual(f.calls.map(call => call.name), ['campusData']);
+  assert.deepEqual(f.calls.map(call => call.name), ['onboardingCampusData']);
   // Even mutations outside the disabled UI cannot change the captured request snapshot.
   f.page.entries[0].title = '较新的本地状态';
   f.page.semester = '较新的学期';
-  data.resolve(campusData());
+  data.resolve(onboardingCampusData());
   await tick();
   assert.deepEqual(f.calls.at(-1).args[3], [course()]);
   assert.equal(f.calls.at(-1).args[2], user.semester);
@@ -413,7 +413,7 @@ test('finish freezes confirmed courses and semester, blocks competing edits and 
   saved.resolve(receipt());
   await finishing;
   await f.page.finish();
-  assert.deepEqual(f.calls.map(call => call.name), ['campusData', 'completeOnboarding']);
+  assert.deepEqual(f.calls.map(call => call.name), ['onboardingCampusData', 'completeOnboarding']);
   assert.deepEqual(f.completed, [user]);
   assert.equal(f.page.completed, true);
   assert.equal(f.page.loading, false);
@@ -439,14 +439,14 @@ test('finish cannot submit before confirmation or with invalid courses or semest
 });
 
 test('missing, empty or mismatched campus data cannot be relabelled or submitted as the supplied campus', async () => {
-  const wrong = campusData();
+  const wrong = onboardingCampusData();
   wrong.package.campus = '其他校区';
-  for (const snapshot of [null, {}, { ...campusData(), places: [] }, wrong,
-    { ...campusData(), places: [{ name: '图书馆', category: '学习', zone: '', aliases: [42] }] }]) {
-    const f = await fixture({ campusData: async () => snapshot });
+  for (const snapshot of [null, {}, { ...onboardingCampusData(), places: [] }, wrong,
+    { ...onboardingCampusData(), places: [{ name: '图书馆', category: '学习', zone: '', aliases: [42] }] }]) {
+    const f = await fixture({ onboardingCampusData: async () => snapshot });
     readyToConfirm(f);
     await f.page.finish();
-    assert.deepEqual(f.calls.map(call => call.name), ['campusData']);
+    assert.deepEqual(f.calls.map(call => call.name), ['onboardingCampusData']);
     assert.match(f.page.message, /尚未提交/);
     assert.deepEqual(f.page.entries, [course()]);
     assert.equal(f.page.loading, false);
@@ -497,13 +497,13 @@ test('incomplete or mismatched save receipts do not announce onboarding completi
 
 test('leaving during the campus read prevents a write; leaving during a write prevents late completion', async () => {
   const data = deferred();
-  const f = await fixture({ campusData: () => data.promise });
+  const f = await fixture({ onboardingCampusData: () => data.promise });
   readyToConfirm(f);
   const first = f.page.finish();
   f.page.aboutToDisappear();
-  data.resolve(campusData());
+  data.resolve(onboardingCampusData());
   await first;
-  assert.deepEqual(f.calls.map(call => call.name), ['campusData']);
+  assert.deepEqual(f.calls.map(call => call.name), ['onboardingCampusData']);
   assert.deepEqual(f.completed, []);
   const saved = deferred();
   const saving = await fixture({ completeOnboarding: () => saved.promise });
@@ -592,7 +592,7 @@ test('onboarding unknown write survives process restart and queries original ID 
   assert.equal(second.calls[0].args[0], sent[5]); second.page.updateEditor('title', '不能改变冻结课程');
   await second.page.retrySameSubmission();
   assert.deepEqual(second.calls.find(call => call.name === 'completeOnboarding').args, sent);
-  assert.equal(second.calls.some(call => call.name === 'campusData'), false, 'retry uses the original reviewed map');
+  assert.equal(second.calls.some(call => call.name === 'onboardingCampusData'), false, 'retry uses the original reviewed map');
   assert.equal(second.completed.length, 1); assert.equal(second.draftStore.read(second.lease, { kind: 'onboarding', ownerId: 'main' }), undefined);
 });
 
@@ -709,4 +709,8 @@ test('UX07 all 500 diagnostic courses persist through the real draft store and o
   const writes = f.calls.filter(call => call.name === 'completeOnboarding');
   assert.equal(writes.length, 1); assert.deepEqual(writes[0].args[3], result.entries);
   assert.equal(f.page.completed, true); assert.equal(f.completed.length, 1);
+});
+test('UX11 initial campus lookup uses selected fixed scope without requiring a previously saved profile',async()=>{
+ const f=await fixture();readyToConfirm(f);await f.page.finish();const read=f.calls.find(c=>c.name==='onboardingCampusData');assert.deepEqual(read.args,['杭州电子科技大学','下沙校区']);assert.equal(f.completed.length,1);
+ const bad=await fixture({onboardingCampusData:async()=>{throw new feedback.CampusFlowRequestError(404,'DATA_SCOPE_UNSUPPORTED','当前校区暂不支持。');}});readyToConfirm(bad);await bad.page.finish();assert.equal(bad.calls.some(c=>c.name==='completeOnboarding'),false);assert.match(bad.page.message,/校区.*草稿仍保留/);assert.deepEqual(bad.page.entries,[course()]);
 });

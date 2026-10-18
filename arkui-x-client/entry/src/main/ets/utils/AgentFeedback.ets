@@ -50,6 +50,8 @@ function knownErrorMessage(code: string): string {
       return '未找到此提案，请刷新核对。';
     case 'FOCUS_NOT_FOUND':
       return '当前账号中未找到这次专注记录。';
+    case 'DATA_SCOPE_UNSUPPORTED':
+      return '当前服务尚未提供此学校和校区的校园资料，请核对配置；个人信息尚未更改。';
     case 'REVIEW_INVALID':
       return '请选择有效日期，再回看这一天或这一周。';
     case 'REVIEW_LIMIT':

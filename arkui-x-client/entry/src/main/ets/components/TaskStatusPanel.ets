@@ -4,11 +4,15 @@ import { formatPlanDateTime } from '../utils/PlanPresentation';
 import { TaskScheduleDetails } from './TaskScheduleDetails';
 import { AppTheme } from '../theme/AppTheme';
 
+export interface TaskStatusLabel { taskId: string; title: string; }
+
 // Controlled view: Index owns the only account-scoped coordinator and durable operation ledger.
 @Component
 export struct TaskStatusPanel {
   @Prop @Watch('stateChanged') state: TaskStatusState = { items: [], selectedId: '', lockedTaskIds: [], pendingCount: 0, message: '' };
   @Prop active: boolean = true;
+  @Prop labels: TaskStatusLabel[] = [];
+  @State private expandedDetails: string[] = [];
   onSelect: (id: string) => void = () => {};
   onCheck: (id: string) => void = () => {};
   onRetry: (id: string) => void = () => {};
@@ -35,7 +39,8 @@ export struct TaskStatusPanel {
   private items(): TaskStatusItem[] { return this.state.items.slice(this.pageIndex * 6, this.pageIndex * 6 + 6); }
   private label(item: TaskStatusItem): string {
     const title = item.operation?.preview?.task.title;
-    return title ?? `${item.kind === 'restore' ? '恢复未完成' : '标记完成'} · 任务 ${item.taskId}`;
+    const known = this.labels.find((label: TaskStatusLabel) => label.taskId === item.taskId);
+    return title ?? known?.title ?? `${item.kind === 'restore' ? '恢复未完成' : '标记完成'} · 名称暂未读取`;
   }
   private phaseLabel(item: TaskStatusItem): string {
     if (item.busy) { return '正在核对 / 保存，请稍候'; }
@@ -68,6 +73,14 @@ export struct TaskStatusPanel {
   private overlaps(preview: TaskStatusPreview): CourseOverlap[] { return preview.course_review.overlaps.slice(this.overlapPage * 6, this.overlapPage * 6 + 6); }
   private canOpenTask(item: TaskStatusItem): boolean { return this.active && !this.state.lockedTaskIds.includes(item.taskId); }
 
+  private toggleDetails(id: string): void {
+    if (!this.active || !this.state.items.some((item: TaskStatusItem) => item.operationId === id)) { return; }
+    this.expandedDetails = this.expandedDetails.includes(id) ? this.expandedDetails.filter((value: string) => value !== id) : this.expandedDetails.concat([id]);
+  }
+  private messageColor(item: TaskStatusItem): string {
+    return item.phase === 'applied' ? AppTheme.success : item.phase === 'cancelled' || item.busy ? AppTheme.secondary : AppTheme.warning;
+  }
+
   @Builder
   private Receipt(receipt: TaskStatusReceipt) {
     Column({ space: 8 }) {
@@ -77,7 +90,6 @@ export struct TaskStatusPanel {
         .fontSize(AppTheme.bodySize).fontColor(AppTheme.ink).width('100%')
       Text('这是该次操作的回执，当前任务可能已有后续修改；请打开任务查看最新内容。恢复不会删除专注记录，也不会还原旧标题、时间或地点。')
         .fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
-      Text(`回执编号：${receipt.operation_id}`).fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
     }.width('100%').padding(16).alignItems(HorizontalAlign.Start).backgroundColor(AppTheme.successSoft).borderRadius(AppTheme.cardRadius)
   }
 
@@ -146,7 +158,7 @@ export struct TaskStatusPanel {
                 Text(this.phaseLabel(item)).fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
               }.width('100%').alignItems(HorizontalAlign.Start)
             }.width('100%').constraintSize({ minHeight: 56 }).padding(12).backgroundColor(this.state.selectedId === item.operationId ? AppTheme.accentSoft : AppTheme.surface)
-              .borderRadius(AppTheme.controlRadius).onClick(() => this.onSelect(item.operationId))
+              .borderRadius(AppTheme.controlRadius).accessibilityText(`${this.label(item)}，${this.phaseLabel(item)}`).onClick(() => this.onSelect(item.operationId))
           }, (item: TaskStatusItem) => `${item.operationId}-${item.phase}`)
           if (this.state.items.length > 6) {
             Row({ space: 8 }) {
@@ -158,9 +170,14 @@ export struct TaskStatusPanel {
           ForEach(this.selectedItems(), (item: TaskStatusItem) => {
             Column({ space: 12 }) {
               Text(this.phaseLabel(item)).fontSize(AppTheme.sectionTitle).fontColor(item.phase === 'applied' ? AppTheme.success : AppTheme.ink).width('100%')
-              if (item.message.length > 0) { Text(item.message).fontSize(AppTheme.bodySize).fontColor(AppTheme.warning).width('100%').wordBreak(WordBreak.BREAK_WORD) }
+              if (item.message.length > 0) { Text(item.message).fontSize(AppTheme.bodySize).fontColor(this.messageColor(item)).width('100%').wordBreak(WordBreak.BREAK_WORD) }
               if (item.operation?.preview) { this.Preview(item, item.operation.preview) }
               if (item.operation?.receipt) { this.Receipt(item.operation.receipt) }
+              Button(this.expandedDetails.includes(item.operationId) ? '收起核对编号' : '查看核对编号').width('100%').constraintSize({ minHeight: 48 })
+                .fontColor(AppTheme.secondary).backgroundColor(Color.Transparent).onClick(() => this.toggleDetails(item.operationId))
+              if (this.expandedDetails.includes(item.operationId)) {
+                Text(`任务编号：${item.taskId}\n操作／回执编号：${item.operationId}`).fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+              }
               if (!item.busy && ['unknown', 'cleanup', 'retryable', 'review'].includes(item.phase)) {
                 Button('核对原操作结果').width('100%').constraintSize({ minHeight: 48 }).enabled(this.active).onClick(() => this.onCheck(item.operationId))
               }

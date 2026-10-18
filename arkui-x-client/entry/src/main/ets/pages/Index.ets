@@ -6,7 +6,7 @@ import { AuthResponse, UserProfile, PlanningTask, TaskStatusOperation, CourseAck
 import { CampusFlowApi } from '../services/CampusFlowApi';
 import { localDrafts } from '../services/LocalDrafts';
 import { DraftLease } from '../utils/DraftStore';
-import { TaskStatusController, TaskStatusState } from '../utils/TaskStatusController';
+import { TaskStatusController, TaskStatusState, TaskStatusItem } from '../utils/TaskStatusController';
 import { timetableOperationId } from '../utils/TimetableMaintenance';
 import { FocusController, FocusState, FocusLocalView, FocusPendingView, emptyFocusState } from '../utils/FocusController';
 import { localFocus } from '../services/LocalFocus';
@@ -15,7 +15,7 @@ import { FocusPage } from './FocusPage';
 import { ReviewPage } from './ReviewPage';
 import { ReviewPeriod } from '../model/ReviewModels';
 import { reviewRange } from '../utils/ReviewTime';
-import { TaskStatusPanel } from '../components/TaskStatusPanel';
+import { TaskStatusPanel, TaskStatusLabel } from '../components/TaskStatusPanel';
 import { localHistory } from '../services/LocalHistory';
 import { historyScope } from '../utils/LocalHistoryStore';
 import { AgentPage } from './AgentPage';
@@ -65,6 +65,8 @@ struct Index {
   private taskStatuses: TaskStatusController | null = null;
   @State private taskStatusState: TaskStatusState = { items: [], selectedId: '', lockedTaskIds: [], pendingCount: 0, message: '' };
   @State private taskStatusOpen: boolean = false;
+  @State private taskStatusLabels: TaskStatusLabel[] = [];
+  private taskStatusViewRevision: number = 0;
   @State private pendingLogoutConfirm: boolean = false;
   @State private pendingServiceUrl: string = '';
   private focusManager: FocusController | null = null;
@@ -289,7 +291,7 @@ struct Index {
   private resetTaskStatuses(): void {
     this.taskStatuses?.dispose(); this.taskStatuses = null;
     this.taskStatusState = { items: [], selectedId: '', lockedTaskIds: [], pendingCount: 0, message: '' };
-    this.taskStatusOpen = false; this.pendingLogoutConfirm = false;
+    this.taskStatusOpen = false; this.taskStatusLabels = []; this.taskStatusViewRevision++; this.pendingLogoutConfirm = false;
   }
 
   private configureTaskStatuses(): void {
@@ -309,17 +311,50 @@ struct Index {
 
   private async changeTaskStatus(task: PlanningTask): Promise<void> {
     if (!this.pageActive || !this.voiceForeground || this.token.length === 0) { return; }
-    this.taskStatusOpen = true;
-    if (this.taskStatuses === null) { this.configureTaskStatuses(); this.taskStatusOpen = true; }
+    if (this.taskStatuses === null) { this.configureTaskStatuses(); }
     if (this.taskStatuses === null) {
+      this.taskStatusOpen = true;
       this.taskStatusState = { items: [], selectedId: '', lockedTaskIds: [], pendingCount: 0,
         message: '本机恢复记录暂不可用，本次未提交。请先在个人设置恢复草稿保存。' }; return;
     }
-    await this.taskStatuses.begin(task, task.status === 'completed' ? 'restore' : 'complete');
+    // Titles only label this session's records; exact IDs and receipts still own all actions.
+    this.taskStatusLabels = this.taskStatusLabels.filter((item: TaskStatusLabel) => item.taskId !== task.task_id)
+      .concat([{ taskId: task.task_id, title: task.title }]);
+    const controller = this.taskStatuses; const account = this.authRevision;
+    const origin = this.navigation; const focus = this.focusPageOpen; const focusRevision = this.focusTaskRequestRevision;
+    const viewRevision = this.taskStatusViewRevision; const entry = this.reviewEntryRevision;
+    const kind = task.status === 'completed' ? 'restore' : 'complete';
+    if (kind === 'restore') { this.taskStatusOpen = true; }
+    const pending = controller.begin(task, kind);
+    const operationId = controller.snapshot().selectedId;
+    await pending;
+    if (!this.pageActive || !this.voiceForeground || account !== this.authRevision || controller !== this.taskStatuses ||
+      origin !== this.navigation || focus !== this.focusPageOpen || focusRevision !== this.focusTaskRequestRevision ||
+      viewRevision !== this.taskStatusViewRevision || entry !== this.reviewEntryRevision || this.reviewPageOpen) { return; }
+    const selected = this.taskStatusState.items.find((item: TaskStatusItem) => item.operationId === operationId && item.taskId === task.task_id);
+    // Successful completion stays on the current page with a persistent receipt entry.
+    // Unknown/failed results and recovery previews retain the full resolution path.
+    if (kind === 'complete' && this.taskStatusState.selectedId === operationId && (selected === undefined || selected.phase !== 'applied')) { this.taskStatusOpen = true; }
   }
+
+  private taskStatusBarLabel(): string {
+    if (this.taskStatusState.pendingCount > 0) {
+      return this.taskStatusState.items.some((item: TaskStatusItem) => item.busy) ?
+        `正在保存状态 · ${this.taskStatusState.pendingCount} 项处理中` : `${this.taskStatusState.pendingCount} 项完成 / 恢复结果待核对`;
+    }
+    if (this.taskStatusState.message.length > 0) { return '状态操作有提示 · 打开核对'; }
+    const items = this.taskStatusState.items;
+    const latest = items.length > 0 ? items[items.length - 1] : null;
+    if (latest?.phase === 'applied') { return latest.kind === 'complete' ? '这次完成已保存 · 查看记录' : '这次恢复已保存 · 查看记录'; }
+    if (latest?.phase === 'error' || items.length === 0 && this.taskStatusState.message.length > 0) { return '本次操作未完成 · 查看原因'; }
+    return '查看完成与恢复记录';
+  }
+
+  private closeTaskStatus(): void { this.taskStatusOpen = false; this.taskStatusViewRevision++; }
 
   private openTaskStatus(taskId: string = ''): void {
     if (!this.pageActive || this.token.length === 0) { return; }
+    this.taskStatusViewRevision++;
     const item = this.taskStatusState.items.find((item) => item.taskId === taskId && !['applied', 'cancelled', 'error'].includes(item.phase)) ??
       this.taskStatusState.items.find((item) => item.taskId === taskId);
     if (item !== undefined) { this.taskStatuses?.select(item.operationId); }
@@ -442,7 +477,7 @@ struct Index {
   }
 
   onBackPress(): boolean {
-    if (this.taskStatusOpen) { this.taskStatusOpen = false; return true; }
+    if (this.taskStatusOpen) { this.closeTaskStatus(); return true; }
     if (this.reviewPageOpen) { this.reviewBackRevision++; return true; }
     if (this.focusPageOpen) { this.closeFocus(); return true; }
     if (this.pendingLogoutConfirm) { this.pendingLogoutConfirm = false; this.pendingServiceUrl = ''; return true; }
@@ -830,13 +865,13 @@ struct Index {
           onOpenTask: (id: string) => { this.closeFocus(); this.openPlanDetails(id, ''); } })
       }
       if (this.taskStatusOpen) {
-        TaskStatusPanel({ state: this.taskStatusState, active: this.voiceForeground,
+        TaskStatusPanel({ state: this.taskStatusState, labels: this.taskStatusLabels, active: this.voiceForeground,
           onSelect: (id: string) => this.taskStatuses?.select(id),
           onCheck: (id: string) => this.taskStatuses?.check(id), onRetry: (id: string) => this.taskStatuses?.retry(id),
           onConfirm: (id: string, acks: CourseAcknowledgement[]) => this.taskStatuses?.confirm(acks, id),
           onCancel: (id: string) => this.taskStatuses?.cancel(id), onDismiss: (id: string) => this.taskStatuses?.dismiss(id),
-          onClose: () => this.taskStatusOpen = false,
-          onOpenTask: (id: string) => { this.taskStatusOpen = false; this.openPlanDetails(id, ''); } })
+          onClose: () => this.closeTaskStatus(),
+          onOpenTask: (id: string) => { this.closeTaskStatus(); this.openPlanDetails(id, ''); } })
           .width('100%').height('100%').backgroundColor(AppTheme.bg)
       }
     }.width('100%').height('100%')
@@ -932,8 +967,8 @@ struct Index {
             .width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize).fontColor(AppTheme.accent)
             .backgroundColor(AppTheme.accentSoft).onClick(() => this.openFocus())
         }
-        if (!this.focusPageOpen && !this.reviewPageOpen && !this.taskStatusOpen && this.taskStatusState.items.length > 0) {
-          Button(this.taskStatusState.pendingCount > 0 ? `${this.taskStatusState.pendingCount} 项完成 / 恢复结果待核对` : '查看本次完成 / 恢复记录')
+        if (!this.reviewPageOpen && !this.taskStatusOpen && (this.taskStatusState.items.length > 0 || this.taskStatusState.message.length > 0)) {
+          Button(this.taskStatusBarLabel())
             .width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize).fontColor(AppTheme.accent)
             .backgroundColor(AppTheme.accentSoft).onClick(() => this.openTaskStatus())
         }

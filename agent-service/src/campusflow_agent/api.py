@@ -1109,6 +1109,21 @@ def create_app(
         except Exception as exc:
             raise _deepseek_exception(exc) from exc
 
+    @app.get("/api/v1/onboarding/campus-data", response_model=CampusDataSnapshot)
+    async def onboarding_campus_data(
+        user: CurrentUser,
+        school: Annotated[str, Query(min_length=1, max_length=100)],
+        campus: Annotated[str, Query(min_length=1, max_length=100)],
+    ) -> CampusDataSnapshot:
+        # First-time users have no saved campus yet. Inspect the selected public
+        # reference package without prematurely changing their profile/CAS baseline.
+        if not campus_supported(school, campus):
+            raise CampusFlowError(
+                404, "当前学校或校区还没有可用的校园数据包。", "DATA_SCOPE_UNSUPPORTED"
+            )
+        snapshot = store.campus_data_snapshot(user.user_id)
+        return snapshot.model_copy(update={"corrections": []})
+
     @app.get("/api/v1/onboarding", response_model=OnboardingSnapshot)
     async def onboarding_snapshot(user: CurrentUser) -> OnboardingSnapshot:
         return timetable_service.onboarding_snapshot(user.user_id)

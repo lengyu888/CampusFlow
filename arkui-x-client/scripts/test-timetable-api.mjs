@@ -79,3 +79,10 @@ test('UX07 all subscription paths retain safe import codes without disclosing UR
  }}
  for(const code of ['UNKNOWN_IMPORT','<private>']) {const f=setup({responseCode:500,result:JSON.stringify({code,detail:'secret-url'})});await assert.rejects(f.client.previewSubscription('https://private/'),e=>e.code==='HTTP_ERROR'&&!e.message.includes('secret'));}
 });
+test('UX11 first-time campus lookup sends explicit selected scope through a read-only authenticated route',async()=>{
+ const f=setup();await f.client.onboardingCampusData('杭州电子科技大学','下沙校区');await f.client.onboardingCampusData('school&x=1','campus/a?b');await f.client.campusData();
+ assert.equal(f.calls[0].url,'https://fixture.invalid/api/v1/onboarding/campus-data?school='+encodeURIComponent('杭州电子科技大学')+'&campus='+encodeURIComponent('下沙校区'));
+ assert.equal(f.calls[1].url,'https://fixture.invalid/api/v1/onboarding/campus-data?school=school%26x%3D1&campus=campus%2Fa%3Fb');assert.equal(f.calls[2].url,'https://fixture.invalid/api/v1/campus-data');
+ assert(f.calls.every(c=>c.options.method==='GET'&&c.options.extraData===''&&c.options.header.Authorization==='Bearer token-a'));assert.equal(f.destroyed(),3);
+ const bad=setup({responseCode:404,result:JSON.stringify({code:'DATA_SCOPE_UNSUPPORTED',detail:'private-url'})});await assert.rejects(bad.client.onboardingCampusData('学校','校区'),e=>e.code==='DATA_SCOPE_UNSUPPORTED'&&!e.message.includes('private'));
+});

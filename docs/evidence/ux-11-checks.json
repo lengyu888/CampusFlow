@@ -1,0 +1,260 @@
+{
+  "stage": "UX11",
+  "backend": {
+    "passed": 943,
+    "deselected": 2,
+    "ruff": "passed"
+  },
+  "client": {
+    "tests": 1120,
+    "pass": 1119,
+    "fail": 0,
+    "skipped": 1
+  },
+  "skip_reason": "Existing Pure Java NativePolicy check needs unavailable JDK; no installation",
+  "static": "> check\n> node scripts/static-check.mjs\n\nArkUI-X 静态验收通过：91 个 ArkTS/TS 文件，21 个配置文件。\n已检查工程骨架、JSON 配置、相对导入、密钥泄漏、网络权限与 FastAPI 接口契约。",
+  "journey": {
+    "steps": 14,
+    "status": "passed",
+    "report": "ux-11-journey.json",
+    "boundary": "Actual ETS methods + native adapter shims + real ASGI/SQLite + scripted provider stream; no native rendering or real model."
+  },
+  "browser": {
+    "boundary": "Synthetic Web rendering; actual stripped ArkTS helpers/page methods; memory drivers and controlled synthetic gateways/clock. Not native compilation/device/model/performance validation.",
+    "checks": [
+      {
+        "name": "Current production source hashes and actual ASGI fixtures are embedded; native/model/network boundary explicit",
+        "passed": true
+      },
+      {
+        "name": "Successful completion keeps today visible and exposes durable receipt bar without a full-screen interruption",
+        "passed": true
+      },
+      {
+        "name": "Receipt details remain reachable by task title, with operation identifiers folded by default",
+        "passed": true
+      },
+      {
+        "name": "Unknown completion keeps an exact-task lock and performs GET-only recovery without repeating the write",
+        "passed": true
+      },
+      {
+        "name": "Restore requires a fresh exact course acknowledgement and preserves the later task title and time",
+        "passed": true
+      },
+      {
+        "name": "360px input remains above the explicit Web keyboard placeholder with meaningful focus",
+        "passed": true
+      },
+      {
+        "name": "Focus starts with no target and elapsed time advances while zero synced pieces do not masquerade as a second timer",
+        "passed": true
+      },
+      {
+        "name": "Pausing then ending needs explicit confirmation; recorded time never marks a task complete",
+        "passed": true
+      },
+      {
+        "name": "Successful focus message is neutral and complete source details are still explicitly reachable",
+        "passed": true
+      },
+      {
+        "name": "Review starts with at most three facts and a natural campus reading time, keeping raw ISO under evidence",
+        "passed": true
+      },
+      {
+        "name": "Optional private feeling is saved locally and is excluded from the assistant summary until separately opted in",
+        "passed": true
+      },
+      {
+        "name": "Reduced-motion preference is honored without hidden movement or native-performance claims",
+        "passed": true
+      },
+      {
+        "name": "Page switching protects the current note when storage fails; restoring storage permits the switch",
+        "passed": true
+      },
+      {
+        "name": "Self-contained web demo requests no external resource and has no browser runtime error",
+        "passed": true
+      }
+    ],
+    "sourceHashes": {
+      "DailyAgenda": "889b2115d924ba40cf55ee8835d1f1695fc3fa8b88061f717e450736d1ae4709",
+      "AgentFeedback": "7ed8420f310c3f318d050479b9df8484f4337f6b6bdbdec8c24b8e58c8dbaf0e",
+      "FocusDigest": "abc35ad919b4848188e8c252796851c51b45dbb4addc114a0b3044a02e42480a",
+      "FocusValidation": "e4f253589ed2622b926ff7176026750343792e8b34032ccdef5ae256b5060383",
+      "FocusTimer": "05ec726c071374e0f0962d7ba3eb984d62d77401ab41dd732a3981fef15b6cdc",
+      "FocusStore": "7a28b7d19fa2f3d12cec46750e8d79f3babafc6bde365e28cc364902b9ff6474",
+      "FocusController": "4ade357e57896b5e4b8593408114517258f70d9bc253cda44f330e0cd5e93fc5",
+      "ReviewTime": "59d49a2b5ad27fbdff83ecd6eebfdb843619f5fb65f3304379c71d14a3ef33a7",
+      "ReviewValidation": "95e562fd617f89d7d009d21f1f1b5f36b5ce04fb57ed0efc534907528422937f",
+      "ReviewSummary": "feb04a7c4e651ecddcb7180cab8d727bbd7acc356ad829506fcefa62873f9172",
+      "ReviewController": "29bb70de52d3325ecdbcdac3f9f917f0a2160149f183650bfcd440544c88b80f",
+      "DraftStore": "09b8d2ff403461f7a54a32b78619ab28f40ea711a349c3861277ca251ca9561a",
+      "LocalHistoryStore": "bf12ecde88c5a5ad4382518a27a15f8c6f9f2cab3b3ae8d3e919123295ddba10",
+      "PlanPresentation": "bc7b89a2eee9473a4f49817ec72fc75e6b5736a65ae9906bc2659d849b1e6a7a",
+      "TaskStatusValidation": "03c227d2714291d7942984cf325ff2b420a298e428d52c7a0e97fb27c410c170",
+      "TaskStatusController": "45533a8a249e69160bda220f237056b9321d9150bd0fd146acc1090d3b9e53bc",
+      "ReviewPage": "799fedbf67ec496403c39b20f82729f78976c303251026aa9c8872c9ab169aef",
+      "FocusPage": "92651dce87e363cc8bd85f97f4b3dc5a86ea59ebb5b3879c48c7fa5eb1ccbd90",
+      "TaskStatusPanel": "99f9f8cbf10451b40465065993b7d8b6ec1c8b0879e4b3e655b7aa04353f5b6f",
+      "Index": "b755063f03c6696c6d5cb8792bfc591af56b2232b2759256d0057d8811582e64",
+      "AppTheme": "1e0613f871e3209878d208709148992fcebff066fc4d8251086a7f09187ebb19"
+    },
+    "fixtureSha256": "071585e5c0ecb39b70e0c60c50d580927f4809d1021209c4aabadf2b045aabc9",
+    "htmlSha256": "875b5e6b926d79af146fc4a046c98eed530e386a4d950935f27c2962dfdb168f",
+    "assets": [
+      {
+        "name": "xj_review_empty",
+        "bytes": 1696770,
+        "sha256": "4bae2e30a628de9fa0a0f932fc3704463ded5ff73e5a3fd118f9c53afe6db090",
+        "width": 1536,
+        "height": 1024
+      },
+      {
+        "name": "xj_focus_entry",
+        "bytes": 1558531,
+        "sha256": "666ee6d10ee6c8e6a8a833072bbe250bfb0f83ad43a0b2ed482016c9d9ab9914",
+        "width": 1254,
+        "height": 1254
+      },
+      {
+        "name": "xj_focus_end",
+        "bytes": 1576293,
+        "sha256": "7a6d78908c17554f5baec2a9395ffef9f8d10da3cc508b60f59ac08866ab9fec",
+        "width": 1536,
+        "height": 1024
+      }
+    ],
+    "totalPngBytes": 4831594,
+    "htmlBytes": 6769186,
+    "htmlGzipBytes": 4863664,
+    "webLoad": {
+      "type": "navigate",
+      "domContentLoadedMs": 89.40000003576279,
+      "loadEventEndMs": 92,
+      "durationMs": 92,
+      "transport": "local file, warm host environment; one desktop Chrome observation, not a native benchmark"
+    },
+    "layouts": [
+      {
+        "name": "320-large-recovery",
+        "width": 320,
+        "height": 900,
+        "viewport": 320,
+        "document": 320,
+        "smallButtons": [],
+        "overflow": []
+      },
+      {
+        "name": "320-large-recovery",
+        "width": 320,
+        "height": 900,
+        "viewport": 320,
+        "document": 320,
+        "smallButtons": [],
+        "overflow": []
+      },
+      {
+        "name": "360-keyboard-input",
+        "width": 360,
+        "height": 800,
+        "viewport": 360,
+        "document": 360,
+        "smallButtons": [],
+        "overflow": []
+      },
+      {
+        "name": "390-focus-running",
+        "width": 390,
+        "height": 900,
+        "viewport": 390,
+        "document": 390,
+        "smallButtons": [],
+        "overflow": []
+      },
+      {
+        "name": "430-review",
+        "width": 430,
+        "height": 920,
+        "viewport": 430,
+        "document": 430,
+        "smallButtons": [],
+        "overflow": []
+      },
+      {
+        "name": "landscape-review",
+        "width": 844,
+        "height": 390,
+        "viewport": 844,
+        "document": 844,
+        "smallButtons": [],
+        "overflow": []
+      },
+      {
+        "name": "390-large-review",
+        "width": 390,
+        "height": 900,
+        "viewport": 390,
+        "document": 390,
+        "smallButtons": [],
+        "overflow": []
+      },
+      {
+        "name": "390-large-review",
+        "width": 390,
+        "height": 900,
+        "viewport": 390,
+        "document": 390,
+        "smallButtons": [],
+        "overflow": []
+      }
+    ],
+    "screenshots": [
+      "01-wide-success-stays-here.png",
+      "09-390-unknown-requires-check.png",
+      "02-320-large-fresh-course-ack.png",
+      "03-360-keyboard-placeholder.png",
+      "04-390-focus-one-timer.png",
+      "05-390-focus-end-light-receipt.png",
+      "06-430-three-facts-natural-time.png",
+      "07-landscape-summary.png",
+      "10-landscape-facts-viewport.png",
+      "08-390-large-summary.png"
+    ],
+    "consoleErrors": [],
+    "httpRequests": []
+  },
+  "accessibility": {
+    "report": "ux-11-accessibility-audit.json",
+    "native_certification": false
+  },
+  "visual_review": "Root inspected actual 320 large-type fresh course acknowledgement, 390 single focus timer, and landscape review captures; controls and evidence remain reachable. Independent reviewer also checked the focus running/end screens. Browser approximation only.",
+  "independent_review": "Verified same-process ASGI/SQLite journey and exact operation recovery. Fixed genuine first-user onboarding scope deadlock with an authenticated public-data read endpoint. Corrected draft-preservation proof to check newer revision survival without manually recreating it.",
+  "native_build": false,
+  "device_validation": false,
+  "real_model_calls": false,
+  "logs": [
+    {
+      "file": "ux11-backend-full.log",
+      "sha256": "60952a47872deb333c9554f7e178cba7d932822f19406a5ed4e7d76dac7fb53c"
+    },
+    {
+      "file": "ux11-backend-ruff.log",
+      "sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18"
+    },
+    {
+      "file": "ux11-client-full.log",
+      "sha256": "c78c700a2f7be2e2421bc005a684e5c517722f0bfab08a3b5f804635aaa4c47d"
+    },
+    {
+      "file": "ux11-static.log",
+      "sha256": "88b9864ec4566b8abc286d3171e994630237e98d5f99e0c787aa5b712b378dde"
+    },
+    {
+      "file": "ux11-journey-report.json",
+      "sha256": "6eac3130b689ec92987c5cc3d80225e68d66e41ad864c0ebbe50a521e7c88df1"
+    }
+  ]
+}

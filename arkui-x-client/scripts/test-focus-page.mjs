@@ -114,3 +114,17 @@ test('Entry initialization waits for focus file read and reports failure without
  const Ability=new Function('UIAbility','initializeLocalFocus','initializeLocalDrafts','initializeLocalHistory','AppStorage',stripTypeScriptTypes(source)+'\nreturn EntryAbility;')(class{},()=>pending.promise,async()=>{},async()=>{}, {setOrCreate:(key,value)=>stored.set(key,value)});
  const ability=new Ability();ability.context={filesDir:'/app-private'};ability.onWindowStageCreate({loadContent:v=>loaded.push(v)});await tick();assert.deepEqual(loaded,[]);pending.reject(Error('privatepath'));await tick();assert.deepEqual(loaded,['pages/Index']);assert.match(stored.get('localFocusError'),/原文件保留/);assert.doesNotMatch(stored.get('localFocusError'),/privatepath/);
 });
+
+test('selected record has one local headline and is excluded only by exact ID from other lists',()=>{
+ const current=local(),other=local({recordId:uuid(21),taskId:'task-b'}),record=focusRecord(current.recordId),second=focusRecord(other.recordId);const p=panel({...emptyFocusState(),phase:'ready',local:current,localRecords:[current,other],record,selectedRecordId:current.recordId,history:[record,second]});
+ assert.deepEqual(p.otherLocalRecords().map(r=>r.recordId),[other.recordId]);assert.deepEqual(p.otherHistoryRecords().map(r=>r.record_id),[other.recordId]);assert.equal(p.showStartCard(),false);assert.equal(p.detailExpanded,false);p.toggleRecordDetails(record.record_id);assert.equal(p.detailExpanded,true);p.state.record={...record,revision:2};p.stateChanged();assert.equal(p.detailExpanded,true);p.state.selectedRecordId=other.recordId;p.state.record=second;p.stateChanged();assert.equal(p.detailExpanded,false);p.toggleRecordDetails(record.record_id);assert.equal(p.detailExpanded,false);
+});
+test('unconfirmed zero is described as absent confirmed fragments without erasing the live timer',()=>{
+ const p=panel();assert.match(p.synchronizedLabel(local({elapsedMs:150000,confirmedElapsedMs:0})),/尚无已确认.*本机显示仍保留/);assert.doesNotMatch(p.synchronizedLabel(local({elapsedMs:150000,confirmedElapsedMs:0})),/已同步 0/);assert.match(p.synchronizedLabel(local({confirmedElapsedMs:60000})),/1:00.*不相加/);
+});
+test('successful receipt and cleanup messages are neutral while unknown and failures retain warnings',()=>{
+ const p=panel();p.state.message='这次记录操作已取得回执，当前记录将单独读取。';assert.equal(p.messageIsWarning(),false);p.state.message='结果尚待核对，请查询原编号。';assert.equal(p.messageIsWarning(),true);p.state.message='本机已结束计时；记录保存与任务完成分别核对。';assert.equal(p.messageIsWarning(),false);p.state.errorCode='NETWORK_ERROR';assert.equal(p.messageIsWarning(),true);p.state.errorCode='';p.notice='最新任务已经完成，不重复提交，也不会把它恢复为未完成。';assert.equal(p.noticeIsWarning(),false);p.notice='最新任务尚未核对成功，本次未提交完成状态；请重试。';assert.equal(p.noticeIsWarning(),true);
+});
+test('ended/detail views offer opt-in new recording instead of automatically repeating the start form',()=>{
+ const p=panel({...emptyFocusState(),phase:'ready',record:focusRecord(uuid(20),{state:'ended'})});assert.equal(p.showStartCard(),false);p.startExpanded=true;assert.equal(p.showStartCard(),true);p.state.record=null;p.startExpanded=false;assert.equal(p.showStartCard(),true);p.state.activeRecord=focusRecord(uuid(22));assert.equal(p.showStartCard(),false);
+});

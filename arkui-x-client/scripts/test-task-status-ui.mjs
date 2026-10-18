@@ -164,3 +164,31 @@ test('terminal preview copy distinguishes cancelled changes from historical appl
   assert.match(p.previewContext(item(appliedRestore(overlappingRestore()))),/当时.*不是当前任务快照/);
   assert.match(p.previewContext(item()),/保留当前任务内容/);
 });
+
+test('UX11 complete stays in place with persistent success entry; restore and unknown keep full resolution panel',async()=>{
+ const f=await fixture();await f.page.changeTaskStatus(statusTask());assert.equal(f.page.taskStatusOpen,false);assert.match(f.page.taskStatusBarLabel(),/完成已保存/);
+ assert.deepEqual(f.page.taskStatusLabels,[{taskId:'task-a',title:statusTask().title}]);
+ const p=panel(f.page.taskStatusState);p.labels=f.page.taskStatusLabels;assert.equal(p.label(p.selected()),statusTask().title);assert.deepEqual(p.expandedDetails,[]);p.toggleDetails(statusIds.complete);assert.deepEqual(p.expandedDetails,[statusIds.complete]);p.toggleDetails(statusIds.complete);assert.deepEqual(p.expandedDetails,[]);
+ await f.page.changeTaskStatus(completedTask());assert.equal(f.page.taskStatusOpen,true);assert.equal(f.page.taskStatusState.items.at(-1).phase,'review');
+ const unknown=await fixture({start:async()=>{throw Error('ambiguous')}});await unknown.page.changeTaskStatus(statusTask());assert.equal(unknown.page.taskStatusOpen,true);assert.match(unknown.page.taskStatusBarLabel(),/待核对/);
+});
+test('UX11 late completion never opens another view; two independent pending results retain exact receipt association',async()=>{
+ const waits={a:deferred(),b:deferred()};const f=await fixture({start:(id,request)=>{waits[id].request=request;return waits[id].promise;}});
+ const first=f.page.changeTaskStatus(statusTask({task_id:'a'}));await tick();const second=f.page.changeTaskStatus(statusTask({task_id:'b'}));await tick();
+ assert.equal(f.page.taskStatusOpen,false);assert.match(f.page.taskStatusBarLabel(),/2 项处理中/);
+ waits.a.resolve(completeOperation(statusTask({task_id:'a'}),waits.a.request));await first;assert.equal(f.page.taskStatusOpen,false);
+ f.page.navigation={...f.page.navigation,root:2};waits.b.reject(Error('unknown'));await second;assert.equal(f.page.taskStatusOpen,false);assert.match(f.page.taskStatusBarLabel(),/待核对/);
+ f.page.openTaskStatus('b');assert.equal(f.page.taskStatusOpen,true);assert.equal(f.page.taskStatusState.selectedId,waits.b.request.operation_id);
+});
+test('UX11 titles are presentation only, IDs remain exact and clearing the account removes cached labels',async()=>{
+ const f=await fixture();await f.page.changeTaskStatus(statusTask({title:'一样的标题'}));const p=panel(f.page.taskStatusState);p.labels=[{taskId:'unrelated',title:'另一个账号的内容'}];assert.doesNotMatch(p.label(p.selected()),/另一个账号/);
+ p.active=false;p.toggleDetails(statusIds.complete);assert.deepEqual(p.expandedDetails,[]);p.active=true;p.toggleDetails('absent');assert.deepEqual(p.expandedDetails,[]);
+ f.page.resetTaskStatuses();assert.deepEqual(f.page.taskStatusLabels,[]);assert.equal(f.page.taskStatusOpen,false);
+});
+test('UX11 closing the operation panel or opening another focus record prevents an old failure from reclaiming the screen',async()=>{
+ for(const route of ['status','focus']){const wait=deferred(),f=await fixture({start:()=>wait.promise});if(route==='focus')f.page.focusPageOpen=true;
+ const running=f.page.changeTaskStatus(statusTask());await tick();
+ if(route==='status'){f.page.openTaskStatus('task-a');assert.equal(f.page.onBackPress(),true);}else{f.page.closeFocus();f.page.openFocus(statusTask({task_id:'another'}));}
+ wait.reject(Error('ambiguous'));await running;assert.equal(f.page.taskStatusOpen,false);assert.equal(f.page.taskStatusState.items[0].phase,'unknown');assert.match(f.page.taskStatusBarLabel(),/待核对/);
+ }
+});

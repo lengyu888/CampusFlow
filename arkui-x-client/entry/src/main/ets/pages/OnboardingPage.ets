@@ -532,7 +532,7 @@ export struct OnboardingPage {
     const revision = ++this.requestRevision;
     this.loading = true; this.busyLabel = '正在读取校园地点…'; this.message = '';
     try {
-      const data = await new CampusFlowApi(baseUrl, token).campusData();
+      const data = await new CampusFlowApi(baseUrl, token).onboardingCampusData(this.school, this.campus);
       if (!this.finishCurrent(revision, lease, baseUrl, token)) { return; }
       const map = this.campusMap(data);
       if (map === null) { this.message = '校园地点数据缺失或校区不匹配，尚未提交。请稍后重试，课表草稿仍保留。'; return; }
@@ -540,7 +540,13 @@ export struct OnboardingPage {
         school: this.school, campus: this.campus, semester: semester, timetable: checked.entries, campusMap: map };
       this.loading = false;
       await this.submitFrozen();
-    } catch (error) { if (this.finishCurrent(revision, lease, baseUrl, token)) { this.message = this.failureMessage(error, false); } }
+    } catch (error) {
+      if (this.finishCurrent(revision, lease, baseUrl, token)) {
+        this.message = error instanceof CampusFlowRequestError && error.statusCode === 401 ? this.failureMessage(error, false) :
+          error instanceof CampusFlowRequestError && error.code === 'DATA_SCOPE_UNSUPPORTED' ? `${error.message}课表草稿仍保留。` :
+          '校园地点暂时无法读取，配置尚未提交。课表草稿仍保留，可稍后重试。';
+      }
+    }
     finally { if (this.finishCurrent(revision, lease, baseUrl, token)) { this.loading = false; this.busyLabel = ''; } }
   }
   private validReceipt(receipt: OnboardingSaveReceipt, submission: OnboardingSubmission): boolean {
