@@ -396,21 +396,19 @@ export struct OnboardingPage {
     this.importWarnings = [];
   }
 
-  private failureMessage(error: Error, saving: boolean): string {
-    if (error instanceof CampusFlowRequestError) {
-      if (!saving && error.code.startsWith('IMPORT_')) { return error.message; }
-      if (error.statusCode === 401) {
-        this.needsLogin = true;
-        return '登录已失效，请重新登录后继续；本机草稿按账号隔离，主动退出账号时会清除。';
-      }
-      if (error.statusCode === 422) {
-        return saving ? '课表未通过服务校验，请返回检查课程、学期和时间。草稿已保留。'
-          : '无法读取此订阅。请检查 HDUHelp 课表链接是否完整、有效，或改用手动录入。';
-      }
-      if (error.code === 'NETWORK_ERROR' || error.statusCode === 504 || error.statusCode === 408) {
-        return saving ? '暂时无法确认保存结果，草稿仍保留；请先核对原保存操作，不会自动重复提交。'
-          : '课表预览连接失败，请检查网络和服务地址后重试。现有草稿未改动。';
-      }
+  private failureMessage(statusCode: number, code: string, message: string, saving: boolean): string {
+    if (!saving && code.startsWith('IMPORT_')) { return message; }
+    if (statusCode === 401) {
+      this.needsLogin = true;
+      return '登录已失效，请重新登录后继续；本机草稿按账号隔离，主动退出账号时会清除。';
+    }
+    if (statusCode === 422) {
+      return saving ? '课表未通过服务校验，请返回检查课程、学期和时间。草稿已保留。'
+        : '无法读取此订阅。请检查 HDUHelp 课表链接是否完整、有效，或改用手动录入。';
+    }
+    if (code === 'NETWORK_ERROR' || statusCode === 504 || statusCode === 408) {
+      return saving ? '暂时无法确认保存结果，草稿仍保留；请先核对原保存操作，不会自动重复提交。'
+        : '课表预览连接失败，请检查网络和服务地址后重试。现有草稿未改动。';
     }
     return saving ? '暂时无法完成配置，已保留课表草稿，请稍后重试。'
       : '暂时无法读取课表预览，请稍后重试或手动录入。现有草稿未改动。';
@@ -438,7 +436,10 @@ export struct OnboardingPage {
       this.importWarnings = checked.sourceWarnings;
         this.notice = '这是只读预览，尚未保存或绑定订阅。核对后可加入待确认课表。';
     } catch (error) {
-      if (this.current(revision) && this.baseUrl === baseUrl && this.token === token) { this.message = this.failureMessage(error, false); }
+      if (this.current(revision) && this.baseUrl === baseUrl && this.token === token) {
+        this.message = error instanceof CampusFlowRequestError ?
+          this.failureMessage(error.statusCode, error.code, error.message, false) : this.failureMessage(0, '', '', false);
+      }
     } finally {
       if (this.current(revision)) { this.loading = false; this.busyLabel = ''; }
     }
@@ -536,13 +537,14 @@ export struct OnboardingPage {
       if (!this.finishCurrent(revision, lease, baseUrl, token)) { return; }
       const map = this.campusMap(data);
       if (map === null) { this.message = '校园地点数据缺失或校区不匹配，尚未提交。请稍后重试，课表草稿仍保留。'; return; }
-      this.submission = { operationId: timetableOperationId(), expectedRevision: expectedRevision,
+      const submission: OnboardingSubmission = { operationId: timetableOperationId(), expectedRevision: expectedRevision,
         school: this.school, campus: this.campus, semester: semester, timetable: checked.entries, campusMap: map };
+      this.submission = submission;
       this.loading = false;
       await this.submitFrozen();
     } catch (error) {
       if (this.finishCurrent(revision, lease, baseUrl, token)) {
-        this.message = error instanceof CampusFlowRequestError && error.statusCode === 401 ? this.failureMessage(error, false) :
+        this.message = error instanceof CampusFlowRequestError && error.statusCode === 401 ? this.failureMessage(error.statusCode, error.code, error.message, false) :
           error instanceof CampusFlowRequestError && error.code === 'DATA_SCOPE_UNSUPPORTED' ? `${error.message}课表草稿仍保留。` :
           '校园地点暂时无法读取，配置尚未提交。课表草稿仍保留，可稍后重试。';
       }

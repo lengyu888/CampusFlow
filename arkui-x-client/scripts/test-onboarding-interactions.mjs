@@ -6,7 +6,7 @@ import { test } from 'node:test';
 
 async function helperModule(name) {
   const source = readFileSync(new URL(`../entry/src/main/ets/utils/${name}.ets`, import.meta.url), 'utf8')
-    .replace(/^import \{[^\n]+\} from '\.\.\/model\/ApiModels';\r?\n/gm, '');
+    .replace(/^import \{[\s\S]*?\} from '(?:\.\.\/model\/ApiModels|\.\/OnboardingTimetable)';\r?\n/gm, '');
   return import(`data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(source)).toString('base64')}`);
 }
 const timetable = await helperModule('OnboardingTimetable');
@@ -713,4 +713,22 @@ test('UX07 all 500 diagnostic courses persist through the real draft store and o
 test('UX11 initial campus lookup uses selected fixed scope without requiring a previously saved profile',async()=>{
  const f=await fixture();readyToConfirm(f);await f.page.finish();const read=f.calls.find(c=>c.name==='onboardingCampusData');assert.deepEqual(read.args,['杭州电子科技大学','下沙校区']);assert.equal(f.completed.length,1);
  const bad=await fixture({onboardingCampusData:async()=>{throw new feedback.CampusFlowRequestError(404,'DATA_SCOPE_UNSUPPORTED','当前校区暂不支持。');}});readyToConfirm(bad);await bad.page.finish();assert.equal(bad.calls.some(c=>c.name==='completeOnboarding'),false);assert.match(bad.page.message,/校区.*草稿仍保留/);assert.deepEqual(bad.page.entries,[course()]);
+});
+
+test('campus lookup authentication and unknown failures preserve drafts without freezing or posting onboarding',async()=>{
+  for(const failure of [new feedback.CampusFlowRequestError(401,'LOGIN_REQUIRED','private diagnostic'),
+    new Error('private diagnostic'),{statusCode:401,code:'LOGIN_REQUIRED',message:'private diagnostic'}]) {
+    const f=await fixture({onboardingCampusData:async()=>{throw failure;}});
+    readyToConfirm(f);
+    const original=structuredClone(f.page.entries);
+    await f.page.finish();
+    assert.equal(f.page.needsLogin,failure instanceof feedback.CampusFlowRequestError);
+    assert.match(f.page.message,f.page.needsLogin ? /登录已失效/ : /校园地点暂时无法读取/);
+    assert.doesNotMatch(f.page.message,/private diagnostic/);
+    assert.deepEqual(f.page.entries,original);
+    assert.equal(f.page.submission,null);
+    assert.equal(f.page.loading,false);
+    assert.equal(f.calls.some(call=>call.name==='completeOnboarding'),false);
+    assert.deepEqual(f.completed,[]);
+  }
 });

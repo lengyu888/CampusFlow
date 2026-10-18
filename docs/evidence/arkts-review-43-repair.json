@@ -1,0 +1,1019 @@
+{
+  "source_review": "https://github.com/lengyu888/CampusFlow/pull/30#pullrequestreview-5562007111",
+  "source_commit": "4b759f88dd0de0507a999954a4da51a8b400284c",
+  "native_result": "ERROR:44 WARN:61; 43 detailed locations; no HAP",
+  "diagnostics": [
+    {
+      "number": 1,
+      "code": "10605030",
+      "message": "Structural typing is not supported (arkts-no-structural-typing)",
+      "file": "arkui-x-client/entry/src/main/ets/utils/DraftStore.ets",
+      "original_line": 594,
+      "original_column": 28,
+      "original_source": "const next = operation(item, scope);",
+      "repair": "DraftOperation 显式继承输入模型，原有复制和校验保留",
+      "evidence": [
+        {
+          "file": "arkui-x-client/entry/src/main/ets/utils/DraftStore.ets",
+          "lines": [
+            166
+          ],
+          "anchor": "export interface DraftOperation extends DraftOperationInput"
+        }
+      ],
+      "status": "source-repaired; native-recompile-pending"
+    },
+    {
+      "number": 2,
+      "code": "10605030",
+      "message": "Structural typing is not supported (arkts-no-structural-typing)",
+      "file": "arkui-x-client/entry/src/main/ets/utils/DraftStore.ets",
+      "original_line": 793,
+      "original_column": 94,
+      "original_source": "return this.document.operations.map((value: DraftOperation): DraftOperation => operation(value, lease.scope));",
+      "repair": "DraftOperation 显式继承输入模型，原有复制和校验保留",
+      "evidence": [
+        {
+          "file": "arkui-x-client/entry/src/main/ets/utils/DraftStore.ets",
+          "lines": [
+            166
+          ],
+          "anchor": "export interface DraftOperation extends DraftOperationInput"
+        }
+      ],
+      "status": "source-repaired; native-recompile-pending"
+    },
+    {
+      "number": 3,
+      "code": "10605030",
+      "message": "Structural typing is not supported (arkts-no-structural-typing)",
+      "file": "arkui-x-client/entry/src/main/ets/utils/AgentRun.ets",
+      "original_line": 310,
+      "original_column": 74,
+      "original_source": "this.state.message = error.code === 'RUN_DELETED' ? this.failure(error) : error.message; this.publish();",
+      "repair": "错误处理接收实际 Error / CampusFlowRequestError 联合类型",
+      "evidence": [
+        {
+          "file": "arkui-x-client/entry/src/main/ets/utils/AgentRun.ets",
+          "lines": [
+            183
+          ],
+          "anchor": "private failure(error: Error | CampusFlowRequestError)"
+        }
+      ],
+      "status": "source-repaired; native-recompile-pending"
+    },
+    {
+      "number": 4,
+      "code": "10605030",
+      "message": "Structural typing is not supported (arkts-no-structural-typing)",
+      "file": "arkui-x-client/entry/src/main/ets/utils/CourseReview.ets",
+      "original_line": 22,
+      "original_column": 70,
+      "original_source": "milestone.tasks.forEach((task: PendingTaskPreview) => tasks.push(task));",
+      "repair": "候选和已保存任务共用 PlanningTaskDraft，校验规则保留",
+      "evidence": [
+        {
+          "file": "arkui-x-client/entry/src/main/ets/model/ApiModels.ets",
+          "lines": [
+            165
+          ],
+          "anchor": "export type PendingTaskPreview = PlanningTaskDraft;"
+        },
+        {
+          "file": "arkui-x-client/entry/src/main/ets/model/ApiModels.ets",
+          "lines": [
+            423
+          ],
+          "anchor": "export interface PlanningTask extends PlanningTaskDraft"
+        }
+      ],
+      "status": "source-repaired; native-recompile-pending"
+    },
+    {
+      "number": 5,
+      "code": "10605030",
+      "message": "Structural typing is not supported (arkts-no-structural-typing)",
+      "file": "arkui-x-client/entry/src/main/ets/utils/ActionReliability.ets",
+      "original_line": 27,
+      "original_column": 16,
+      "original_source": "taskFields(value, false) && nullableText(value.plan_id) && nullableText(value.milestone_id) &&",
+      "repair": "候选和已保存任务共用 PlanningTaskDraft，校验规则保留",
+      "evidence": [
+        {
+          "file": "arkui-x-client/entry/src/main/ets/model/ApiModels.ets",
+          "lines": [
+            165
+          ],
+          "anchor": "export type PendingTaskPreview = PlanningTaskDraft;"
+        },
+        {
+          "file": "arkui-x-client/entry/src/main/ets/model/ApiModels.ets",
+          "lines": [
+            423
+          ],
+          "anchor": "export interface PlanningTask extends PlanningTaskDraft"
+        }
+      ],
+      "status": "source-repaired; native-recompile-pending"
+    },
+    {
+      "number": 6,
+      "code": "10605030",
+      "message": "Structural typing is not supported (arkts-no-structural-typing)",
+      "file": "arkui-x-client/entry/src/main/ets/utils/ActionReliability.ets",
+      "original_line": 32,
+      "original_column": 115,
+      "original_source": "return value !== undefined && value !== null && typeof value === 'object' && value.plan_id === id && planFields(value) &&",
+      "repair": "已保存计划显式继承 PlanningPlanDraft",
+      "evidence": [
+        {
+          "file": "arkui-x-client/entry/src/main/ets/model/ApiModels.ets",
+          "lines": [
+            503
+          ],
+          "anchor": "export interface PlanSummary extends PlanningPlanDraft"
+        }
+      ],
+      "status": "source-repaired; native-recompile-pending"
+    },
+    {
+      "number": 7,
+      "code": "10605030",
+      "message": "Structural typing is not supported (arkts-no-structural-typing)",
+      "file": "arkui-x-client/entry/src/main/ets/utils/ActionReliability.ets",
+      "original_line": 180,
+      "original_column": 20,
+      "original_source": "sameTaskFields(left, right) && left.task_version === right.task_version && left.task_id === right.task_id && left.plan_id === right.plan_id &&",
+      "repair": "候选和已保存任务共用 PlanningTaskDraft，校验规则保留",
+      "evidence": [
+        {
+          "file": "arkui-x-client/entry/src/main/ets/model/ApiModels.ets",
+          "lines": [
+            165
+          ],
+          "anchor": "export type PendingTaskPreview = PlanningTaskDraft;"
+        },
+        {
+          "file": "arkui-x-client/entry/src/main/ets/model/ApiModels.ets",
+          "lines": [
+            423
+          ],
+          "anchor": "export interface PlanningTask extends PlanningTaskDraft"
+        }
+      ],
+      "status": "source-repaired; native-recompile-pending"
+    },
+    {
+      "number": 8,
+      "code": "10605030",
+      "message": "Structural typing is not supported (arkts-no-structural-typing)",
+      "file": "arkui-x-client/entry/src/main/ets/utils/ActionReliability.ets",
+      "original_line": 180,
+      "original_column": 26,
+      "original_source": "sameTaskFields(left, right) && left.task_version === right.task_version && left.task_id === right.task_id && left.plan_id === right.plan_id &&",
+      "repair": "候选和已保存任务共用 PlanningTaskDraft，校验规则保留",
+      "evidence": [
+        {
+          "file": "arkui-x-client/entry/src/main/ets/model/ApiModels.ets",
+          "lines": [
+            165
+          ],
+          "anchor": "export type PendingTaskPreview = PlanningTaskDraft;"
+        },
+        {
+          "file": "arkui-x-client/entry/src/main/ets/model/ApiModels.ets",
+          "lines": [
+            423
+          ],
+          "anchor": "export interface PlanningTask extends PlanningTaskDraft"
+        }
+      ],
+      "status": "source-repaired; native-recompile-pending"
+    },
+    {
+      "number": 9,
+      "code": "10605030",
+      "message": "Structural typing is not supported (arkts-no-structural-typing)",
+      "file": "arkui-x-client/entry/src/main/ets/utils/ActionReliability.ets",
+      "original_line": 187,
+      "original_column": 20,
+      "original_source": "samePlanFields(left, right) && left.plan_id === right.plan_id && left.status === right.status &&",
+      "repair": "已保存计划显式继承 PlanningPlanDraft",
+      "evidence": [
+        {
+          "file": "arkui-x-client/entry/src/main/ets/model/ApiModels.ets",
+          "lines": [
+            503
+          ],
+          "anchor": "export interface PlanSummary extends PlanningPlanDraft"
+        }
+      ],
+      "status": "source-repaired; native-recompile-pending"
+    },
+    {
+      "number": 10,
+      "code": "10605030",
+      "message": "Structural typing is not supported (arkts-no-structural-typing)",
+      "file": "arkui-x-client/entry/src/main/ets/utils/ActionReliability.ets",
+      "original_line": 187,
+      "original_column": 26,
+      "original_source": "samePlanFields(left, right) && left.plan_id === right.plan_id && left.status === right.status &&",
+      "repair": "已保存计划显式继承 PlanningPlanDraft",
+      "evidence": [
+        {
+          "file": "arkui-x-client/entry/src/main/ets/model/ApiModels.ets",
+          "lines": [
+            503
+          ],
+          "anchor": "export interface PlanSummary extends PlanningPlanDraft"
+        }
+      ],
+      "status": "source-repaired; native-recompile-pending"
+    },
+    {
+      "number": 11,
+      "code": "10605030",
+      "message": "Structural typing is not supported (arkts-no-structural-typing)",
+      "file": "arkui-x-client/entry/src/main/ets/utils/ActionReliability.ets",
+      "original_line": 198,
+      "original_column": 86,
+      "original_source": "item.tasks.every((task: PendingTaskPreview, taskIndex: number) => sameTaskFields(task, right[index].tasks[taskIndex])));",
+      "repair": "候选和已保存任务共用 PlanningTaskDraft，校验规则保留",
+      "evidence": [
+        {
+          "file": "arkui-x-client/entry/src/main/ets/model/ApiModels.ets",
+          "lines": [
+            165
+          ],
+          "anchor": "export type PendingTaskPreview = PlanningTaskDraft;"
+        },
+        {
+          "file": "arkui-x-client/entry/src/main/ets/model/ApiModels.ets",
+          "lines": [
+            423
+          ],
+          "anchor": "export interface PlanningTask extends PlanningTaskDraft"
+        }
+      ],
+      "status": "source-repaired; native-recompile-pending"
+    },
+    {
+      "number": 12,
+      "code": "10605030",
+      "message": "Structural typing is not supported (arkts-no-structural-typing)",
+      "file": "arkui-x-client/entry/src/main/ets/utils/ActionReliability.ets",
+      "original_line": 198,
+      "original_column": 92,
+      "original_source": "item.tasks.every((task: PendingTaskPreview, taskIndex: number) => sameTaskFields(task, right[index].tasks[taskIndex])));",
+      "repair": "候选和已保存任务共用 PlanningTaskDraft，校验规则保留",
+      "evidence": [
+        {
+          "file": "arkui-x-client/entry/src/main/ets/model/ApiModels.ets",
+          "lines": [
+            165
+          ],
+          "anchor": "export type PendingTaskPreview = PlanningTaskDraft;"
+        },
+        {
+          "file": "arkui-x-client/entry/src/main/ets/model/ApiModels.ets",
+          "lines": [
+            423
+          ],
+          "anchor": "export interface PlanningTask extends PlanningTaskDraft"
+        }
+      ],
+      "status": "source-repaired; native-recompile-pending"
+    },
+    {
+      "number": 13,
+      "code": "10605030",
+      "message": "Structural typing is not supported (arkts-no-structural-typing)",
+      "file": "arkui-x-client/entry/src/main/ets/utils/PlanningReplan.ets",
+      "original_line": 273,
+      "original_column": 52,
+      "original_source": "this.state.message = rejected ? this.failure(error) : '未收到明确的改期结果，请先查询结果。不会自动重复提交。';",
+      "repair": "错误处理接收实际 Error / CampusFlowRequestError 联合类型",
+      "evidence": [
+        {
+          "file": "arkui-x-client/entry/src/main/ets/utils/PlanningReplan.ets",
+          "lines": [
+            165
+          ],
+          "anchor": "private failure(error: Error | CampusFlowRequestError)"
+        }
+      ],
+      "status": "source-repaired; native-recompile-pending"
+    },
+    {
+      "number": 14,
+      "code": "10605038",
+      "message": "Object literal must correspond to some explicitly declared class or interface (arkts-no-untyped-obj-literals)",
+      "file": "arkui-x-client/entry/src/main/ets/utils/TaskStatusController.ets",
+      "original_line": 164,
+      "original_column": 28,
+      "original_source": "const item = this.item({ scope: this.scope, taskId: task.task_id, request: request, intent: 'start', acknowledgements: [] });",
+      "repair": "先按操作种类复制持久化请求，再构造具名指针",
+      "evidence": [
+        {
+          "file": "arkui-x-client/entry/src/main/ets/utils/TaskStatusController.ets",
+          "lines": [
+            164
+          ],
+          "anchor": "const storedRequest: DraftTaskStatusRequest"
+        },
+        {
+          "file": "arkui-x-client/entry/src/main/ets/utils/TaskStatusController.ets",
+          "lines": [
+            168
+          ],
+          "anchor": "const pointer: DraftTaskStatusOperation"
+        }
+      ],
+      "status": "source-repaired; native-recompile-pending"
+    },
+    {
+      "number": 15,
+      "code": "10605030",
+      "message": "Structural typing is not supported (arkts-no-structural-typing)",
+      "file": "arkui-x-client/entry/src/main/ets/services/NativePlatformBridge.ets",
+      "original_line": 113,
+      "original_column": 24,
+      "original_source": "else { item.reject(new NativeBridgeError(error)); }",
+      "repair": "pending 拒绝回调参数使用实际 NativeBridgeError",
+      "evidence": [
+        {
+          "file": "arkui-x-client/entry/src/main/ets/services/NativePlatformBridge.ets",
+          "lines": [
+            58
+          ],
+          "anchor": "reject: (error: NativeBridgeError) => void;"
+        }
+      ],
+      "status": "source-repaired; native-recompile-pending"
+    },
+    {
+      "number": 16,
+      "code": "10605038",
+      "message": "Object literal must correspond to some explicitly declared class or interface (arkts-no-untyped-obj-literals)",
+      "file": "arkui-x-client/entry/src/main/ets/services/NativePlatformBridge.ets",
+      "original_line": 179,
+      "original_column": 77,
+      "original_source": "command.reminders = args.reminders.map((item: NativeReminderItem) => ({ id: item.id, fire_at_ms: item.fire_at_ms }));",
+      "repair": "提醒映射显式返回 NativeReminderItem",
+      "evidence": [
+        {
+          "file": "arkui-x-client/entry/src/main/ets/services/NativePlatformBridge.ets",
+          "lines": [
+            179
+          ],
+          "anchor": "map((item: NativeReminderItem): NativeReminderItem"
+        }
+      ],
+      "status": "source-repaired; native-recompile-pending"
+    },
+    {
+      "number": 17,
+      "code": "10605038",
+      "message": "Object literal must correspond to some explicitly declared class or interface (arkts-no-untyped-obj-literals)",
+      "file": "arkui-x-client/entry/src/main/ets/components/TaskStatusPanel.ets",
+      "original_line": 71,
+      "original_column": 96,
+      "original_source": "this.onConfirm(current.operationId, this.selectedAcks.map((ack: CourseAcknowledgement) => ({ candidate_id: ack.candidate_id, review_digest: ack.review_digest })));",
+      "repair": "确认回调复制项显式返回 CourseAcknowledgement",
+      "evidence": [
+        {
+          "file": "arkui-x-client/entry/src/main/ets/components/TaskStatusPanel.ets",
+          "lines": [
+            71
+          ],
+          "anchor": "map((ack: CourseAcknowledgement): CourseAcknowledgement"
+        }
+      ],
+      "status": "source-repaired; native-recompile-pending"
+    },
+    {
+      "number": 18,
+      "code": "10605030",
+      "message": "Structural typing is not supported (arkts-no-structural-typing)",
+      "file": "arkui-x-client/entry/src/main/ets/services/NativeBridgeVoiceDriver.ets",
+      "original_line": 48,
+      "original_column": 44,
+      "original_source": "else { events.onError(voiceFailure(new NativeBridgeError(event.code ?? 'SYSTEM_ERROR')).message); }",
+      "repair": "语音错误处理接收实际 Error / NativeBridgeError 联合类型",
+      "evidence": [
+        {
+          "file": "arkui-x-client/entry/src/main/ets/services/NativeBridgeVoiceDriver.ets",
+          "lines": [
+            4
+          ],
+          "anchor": "function voiceFailure(error: Error | NativeBridgeError)"
+        }
+      ],
+      "status": "source-repaired; native-recompile-pending"
+    },
+    {
+      "number": 19,
+      "code": "10605030",
+      "message": "Structural typing is not supported (arkts-no-structural-typing)",
+      "file": "arkui-x-client/entry/src/main/ets/services/NativeBridgeVoiceDriver.ets",
+      "original_line": 56,
+      "original_column": 44,
+      "original_source": "else { events.onError(voiceFailure(new NativeBridgeError(event.code ?? 'SYSTEM_ERROR')).message); }",
+      "repair": "语音错误处理接收实际 Error / NativeBridgeError 联合类型",
+      "evidence": [
+        {
+          "file": "arkui-x-client/entry/src/main/ets/services/NativeBridgeVoiceDriver.ets",
+          "lines": [
+            4
+          ],
+          "anchor": "function voiceFailure(error: Error | NativeBridgeError)"
+        }
+      ],
+      "status": "source-repaired; native-recompile-pending"
+    },
+    {
+      "number": 20,
+      "code": "10605038",
+      "message": "Object literal must correspond to some explicitly declared class or interface (arkts-no-untyped-obj-literals)",
+      "file": "arkui-x-client/entry/src/main/ets/pages/AgentPage.ets",
+      "original_line": 310,
+      "original_column": 75,
+      "original_source": "this.savedMessages = context?.messages.map((item: HistoryMessage) => ({ role: item.role, content: item.content, created_at: item.created_at })) ?? [];",
+      "repair": "历史消息映射显式返回 HistoryMessage，保留复制",
+      "evidence": [
+        {
+          "file": "arkui-x-client/entry/src/main/ets/pages/AgentPage.ets",
+          "lines": [
+            310,
+            360,
+            674
+          ],
+          "anchor": "map((item: HistoryMessage): HistoryMessage"
+        }
+      ],
+      "status": "source-repaired; native-recompile-pending"
+    },
+    {
+      "number": 21,
+      "code": "10605038",
+      "message": "Object literal must correspond to some explicitly declared class or interface (arkts-no-untyped-obj-literals)",
+      "file": "arkui-x-client/entry/src/main/ets/pages/AgentPage.ets",
+      "original_line": 311,
+      "original_column": 86,
+      "original_source": "this.messages = this.savedMessages.map((item: HistoryMessage, index: number) => ({",
+      "repair": "会话映射显式返回 ConversationEntry",
+      "evidence": [
+        {
+          "file": "arkui-x-client/entry/src/main/ets/pages/AgentPage.ets",
+          "lines": [
+            311
+          ],
+          "anchor": "map((item: HistoryMessage, index: number): ConversationEntry"
+        }
+      ],
+      "status": "source-repaired; native-recompile-pending"
+    },
+    {
+      "number": 22,
+      "code": "10605038",
+      "message": "Object literal must correspond to some explicitly declared class or interface (arkts-no-untyped-obj-literals)",
+      "file": "arkui-x-client/entry/src/main/ets/pages/AgentPage.ets",
+      "original_line": 360,
+      "original_column": 74,
+      "original_source": "this.savedMessages = context.messages.map((item: HistoryMessage) => ({ role: item.role, content: item.content, created_at: item.created_at }));",
+      "repair": "历史消息映射显式返回 HistoryMessage，保留复制",
+      "evidence": [
+        {
+          "file": "arkui-x-client/entry/src/main/ets/pages/AgentPage.ets",
+          "lines": [
+            310,
+            360,
+            674
+          ],
+          "anchor": "map((item: HistoryMessage): HistoryMessage"
+        }
+      ],
+      "status": "source-repaired; native-recompile-pending"
+    },
+    {
+      "number": 23,
+      "code": "10605030",
+      "message": "Structural typing is not supported (arkts-no-structural-typing)",
+      "file": "arkui-x-client/entry/src/main/ets/pages/AgentPage.ets",
+      "original_line": 530,
+      "original_column": 84,
+      "original_source": "if (operation.runRequest !== null) { await this.runController().recoverRequest(operation.runRequest); }",
+      "repair": "草稿运行请求复用 API RunStartRequest 类型",
+      "evidence": [
+        {
+          "file": "arkui-x-client/entry/src/main/ets/utils/DraftStore.ets",
+          "lines": [
+            121
+          ],
+          "anchor": "export type DraftRunRequest = RunStartRequest;"
+        }
+      ],
+      "status": "source-repaired; native-recompile-pending"
+    },
+    {
+      "number": 24,
+      "code": "10605038",
+      "message": "Object literal must correspond to some explicitly declared class or interface (arkts-no-untyped-obj-literals)",
+      "file": "arkui-x-client/entry/src/main/ets/pages/AgentPage.ets",
+      "original_line": 675,
+      "original_column": 10,
+      "original_source": "({ role: item.role, content: item.content, created_at: item.created_at }));",
+      "repair": "历史消息映射显式返回 HistoryMessage，保留复制",
+      "evidence": [
+        {
+          "file": "arkui-x-client/entry/src/main/ets/pages/AgentPage.ets",
+          "lines": [
+            310,
+            360,
+            674
+          ],
+          "anchor": "map((item: HistoryMessage): HistoryMessage"
+        }
+      ],
+      "status": "source-repaired; native-recompile-pending"
+    },
+    {
+      "number": 25,
+      "code": "10605038",
+      "message": "Object literal must correspond to some explicitly declared class or interface (arkts-no-untyped-obj-literals)",
+      "file": "arkui-x-client/entry/src/main/ets/pages/AgentPage.ets",
+      "original_line": 1328,
+      "original_column": 8,
+      "original_source": "({ candidate_id: task.candidate_id ?? '', allow_during_course: task.allow_during_course ?? false }));",
+      "repair": "课内许可映射显式返回 CoursePermissionChoice",
+      "evidence": [
+        {
+          "file": "arkui-x-client/entry/src/main/ets/pages/AgentPage.ets",
+          "lines": [
+            1327
+          ],
+          "anchor": "map((task: PlanningTaskDraft): CoursePermissionChoice"
+        }
+      ],
+      "status": "source-repaired; native-recompile-pending"
+    },
+    {
+      "number": 26,
+      "code": "10605999",
+      "message": "Argument of type 'TimetableEntry | null' is not assignable to parameter of type 'TimetableEntry'.\n  Type 'null' is not assignable to type 'TimetableEntry'.",
+      "file": "arkui-x-client/entry/src/main/ets/utils/TimetableImportReview.ets",
+      "original_line": 63,
+      "original_column": 17,
+      "original_source": "if (!rawEntry(row.entry) || hasError) { return false; }",
+      "repair": "源课程先使用局部值排除 null，再保留字段及身份验证",
+      "evidence": [
+        {
+          "file": "arkui-x-client/entry/src/main/ets/utils/TimetableImportReview.ets",
+          "lines": [
+            63,
+            253
+          ],
+          "anchor": "const entry = row.entry;"
+        },
+        {
+          "file": "arkui-x-client/entry/src/main/ets/utils/TimetableImportReview.ets",
+          "lines": [
+            64
+          ],
+          "anchor": "if (entry === null || !rawEntry(entry) || hasError)"
+        }
+      ],
+      "status": "source-repaired; native-recompile-pending"
+    },
+    {
+      "number": 27,
+      "code": "10605999",
+      "message": "Argument of type 'TimetableEntry | null' is not assignable to parameter of type 'TimetableEntry'.\n  Type 'null' is not assignable to type 'TimetableEntry'.",
+      "file": "arkui-x-client/entry/src/main/ets/utils/TimetableImportReview.ets",
+      "original_line": 65,
+      "original_column": 64,
+      "original_source": "return checked.valid && identity(checked.entry) === identity(row.entry);",
+      "repair": "源课程先使用局部值排除 null，再保留字段及身份验证",
+      "evidence": [
+        {
+          "file": "arkui-x-client/entry/src/main/ets/utils/TimetableImportReview.ets",
+          "lines": [
+            63,
+            253
+          ],
+          "anchor": "const entry = row.entry;"
+        },
+        {
+          "file": "arkui-x-client/entry/src/main/ets/utils/TimetableImportReview.ets",
+          "lines": [
+            64
+          ],
+          "anchor": "if (entry === null || !rawEntry(entry) || hasError)"
+        }
+      ],
+      "status": "source-repaired; native-recompile-pending"
+    },
+    {
+      "number": 28,
+      "code": "10605999",
+      "message": "'value.source_event_count' is possibly 'undefined'.",
+      "file": "arkui-x-client/entry/src/main/ets/utils/TimetableImportReview.ets",
+      "original_line": 94,
+      "original_column": 52,
+      "original_source": "!Number.isInteger(value.source_event_count) || value.source_event_count < 1 || value.source_event_count > 500 ||",
+      "repair": "来源计数局部值先做 number 收窄并保持整数及范围校验",
+      "evidence": [
+        {
+          "file": "arkui-x-client/entry/src/main/ets/utils/TimetableImportReview.ets",
+          "lines": [
+            94
+          ],
+          "anchor": "const sourceCount = value.source_event_count;"
+        },
+        {
+          "file": "arkui-x-client/entry/src/main/ets/utils/TimetableImportReview.ets",
+          "lines": [
+            96
+          ],
+          "anchor": "typeof sourceCount !== 'number'"
+        }
+      ],
+      "status": "source-repaired; native-recompile-pending"
+    },
+    {
+      "number": 29,
+      "code": "10605999",
+      "message": "'value.source_event_count' is possibly 'undefined'.",
+      "file": "arkui-x-client/entry/src/main/ets/utils/TimetableImportReview.ets",
+      "original_line": 94,
+      "original_column": 84,
+      "original_source": "!Number.isInteger(value.source_event_count) || value.source_event_count < 1 || value.source_event_count > 500 ||",
+      "repair": "来源计数局部值先做 number 收窄并保持整数及范围校验",
+      "evidence": [
+        {
+          "file": "arkui-x-client/entry/src/main/ets/utils/TimetableImportReview.ets",
+          "lines": [
+            94
+          ],
+          "anchor": "const sourceCount = value.source_event_count;"
+        },
+        {
+          "file": "arkui-x-client/entry/src/main/ets/utils/TimetableImportReview.ets",
+          "lines": [
+            96
+          ],
+          "anchor": "typeof sourceCount !== 'number'"
+        }
+      ],
+      "status": "source-repaired; native-recompile-pending"
+    },
+    {
+      "number": 30,
+      "code": "10605038",
+      "message": "Object literal must correspond to some explicitly declared class or interface (arkts-no-untyped-obj-literals)",
+      "file": "arkui-x-client/entry/src/main/ets/pages/OnboardingPage.ets",
+      "original_line": 145,
+      "original_column": 12,
+      "original_source": "return { school: this.school, campus: this.campus, step: this.step, semester: this.semester, entries: this.entries,",
+      "repair": "草稿课程及导入问题复用录课具名类型",
+      "evidence": [
+        {
+          "file": "arkui-x-client/entry/src/main/ets/utils/DraftStore.ets",
+          "lines": [
+            9
+          ],
+          "anchor": "export type DraftCourse = TimetableEntry;"
+        },
+        {
+          "file": "arkui-x-client/entry/src/main/ets/utils/DraftStore.ets",
+          "lines": [
+            11
+          ],
+          "anchor": "export type DraftIssue = TimetableIssue;"
+        }
+      ],
+      "status": "source-repaired; native-recompile-pending"
+    },
+    {
+      "number": 31,
+      "code": "10605030",
+      "message": "Structural typing is not supported (arkts-no-structural-typing)",
+      "file": "arkui-x-client/entry/src/main/ets/pages/OnboardingPage.ets",
+      "original_line": 202,
+      "original_column": 35,
+      "original_source": "this.entries = draft.entries; this.editor = draft.editor; this.editorOpen = draft.editorOpen;",
+      "repair": "草稿课程及导入问题复用录课具名类型",
+      "evidence": [
+        {
+          "file": "arkui-x-client/entry/src/main/ets/utils/DraftStore.ets",
+          "lines": [
+            9
+          ],
+          "anchor": "export type DraftCourse = TimetableEntry;"
+        },
+        {
+          "file": "arkui-x-client/entry/src/main/ets/utils/DraftStore.ets",
+          "lines": [
+            11
+          ],
+          "anchor": "export type DraftIssue = TimetableIssue;"
+        }
+      ],
+      "status": "source-repaired; native-recompile-pending"
+    },
+    {
+      "number": 32,
+      "code": "10605038",
+      "message": "Object literal must correspond to some explicitly declared class or interface (arkts-no-untyped-obj-literals)",
+      "file": "arkui-x-client/entry/src/main/ets/pages/OnboardingPage.ets",
+      "original_line": 539,
+      "original_column": 25,
+      "original_source": "this.submission = { operationId: timetableOperationId(), expectedRevision: expectedRevision,",
+      "repair": "冻结提交先构造具名 OnboardingSubmission",
+      "evidence": [
+        {
+          "file": "arkui-x-client/entry/src/main/ets/pages/OnboardingPage.ets",
+          "lines": [
+            540
+          ],
+          "anchor": "const submission: OnboardingSubmission"
+        }
+      ],
+      "status": "source-repaired; native-recompile-pending"
+    },
+    {
+      "number": 33,
+      "code": "10605030",
+      "message": "Structural typing is not supported (arkts-no-structural-typing)",
+      "file": "arkui-x-client/entry/src/main/ets/pages/OnboardingPage.ets",
+      "original_line": 545,
+      "original_column": 114,
+      "original_source": "this.message = error instanceof CampusFlowRequestError && error.statusCode === 401 ? this.failureMessage(error, false) :",
+      "repair": "错误提示改为原始状态/错误码/消息字段传参",
+      "evidence": [
+        {
+          "file": "arkui-x-client/entry/src/main/ets/pages/OnboardingPage.ets",
+          "lines": [
+            399
+          ],
+          "anchor": "private failureMessage(statusCode: number, code: string, message: string, saving: boolean)"
+        }
+      ],
+      "status": "source-repaired; native-recompile-pending"
+    },
+    {
+      "number": 34,
+      "code": "10605030",
+      "message": "Structural typing is not supported (arkts-no-structural-typing)",
+      "file": "arkui-x-client/entry/src/main/ets/pages/OnboardingPage.ets",
+      "original_line": 599,
+      "original_column": 52,
+      "original_source": "submission.semester, submission.timetable, submission.campusMap, submission.operationId, submission.expectedRevision);",
+      "repair": "草稿校园地图及地点复用 API 模型",
+      "evidence": [
+        {
+          "file": "arkui-x-client/entry/src/main/ets/utils/DraftStore.ets",
+          "lines": [
+            15
+          ],
+          "anchor": "export type DraftCampusMap = CampusMapSummary;"
+        },
+        {
+          "file": "arkui-x-client/entry/src/main/ets/utils/DraftStore.ets",
+          "lines": [
+            13
+          ],
+          "anchor": "export type DraftCampusPlace = CampusPlaceImport;"
+        }
+      ],
+      "status": "source-repaired; native-recompile-pending"
+    },
+    {
+      "number": 35,
+      "code": "10605030",
+      "message": "Structural typing is not supported (arkts-no-structural-typing)",
+      "file": "arkui-x-client/entry/src/main/ets/components/PlanningActionPanel.ets",
+      "original_line": 81,
+      "original_column": 105,
+      "original_source": "if (action.before_task !== undefined && action.before_task !== null) { this.TaskFields('变更前', action.before_task) }",
+      "repair": "候选和已保存任务共用 PlanningTaskDraft，校验规则保留",
+      "evidence": [
+        {
+          "file": "arkui-x-client/entry/src/main/ets/model/ApiModels.ets",
+          "lines": [
+            165
+          ],
+          "anchor": "export type PendingTaskPreview = PlanningTaskDraft;"
+        },
+        {
+          "file": "arkui-x-client/entry/src/main/ets/model/ApiModels.ets",
+          "lines": [
+            423
+          ],
+          "anchor": "export interface PlanningTask extends PlanningTaskDraft"
+        }
+      ],
+      "status": "source-repaired; native-recompile-pending"
+    },
+    {
+      "number": 36,
+      "code": "10605030",
+      "message": "Structural typing is not supported (arkts-no-structural-typing)",
+      "file": "arkui-x-client/entry/src/main/ets/components/PlanningActionPanel.ets",
+      "original_line": 83,
+      "original_column": 36,
+      "original_source": "this.PlanFields('变更前', action.before_plan)",
+      "repair": "已保存计划显式继承 PlanningPlanDraft",
+      "evidence": [
+        {
+          "file": "arkui-x-client/entry/src/main/ets/model/ApiModels.ets",
+          "lines": [
+            503
+          ],
+          "anchor": "export interface PlanSummary extends PlanningPlanDraft"
+        }
+      ],
+      "status": "source-repaired; native-recompile-pending"
+    },
+    {
+      "number": 37,
+      "code": "10605038",
+      "message": "Object literal must correspond to some explicitly declared class or interface (arkts-no-untyped-obj-literals)",
+      "file": "arkui-x-client/entry/src/main/ets/pages/PlanCenterPage.ets",
+      "original_line": 604,
+      "original_column": 60,
+      "original_source": "return this.week().days.map((day: PlanningWeekDay) => ({ key: day.date, day: Number(day.date.substring(8)), date: day.date,",
+      "repair": "日历日期映射显式返回 CalendarDay",
+      "evidence": [
+        {
+          "file": "arkui-x-client/entry/src/main/ets/pages/PlanCenterPage.ets",
+          "lines": [
+            604
+          ],
+          "anchor": "map((day: PlanningWeekDay): CalendarDay"
+        }
+      ],
+      "status": "source-repaired; native-recompile-pending"
+    },
+    {
+      "number": 38,
+      "code": "10605038",
+      "message": "Object literal must correspond to some explicitly declared class or interface (arkts-no-untyped-obj-literals)",
+      "file": "arkui-x-client/entry/src/main/ets/pages/TimetablePage.ets",
+      "original_line": 163,
+      "original_column": 12,
+      "original_source": "return { baselineEntries: snapshot.baselineEntries, expectedRevision: snapshot.expectedRevision,",
+      "repair": "冻结提交先构造具名 TimetableSubmission",
+      "evidence": [
+        {
+          "file": "arkui-x-client/entry/src/main/ets/pages/TimetablePage.ets",
+          "lines": [
+            166
+          ],
+          "anchor": "const frozen: TimetableSubmission"
+        }
+      ],
+      "status": "source-repaired; native-recompile-pending"
+    },
+    {
+      "number": 39,
+      "code": "10605038",
+      "message": "Object literal must correspond to some explicitly declared class or interface (arkts-no-untyped-obj-literals)",
+      "file": "arkui-x-client/entry/src/main/ets/utils/AppNavigation.ets",
+      "original_line": 28,
+      "original_column": 59,
+      "original_source": "stacks: state.stacks.map((stack: NavigationStack) => ({ root: stack.root, routes: stack.routes.slice() }))",
+      "repair": "导航快照及同类映射显式返回 NavigationStack",
+      "evidence": [
+        {
+          "file": "arkui-x-client/entry/src/main/ets/utils/AppNavigation.ets",
+          "lines": [
+            28,
+            42,
+            52,
+            64
+          ],
+          "anchor": "map((stack: NavigationStack): NavigationStack"
+        }
+      ],
+      "status": "source-repaired; native-recompile-pending"
+    },
+    {
+      "number": 40,
+      "code": "10505001",
+      "message": "Property 'background' in type 'FeedbackPanel' is not assignable to the same property in base type 'CustomComponent'.\n  Type '() => string' is not assignable to type '(content: ResourceColor | CustomBuilder, options?: BackgroundOptions) => CommonAttribute'.\n    Type 'string' is not assignable to type 'CommonAttribute'.",
+      "file": "arkui-x-client/entry/src/main/ets/components/FeedbackPanel.ets",
+      "original_line": 21,
+      "original_column": 11,
+      "original_source": "private background(): string {",
+      "repair": "私有背景 helper 改名避免覆盖系统属性",
+      "evidence": [
+        {
+          "file": "arkui-x-client/entry/src/main/ets/components/FeedbackPanel.ets",
+          "lines": [
+            21
+          ],
+          "anchor": "private panelBackground(): string"
+        }
+      ],
+      "status": "source-repaired; native-recompile-pending"
+    },
+    {
+      "number": 41,
+      "code": "10505001",
+      "message": "Property 'borderColor' in type 'FeedbackPanel' is not assignable to the same property in base type 'CustomComponent'.\n  Type '() => string' is not assignable to type '(value: ResourceColor | EdgeColors | LocalizedEdgeColors) => CommonAttribute'.\n    Type 'string' is not assignable to type 'CommonAttribute'.",
+      "file": "arkui-x-client/entry/src/main/ets/components/FeedbackPanel.ets",
+      "original_line": 28,
+      "original_column": 11,
+      "original_source": "private borderColor(): string {",
+      "repair": "私有边框 helper 改名避免覆盖系统属性",
+      "evidence": [
+        {
+          "file": "arkui-x-client/entry/src/main/ets/components/FeedbackPanel.ets",
+          "lines": [
+            28
+          ],
+          "anchor": "private panelBorderColor(): string"
+        }
+      ],
+      "status": "source-repaired; native-recompile-pending"
+    },
+    {
+      "number": 42,
+      "code": "10505001",
+      "message": "Property 'enabled' in type 'CourseReviewPanel' is not assignable to the same property in base type 'CustomComponent'.\n  Type 'boolean' is not assignable to type '(value: boolean) => CommonAttribute'.",
+      "file": "arkui-x-client/entry/src/main/ets/components/CourseReviewPanel.ets",
+      "original_line": 10,
+      "original_column": 9,
+      "original_source": "@Prop enabled: boolean = true;",
+      "repair": "Prop 更名 reviewEnabled，全部调用及按钮保留禁用条件",
+      "evidence": [
+        {
+          "file": "arkui-x-client/entry/src/main/ets/components/CourseReviewPanel.ets",
+          "lines": [
+            10
+          ],
+          "anchor": "@Prop reviewEnabled: boolean = true;"
+        },
+        {
+          "file": "arkui-x-client/entry/src/main/ets/pages/AgentPage.ets",
+          "lines": [
+            2429
+          ],
+          "anchor": "reviewEnabled: this.decisionId.length === 0"
+        },
+        {
+          "file": "arkui-x-client/entry/src/main/ets/components/PlanningActionPanel.ets",
+          "lines": [
+            108
+          ],
+          "anchor": "reviewEnabled: this.active"
+        }
+      ],
+      "status": "source-repaired; native-recompile-pending"
+    },
+    {
+      "number": 43,
+      "code": "10505001",
+      "message": "Cannot find name 'AgendaRow'.",
+      "file": "arkui-x-client/entry/src/main/ets/pages/PlanCenterPage.ets",
+      "original_line": 852,
+      "original_column": 30,
+      "original_source": "agenda.rows.some((row: AgendaRow) => row.taskId === task.task_id) ||",
+      "repair": "显式导入已经导出的 AgendaRow",
+      "evidence": [
+        {
+          "file": "arkui-x-client/entry/src/main/ets/pages/PlanCenterPage.ets",
+          "lines": [
+            33
+          ],
+          "anchor": "import { DailyAgenda, AgendaRow, buildDailyAgenda, shanghaiDate }"
+        }
+      ],
+      "status": "source-repaired; native-recompile-pending"
+    }
+  ],
+  "reviewed_at": "2026-10-18",
+  "native_recompile": "Not run in this workspace; no native environment installed. The referenced native failure is at the original commit, not a claim about the repaired commit.",
+  "source_sha256": {
+    "arkui-x-client/entry/src/main/ets/components/CourseReviewPanel.ets": "02f7e92c3e7882812b0b80a17ca8acecf73d20e6f645c04cc8426fa662fa4556",
+    "arkui-x-client/entry/src/main/ets/components/FeedbackPanel.ets": "5038662309d32a9921fca800a6a7d01d22270b82955cd7f3510a2645e35ed80c",
+    "arkui-x-client/entry/src/main/ets/components/PlanningActionPanel.ets": "23cb8dba6d63c0b84afcda32a4dfeb1ed1c35c0479e7738610f213230b714d75",
+    "arkui-x-client/entry/src/main/ets/components/TaskStatusPanel.ets": "62a60f6485ee4d825e3fcd10db585fbd302fe2228e8e25d21c7efa79fbd997b4",
+    "arkui-x-client/entry/src/main/ets/model/ApiModels.ets": "903e064db01e3801d577d11676ae1638b9406ebee41b14d5d511f53888da113e",
+    "arkui-x-client/entry/src/main/ets/pages/AgentPage.ets": "060d0d8165588e8cab8e061185d44a589f09d20c1ebb6c6042540a78d0fa3e64",
+    "arkui-x-client/entry/src/main/ets/pages/OnboardingPage.ets": "3f9c134229916c116c1436345e59b51c963ba08af34f899cf61db633b8db90bf",
+    "arkui-x-client/entry/src/main/ets/pages/PlanCenterPage.ets": "e38e267aa9f0c53a8076d73a6487f6bf74f17ce1159a09efb3a06518349c8f7d",
+    "arkui-x-client/entry/src/main/ets/pages/TimetablePage.ets": "d51d2265b9a8e11e8b21e8beed99715a58572afb0933e8bbc0bdec702b47c170",
+    "arkui-x-client/entry/src/main/ets/services/NativeBridgeVoiceDriver.ets": "c84ac5c22bbd4e82194e9bce1c0437f337b46d8b1b7daf0a47a652bd67f33ba8",
+    "arkui-x-client/entry/src/main/ets/services/NativePlatformBridge.ets": "f58ec6b9e3b9c143f420284dd09abccbbca1ef00c766c94e12e38152356808c0",
+    "arkui-x-client/entry/src/main/ets/utils/ActionReliability.ets": "d3c8898b26e1604be3c48510f32479649a51a38d3ccfe9056dc964cb9fb03636",
+    "arkui-x-client/entry/src/main/ets/utils/AgentRun.ets": "e5cc1a5e5d17de4a53fe934b3c76050f254d56beb997cd336baa9eba42777766",
+    "arkui-x-client/entry/src/main/ets/utils/AppNavigation.ets": "cff571795fa49f5a2d1b430fd778eadf4859cc10a1df968fb3afd3635c75841a",
+    "arkui-x-client/entry/src/main/ets/utils/DraftStore.ets": "9f11d651080c83e8a29bfc0916dc8325acb48022087d7320630206cbb37c957f",
+    "arkui-x-client/entry/src/main/ets/utils/PlanningReplan.ets": "76a44925fcca31acc2f634665062efedecdf3c890262b363d462f6c9349c1045",
+    "arkui-x-client/entry/src/main/ets/utils/TaskStatusController.ets": "cb02ca85987c7819321fe9157882841c8eddbc1647f9407f4fc8b6b02d8d5164",
+    "arkui-x-client/entry/src/main/ets/utils/TimetableImportReview.ets": "5bbe2461275b5cdfffdad5b4933f7a4ea054cb4220328d2c0d14f5af6260513a"
+  }
+}

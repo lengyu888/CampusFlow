@@ -7,7 +7,8 @@ import { stripTypeScriptTypes } from 'node:module';
 import { test } from 'node:test';
 
 // Execute the production store and file adapter; the fs shim is not native/device evidence.
-const source = readFileSync(new URL('../entry/src/main/ets/utils/DraftStore.ets', import.meta.url), 'utf8');
+const source = readFileSync(new URL('../entry/src/main/ets/utils/DraftStore.ets', import.meta.url), 'utf8')
+  .replace(/^import \{[\s\S]*?\} from '(?:\.\.\/model\/ApiModels|\.\/OnboardingTimetable)';\r?\n/gm, '');
 const module = await import(`data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(source)).toString('base64')}`);
 const { DraftStore, MAX_LOCAL_DRAFT_BYTES, MAX_DRAFT_RECORD_BYTES, draftUtf8Bytes, assistantDraftKey } = module;
 const scopeA = JSON.stringify(['https://campus.invalid', 'account-a']);

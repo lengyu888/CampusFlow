@@ -7,7 +7,7 @@ import { AppTheme } from '../theme/AppTheme';
 @Component
 export struct CourseReviewPanel {
   @Prop action: PendingAction;
-  @Prop enabled: boolean = true;
+  @Prop reviewEnabled: boolean = true;
   @Prop selected: CourseAcknowledgement[] = [];
   onToggle: (review: CourseReview) => void = () => {};
 
@@ -45,7 +45,7 @@ export struct CourseReviewPanel {
             Button(this.checked(review) ? '已选择：仍这样安排（点此取消）' : '仍这样安排').width('100%').constraintSize({ minHeight: 48 })
               .fontSize(AppTheme.bodySize).fontColor(this.checked(review) ? AppTheme.onAccent : AppTheme.accent)
               .backgroundColor(this.checked(review) ? AppTheme.accent : AppTheme.accentSoft).borderRadius(AppTheme.controlRadius)
-              .enabled(this.enabled).onClick(() => this.onToggle(review))
+              .enabled(this.reviewEnabled).onClick(() => this.onToggle(review))
             Text('仅确认上面这项任务与所列课程的重叠；最后还需确认整份变更。')
               .fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
           }

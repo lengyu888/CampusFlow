@@ -6,7 +6,7 @@ import { conversationDependencies, assistantDraftKey } from './helpers/conversat
 import { reliability } from './helpers/course-review-fixture.mjs';
 import { candidate, sampleTask } from './helpers/planning-action-fixture.mjs';
 import { makeRunController, runSnapshot, shanghaiDate } from './helpers/agent-run-ui-fixture.mjs';
-const load = async name => import(`data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(readFileSync(new URL(`../entry/src/main/ets/utils/${name}.ets`,import.meta.url),'utf8').replace(/^import [^\n]+;\r?\n/gm,''))).toString('base64')}`);
+const load = async name => import(`data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(readFileSync(new URL(`../entry/src/main/ets/utils/${name}.ets`,import.meta.url),'utf8').replace(/^import [\s\S]*?;\r?\n/gm,''))).toString('base64')}`);
 const feedback=await load('AgentFeedback'); const {DraftStore}=await load('DraftStore');
 const source=readFileSync(new URL('../entry/src/main/ets/pages/AgentPage.ets',import.meta.url),'utf8');
 const methods=source.slice(0,source.indexOf('\n  @Builder')).replace(/^import [^\n]+;\r?\n/gm,'').replace(/^@Component\r?\n/m,'')
@@ -63,6 +63,20 @@ test('authoritative continue validates account/context and restores text only, n
  const h=await fixture({sessionContext:async()=>context()});h.page.pendingActions=[pending()];h.page.requestConversation('session-b');await h.page.switchConversation();
  assert.equal(h.page.sessionId,'session-b');assert.equal(h.page.contextRevision,'b'.repeat(64));assert.equal(h.page.sessionMode,'continue');
  assert.deepEqual(h.page.messages.map(x=>x.content),['原问题','原回答']);assert.deepEqual(h.page.pendingActions,[]);
+});
+
+test('conversation history and permission editing retain independent presentation snapshots',async()=>{
+ const h=await fixture(),remote=context('session-a');
+ h.page.enterConversation('session-a',remote);
+ h.page.savedMessages[0].content='saved-copy';h.page.messages[1].content='display-copy';
+ assert.equal(remote.messages[0].content,'原问题');assert.equal(remote.messages[1].content,'原回答');
+ assert.equal(h.page.messages[0].content,'原问题');assert.equal(h.page.savedMessages[1].content,'原回答');
+ h.page.applyContextMessages(remote);h.page.savedMessages[0].content='refreshed-copy';
+ assert.equal(remote.messages[0].content,'原问题');
+ const action=pending();select(h,action);h.page.togglePermissionEditor(action);
+ assert.deepEqual(h.page.permissionChoices,[{candidate_id:'candidate-a',allow_during_course:false}]);
+ h.page.permissionChoices[0].allow_during_course=true;
+ assert.equal(action.payload.task.allow_during_course,false,'editing choices cannot rewrite the server proposal');
 });
 test('wrong owner, empty history and context errors cannot replace current conversation',async()=>{
  for(const mode of ['owner','empty','failure']){

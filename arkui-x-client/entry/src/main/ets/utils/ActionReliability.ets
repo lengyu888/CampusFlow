@@ -10,7 +10,7 @@ function dateTime(value: string | null): boolean {
 function reminder(value: number | null): boolean {
   return value === null || (typeof value === 'number' && Number.isInteger(value) && value >= 0);
 }
-function taskFields(value: PlanningTaskDraft | PendingTaskPreview, requireValidRange: boolean = true): boolean {
+function taskFields(value: PlanningTaskDraft, requireValidRange: boolean = true): boolean {
   return value !== null && typeof value === 'object' && !Array.isArray(value) && text(value.title) &&
     (value.allow_during_course === undefined || typeof value.allow_during_course === 'boolean') &&
     dateTime(value.start_at) && dateTime(value.end_at) && nullableText(value.location) && reminder(value.reminder_minutes) &&

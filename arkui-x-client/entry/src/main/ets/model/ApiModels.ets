@@ -160,15 +160,9 @@ export interface ActionStateVersion { timetable: number; planning: number; }
 export interface CandidateTaskReceipt { candidate_id: string; task_id: string; }
 export interface CourseAcknowledgementReceipt { candidate_id: string; acknowledgement_id: string; }
 
-export interface PendingTaskPreview {
-  candidate_id?: string;
-  allow_during_course?: boolean;
-  title: string;
-  start_at: string | null;
-  end_at: string | null;
-  reminder_minutes: number | null;
-  location: string | null;
-}
+// A milestone candidate is the same task draft as a standalone candidate.
+// Sharing its declared type keeps callbacks and validators nominally compatible in ArkTS.
+export type PendingTaskPreview = PlanningTaskDraft;
 
 export interface PendingMilestonePreview {
   title: string;
@@ -426,19 +420,13 @@ export interface CampusRoute {
   evidence?: DataEvidence[];
 }
 
-export interface PlanningTask {
-  allow_during_course?: boolean;
+export interface PlanningTask extends PlanningTaskDraft {
   task_version?: number;
   completion_operation_id?: string | null;
   course_overlap?: CourseOverlapState;
   task_id: string;
   plan_id: string | null;
   milestone_id: string | null;
-  title: string;
-  start_at: string | null;
-  end_at: string | null;
-  reminder_minutes: number | null;
-  location: string | null;
   status: string;
   source: string;
   created_at: string;
@@ -512,11 +500,8 @@ export interface PlanMilestone {
   completed_count: number;
 }
 
-export interface PlanSummary {
+export interface PlanSummary extends PlanningPlanDraft {
   plan_id: string;
-  title: string;
-  summary: string;
-  target_date: string | null;
   status: string;
   progress: number;
   task_count: number;

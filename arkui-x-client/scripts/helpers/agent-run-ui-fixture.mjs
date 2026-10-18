@@ -39,7 +39,8 @@ export function rememberHistory(history, request, response) {
 
 
 // Real account-scoped draft storage; only filesystem and wall-clock debounce are injected.
-const draftSource = readFileSync(new URL('../../entry/src/main/ets/utils/DraftStore.ets', import.meta.url), 'utf8');
+const draftSource = readFileSync(new URL('../../entry/src/main/ets/utils/DraftStore.ets', import.meta.url), 'utf8')
+  .replace(/^import \{[\s\S]*?\} from '(?:\.\.\/model\/ApiModels|\.\/OnboardingTimetable)';\r?\n/gm, '');
 const { DraftStore } = await import(`data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(draftSource)).toString('base64')}`);
 const dailySource = readFileSync(new URL('../../entry/src/main/ets/utils/DailyAgenda.ets', import.meta.url), 'utf8')
   .replace(/^import [^\n]+;\r?\n/gm, '');

@@ -68,7 +68,7 @@ export struct TaskStatusPanel {
     const current = this.selected(); const preview = current?.operation?.preview;
     if (!this.active || current?.operationId !== item.operationId || !current.canConfirm || current.busy || preview === null || preview === undefined) { return; }
     if (preview.course_review.requires_acknowledgement && !this.checked(preview)) { return; }
-    this.onConfirm(current.operationId, this.selectedAcks.map((ack: CourseAcknowledgement) => ({ candidate_id: ack.candidate_id, review_digest: ack.review_digest })));
+    this.onConfirm(current.operationId, this.selectedAcks.map((ack: CourseAcknowledgement): CourseAcknowledgement => ({ candidate_id: ack.candidate_id, review_digest: ack.review_digest })));
   }
   private overlaps(preview: TaskStatusPreview): CourseOverlap[] { return preview.course_review.overlaps.slice(this.overlapPage * 6, this.overlapPage * 6 + 6); }
   private canOpenTask(item: TaskStatusItem): boolean { return this.active && !this.state.lockedTaskIds.includes(item.taskId); }

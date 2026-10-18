@@ -30,7 +30,8 @@ const indexController = indexSource.slice(0, indexSource.indexOf('\n  @Builder')
   .replace(/^@(Entry|Component)\r?\n/gm, '')
   .replace(/@(State|Prop)\s+|@(StorageLink|Watch)\('[^']+'\)\s*/g, '')
   .replace('struct Index', 'class Index') + '\n}\n';
-const draftSource = readFileSync(new URL('../entry/src/main/ets/utils/DraftStore.ets', import.meta.url), 'utf8');
+const draftSource = readFileSync(new URL('../entry/src/main/ets/utils/DraftStore.ets', import.meta.url), 'utf8')
+  .replace(/^import \{[\s\S]*?\} from '(?:\.\.\/model\/ApiModels|\.\/OnboardingTimetable)';\r?\n/gm, '');
 const { DraftStore } = await import(`data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(draftSource)).toString('base64')}`);
 const createIndexFactory = new Function('localHistory', 'historyScope', 'CampusFlowApi', 'AppStorage', 'localDrafts', 'TaskStatusController', 'timetableOperationId', 'FocusController', 'emptyFocusState', 'localFocus', 'PlatformFocusClock', ...navNames,
   stripTypeScriptTypes(indexController) + '\nreturn Index;');

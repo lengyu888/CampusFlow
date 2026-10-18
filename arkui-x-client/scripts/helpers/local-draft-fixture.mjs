@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { stripTypeScriptTypes } from 'node:module';
-const source = readFileSync(new URL('../../entry/src/main/ets/utils/DraftStore.ets', import.meta.url), 'utf8');
+const source = readFileSync(new URL('../../entry/src/main/ets/utils/DraftStore.ets', import.meta.url), 'utf8')
+  .replace(/^import \{[\s\S]*?\} from '(?:\.\.\/model\/ApiModels|\.\/OnboardingTimetable)';\r?\n/gm, '');
 export const { DraftStore } = await import(`data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(source)).toString('base64')}`);
 export class DraftMemoryDriver {
   text; failWrite = false; failRemove = false; beforeWrite = null;

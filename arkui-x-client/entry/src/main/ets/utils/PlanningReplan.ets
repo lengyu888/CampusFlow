@@ -162,7 +162,7 @@ export class PlanningReplanController {
     this.state = { phase: 'idle', report: null, preview: null, message: '', notice: '' };
   }
 
-  private failure(error: Error): string {
+  private failure(error: Error | CampusFlowRequestError): string {
     if (error instanceof CampusFlowRequestError) {
       if (error.statusCode === 401 || error.statusCode === 403) { return '当前登录或权限已失效，请重新登录后核对规划。'; }
       if (error.statusCode === 404) { return '未找到改期功能或该方案，请核对后端版本并刷新规划。'; }

@@ -55,7 +55,7 @@ interface PendingNativeRequest {
   id: string;
   timer: number;
   resolve: (result: NativePlatformResult) => void;
-  reject: (error: Error) => void;
+  reject: (error: NativeBridgeError) => void;
 }
 interface VoiceSubscription { id: number; listener: (event: NativeVoiceEvent) => void; }
 
@@ -176,7 +176,7 @@ export class NativePlatformBridge implements PlatformServicePort {
         item.fire_at_ms <= now + 366 * 86400000) || new Set(args.reminders.map((item: NativeReminderItem) => item.id)).size !== args.reminders.length) {
         return Promise.reject(new NativeBridgeError('INVALID_REQUEST'));
       }
-      command.reminders = args.reminders.map((item: NativeReminderItem) => ({ id: item.id, fire_at_ms: item.fire_at_ms }));
+      command.reminders = args.reminders.map((item: NativeReminderItem): NativeReminderItem => ({ id: item.id, fire_at_ms: item.fire_at_ms }));
     }
     const json = JSON.stringify(command);
     return new Promise<NativePlatformResult>((resolve, reject) => {

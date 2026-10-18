@@ -557,5 +557,8 @@
       "result": "CampusPage uses separate icon and illustrated builders; illustration Resource is required, never undefined.",
       "source": "https://github.com/openharmony/docs/blob/master/zh-cn/application-dev/ui/state-management/arkts-builder.md"
     }
-  ]
+  ],
+  "snapshot_status": "Historical preflight at 4b759f8: subsequent native CompileArkTS failed. This is not the current repaired-source verification.",
+  "snapshot_commit": "4b759f88dd0de0507a999954a4da51a8b400284c",
+  "superseded_by": "arkts-review-43-repair.json"
 }

@@ -1,5 +1,5 @@
 import { CourseAcknowledgement, PlanningTask, TaskStatusOperation, TaskStatusStartRequest } from '../model/ApiModels';
-import { DraftLease, DraftStore, DraftTaskStatusOperation } from './DraftStore';
+import { DraftLease, DraftStore, DraftTaskStatusOperation, DraftTaskStatusRequest } from './DraftStore';
 import { CampusFlowRequestError } from './AgentFeedback';
 import { taskStatusUuid, validTaskStatusRequest, validTaskStatusOperation, validTaskStatusAcknowledgements,
   taskStatusCanConfirm } from './TaskStatusValidation';
@@ -161,7 +161,13 @@ export class TaskStatusController {
       this.store.taskStatusOperations(this.lease).some((value: DraftTaskStatusOperation) => value.request.operation_id === request.operation_id)) {
       this.selectedId = ''; this.message = '无法生成新的有效操作编号，本次未提交。'; this.publish(); return;
     }
-    const item = this.item({ scope: this.scope, taskId: task.task_id, request: request, intent: 'start', acknowledgements: [] });
+    const storedRequest: DraftTaskStatusRequest = request.kind === 'complete' ?
+      { operation_id: request.operation_id, kind: 'complete', expected_revision: request.expected_revision } :
+      { operation_id: request.operation_id, kind: 'restore', expected_revision: request.expected_revision,
+        source_operation_id: request.source_operation_id };
+    const pointer: DraftTaskStatusOperation = { scope: this.scope, taskId: task.task_id,
+      request: storedRequest, intent: 'start', acknowledgements: [] };
+    const item = this.item(pointer);
     item.phase = 'preparing'; this.items.push(item); this.selectedId = item.operationId; this.message = ''; this.publish();
     if (!this.ready() || !this.items.includes(item)) { return; }
     const generation = this.generation; const revision = ++item.revision; const api = this.api;

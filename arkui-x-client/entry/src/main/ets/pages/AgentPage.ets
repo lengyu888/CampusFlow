@@ -307,8 +307,8 @@ export struct AgentPage {
     this.conversationRevision++; this.contextReadRevision++;
     this.sessionId = id; this.sessionTitle = context?.summary.title ?? '';
     this.contextRevision = context?.context_revision ?? ''; this.sessionMode = context === null ? 'new' : 'continue';
-    this.savedMessages = context?.messages.map((item: HistoryMessage) => ({ role: item.role, content: item.content, created_at: item.created_at })) ?? [];
-    this.messages = this.savedMessages.map((item: HistoryMessage, index: number) => ({
+    this.savedMessages = context?.messages.map((item: HistoryMessage): HistoryMessage => ({ role: item.role, content: item.content, created_at: item.created_at })) ?? [];
+    this.messages = this.savedMessages.map((item: HistoryMessage, index: number): ConversationEntry => ({
       id: `history-${id}-${index}`, role: item.role, content: item.content, tools: [], failedPrompt: '', failureCode: '', sessionId: id
     }));
     this.pendingActions = []; this.proposalOrigins = []; this.decisionFeedback = []; this.decisionId = '';
@@ -357,7 +357,7 @@ export struct AgentPage {
       else { rebuilt.unshift({ id: `history-${this.sessionId}-${index}-${context.context_revision}`, role: item.role,
         content: item.content, tools: [], failedPrompt: '', failureCode: '', sessionId: this.sessionId }); }
     }
-    this.savedMessages = context.messages.map((item: HistoryMessage) => ({ role: item.role, content: item.content, created_at: item.created_at }));
+    this.savedMessages = context.messages.map((item: HistoryMessage): HistoryMessage => ({ role: item.role, content: item.content, created_at: item.created_at }));
     // Match surviving answer bubbles by exact text/role so their live proposals keep the same anchor.
     // Never turn history text into actions; unmatched local pending results remain visibly separate.
     const live = this.messages.filter((entry: ConversationEntry) => !used.includes(entry.id) &&
@@ -671,7 +671,7 @@ export struct AgentPage {
         model_name: run.model, last_message: Array.from(history[history.length - 1].content).slice(0, 200).join(''),
         message_count: history.length, created_at: history[0].created_at, updated_at: history[history.length - 1].created_at
       };
-      const messages: HistoryMessage[] = history.map((item: HistoryMessage) =>
+      const messages: HistoryMessage[] = history.map((item: HistoryMessage): HistoryMessage =>
         ({ role: item.role, content: item.content, created_at: item.created_at }));
       const saved = await localHistory.save(this.historyScope, summary, messages);
       if (!this.canSaveRunHistory(run.session_id, revision, historyRevision)) { return; }
@@ -1324,7 +1324,7 @@ export struct AgentPage {
     if (this.decisionId.length > 0 || this.needsReview(action.proposal_id)) { return; }
     if (this.permissionProposalId === action.proposal_id) { this.permissionProposalId = ''; return; }
     this.permissionProposalId = action.proposal_id;
-    this.permissionChoices = courseCandidates(action).map((task: PlanningTaskDraft) =>
+    this.permissionChoices = courseCandidates(action).map((task: PlanningTaskDraft): CoursePermissionChoice =>
       ({ candidate_id: task.candidate_id ?? '', allow_during_course: task.allow_during_course ?? false }));
   }
 
@@ -2426,7 +2426,7 @@ export struct AgentPage {
       if (!this.receiptCollapsed(action)) {
         AgentProposalSummary({ action: action, evidence: this.sourcesForProposal(action), active: this.voiceActive })
         CourseReviewPanel({ action: action, selected: this.acksFor(action),
-          enabled: this.decisionId.length === 0 && !this.loading && !this.needsReview(action.proposal_id),
+          reviewEnabled: this.decisionId.length === 0 && !this.loading && !this.needsReview(action.proposal_id),
           onToggle: (review: CourseReview) => this.toggleCourseAck(action, review) })
         if (action.status === 'pending' && validReliableAction(action) && !this.needsReview(action.proposal_id) && courseCandidates(action).length > 0) {
           Button(this.permissionProposalId === action.proposal_id ? '收起课内许可设置' : '逐项设置课内许可')

@@ -1,7 +1,7 @@
 import { RecognitionEvents, SpeechEvents, VoiceCapabilities, VoiceDriver, VoiceInteractionError } from '../utils/VoiceInteraction';
 import { NativePlatformBridge, NativeVoiceEvent, NativeBridgeError, nativePlatformBridge } from './NativePlatformBridge';
 
-function voiceFailure(error: Error): VoiceInteractionError {
+function voiceFailure(error: Error | NativeBridgeError): VoiceInteractionError {
   const code = error instanceof NativeBridgeError ? error.code : 'SYSTEM_ERROR';
   return new VoiceInteractionError(code === 'PERMISSION_DENIED' ? '未获得系统语音或麦克风权限，可在系统设置中允许后重试。' :
     code === 'TIMEOUT' ? '设备语音服务响应超时，已停止本次操作，请重试或使用文字。' :

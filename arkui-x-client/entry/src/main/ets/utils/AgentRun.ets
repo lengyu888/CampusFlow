@@ -180,7 +180,7 @@ export class AgentRunController {
     }, delay);
   }
 
-  private failure(error: Error): string {
+  private failure(error: Error | CampusFlowRequestError): string {
     if (error instanceof CampusFlowRequestError) {
       if (error.code === 'RUN_DELETED') { return '这次运行所属的会话已删除，不会重新执行或恢复已删除内容。'; }
       if (['SESSION_DELETED', 'SESSION_NOT_FOUND', 'SESSION_CONTEXT_CHANGED', 'SESSION_EXISTS', 'SESSION_MODE_INVALID'].includes(error.code)) {
@@ -195,7 +195,7 @@ export class AgentRunController {
     return '连接中断或返回内容无法核验，已有片段仍保留。请查询同一次运行，勿另建重复请求。';
   }
 
-  private failedRead(error: Error): void {
+  private failedRead(error: Error | CampusFlowRequestError): void {
     this.failures++;
     this.state.errorCode = error instanceof CampusFlowRequestError ? error.code : '';
     const deleted = this.state.errorCode === 'RUN_DELETED' || this.state.errorCode === 'SESSION_DELETED';

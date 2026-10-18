@@ -5,7 +5,8 @@ import { readFileSync } from 'node:fs';
 import { stripTypeScriptTypes } from 'node:module';
 import { test } from 'node:test';
 
-const draftSource = readFileSync(new URL('../entry/src/main/ets/utils/DraftStore.ets', import.meta.url), 'utf8');
+const draftSource = readFileSync(new URL('../entry/src/main/ets/utils/DraftStore.ets', import.meta.url), 'utf8')
+  .replace(/^import \{[\s\S]*?\} from '(?:\.\.\/model\/ApiModels|\.\/OnboardingTimetable)';\r?\n/gm, '');
 const { DraftStore } = await import(`data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(draftSource)).toString('base64')}`);
 
 // Execute real entry/auth controller methods with synthetic storage and HTTP.

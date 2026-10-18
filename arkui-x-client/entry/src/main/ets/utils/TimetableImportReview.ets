@@ -60,9 +60,10 @@ function validSourceRow(row: ScheduleImportRow, index: number): boolean {
     !Array.isArray(row.issues) || !row.issues.every((issue: ScheduleImportIssue) => validIssue(issue))) { return false; }
   const hasError = row.issues.some((issue: ScheduleImportIssue) => issue.severity === 'error');
   if (row.status !== 'ready') { return row.entry === null && hasError; }
-  if (!rawEntry(row.entry) || hasError) { return false; }
+  const entry = row.entry;
+  if (entry === null || !rawEntry(entry) || hasError) { return false; }
   const checked = validateTimetableEntry(row.input);
-  return checked.valid && identity(checked.entry) === identity(row.entry);
+  return checked.valid && identity(checked.entry) === identity(entry);
 }
 function copyIssue(issue: ScheduleImportIssue): ScheduleImportIssue {
   return { field: issue.field, code: issue.code, severity: issue.severity, message: issue.message };
@@ -90,9 +91,10 @@ export function parseImportReview(json: string): ImportReviewParse {
     value.timezone_policy !== 'campus-utc+08:00') {
     return parseFailure('服务端未提供受支持的完整行诊断，请更新或重试；没有采用旧列表替代核对。');
   }
+  const sourceCount = value.source_event_count;
   if (value.provider !== 'hduhelp' || typeof value.calendar_name !== 'string' || !Array.isArray(value.rows) ||
-    !Number.isInteger(value.source_event_count) || value.source_event_count < 1 || value.source_event_count > 500 ||
-    value.rows.length !== value.source_event_count || !value.rows.every((row: ScheduleImportRow, index: number) => validSourceRow(row, index)) ||
+    typeof sourceCount !== 'number' || !Number.isInteger(sourceCount) || sourceCount < 1 || sourceCount > 500 ||
+    value.rows.length !== sourceCount || !value.rows.every((row: ScheduleImportRow, index: number) => validSourceRow(row, index)) ||
     !Array.isArray(value.entries) || !Number.isInteger(value.event_count) || value.event_count !== value.entries.length ||
     !Array.isArray(value.warnings) || value.warnings.length > 20 ||
     !value.warnings.every((warning: string) => typeof warning === 'string')) {
@@ -117,7 +119,7 @@ export function parseImportReview(json: string): ImportReviewParse {
   const warnings = value.warnings.filter((warning: string) => warning.trim().length > 0)
     .map((warning: string): TimetableIssue => ({ index: -1, relatedIndex: -1, field: 'import', message: warning }));
   return { valid: true, message: '', rows: value.rows.map((row: ScheduleImportRow) => copyRow(row)),
-    sourceWarnings: warnings, calendarName: value.calendar_name, sourceCount: value.source_event_count };
+    sourceWarnings: warnings, calendarName: value.calendar_name, sourceCount: sourceCount };
 }
 
 function emptyChoice(index: number): ImportRowChoice {

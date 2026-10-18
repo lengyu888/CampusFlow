@@ -10,7 +10,7 @@ const methods = (source,name) => stripTypeScriptTypes(source.slice(0,source.inde
   .replace(/@(State|Prop)\s+|@(Watch|StorageLink)\('[^']+'\)\s*/g,'').replace(`export struct ${name}`,`class ${name}`).replace(`struct ${name}`,`class ${name}`)+'\n}\n');
 const navigation=await import(`data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(read('utils/AppNavigation'))).toString('base64')}`);
 const names=['createNavigation','currentRoute','selectRoot','openSecondary','backNavigation','isRootRoute','hasBack'];
-const {DraftStore}=await import(`data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(read('utils/DraftStore'))).toString('base64')}`);
+const {DraftStore}=await import(`data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(read('utils/DraftStore').replace(/^import \{[\s\S]*?\} from '(?:\.\.\/model\/ApiModels|\.\/OnboardingTimetable)';\r?\n/gm, ''))).toString('base64')}`);
 const indexSource=read('pages/Index');
 const create=new Function('localHistory','historyScope','CampusFlowApi','AppStorage','AppTheme','Curve','ReminderCoordinator','PlatformReminderDriver','localDrafts','TaskStatusController','timetableOperationId','FocusController','emptyFocusState','localFocus','PlatformFocusClock',...names,
   methods(indexSource,'Index')+'\nreturn Index;');

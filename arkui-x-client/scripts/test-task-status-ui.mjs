@@ -138,6 +138,24 @@ test('panel unknown/busy/hidden callbacks cannot confirm, while complete receipt
   const src=read('components/TaskStatusPanel.ets');assert.match(src,/这是该次操作的回执/);assert.match(src,/if \(item\.canCancel\)/);
 });
 
+test('restore confirmation receives an independent acknowledgement snapshot and stays blocked while busy',()=>{
+  const p=panel(state([item()])),submitted=[];
+  p.onConfirm=(id,acks)=>submitted.push({id,acks});
+  p.toggleAck(p.selected());
+  const original=structuredClone(p.selectedAcks);
+  p.confirm(p.selected());
+  assert.equal(submitted.length,1);
+  assert.deepEqual(submitted[0],{id:statusIds.restore,acks:original});
+  assert.notEqual(submitted[0].acks,p.selectedAcks);
+  assert.notEqual(submitted[0].acks[0],p.selectedAcks[0]);
+  submitted[0].acks[0].review_digest='changed-by-consumer';
+  assert.deepEqual(p.selectedAcks,original,'a receiver cannot mutate the displayed acknowledgement');
+  p.state.items[0].busy=true;
+  p.confirm(p.selected());p.toggleAck(p.selected());
+  assert.equal(submitted.length,1);
+  assert.deepEqual(p.selectedAcks,original,'a busy operation cannot change the selected consent');
+});
+
 test('all pending status records and all overlap courses remain reachable in six-item pages, using exact operation IDs',()=>{
   const items=Array.from({length:14},(_,i)=>item({...overlappingRestore(),operation_id:`item-${i}`},{operationId:`item-${i}`,taskId:`task-${i}`}));
   const p=panel(state(items));const found=[];for(let i=0;i<3;i++){p.pageIndex=i;found.push(...p.items().map(x=>x.operationId));}assert.deepEqual(found,items.map(x=>x.operationId));

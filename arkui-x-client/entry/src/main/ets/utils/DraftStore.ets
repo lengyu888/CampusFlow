@@ -1,35 +1,18 @@
+import { TimetableEntry, CampusPlaceImport, CampusMapSummary, RunStartRequest,
+  CourseAcknowledgement, CoursePermissionChoice } from '../model/ApiModels';
+import { TimetableIssue } from './OnboardingTimetable';
+
 // Input snapshots only: these records are never authority to execute a server action.
 export type DraftKind = 'assistant' | 'new-task' | 'onboarding' | 'timetable' | 'review-note';
 export type DraftOperationKind = 'run' | 'proposal' | 'course-permission' | 'onboarding' | 'timetable';
 
-export interface DraftCourse {
-  date: string;
-  title: string;
-  start_time: string;
-  end_time: string;
-  location: string;
-  teacher: string;
-}
+export type DraftCourse = TimetableEntry;
 
-export interface DraftIssue {
-  index: number;
-  relatedIndex: number;
-  field: string;
-  message: string;
-}
+export type DraftIssue = TimetableIssue;
 
-export interface DraftCampusPlace {
-  name: string;
-  category: string;
-  zone: string;
-  aliases: string[];
-}
+export type DraftCampusPlace = CampusPlaceImport;
 
-export interface DraftCampusMap {
-  campus_name: string;
-  places: DraftCampusPlace[];
-  warnings: string[];
-}
+export type DraftCampusMap = CampusMapSummary;
 
 export interface AssistantDraft {
   text: string;
@@ -135,24 +118,11 @@ export interface DraftTicket {
   localRevision: number;
 }
 
-export interface DraftRunRequest {
-  run_id: string;
-  session_id: string;
-  model: string;
-  message: string;
-  session_mode?: string | null;
-  expected_context_revision?: string | null;
-}
+export type DraftRunRequest = RunStartRequest;
 
-export interface DraftCourseAcknowledgement {
-  candidate_id: string;
-  review_digest: string;
-}
+export type DraftCourseAcknowledgement = CourseAcknowledgement;
 
-export interface DraftCoursePermissionChoice {
-  candidate_id: string;
-  allow_during_course: boolean;
-}
+export type DraftCoursePermissionChoice = CoursePermissionChoice;
 
 export interface DraftProposalRequest {
   proposal_id: string;
@@ -193,13 +163,8 @@ export interface DraftOperationInput {
   permissionRequest?: DraftPermissionRequest | null;
 }
 
-export interface DraftOperation {
+export interface DraftOperation extends DraftOperationInput {
   scope: string;
-  kind: DraftOperationKind;
-  id: string;
-  draftKind: DraftKind;
-  ownerId: string;
-  localRevision: number;
   fingerprint: string;
   runRequest: DraftRunRequest | null;
   sessionId: string | null;

@@ -28,6 +28,19 @@ test('unknown diagnostics, count/index mismatch and 501 events reject the entire
   }
   for(const json of ['', '{', 'null','[]','"text"']) assert.equal(parseImportReview(json).valid,false);
 });
+test('missing or null ready entry and nonnumeric source counts fail closed without losing source rows', () => {
+  for(const entry of [null,undefined]) {
+    const input=preview([row(0,{entry})]);
+    const result=parseImportReview(JSON.stringify(input));
+    assert.equal(result.valid,false); assert.deepEqual(result.rows,[]); assert.equal(input.rows.length,1);
+  }
+  for(const sourceCount of [undefined,null,'1',true,-1,0,1.5,NaN,Infinity,501]) {
+    const result=parse([row()],{source_event_count:sourceCount});
+    assert.equal(result.valid,false,`invalid source count ${String(sourceCount)}`); assert.deepEqual(result.rows,[]);
+  }
+  const valid=parse([row()]);
+  assert.equal(valid.valid,true); assert.equal(valid.sourceCount,1); assert.deepEqual(valid.rows.map(item=>item.source_index),[0]);
+});
 test('ready entries require exact normalized fields and no errors; bad rows require null entry with an error', () => {
   for(const r of [row(0,{entry:course({teacher:'另一个老师'})}),row(0,{input:course({title:'😀'.repeat(101)})}),row(0,{issues:[issue()]}),badRow(0,{entry:course()}),badRow(0,{issues:[]}),unsupported(0,{issues:[issue({severity:'warning'})]}),row(0,{status:'unchecked'}),row(0,{input:{...course(),location:undefined}}),row(0,{entry:{...course(),teacher:undefined}})]) assert.equal(parse([r]).valid,false);
   assert.equal(parse([row(0,{input:course({title:' 操作系统 ',teacher:' 陈老师 '})})]).valid,true);

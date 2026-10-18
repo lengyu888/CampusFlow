@@ -105,7 +105,7 @@ export struct PlanningActionPanel {
           ForEach(action.warnings ?? [], (warning: string, index: number) => {
             Text(`核对提示 ${index + 1}：${warning}`).fontSize(AppTheme.bodySize).fontColor(AppTheme.warning).width('100%').wordBreak(WordBreak.BREAK_WORD)
           }, (warning: string, index: number) => `${index}`)
-          CourseReviewPanel({ action: action, enabled: this.active && ['review', 'retryable'].includes(this.state.phase),
+          CourseReviewPanel({ action: action, reviewEnabled: this.active && ['review', 'retryable'].includes(this.state.phase),
             selected: this.selectedCourseAcks, onToggle: (review: CourseReview) => this.toggleCourse(review) })
           Text(`预览有效至 ${formatPlanDateTime(action.expires_at ?? null)} · 北京时间`)
             .fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')

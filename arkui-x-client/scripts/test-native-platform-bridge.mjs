@@ -87,6 +87,31 @@ test('untrusted replies/voice events are bounded and raw provider diagnostics ne
   assert.equal(received.length,1); assert.equal('raw'in received[0],false);
   unsub(); f.event({v:1,kind:'voice',operation_id:'a',event:'speech_complete'}); assert.equal(received.length,1);
 });
+test('native rejection preserves its classified Error instance for bridge and voice callers', async () => {
+  const f=fixture();
+  const request=f.instance.request('capabilities'); await flush();
+  f.reply(f.commands[0],{},false,'PERMISSION_DENIED');
+  await assert.rejects(request,error=>error instanceof bridgeModule.NativeBridgeError &&
+    error instanceof Error && error.code==='PERMISSION_DENIED');
+  const driver=new Driver(f.instance), probing=driver.probe(); await flush();
+  f.reply(f.commands.at(-1),{},false,'PERMISSION_DENIED');
+  await assert.rejects(probing,error=>error instanceof voiceModule.VoiceInteractionError && /权限/.test(error.message));
+});
+test('recognition and speech error events classify once and never complete the failed operation', async () => {
+  const f=fixture({dispatch(c,r){r(c);return'accepted';}}), driver=new Driver(f.instance), observed=[];
+  const recognition={onStart(){},onResult(text){observed.push(text);},onComplete(){observed.push('recognition complete');},onError(text){observed.push(text);}};
+  await driver.startListening('r1',recognition);
+  const recognitionId=f.commands.at(-1).operation_id;
+  const denied={v:1,kind:'voice',operation_id:recognitionId,event:'recognition_error',code:'PERMISSION_DENIED'};
+  f.event(denied); f.event(denied);
+  f.event({v:1,kind:'voice',operation_id:recognitionId,event:'recognition_complete'});
+  assert.equal(observed.length,1); assert.match(observed[0],/权限/);
+  await driver.speak('s1','回答',{onStart(){},onComplete(){observed.push('speech complete');},onError(text){observed.push(text);}});
+  const speechId=f.commands.at(-1).operation_id;
+  f.event({v:1,kind:'voice',operation_id:speechId,event:'speech_error',code:'private native detail'});
+  f.event({v:1,kind:'voice',operation_id:speechId,event:'speech_complete'});
+  assert.equal(observed.length,2); assert.match(observed[1],/未完成/); assert.doesNotMatch(observed.join(' '),/private|complete/);
+});
 test('cancel during permission wait invalidates late results and a new operation receives full accumulated text only', async () => {
   const f=fixture(); const driver=new Driver(f.instance), results=[];
   const events={onStart(){results.push('start');},onResult(t){results.push(t);},onComplete(){results.push('complete');},onError(t){results.push(t);}};
