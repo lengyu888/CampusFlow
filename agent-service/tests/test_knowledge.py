@@ -23,12 +23,22 @@ from campusflow_agent.tools import CURRENT_USER_ID, build_tools
 
 
 @pytest.fixture(autouse=True)
-def no_network(monkeypatch):
+def no_network(event_loop, monkeypatch):
+    # Windows constructs the event loop's socketpair before the guard is installed;
+    # monkeypatch is restored before pytest-asyncio closes/replaces that loop.
     def denied(*args, **kwargs):
         pytest.fail("knowledge retrieval must not open network connections")
 
     monkeypatch.setattr(socket, "create_connection", denied)
     monkeypatch.setattr(socket.socket, "connect", denied)
+
+
+def test_offline_guard_rejects_connection_helpers_and_raw_sockets():
+    with pytest.raises(pytest.fail.Exception, match="must not open network connections"):
+        socket.create_connection(("example.invalid", 443))
+    with socket.socket() as connection:
+        with pytest.raises(pytest.fail.Exception, match="must not open network connections"):
+            connection.connect(("203.0.113.1", 443))
 
 
 @pytest.fixture

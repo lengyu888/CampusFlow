@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CampusFlow Markdown 验收样例</title>
+  <link rel="stylesheet" href="../../src/campusflow_agent/web/styles.css">
+  <link rel="stylesheet" href="../../src/campusflow_agent/web/native.css">
+  <link rel="stylesheet" href="../../src/campusflow_agent/web/redesign.css">
+  <link rel="stylesheet" href="../../src/campusflow_agent/web/markdown.css">
+  <style>
+    body { display: block; padding: 20px; background: #fbfcfe; }
+    main { max-width: 900px; margin: auto; }
+    h1 { font-size: 24px; }
+    .messages { min-height: 0; padding: 20px 0; overflow: visible; }
+    @media (max-width: 500px) { body { padding: 12px; } }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Markdown 消息验收样例</h1>
+    <p>拖动宽表格和长代码，检查页面本身没有横向溢出。</p>
+    <section class="messages" id="samples"></section>
+  </main>
+  <script src="../../src/campusflow_agent/web/vendor/marked-18.1.1.umd.js"></script>
+  <script src="../../src/campusflow_agent/web/vendor/purify-3.4.17.min.js"></script>
+  <script src="../../src/campusflow_agent/web/markdown.js"></script>
+  <script>
+    const samples = [
+      ["常规课程表与段落", "今天的安排如下：\n\n| 课程 | 时间 | 地点 |\n| :--- | :---: | ---: |\n| **高等数学** | 08:00–09:35 | 1教 203 |\n| 大学英语 | 10:00–11:35 | 2教 305 |\n\n记得提前十分钟出发。"],
+      ["多列表格与长单元格", "| 日期 | 课程 | 开始 | 结束 | 地点 | 准备 | 备注 |\n| --- | --- | --- | --- | --- | --- | --- |\n| 周一 | 高等数学 | 08:00 | 09:35 | 第一教学楼203 | 带课本和作业 | 这里是一段较长的备注，用于确认内容会在单元格中正常换行，不会挤到相邻列 |\n| 周二 | 程序设计 | 10:00 | 11:35 | 实验中心305 | 笔记本电脑 | 完成实验报告 |"],
+      ["标题、列表与引用", "## 本周学习计划\n\n**先复习重点**，再进行*针对练习*。\n\n1. 复习数学\n2. 整理错题\n\n- 英语阅读\n- 完成程序实验\n\n> 每学习五十分钟休息十分钟。\n\n使用 `task_id` 更新待办。"],
+      ["代码与转义竖线", "| 名称 | 示例 |\n| --- | --- |\n| 名称\\|别名 | `a \\| b` |\n\n```html\n<img src=x onerror=alert(1)>\n| 这是 | 代码 |\n```\n\n```text\n这是一条用来测试横向滚动的很长代码行：ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789\n```"],
+      ["原始 HTML 与图片", '<img src="https://example.com/tracker" onerror="alert(1)">\n\n<script>alert(1)<\/script>\n\n![图片说明](https://example.com/tracker.png)\n\n[不安全链接](javascript:alert(1))'],
+    ];
+    for (const [label, content] of samples) {
+      const article = document.createElement("article");
+      article.className = "message assistant";
+      const meta = document.createElement("div");
+      meta.className = "meta";
+      meta.textContent = `AGENT / ${label}`;
+      const bubble = document.createElement("div");
+      bubble.className = "bubble";
+      CampusFlowMarkdown.render(bubble, content);
+      article.append(meta, bubble);
+      document.querySelector("#samples").append(article);
+    }
+  </script>
+</body>
+</html>

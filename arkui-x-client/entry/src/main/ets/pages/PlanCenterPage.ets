@@ -29,7 +29,7 @@ import { formatPlanDateTime } from '../utils/PlanPresentation';
 import { EvidencePanel } from '../components/EvidencePanel';
 import { validPreferenceSnapshot } from '../utils/LearningPreferences';
 import { TaskQuery, TaskQueryResult, PlanningCourseRef, PlanningWeek, PlanningWeekRow, PlanningWeekDay, PlanningDayLoad, filterPlanningTasks, buildPlanningWeek, resolvePlanningCourse, dailyPlannedLoad, projectPlanningCandidate, validPlanningTimetable } from '../utils/PlanningOverview';
-import { DailyAgenda, buildDailyAgenda, shanghaiDate } from '../utils/DailyAgenda';
+import { AgendaRow, DailyAgenda, buildDailyAgenda, shanghaiDate } from '../utils/DailyAgenda';
 
 interface CalendarDay {
   key: string;
@@ -593,7 +593,7 @@ export struct PlanCenterPage {
 
   private week(): PlanningWeek { return buildPlanningWeek(this.timetable, this.timetableRevision, this.overview.tasks, this.selectedDate); }
   private weekDays(): CalendarDay[] {
-    return this.week().days.map((day: PlanningWeekDay) => ({ key: day.date, day: Number(day.date.substring(8)), date: day.date,
+    return this.week().days.map((day: PlanningWeekDay): CalendarDay => ({ key: day.date, day: Number(day.date.substring(8)), date: day.date,
       courseCount: day.rows.filter((row: PlanningWeekRow) => row.kind === 'course').length,
       taskCount: day.rows.filter((row: PlanningWeekRow) => row.kind === 'task').length + day.allDay.length }));
   }

@@ -22,12 +22,15 @@ data/
 .idea/
 .vscode/
 .deveco-local/
+.obsidian/
+**/.codegenie/
 .DS_Store
 Thumbs.db
 
 # ArkUI-X generated outputs
 **/build/
 **/.hvigor/
+**/.preview/
 **/oh_modules/
 **/.arkui-x/android/.gradle/
 **/local.properties
@@ -37,6 +40,8 @@ Thumbs.db
 *.xcuserstate
 .reference/
 
-
 # Local native build receipts contain machine paths, not shared verification evidence.
 .native-build-*.local.json
+
+# Local modification logs (not tracked)
+修改日志/

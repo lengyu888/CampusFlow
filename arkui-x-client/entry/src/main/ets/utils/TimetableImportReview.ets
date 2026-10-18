@@ -60,7 +60,7 @@ function validSourceRow(row: ScheduleImportRow, index: number): boolean {
     !Array.isArray(row.issues) || !row.issues.every((issue: ScheduleImportIssue) => validIssue(issue))) { return false; }
   const hasError = row.issues.some((issue: ScheduleImportIssue) => issue.severity === 'error');
   if (row.status !== 'ready') { return row.entry === null && hasError; }
-  if (!rawEntry(row.entry) || hasError) { return false; }
+  if (row.entry === null || !rawEntry(row.entry) || hasError) { return false; }
   const checked = validateTimetableEntry(row.input);
   return checked.valid && identity(checked.entry) === identity(row.entry);
 }
@@ -91,7 +91,7 @@ export function parseImportReview(json: string): ImportReviewParse {
     return parseFailure('服务端未提供受支持的完整行诊断，请更新或重试；没有采用旧列表替代核对。');
   }
   if (value.provider !== 'hduhelp' || typeof value.calendar_name !== 'string' || !Array.isArray(value.rows) ||
-    !Number.isInteger(value.source_event_count) || value.source_event_count < 1 || value.source_event_count > 500 ||
+    typeof value.source_event_count !== 'number' || !Number.isInteger(value.source_event_count) || value.source_event_count < 1 || value.source_event_count > 500 ||
     value.rows.length !== value.source_event_count || !value.rows.every((row: ScheduleImportRow, index: number) => validSourceRow(row, index)) ||
     !Array.isArray(value.entries) || !Number.isInteger(value.event_count) || value.event_count !== value.entries.length ||
     !Array.isArray(value.warnings) || value.warnings.length > 20 ||

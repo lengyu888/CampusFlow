@@ -79,7 +79,11 @@ export class ReminderCoordinator {
   private publish(phase: string, message: string, scheduled: number = this.current.scheduled,
     skipped: number = this.current.skipped, limited: boolean = this.current.limited): void {
     this.current = { phase: phase, message: message, scheduled: scheduled, skipped: skipped, limited: limited, enabled: this.enabled };
-    if (!this.disposed) { this.notify({ ...this.current }); }
+    if (!this.disposed) {
+      this.notify({ phase: this.current.phase, message: this.current.message,
+        scheduled: this.current.scheduled, skipped: this.current.skipped,
+        limited: this.current.limited, enabled: this.current.enabled });
+    }
   }
   private live(revision: number): boolean { return !this.disposed && revision === this.revision; }
   private run(work: () => Promise<void>): Promise<void> {

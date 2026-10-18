@@ -3,7 +3,7 @@ import { CampusFlowRequestError } from '../utils/AgentFeedback';
 import { CampusFlowApi } from '../services/CampusFlowApi';
 import { TimetableMaintenance, TimetableMaintenanceState, TimetableDraftSnapshot, timetableOperationId } from '../utils/TimetableMaintenance';
 import { TimetableFieldErrors, TimetableIssue, normalizeTimetableEntry, validateTimetableEntry, validateTimetableList, expandWeeklyEntry } from '../utils/OnboardingTimetable';
-import { DraftLease, DraftKey, DraftRecord, DraftSaveState, TimetableDraft } from '../utils/DraftStore';
+import { DraftLease, DraftKey, DraftRecord, DraftSaveState, TimetableDraft, TimetableSubmission } from '../utils/DraftStore';
 import { localDrafts } from '../services/LocalDrafts';
 import { shanghaiDate } from '../utils/DailyAgenda';
 import { ImportRowChoice, parseImportReview, assembleSelectedImport } from '../utils/TimetableImportReview';
@@ -160,12 +160,13 @@ export struct TimetablePage {
     this.localRevision = this.recoverableDraft?.localRevision ?? 0;
   }
   private draftPayload(snapshot: TimetableDraftSnapshot): TimetableDraft {
+    const submission: TimetableSubmission | null = snapshot.operation === null ? null : { operationId: snapshot.operation.id,
+      expectedRevision: snapshot.operation.revision, entries: snapshot.operation.entries, confirmClear: snapshot.operation.confirmClear };
     return { baselineEntries: snapshot.baselineEntries, expectedRevision: snapshot.expectedRevision,
       draftEntries: snapshot.draftEntries, editor: this.editor, editorOpen: this.editorOpen,
       editorDirty: this.editorDirty, editingIndex: this.editingIndex, repeatWeeks: this.repeatWeeks,
       sourceWarnings: this.sourceWarnings, anchorDate: this.anchorDate, timezone: 'Asia/Shanghai',
-      submission: snapshot.operation === null ? null : { operationId: snapshot.operation.id,
-        expectedRevision: snapshot.operation.revision, entries: snapshot.operation.entries, confirmClear: snapshot.operation.confirmClear } };
+      submission: submission };
   }
   private stageDraft(): void {
     const lease = this.boundLease;

@@ -2,7 +2,7 @@ import { CampusDataSnapshot, CampusMapSummary, CampusPlaceImport, TimetableEntry
 import { CampusFlowApi } from '../services/CampusFlowApi';
 import { CampusFlowRequestError } from '../utils/AgentFeedback';
 import { TimetableFieldErrors, TimetableIssue, normalizeTimetableEntry, validateTimetableEntry, validateTimetableList, expandWeeklyEntry } from '../utils/OnboardingTimetable';
-import { DraftLease, DraftKey, DraftRecord, DraftSaveState, OnboardingDraft, OnboardingSubmission } from '../utils/DraftStore';
+import { DraftLease, DraftKey, DraftRecord, DraftSaveState, OnboardingDraft, OnboardingSubmission, DraftCampusPlace } from '../utils/DraftStore';
 import { localDrafts } from '../services/LocalDrafts';
 import { historyScope } from '../utils/LocalHistoryStore';
 import { shanghaiDate } from '../utils/DailyAgenda';
@@ -199,7 +199,10 @@ export struct OnboardingPage {
     if (record === null || lease === null || !localDrafts.valid(lease)) { return; }
     const draft = record.payload as OnboardingDraft;
     this.requestRevision++; this.step = draft.step; this.semester = draft.semester;
-    this.entries = draft.entries; this.editor = draft.editor; this.editorOpen = draft.editorOpen;
+    this.entries = draft.entries;
+    this.editor = { date: draft.editor.date, title: draft.editor.title, start_time: draft.editor.start_time,
+      end_time: draft.editor.end_time, location: draft.editor.location, teacher: draft.editor.teacher };
+    this.editorOpen = draft.editorOpen;
     this.editorDirty = draft.editorDirty; this.editingIndex = draft.editingIndex; this.repeatWeeks = draft.repeatWeeks;
     this.sourceWarnings = draft.sourceWarnings; this.anchorDate = draft.anchorDate;
     this.expectedRevision = draft.expectedRevision; this.baselineEntries = draft.baselineEntries;
@@ -589,8 +592,12 @@ export struct OnboardingPage {
       await this.persistSubmission();
       if (!this.current(revision)) { return; }
       sent = true;
+      const campusMap: CampusMapSummary = { campus_name: submission.campusMap.campus_name,
+        warnings: submission.campusMap.warnings,
+        places: submission.campusMap.places.map((place: DraftCampusPlace): CampusPlaceImport => ({ name: place.name,
+          category: place.category, zone: place.zone, aliases: place.aliases })) };
       const result = await new CampusFlowApi(this.baseUrl, this.token).completeOnboarding(submission.school, submission.campus,
-        submission.semester, submission.timetable, submission.campusMap, submission.operationId, submission.expectedRevision);
+        submission.semester, submission.timetable, campusMap, submission.operationId, submission.expectedRevision);
       if (!this.current(revision)) { return; }
       if (result === null || result.user === undefined || result.user === null || result.user.onboarding_complete !== true ||
         result.timetable_count !== submission.timetable.length || result.campus_place_count !== submission.campusMap.places.length ||

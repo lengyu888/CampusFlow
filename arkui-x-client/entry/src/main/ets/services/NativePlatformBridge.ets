@@ -40,7 +40,7 @@ class BridgeClock implements NativeBridgeClock {
   setTimeout(callback: () => void, delay: number): number { return setTimeout(callback, delay); }
   clearTimeout(id: number): void { clearTimeout(id); }
 }
-export class NativeBridgeError extends Error {
+export class NativeBridgeError extends Error implements Error {
   code: string;
   constructor(code: string) {
     super('设备服务暂未完成，请核对状态后重试。');
@@ -189,7 +189,7 @@ export class NativePlatformBridge {
         item.fire_at_ms <= now + 366 * 86400000) || new Set(args.reminders.map((item: NativeReminderItem) => item.id)).size !== args.reminders.length) {
         return Promise.reject(new NativeBridgeError('INVALID_REQUEST'));
       }
-      command.reminders = args.reminders.map((item: NativeReminderItem) => ({ id: item.id, fire_at_ms: item.fire_at_ms }));
+      command.reminders = args.reminders.map((item: NativeReminderItem): NativeReminderItem => ({ id: item.id, fire_at_ms: item.fire_at_ms }));
     }
     const json = JSON.stringify(command);
     return new Promise<NativePlatformResult>((resolve, reject) => {

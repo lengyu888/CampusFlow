@@ -264,6 +264,7 @@ class SessionSummary(BaseModel):
     message_count: int
     created_at: datetime
     updated_at: datetime
+    status: Literal["pending", "active"] = "active"
 
 
 class SessionRenameRequest(BaseModel):

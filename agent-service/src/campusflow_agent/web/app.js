@@ -1110,6 +1110,8 @@ function appendMessage(role, content, options = {}) {
     typing.className = "typing";
     for (let index = 0; index < 3; index += 1) typing.append(document.createElement("span"));
     bubble.append(typing);
+  } else if (role === "assistant" && window.CampusFlowMarkdown) {
+    window.CampusFlowMarkdown.render(bubble, content);
   } else {
     bubble.textContent = content;
   }
@@ -1321,12 +1323,45 @@ async function confirmAction(proposalId, card, button, label) {
   }
 }
 
+function upsertSession(session) {
+  const index = state.sessions.findIndex((item) => item.session_id === session.session_id);
+  if (index >= 0) {
+    state.sessions[index] = { ...state.sessions[index], ...session };
+  } else {
+    state.sessions = [session, ...state.sessions];
+  }
+  elements.todayHistoryCount.textContent = state.sessions.length;
+  if (!elements.historyDrawer.hidden) renderHistorySessions(state.sessions);
+}
+
+async function refreshSessions() {
+  try {
+    state.sessions = await api("/api/v1/sessions");
+    elements.todayHistoryCount.textContent = state.sessions.length;
+    if (!elements.historyDrawer.hidden) renderHistorySessions(state.sessions);
+  } catch {
+    // 保留本地占位会话，避免进行中的对话从历史目录里消失。
+  }
+}
+
 async function sendMessage(message) {
   if (!message || state.sending) return;
   state.sending = true;
   elements.sendButton.disabled = true;
   elements.messageInput.disabled = true;
   appendMessage("user", message);
+  // 提问后立即写入本地会话目录：模型思考期间打开历史也能看到本次对话。
+  const pendingAt = new Date().toISOString();
+  upsertSession({
+    session_id: state.sessionId,
+    title: message.slice(0, 18),
+    model_name: selectedModel(),
+    last_message: message,
+    message_count: 1,
+    created_at: pendingAt,
+    updated_at: pendingAt,
+    status: "pending",
+  });
   const loading = appendMessage("assistant", "", { loading: true });
   try {
     const payload = await api("/api/v1/chat", {
@@ -1345,18 +1380,14 @@ async function sendMessage(message) {
       if (trace.tool_name === "plan_campus_route") renderCampusRoute(trace.result);
     });
     payload.pending_actions.forEach(renderPendingAction);
-    try {
-      state.sessions = await api("/api/v1/sessions");
-      elements.todayHistoryCount.textContent = state.sessions.length;
-    } catch {
-      // The completed answer remains usable if refreshing session metadata fails.
-    }
     setServiceState(true, "Agent 服务在线");
   } catch (error) {
     loading.remove();
     appendMessage("assistant", `本次任务未完成：${error.message}`);
     showToast(error.message, "error");
   } finally {
+    // 以服务端状态覆盖占位会话；此处该会话应已被标记为完成。
+    await refreshSessions();
     state.sending = false;
     elements.sendButton.disabled = false;
     elements.messageInput.disabled = false;
@@ -1426,7 +1457,8 @@ function renderHistorySessions(sessions) {
     const preview = document.createElement("p");
     preview.textContent = session.last_message;
     const meta = document.createElement("small");
-    meta.textContent = `${session.message_count} 条消息 · ${session.model_name === "deepseek-flash" ? "FLASH" : "V4 PRO"}`;
+    const pendingLabel = session.status === "pending" ? " · 思考中…" : "";
+    meta.textContent = `${session.message_count} 条消息 · ${session.model_name === "deepseek-flash" ? "FLASH" : "V4 PRO"}${pendingLabel}`;
     open.append(heading, preview, meta);
     open.addEventListener("click", () => openSession(session.session_id));
     const rename = document.createElement("button");

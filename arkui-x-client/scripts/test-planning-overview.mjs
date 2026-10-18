@@ -205,7 +205,7 @@ test('all query/week/load results are identical across device timezones for offs
       buildPlanningWeek(courses,${JSON.stringify(revision)},tasks,${JSON.stringify(date)}),
       dailyPlannedLoad(courses,tasks,${JSON.stringify(date)})]));`;
   const results = ['UTC', 'America/Los_Angeles', 'Asia/Tokyo'].map(TZ => execFileSync(process.execPath,
-    ['--input-type=module', '-e', script], { encoding: 'utf8', env: { ...process.env, TZ } }).trim());
+    ['--input-type=module'], { input: script, encoding: 'utf8', env: { ...process.env, TZ } }).trim());
   assert.equal(new Set(results).size, 1);
   const [filtered, week, load] = JSON.parse(results[0]);
   assert.equal(filtered.matched, 2); assert.equal(week.startDate, date); assert.equal(load.taskMinutes, 120 + 0.123 / 60);

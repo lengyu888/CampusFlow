@@ -1,3 +1,5 @@
+import type { DraftCourse, DraftCampusMap, DraftCampusPlace } from '../utils/DraftStore';
+
 export interface DataEvidence {
   source_id: string;
   label: string;
@@ -39,7 +41,7 @@ export interface AuthResponse {
   token_type: string;
 }
 
-export interface TimetableEntry {
+export interface TimetableEntry extends DraftCourse {
   date: string;
   title: string;
   start_time: string;
@@ -101,13 +103,13 @@ export interface ScheduleSubscriptionPreview {
   rows?: ScheduleImportRow[];
 }
 
-export interface CampusMapSummary {
+export interface CampusMapSummary extends DraftCampusMap {
   campus_name: string;
   places: CampusPlaceImport[];
   warnings: string[];
 }
 
-export interface CampusPlaceImport {
+export interface CampusPlaceImport extends DraftCampusPlace {
   name: string;
   category: string;
   zone: string;
@@ -160,7 +162,7 @@ export interface ActionStateVersion { timetable: number; planning: number; }
 export interface CandidateTaskReceipt { candidate_id: string; task_id: string; }
 export interface CourseAcknowledgementReceipt { candidate_id: string; acknowledgement_id: string; }
 
-export interface PendingTaskPreview {
+export interface PendingTaskPreview extends PlanningTaskDraft {
   candidate_id?: string;
   allow_during_course?: boolean;
   title: string;
@@ -364,6 +366,7 @@ export interface SessionSummary {
   message_count: number;
   created_at: string;
   updated_at: string;
+  status?: string;
 }
 
 export interface SessionContext {
@@ -426,7 +429,7 @@ export interface CampusRoute {
   evidence?: DataEvidence[];
 }
 
-export interface PlanningTask {
+export interface PlanningTask extends PlanningTaskDraft {
   allow_during_course?: boolean;
   task_version?: number;
   course_overlap?: CourseOverlapState;
@@ -452,7 +455,7 @@ export interface PlanMilestone {
   completed_count: number;
 }
 
-export interface PlanSummary {
+export interface PlanSummary extends PlanningPlanDraft {
   plan_id: string;
   title: string;
   summary: string;

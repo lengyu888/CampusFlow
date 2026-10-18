@@ -43,6 +43,11 @@ import {
   WeatherForecast, ModelCatalog, LearningPreferenceSnapshot, LearningPreferenceWrite, LearningPreferenceDelete, KnowledgeSearch, KnowledgeHit
 } from '../model/ApiModels';
 import { CampusFlowRequestError, localRequestFailure, requestFailure } from '../utils/AgentFeedback';
+import type { AgentRunGateway } from '../utils/AgentRun';
+import type { ReplanGateway } from '../utils/PlanningReplan';
+import type { PlanningActionGateway } from '../utils/PlanningAction';
+import type { PreferenceGateway } from '../utils/LearningPreferences';
+import type { TimetableGateway } from '../utils/TimetableMaintenance';
 
 interface SettingsPayload {
   display_name: string;
@@ -71,7 +76,7 @@ interface ApiErrorPayload {
 
 const PATCH_METHOD: http.RequestMethod = 'PATCH' as http.RequestMethod;
 
-export class CampusFlowApi {
+export class CampusFlowApi implements AgentRunGateway, ReplanGateway, PlanningActionGateway, PreferenceGateway, TimetableGateway {
   private baseUrl: string;
   private accessToken: string;
 

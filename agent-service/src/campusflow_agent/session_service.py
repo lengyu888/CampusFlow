@@ -94,6 +94,7 @@ class SessionService:
                     message_count=len(messages),
                     created_at=messages[0].created_at,
                     updated_at=messages[-1].created_at,
+                    status="pending" if messages[-1].role == "user" else "active",
                 )
         # Title changes do not change model context. Message identity/content/order do.
         encoded = json.dumps(
@@ -210,7 +211,7 @@ class SessionService:
             "INSERT INTO conversation_sessions(user_id,session_id,title,model_name,last_message,"
             "created_at,updated_at) VALUES(?,?,?,?,?,?,?) "
             "ON CONFLICT(user_id,session_id) DO UPDATE SET model_name=excluded.model_name,"
-            "last_message=excluded.last_message,updated_at=excluded.updated_at",
+            "last_message=excluded.last_message,updated_at=excluded.updated_at,status='active'",
             (user_id, session_id, self.store._session_title(message), model, answer, now, now),
         )
         self.connection.executemany(

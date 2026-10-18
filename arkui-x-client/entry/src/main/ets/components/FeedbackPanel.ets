@@ -18,14 +18,14 @@ export struct FeedbackPanel {
     return AppTheme.secondary;
   }
 
-  private background(): string {
+  private panelBackground(): string {
     if (this.kind === 'error') { return AppTheme.dangerSoft; }
     if (this.kind === 'success') { return AppTheme.successSoft; }
     if (this.kind === 'warning' || this.kind === 'unknown') { return AppTheme.warningSoft; }
     return AppTheme.surface;
   }
 
-  private borderColor(): string {
+  private panelBorderColor(): string {
     if (this.kind === 'error') { return AppTheme.dangerOutline; }
     if (this.kind === 'warning' || this.kind === 'unknown') { return AppTheme.warningOutline; }
     return AppTheme.line;
@@ -61,7 +61,7 @@ export struct FeedbackPanel {
           .borderRadius(AppTheme.controlRadius).enabled(!this.busy).onClick(() => this.onAction())
       }
     }.width('100%').alignItems(HorizontalAlign.Start).padding(AppTheme.cardInset)
-      .backgroundColor(this.background()).borderRadius(AppTheme.cardRadius)
-      .border({ width: 1, color: this.borderColor() })
+      .backgroundColor(this.panelBackground()).borderRadius(AppTheme.cardRadius)
+      .border({ width: 1, color: this.panelBorderColor() })
   }
 }

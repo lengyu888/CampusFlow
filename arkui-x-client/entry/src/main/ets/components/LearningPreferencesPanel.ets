@@ -38,14 +38,19 @@ export struct LearningPreferencesPanel {
   private busy(): boolean { return this.state.phase === 'loading' || this.state.phase === 'saving'; }
   private fieldError(field: string): string { return this.state.issues.find((item: PreferenceIssue) => item.field === field)?.message ?? ''; }
   private editField(field: string, value: string): void {
-    const draft: PreferenceDraft = { ...this.state.draft };
+    const current = this.state.draft;
+    const draft: PreferenceDraft = { enabled: current.enabled, session: current.session, rest: current.rest, period: current.period, daily: current.daily };
     if (field === 'session') { draft.session = value; }
     else if (field === 'rest') { draft.rest = value; }
     else if (field === 'daily') { draft.daily = value; }
     else if (field === 'period') { draft.period = value; }
     this.discardConfirm = false; this.instance().edit(draft);
   }
-  private setEnabled(enabled: boolean): void { this.discardConfirm = false; this.instance().edit({ ...this.state.draft, enabled: enabled }); }
+  private setEnabled(enabled: boolean): void {
+    this.discardConfirm = false;
+    const draft = this.state.draft;
+    this.instance().edit({ enabled: enabled, session: draft.session, rest: draft.rest, period: draft.period, daily: draft.daily });
+  }
   private periodLabel(period: string): string {
     return period === 'morning' ? '上午' : period === 'afternoon' ? '下午' : period === 'evening' ? '晚上' : '不限';
   }

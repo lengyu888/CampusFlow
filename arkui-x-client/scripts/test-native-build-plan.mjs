@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { test } from 'node:test';
-const script=new URL('./build-native.mjs',import.meta.url).pathname;
+import { fileURLToPath } from 'node:url';
+const script=fileURLToPath(new URL('./build-native.mjs',import.meta.url));
 for(const [platform,target] of [['harmony','hap'],['android','apk'],['ios','ios']]){
  test(`${platform} default is dry-run and never invokes configured fake CLI`,()=>{
   const result=spawnSync(process.execPath,[script,platform],{encoding:'utf8',env:{...process.env,CAMPUSFLOW_ACE_BIN:'/missing-native-cli'}});

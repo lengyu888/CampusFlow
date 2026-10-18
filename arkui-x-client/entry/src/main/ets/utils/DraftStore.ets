@@ -171,7 +171,7 @@ export interface DraftOperationInput {
   permissionRequest?: DraftPermissionRequest | null;
 }
 
-export interface DraftOperation {
+export interface DraftOperation extends DraftOperationInput {
   scope: string;
   kind: DraftOperationKind;
   id: string;

@@ -263,7 +263,7 @@ export struct AgentPage {
         try { context = await new CampusFlowApi(this.baseUrl, this.token).sessionContext(target); }
         catch (error) {
           // A queued first turn has no completed history. Its owned run remains the authority.
-          if ((targetRun.length === 0 && this.switchDraftId !== target) || this.safeFailure(error).code !== 'SESSION_NOT_FOUND') { throw error; }
+          if ((targetRun.length === 0 && this.switchDraftId !== target) || this.safeFailure(error).code !== 'SESSION_NOT_FOUND') { throw error as Error; }
           if (targetRun.length > 0) {
           const run = await new CampusFlowApi(this.baseUrl, this.token).agentRun(targetRun);
           if (run.run_id !== targetRun || run.session_id !== target) { throw localRequestFailure('INVALID_RESPONSE'); }
@@ -304,8 +304,8 @@ export struct AgentPage {
     this.conversationRevision++; this.contextReadRevision++;
     this.sessionId = id; this.sessionTitle = context?.summary.title ?? '';
     this.contextRevision = context?.context_revision ?? ''; this.sessionMode = context === null ? 'new' : 'continue';
-    this.savedMessages = context?.messages.map((item: HistoryMessage) => ({ role: item.role, content: item.content, created_at: item.created_at })) ?? [];
-    this.messages = this.savedMessages.map((item: HistoryMessage, index: number) => ({
+    this.savedMessages = context?.messages.map((item: HistoryMessage): HistoryMessage => ({ role: item.role, content: item.content, created_at: item.created_at })) ?? [];
+    this.messages = this.savedMessages.map((item: HistoryMessage, index: number): ConversationEntry => ({
       id: `history-${id}-${index}`, role: item.role, content: item.content, tools: [], failedPrompt: '', failureCode: '', sessionId: id
     }));
     this.pendingActions = []; this.proposalOrigins = []; this.decisionFeedback = []; this.decisionId = '';
@@ -354,7 +354,7 @@ export struct AgentPage {
       else { rebuilt.unshift({ id: `history-${this.sessionId}-${index}-${context.context_revision}`, role: item.role,
         content: item.content, tools: [], failedPrompt: '', failureCode: '', sessionId: this.sessionId }); }
     }
-    this.savedMessages = context.messages.map((item: HistoryMessage) => ({ role: item.role, content: item.content, created_at: item.created_at }));
+    this.savedMessages = context.messages.map((item: HistoryMessage): HistoryMessage => ({ role: item.role, content: item.content, created_at: item.created_at }));
     // Match surviving answer bubbles by exact text/role so their live proposals keep the same anchor.
     // Never turn history text into actions; unmatched local pending results remain visibly separate.
     const live = this.messages.filter((entry: ConversationEntry) => !used.includes(entry.id) &&
@@ -524,7 +524,13 @@ export struct AgentPage {
     }
     this.restoredRunIds = this.restoredRunIds.includes(operation.id) ? this.restoredRunIds : this.restoredRunIds.concat([operation.id]);
     this.liveRecoveredRunIds = this.liveRecoveredRunIds.includes(operation.id) ? this.liveRecoveredRunIds : this.liveRecoveredRunIds.concat([operation.id]);
-    if (operation.runRequest !== null) { await this.runController().recoverRequest(operation.runRequest); }
+    if (operation.runRequest !== null) {
+      const saved = operation.runRequest;
+      const request: RunStartRequest = { run_id: saved.run_id, session_id: saved.session_id, model: saved.model, message: saved.message };
+      if (saved.session_mode !== undefined) { request.session_mode = saved.session_mode; }
+      if (saved.expected_context_revision !== undefined) { request.expected_context_revision = saved.expected_context_revision; }
+      await this.runController().recoverRequest(request);
+    }
     else { await this.runController().recover(operation.id); }
   }
 
@@ -668,7 +674,7 @@ export struct AgentPage {
         model_name: run.model, last_message: Array.from(history[history.length - 1].content).slice(0, 200).join(''),
         message_count: history.length, created_at: history[0].created_at, updated_at: history[history.length - 1].created_at
       };
-      const messages: HistoryMessage[] = history.map((item: HistoryMessage) =>
+      const messages: HistoryMessage[] = history.map((item: HistoryMessage): HistoryMessage =>
         ({ role: item.role, content: item.content, created_at: item.created_at }));
       const saved = await localHistory.save(this.historyScope, summary, messages);
       if (!this.canSaveRunHistory(run.session_id, revision, historyRevision)) { return; }
@@ -879,20 +885,24 @@ export struct AgentPage {
   private recordScrollOffset(offset: number): void {
     if (!Number.isFinite(offset)) { return; }
     this.scrollOffset = offset;
-    this.followLatest = this.contentHeight <= this.viewportHeight ||
-      this.contentHeight - this.viewportHeight - offset <= 48;
+    // Offset updates can arrive after a manual upward gesture. Reaching the
+    // bottom (or explicitly sending/viewing latest) is what resumes following.
+    if (this.contentHeight > this.viewportHeight && this.contentHeight - this.viewportHeight - offset > 48) {
+      this.followLatest = false;
+    }
     if (this.followLatest) { this.unreadMessages = 0; }
     else { this.scrollForNewMessage = false; }
   }
 
   private chatContentChanged(height: number): void {
+    const heightChanged = height !== this.contentHeight;
     this.contentHeight = height;
     if (this.restoreOptionsOffset >= 0) {
       this.chatScroller.scrollTo({ xOffset: 0, yOffset: this.restoreOptionsOffset, animation: false });
       this.restoreOptionsOffset = -1;
       return;
     }
-    if (this.voiceActive && this.scrollForNewMessage) {
+    if (heightChanged && this.voiceActive && this.followLatest && this.scrollForNewMessage && this.hasConversation()) {
       this.scrollForNewMessage = false;
       this.unreadMessages = 0;
       this.chatScroller.scrollEdge(Edge.Bottom);
@@ -1321,7 +1331,7 @@ export struct AgentPage {
     if (this.decisionId.length > 0 || this.needsReview(action.proposal_id)) { return; }
     if (this.permissionProposalId === action.proposal_id) { this.permissionProposalId = ''; return; }
     this.permissionProposalId = action.proposal_id;
-    this.permissionChoices = courseCandidates(action).map((task: PlanningTaskDraft) =>
+    this.permissionChoices = courseCandidates(action).map((task: PlanningTaskDraft): CoursePermissionChoice =>
       ({ candidate_id: task.candidate_id ?? '', allow_during_course: task.allow_during_course ?? false }));
   }
 
@@ -2400,7 +2410,7 @@ export struct AgentPage {
       if (!this.receiptCollapsed(action)) {
         AgentProposalSummary({ action: action, evidence: this.sourcesForProposal(action), active: this.voiceActive })
         CourseReviewPanel({ action: action, selected: this.acksFor(action),
-          enabled: this.decisionId.length === 0 && !this.loading && !this.needsReview(action.proposal_id),
+          interactionEnabled: this.decisionId.length === 0 && !this.loading && !this.needsReview(action.proposal_id),
           onToggle: (review: CourseReview) => this.toggleCourseAck(action, review) })
         if (action.status === 'pending' && validReliableAction(action) && !this.needsReview(action.proposal_id) && courseCandidates(action).length > 0) {
           Button(this.permissionProposalId === action.proposal_id ? '收起课内许可设置' : '逐项设置课内许可')
@@ -2632,6 +2642,16 @@ export struct AgentPage {
           .onAreaChange((_oldArea: Area, newArea: Area) => this.chatContentChanged(Number(newArea.height)))
       }.layoutWeight(1).width('100%').clip(true).scrollBar(BarState.Off).align(Alignment.TopStart)
         .onAreaChange((_oldArea: Area, newArea: Area) => this.viewportHeight = Number(newArea.height))
+        .onWillScroll((_xOffset: number, yOffset: number, _state: ScrollState, source: ScrollSource) => {
+          if (yOffset < 0 && source !== ScrollSource.SCROLLER && source !== ScrollSource.SCROLLER_ANIMATION) {
+            this.followLatest = false;
+            this.scrollForNewMessage = false;
+          }
+        })
+        .onReachEnd(() => {
+          this.followLatest = true;
+          this.unreadMessages = 0;
+        })
         .onScroll(() => this.recordScrollOffset(this.chatScroller.currentOffset().yOffset))
 
       if (this.unreadMessages > 0 || this.promptSuggestions.length > 0) {

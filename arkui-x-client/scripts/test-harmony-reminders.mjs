@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { stripTypeScriptTypes } from 'node:module';
 import { test } from 'node:test';
-const source=readFileSync(new URL('../entry/src/main/ets/services/HarmonyReminderDriver.ets',import.meta.url),'utf8').replace(/^import .*;\n/gm,'');
+const source=readFileSync(new URL('../entry/src/main/ets/services/HarmonyReminderDriver.ets',import.meta.url),'utf8').replace(/^import .*;\r?\n/gm,'');
 let sequence=0;
 async function scene(){
  const files=new Map(),handles=new Map(),pending=new Map(),delivered=new Map();let fd=0,id=1,allowed=true,publishFail=false,writeFail=false,shortWrite=false;const calls=[];

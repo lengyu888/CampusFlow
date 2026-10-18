@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { stripTypeScriptTypes } from 'node:module';
 import { test } from 'node:test';
-const source = readFileSync(new URL('../entry/src/main/ets/utils/ReminderCoordinator.ets', import.meta.url), 'utf8').replace(/^import .*;\n/gm, '');
+const source = readFileSync(new URL('../entry/src/main/ets/utils/ReminderCoordinator.ets', import.meta.url), 'utf8').replace(/^import .*;\r?\n/gm, '');
 const { ReminderCoordinator, buildReminderPlan } = await import(`data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(source)).toString('base64')}`);
 const now = Date.parse('2026-10-18T04:00:00Z');
 const task = (overrides = {}) => ({ task_id: 't1', status: 'pending', start_at: '2026-10-18T13:00:00+08:00', reminder_minutes: 0, ...overrides });

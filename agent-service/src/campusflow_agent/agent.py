@@ -664,6 +664,9 @@ class AgentService:
             if frozen_history is not None
             else self.store.get_history(user_id, session_id)
         )
+        if persist_history:
+            # 旧调用由服务负责持久化；HTTP 调用由会话服务按版本成对提交。
+            self.store.append_history(user_id, session_id, "user", message, model_name)
         conversation = [
             HumanMessage(content=item.content)
             if item.role == "user"
@@ -676,6 +679,17 @@ class AgentService:
             result = await graph.ainvoke(
                 {"messages": conversation},
             )
+        except BaseException:
+            if persist_history:
+                # 收尾自己创建的 pending 会话，并保留原异常给调用方处理。
+                self.store.append_history(
+                    user_id,
+                    session_id,
+                    "assistant",
+                    "本次任务未完成，请稍后重试或重新发送。",
+                    model_name,
+                )
+            raise
         finally:
             CURRENT_USER_ID.reset(token)
 
@@ -687,7 +701,6 @@ class AgentService:
                 self.skill_store.record_tool_run(user_id, trace.tool_name)
 
         if persist_history:
-            self.store.append_history(user_id, session_id, "user", message, model_name)
             self.store.append_history(user_id, session_id, "assistant", answer, model_name)
         return AgentReply(message=answer, tool_traces=traces, pending_actions=pending)
 

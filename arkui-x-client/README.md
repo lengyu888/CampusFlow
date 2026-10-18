@@ -128,3 +128,9 @@ npm run check
 `npm test` 使用已有 Node.js 执行共享逻辑和页面控制器测试，不安装依赖，不启动原生应用。
 
 静态检查脚本检查工程必需文件、JSON/JSON5 语法、ArkTS 相对导入、密钥泄漏、网络权限，以及客户端与 FastAPI 的关键接口契约。依赖目录和构建产物会被排除。它不能替代 DevEco Studio 的 ArkTS 类型检查和真机安装测试。
+
+## Agent 回复排版
+
+助手回复和历史详情共用原生 Markdown 消息组件，支持标题、列表、粗体、引用、代码块和表格。宽表格与长代码在气泡内横向滚动，用户输入仍原样显示；已有历史无需迁移。
+
+解析测试：`node --test scripts/test-markdown-parser.mjs`。静态排版可通过 `entry/src/main/ets/components/MarkdownPreview.ets` 的 Previewer 检查，详细支持范围及 Web 验证方式见 [Markdown 显示说明](../docs/markdown-rendering.md)。

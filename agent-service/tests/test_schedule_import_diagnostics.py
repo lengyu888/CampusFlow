@@ -258,12 +258,21 @@ def test_custom_zone_calendar_hint_and_missing_zone_database_are_not_guessed(mon
 
 
 def test_floating_and_minute_compatibility_is_explicit_and_independent_of_process_timezone():
+    if hasattr(time, "tzset"):
+        tzset = time.tzset
+    else:
+        # CPython on Windows uses the Universal CRT for localtime but exposes no tzset.
+        import ctypes
+
+        tzset = ctypes.CDLL("ucrtbase")._tzset
     before = os.environ.get("TZ")
     try:
         serialized = []
-        for zone in ["UTC", "Pacific/Honolulu"]:
+        local_times = []
+        for zone in ["UTC0", "HST10"]:
             os.environ["TZ"] = zone
-            time.tzset()
+            tzset()
+            local_times.append(time.localtime(0))
             preview = parse_icalendar(
                 calendar(
                     event(
@@ -275,13 +284,14 @@ def test_floating_and_minute_compatibility_is_explicit_and_independent_of_proces
             assert codes(preview.rows[0]) == {"FLOATING_CAMPUS_TIME", "MINUTE_PRECISION_INPUT"}
             assert require_complete_subscription(preview)[0].start_time == "08:00"
             serialized.append(preview.model_dump_json())
+        assert local_times[0] != local_times[1]
         assert serialized[0] == serialized[1]
     finally:
         if before is None:
             os.environ.pop("TZ", None)
         else:
             os.environ["TZ"] = before
-        time.tzset()
+        tzset()
 
 
 @pytest.mark.parametrize(
@@ -298,6 +308,10 @@ def test_floating_and_minute_compatibility_is_explicit_and_independent_of_proces
         (calendar(event()) + "\n" + calendar(event()), "IMPORT_INVALID_CALENDAR"),
         (calendar(*([event()] * 501)), "IMPORT_TOO_MANY_EVENTS"),
         ("BEGIN:VCALENDAR\n" + "A" * MAX_CALENDAR_BYTES, "IMPORT_TOO_LARGE"),
+    ],
+    ids=[
+        "empty", "truncated", "nested-event", "unknown-component",
+        "invalid-end-parameter", "multiple-calendars", "event-limit", "byte-limit",
     ],
 )
 def test_unreliable_or_oversized_calendar_rejects_whole_input(text, code):
@@ -349,6 +363,7 @@ def test_write_gate_rejects_old_preview_without_diagnostics():
         (200, "text/calendar", b"\xff\xfe", "IMPORT_INVALID_CALENDAR"),
         (200, "text/calendar", b"x" * (MAX_CALENDAR_BYTES + 1), "IMPORT_TOO_LARGE"),
     ],
+    ids=["redirect", "wrong-content-type", "remote-error", "invalid-encoding", "byte-limit"],
 )
 async def test_fetch_is_bounded_and_does_not_expose_remote_error_or_follow_redirect(
     status,
