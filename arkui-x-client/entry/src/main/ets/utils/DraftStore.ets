@@ -1,5 +1,5 @@
 // Input snapshots only: these records are never authority to execute a server action.
-export type DraftKind = 'assistant' | 'new-task' | 'onboarding' | 'timetable';
+export type DraftKind = 'assistant' | 'new-task' | 'onboarding' | 'timetable' | 'review-note';
 export type DraftOperationKind = 'run' | 'proposal' | 'course-permission' | 'onboarding' | 'timetable';
 
 export interface DraftCourse {
@@ -102,7 +102,14 @@ export interface TimetableDraft {
   submission: TimetableSubmission | null;
 }
 
-export type DraftPayload = AssistantDraft | NewTaskDraft | OnboardingDraft | TimetableDraft;
+export interface ReviewNoteDraft {
+  period: 'day' | 'week';
+  anchor: string;
+  timezone: 'Asia/Shanghai';
+  text: string;
+}
+
+export type DraftPayload = AssistantDraft | NewTaskDraft | OnboardingDraft | TimetableDraft | ReviewNoteDraft;
 
 export interface DraftKey {
   kind: DraftKind;
@@ -292,7 +299,7 @@ function flag(value: boolean): boolean {
 }
 
 function kind(value: DraftKind): DraftKind {
-  if (value !== 'assistant' && value !== 'new-task' && value !== 'onboarding' && value !== 'timetable') {
+  if (value !== 'assistant' && value !== 'new-task' && value !== 'onboarding' && value !== 'timetable' && value !== 'review-note') {
     throw invalid();
   }
   return value;
@@ -326,6 +333,18 @@ export function assistantDraftKey(sessionId: string): DraftKey {
   const id = userText(sessionId, 128);
   if (id.trim().length === 0) { throw invalid(); }
   return { kind: 'assistant', ownerId: `session:${id}` };
+}
+
+// Kept dependency-free so older on-disk schemas and every existing draft loader
+// retain their current entrypoint. Notes use the same fixed UTC+08 calendar rule.
+export function reviewNoteKey(period: 'day' | 'week', anchor: string): DraftKey {
+  if (period !== 'day' && period !== 'week' || typeof anchor !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(anchor)) { throw invalid(); }
+  const ms = Date.parse(`${anchor}T00:00:00Z`); const date = new Date(ms);
+  if (!Number.isFinite(ms) || date.getUTCFullYear() < 1 || date.getUTCFullYear() > 9999 || date.toISOString().slice(0, 10) !== anchor) { throw invalid(); }
+  const start = period === 'week' ? ms - ((date.getUTCDay() + 6) % 7) * 86400000 : ms;
+  const end = start + (period === 'week' ? 7 : 1) * 86400000;
+  if (new Date(start - 28800000).getUTCFullYear() < 1 || new Date(end).getUTCFullYear() > 9999) { throw invalid(); }
+  return { kind: 'review-note', ownerId: `${period}:${new Date(start).toISOString().slice(0, 10)}` };
 }
 
 function frozenRunRequest(value: DraftRunRequest, id: string): DraftRunRequest {
@@ -432,6 +451,14 @@ function onboardingSubmission(value: OnboardingSubmission | null): OnboardingSub
 
 function payload(valueKind: DraftKind, value: DraftPayload): DraftPayload {
   if (!value || typeof value !== 'object' || Array.isArray(value)) { throw invalid(); }
+  if (valueKind === 'review-note') {
+    const item = value as ReviewNoteDraft;
+    const names: string[] = ['period', 'anchor', 'timezone', 'text'];
+    if (Object.keys(item).length !== names.length || !Object.keys(item).every((name: string) => names.includes(name)) ||
+      typeof item.text !== 'string' || Array.from(item.text).length > 500 ||
+      reviewNoteKey(item.period, item.anchor).ownerId !== `${item.period}:${item.anchor}` || item.timezone !== 'Asia/Shanghai') { throw invalid(); }
+    return { period: item.period, anchor: item.anchor, timezone: 'Asia/Shanghai', text: item.text } as ReviewNoteDraft;
+  }
   if (valueKind === 'assistant') {
     const item = value as AssistantDraft;
     return { text: text(item.text, 32000), sessionId: text(item.sessionId, 512, true),
@@ -478,6 +505,10 @@ function record(value: DraftRecord, scope: string): DraftRecord {
     updatedAt: value.updatedAt, payload: payload(valueKind, value.payload) };
   if (valueKind === 'assistant' && result.ownerId.startsWith('session:') &&
     result.ownerId !== assistantDraftKey((result.payload as AssistantDraft).sessionId).ownerId) { throw invalid(); }
+  if (valueKind === 'review-note') {
+    const item = result.payload as ReviewNoteDraft;
+    if (result.ownerId !== reviewNoteKey(item.period, item.anchor).ownerId) { throw invalid(); }
+  }
   if (draftUtf8Bytes(JSON.stringify(result)) > MAX_DRAFT_RECORD_BYTES) { throw invalid(); }
   return result;
 }

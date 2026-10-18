@@ -50,6 +50,14 @@ function knownErrorMessage(code: string): string {
       return '未找到此提案，请刷新核对。';
     case 'FOCUS_NOT_FOUND':
       return '当前账号中未找到这次专注记录。';
+    case 'REVIEW_INVALID':
+      return '请选择有效日期，再回看这一天或这一周。';
+    case 'REVIEW_LIMIT':
+      return '这段时间的完整明细超出读取容量，请缩小到一天查看；本次没有截取部分数据作为总数。';
+    case 'REVIEW_DATA_INVALID':
+      return '部分记录暂时无法完整核对，本次未生成统计。原始任务与计时记录不受影响。';
+    case 'REVIEW_FAILED':
+      return '暂时无法读取这段时间的记录，请稍后刷新。';
     case 'FOCUS_OPERATION_NOT_FOUND':
       return '尚未查到这次记录操作；请保留原编号，需要重试时仍使用原内容。';
     case 'FOCUS_TASK_NOT_FOUND':

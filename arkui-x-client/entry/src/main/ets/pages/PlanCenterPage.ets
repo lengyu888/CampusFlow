@@ -1,3 +1,4 @@
+import { ReviewPeriod } from '../model/ReviewModels';
 import { validCourseAcknowledgements } from '../utils/CourseReview';
 import { TaskCaptureIntent } from '../utils/TaskCaptureTypes';
 import { QuickCaptureIssue, parseQuickCapture, captureEndAt } from '../utils/QuickCaptureParser';
@@ -87,6 +88,7 @@ export struct PlanCenterPage {
   onTaskStatus: (task: PlanningTask) => void = () => {};
   onOpenStatus: (taskId: string) => void = () => {};
   onOpenFocus: (task: PlanningTask) => void = () => {};
+  onOpenReview: (period: ReviewPeriod, anchor: string) => void = () => {};
   onOpenTimetable: () => void = () => {};
   @State private overview: PlanningOverview = {
     plans: [], tasks: [], total_tasks: 0, completed_tasks: 0, due_today: 0, overdue_tasks: 0, progress: 0
@@ -1171,6 +1173,10 @@ export struct PlanCenterPage {
     return `${this.draftTaskDate} · ${this.draftTaskTime.length === 0 ? '全天' : this.draftTaskTime}`;
   }
 
+  private reviewRequested(): void {
+    if (this.active && !this.mutationBusy && !this.captureOnly) { this.onOpenReview('week', this.selectedDate); }
+  }
+
   @Builder
   private SourceStatus() {
     Column({ space: 8 }) {
@@ -1956,6 +1962,11 @@ export struct PlanCenterPage {
             .onClick(() => this.openDetails('draft'))
         }
       }.width('100%').padding({ left: AppTheme.pageInset, right: AppTheme.pageInset, top: 16 })
+      if (this.detailKind.length === 0 && !this.captureOnly) {
+        Button('回看所选日期的这一周').width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
+          .fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft).enabled(!this.mutationBusy)
+          .onClick(() => this.reviewRequested()).padding({ left: AppTheme.pageInset, right: AppTheme.pageInset })
+      }
       if (this.errorText.length > 0) {
         Row({ space: 8 }) {
           Text(this.errorText).fontSize(AppTheme.metaSize).fontColor(AppTheme.danger).layoutWeight(1)

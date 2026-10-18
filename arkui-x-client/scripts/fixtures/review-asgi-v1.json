@@ -1,0 +1,739 @@
+{
+  "contract_version": 1,
+  "synthetic": true,
+  "user_id": "8c96532c145c49de98e7d550b8ba96ba",
+  "cases": [
+    {
+      "label": "empty",
+      "period": "day",
+      "anchor": "2030-10-19",
+      "response": {
+        "contract_version": 1,
+        "user_id": "8c96532c145c49de98e7d550b8ba96ba",
+        "period": "day",
+        "anchor": "2030-10-19",
+        "timezone": "Asia/Shanghai",
+        "timezone_policy": "fixed_utc_plus_08",
+        "period_start": "2030-10-19T00:00:00+08:00",
+        "period_end": "2030-10-20T00:00:00+08:00",
+        "as_of": "2030-10-19T01:00:00Z",
+        "snapshot_digest": "d2ab03b48be4fee09e9da1da6113dcb303b5e408aef40018808999d192c3ddac",
+        "totals": {
+          "current_completed_count": 0,
+          "current_unscheduled_count": 0,
+          "confirmed_elapsed_ms": 0,
+          "unknown_gap_count": 0
+        },
+        "completed_tasks": [],
+        "unscheduled_tasks": [],
+        "unattributed_completed_tasks": [],
+        "focus_intervals": [],
+        "unknown_gaps": []
+      }
+    },
+    {
+      "label": "micro_previous_day",
+      "period": "day",
+      "anchor": "2030-10-18",
+      "response": {
+        "contract_version": 1,
+        "user_id": "8c96532c145c49de98e7d550b8ba96ba",
+        "period": "day",
+        "anchor": "2030-10-18",
+        "timezone": "Asia/Shanghai",
+        "timezone_policy": "fixed_utc_plus_08",
+        "period_start": "2030-10-18T00:00:00+08:00",
+        "period_end": "2030-10-19T00:00:00+08:00",
+        "as_of": "2030-10-19T01:00:00Z",
+        "snapshot_digest": "f3be69bd895a7b9b5dd312ea620daf50c5b4cb07b9644468e8ec75a52838ae50",
+        "totals": {
+          "current_completed_count": 0,
+          "current_unscheduled_count": 1,
+          "confirmed_elapsed_ms": 43198876,
+          "unknown_gap_count": 0
+        },
+        "completed_tasks": [],
+        "unscheduled_tasks": [
+          {
+            "task_id": "634ca5649df648c594a648d6c3afdfe4",
+            "title": "同名合成任务",
+            "task_version": 1,
+            "status": "pending",
+            "created_at": "2030-10-19T01:00:00Z",
+            "start_at": null,
+            "end_at": null,
+            "completed_at": null,
+            "completion_operation_id": null,
+            "completion_evidence": "pending"
+          }
+        ],
+        "unattributed_completed_tasks": [
+          {
+            "task_id": "51dbea02e1fd459295c71d399e8bc587",
+            "title": "旧完成：无归期",
+            "task_version": 2,
+            "status": "completed",
+            "created_at": "2030-10-19T01:00:00Z",
+            "start_at": null,
+            "end_at": null,
+            "completed_at": null,
+            "completion_operation_id": null,
+            "completion_evidence": "unattributed"
+          }
+        ],
+        "focus_intervals": [
+          {
+            "record_id": "a103d27a-01af-459d-b392-fc861f041da9",
+            "task_id": "634ca5649df648c594a648d6c3afdfe4",
+            "task_title": "同名合成任务",
+            "task_missing": false,
+            "record_revision": 3,
+            "interval": {
+              "interval_id": "1bd1e445-bf70-4662-8d3d-d842ee56a801",
+              "segment_id": "abbcbb1f-2794-49fd-92b3-485a542996f0",
+              "clock_session_id": "10000000-0000-4000-8000-000000000002",
+              "sequence": 1,
+              "started_at": "2030-10-18T04:00:00.123456Z",
+              "ended_at": "2030-10-19T04:00:02.123456Z",
+              "elapsed_ms": 86400000
+            },
+            "span_us": 86402000000,
+            "clip_from_us": 0,
+            "clip_to_us": 43199876544,
+            "allocated_elapsed_ms": 43198876
+          },
+          {
+            "record_id": "b385da03-df9d-4549-9e68-5e6e1e1b0190",
+            "task_id": "634ca5649df648c594a648d6c3afdfe4",
+            "task_title": "同名合成任务",
+            "task_missing": false,
+            "record_revision": 3,
+            "interval": {
+              "interval_id": "ee226ef7-5121-4e7a-a9bc-f0e172da0814",
+              "segment_id": "cd3ec4a9-8775-4a29-bd79-9f84052fffb4",
+              "clock_session_id": "10000000-0000-4000-8000-000000000002",
+              "sequence": 1,
+              "started_at": "2030-10-18T15:59:59.999999Z",
+              "ended_at": "2030-10-18T16:00:00.001001Z",
+              "elapsed_ms": 1
+            },
+            "span_us": 1002,
+            "clip_from_us": 0,
+            "clip_to_us": 1,
+            "allocated_elapsed_ms": 0
+          }
+        ],
+        "unknown_gaps": []
+      }
+    },
+    {
+      "label": "mixed_current_day",
+      "period": "day",
+      "anchor": "2030-10-19",
+      "response": {
+        "contract_version": 1,
+        "user_id": "8c96532c145c49de98e7d550b8ba96ba",
+        "period": "day",
+        "anchor": "2030-10-19",
+        "timezone": "Asia/Shanghai",
+        "timezone_policy": "fixed_utc_plus_08",
+        "period_start": "2030-10-19T00:00:00+08:00",
+        "period_end": "2030-10-20T00:00:00+08:00",
+        "as_of": "2030-10-19T01:00:00Z",
+        "snapshot_digest": "f466b234c16c31f7a9796f0029635c55326089706a8eed71fd055cafda03b167",
+        "totals": {
+          "current_completed_count": 2,
+          "current_unscheduled_count": 1,
+          "confirmed_elapsed_ms": 43201125,
+          "unknown_gap_count": 1
+        },
+        "completed_tasks": [
+          {
+            "task_id": "273a456149c34648a66a1697cac1bd6f",
+            "title": "同名合成任务",
+            "task_version": 2,
+            "status": "completed",
+            "created_at": "2030-10-19T01:00:00Z",
+            "start_at": null,
+            "end_at": null,
+            "completed_at": "2030-10-19T01:00:00Z",
+            "completion_operation_id": "b269136f-eab3-5927-80fc-1b92444b4523",
+            "completion_evidence": "operation_receipt"
+          },
+          {
+            "task_id": "4e1ac693723840d3a557565100d3ff26",
+            "title": "旧完成：只有任务时间",
+            "task_version": 2,
+            "status": "completed",
+            "created_at": "2030-10-19T01:00:00Z",
+            "start_at": null,
+            "end_at": null,
+            "completed_at": "2030-10-19T00:30:00+08:00",
+            "completion_operation_id": null,
+            "completion_evidence": "current_task_time"
+          }
+        ],
+        "unscheduled_tasks": [
+          {
+            "task_id": "634ca5649df648c594a648d6c3afdfe4",
+            "title": "同名合成任务",
+            "task_version": 1,
+            "status": "pending",
+            "created_at": "2030-10-19T01:00:00Z",
+            "start_at": null,
+            "end_at": null,
+            "completed_at": null,
+            "completion_operation_id": null,
+            "completion_evidence": "pending"
+          }
+        ],
+        "unattributed_completed_tasks": [
+          {
+            "task_id": "51dbea02e1fd459295c71d399e8bc587",
+            "title": "旧完成：无归期",
+            "task_version": 2,
+            "status": "completed",
+            "created_at": "2030-10-19T01:00:00Z",
+            "start_at": null,
+            "end_at": null,
+            "completed_at": null,
+            "completion_operation_id": null,
+            "completion_evidence": "unattributed"
+          }
+        ],
+        "focus_intervals": [
+          {
+            "record_id": "a103d27a-01af-459d-b392-fc861f041da9",
+            "task_id": "634ca5649df648c594a648d6c3afdfe4",
+            "task_title": "同名合成任务",
+            "task_missing": false,
+            "record_revision": 3,
+            "interval": {
+              "interval_id": "1bd1e445-bf70-4662-8d3d-d842ee56a801",
+              "segment_id": "abbcbb1f-2794-49fd-92b3-485a542996f0",
+              "clock_session_id": "10000000-0000-4000-8000-000000000002",
+              "sequence": 1,
+              "started_at": "2030-10-18T04:00:00.123456Z",
+              "ended_at": "2030-10-19T04:00:02.123456Z",
+              "elapsed_ms": 86400000
+            },
+            "span_us": 86402000000,
+            "clip_from_us": 43199876544,
+            "clip_to_us": 86402000000,
+            "allocated_elapsed_ms": 43201124
+          },
+          {
+            "record_id": "b385da03-df9d-4549-9e68-5e6e1e1b0190",
+            "task_id": "634ca5649df648c594a648d6c3afdfe4",
+            "task_title": "同名合成任务",
+            "task_missing": false,
+            "record_revision": 3,
+            "interval": {
+              "interval_id": "ee226ef7-5121-4e7a-a9bc-f0e172da0814",
+              "segment_id": "cd3ec4a9-8775-4a29-bd79-9f84052fffb4",
+              "clock_session_id": "10000000-0000-4000-8000-000000000002",
+              "sequence": 1,
+              "started_at": "2030-10-18T15:59:59.999999Z",
+              "ended_at": "2030-10-18T16:00:00.001001Z",
+              "elapsed_ms": 1
+            },
+            "span_us": 1002,
+            "clip_from_us": 1,
+            "clip_to_us": 1002,
+            "allocated_elapsed_ms": 1
+          }
+        ],
+        "unknown_gaps": [
+          {
+            "record_id": "b385da03-df9d-4549-9e68-5e6e1e1b0190",
+            "task_id": "634ca5649df648c594a648d6c3afdfe4",
+            "task_title": "同名合成任务",
+            "task_missing": false,
+            "record_revision": 3,
+            "gap": {
+              "gap_id": "d2779700-7976-435a-828a-655c3239ab4d",
+              "segment_id": "cd3ec4a9-8775-4a29-bd79-9f84052fffb4",
+              "reason": "process_interrupted",
+              "observed_start_at": "2030-10-18T16:00:00.123456Z",
+              "observed_end_at": "2030-10-18T15:59:00Z"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "label": "current_natural_week",
+      "period": "week",
+      "anchor": "2030-10-19",
+      "response": {
+        "contract_version": 1,
+        "user_id": "8c96532c145c49de98e7d550b8ba96ba",
+        "period": "week",
+        "anchor": "2030-10-19",
+        "timezone": "Asia/Shanghai",
+        "timezone_policy": "fixed_utc_plus_08",
+        "period_start": "2030-10-14T00:00:00+08:00",
+        "period_end": "2030-10-21T00:00:00+08:00",
+        "as_of": "2030-10-19T01:00:00Z",
+        "snapshot_digest": "5830cc58299fab3a2774c3e367052d9048e65adcec570779bc321c9db8375ebe",
+        "totals": {
+          "current_completed_count": 2,
+          "current_unscheduled_count": 1,
+          "confirmed_elapsed_ms": 86400001,
+          "unknown_gap_count": 1
+        },
+        "completed_tasks": [
+          {
+            "task_id": "273a456149c34648a66a1697cac1bd6f",
+            "title": "同名合成任务",
+            "task_version": 2,
+            "status": "completed",
+            "created_at": "2030-10-19T01:00:00Z",
+            "start_at": null,
+            "end_at": null,
+            "completed_at": "2030-10-19T01:00:00Z",
+            "completion_operation_id": "b269136f-eab3-5927-80fc-1b92444b4523",
+            "completion_evidence": "operation_receipt"
+          },
+          {
+            "task_id": "4e1ac693723840d3a557565100d3ff26",
+            "title": "旧完成：只有任务时间",
+            "task_version": 2,
+            "status": "completed",
+            "created_at": "2030-10-19T01:00:00Z",
+            "start_at": null,
+            "end_at": null,
+            "completed_at": "2030-10-19T00:30:00+08:00",
+            "completion_operation_id": null,
+            "completion_evidence": "current_task_time"
+          }
+        ],
+        "unscheduled_tasks": [
+          {
+            "task_id": "634ca5649df648c594a648d6c3afdfe4",
+            "title": "同名合成任务",
+            "task_version": 1,
+            "status": "pending",
+            "created_at": "2030-10-19T01:00:00Z",
+            "start_at": null,
+            "end_at": null,
+            "completed_at": null,
+            "completion_operation_id": null,
+            "completion_evidence": "pending"
+          }
+        ],
+        "unattributed_completed_tasks": [
+          {
+            "task_id": "51dbea02e1fd459295c71d399e8bc587",
+            "title": "旧完成：无归期",
+            "task_version": 2,
+            "status": "completed",
+            "created_at": "2030-10-19T01:00:00Z",
+            "start_at": null,
+            "end_at": null,
+            "completed_at": null,
+            "completion_operation_id": null,
+            "completion_evidence": "unattributed"
+          }
+        ],
+        "focus_intervals": [
+          {
+            "record_id": "a103d27a-01af-459d-b392-fc861f041da9",
+            "task_id": "634ca5649df648c594a648d6c3afdfe4",
+            "task_title": "同名合成任务",
+            "task_missing": false,
+            "record_revision": 3,
+            "interval": {
+              "interval_id": "1bd1e445-bf70-4662-8d3d-d842ee56a801",
+              "segment_id": "abbcbb1f-2794-49fd-92b3-485a542996f0",
+              "clock_session_id": "10000000-0000-4000-8000-000000000002",
+              "sequence": 1,
+              "started_at": "2030-10-18T04:00:00.123456Z",
+              "ended_at": "2030-10-19T04:00:02.123456Z",
+              "elapsed_ms": 86400000
+            },
+            "span_us": 86402000000,
+            "clip_from_us": 0,
+            "clip_to_us": 86402000000,
+            "allocated_elapsed_ms": 86400000
+          },
+          {
+            "record_id": "b385da03-df9d-4549-9e68-5e6e1e1b0190",
+            "task_id": "634ca5649df648c594a648d6c3afdfe4",
+            "task_title": "同名合成任务",
+            "task_missing": false,
+            "record_revision": 3,
+            "interval": {
+              "interval_id": "ee226ef7-5121-4e7a-a9bc-f0e172da0814",
+              "segment_id": "cd3ec4a9-8775-4a29-bd79-9f84052fffb4",
+              "clock_session_id": "10000000-0000-4000-8000-000000000002",
+              "sequence": 1,
+              "started_at": "2030-10-18T15:59:59.999999Z",
+              "ended_at": "2030-10-18T16:00:00.001001Z",
+              "elapsed_ms": 1
+            },
+            "span_us": 1002,
+            "clip_from_us": 0,
+            "clip_to_us": 1002,
+            "allocated_elapsed_ms": 1
+          }
+        ],
+        "unknown_gaps": [
+          {
+            "record_id": "b385da03-df9d-4549-9e68-5e6e1e1b0190",
+            "task_id": "634ca5649df648c594a648d6c3afdfe4",
+            "task_title": "同名合成任务",
+            "task_missing": false,
+            "record_revision": 3,
+            "gap": {
+              "gap_id": "d2779700-7976-435a-828a-655c3239ab4d",
+              "segment_id": "cd3ec4a9-8775-4a29-bd79-9f84052fffb4",
+              "reason": "process_interrupted",
+              "observed_start_at": "2030-10-18T16:00:00.123456Z",
+              "observed_end_at": "2030-10-18T15:59:00Z"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "label": "no_period_focus_current_tasks_still_explicit",
+      "period": "day",
+      "anchor": "2030-10-25",
+      "response": {
+        "contract_version": 1,
+        "user_id": "8c96532c145c49de98e7d550b8ba96ba",
+        "period": "day",
+        "anchor": "2030-10-25",
+        "timezone": "Asia/Shanghai",
+        "timezone_policy": "fixed_utc_plus_08",
+        "period_start": "2030-10-25T00:00:00+08:00",
+        "period_end": "2030-10-26T00:00:00+08:00",
+        "as_of": "2030-10-19T01:00:00Z",
+        "snapshot_digest": "9ad17385cf7ddd12a5ba032c484960c6adbbc3a59ab1fae4ea8783d079e2cac6",
+        "totals": {
+          "current_completed_count": 0,
+          "current_unscheduled_count": 1,
+          "confirmed_elapsed_ms": 0,
+          "unknown_gap_count": 0
+        },
+        "completed_tasks": [],
+        "unscheduled_tasks": [
+          {
+            "task_id": "634ca5649df648c594a648d6c3afdfe4",
+            "title": "同名合成任务",
+            "task_version": 1,
+            "status": "pending",
+            "created_at": "2030-10-19T01:00:00Z",
+            "start_at": null,
+            "end_at": null,
+            "completed_at": null,
+            "completion_operation_id": null,
+            "completion_evidence": "pending"
+          }
+        ],
+        "unattributed_completed_tasks": [
+          {
+            "task_id": "51dbea02e1fd459295c71d399e8bc587",
+            "title": "旧完成：无归期",
+            "task_version": 2,
+            "status": "completed",
+            "created_at": "2030-10-19T01:00:00Z",
+            "start_at": null,
+            "end_at": null,
+            "completed_at": null,
+            "completion_operation_id": null,
+            "completion_evidence": "unattributed"
+          }
+        ],
+        "focus_intervals": [],
+        "unknown_gaps": []
+      }
+    },
+    {
+      "label": "task_deleted_focus_retained",
+      "period": "day",
+      "anchor": "2030-10-19",
+      "response": {
+        "contract_version": 1,
+        "user_id": "8c96532c145c49de98e7d550b8ba96ba",
+        "period": "day",
+        "anchor": "2030-10-19",
+        "timezone": "Asia/Shanghai",
+        "timezone_policy": "fixed_utc_plus_08",
+        "period_start": "2030-10-19T00:00:00+08:00",
+        "period_end": "2030-10-20T00:00:00+08:00",
+        "as_of": "2030-10-19T01:00:00Z",
+        "snapshot_digest": "05adf4a8ad128408255acaebe6f179058425d9185a52e9949585cc106cf48631",
+        "totals": {
+          "current_completed_count": 2,
+          "current_unscheduled_count": 0,
+          "confirmed_elapsed_ms": 43201125,
+          "unknown_gap_count": 1
+        },
+        "completed_tasks": [
+          {
+            "task_id": "273a456149c34648a66a1697cac1bd6f",
+            "title": "同名合成任务",
+            "task_version": 2,
+            "status": "completed",
+            "created_at": "2030-10-19T01:00:00Z",
+            "start_at": null,
+            "end_at": null,
+            "completed_at": "2030-10-19T01:00:00Z",
+            "completion_operation_id": "b269136f-eab3-5927-80fc-1b92444b4523",
+            "completion_evidence": "operation_receipt"
+          },
+          {
+            "task_id": "4e1ac693723840d3a557565100d3ff26",
+            "title": "旧完成：只有任务时间",
+            "task_version": 2,
+            "status": "completed",
+            "created_at": "2030-10-19T01:00:00Z",
+            "start_at": null,
+            "end_at": null,
+            "completed_at": "2030-10-19T00:30:00+08:00",
+            "completion_operation_id": null,
+            "completion_evidence": "current_task_time"
+          }
+        ],
+        "unscheduled_tasks": [],
+        "unattributed_completed_tasks": [
+          {
+            "task_id": "51dbea02e1fd459295c71d399e8bc587",
+            "title": "旧完成：无归期",
+            "task_version": 2,
+            "status": "completed",
+            "created_at": "2030-10-19T01:00:00Z",
+            "start_at": null,
+            "end_at": null,
+            "completed_at": null,
+            "completion_operation_id": null,
+            "completion_evidence": "unattributed"
+          }
+        ],
+        "focus_intervals": [
+          {
+            "record_id": "a103d27a-01af-459d-b392-fc861f041da9",
+            "task_id": "634ca5649df648c594a648d6c3afdfe4",
+            "task_title": null,
+            "task_missing": true,
+            "record_revision": 3,
+            "interval": {
+              "interval_id": "1bd1e445-bf70-4662-8d3d-d842ee56a801",
+              "segment_id": "abbcbb1f-2794-49fd-92b3-485a542996f0",
+              "clock_session_id": "10000000-0000-4000-8000-000000000002",
+              "sequence": 1,
+              "started_at": "2030-10-18T04:00:00.123456Z",
+              "ended_at": "2030-10-19T04:00:02.123456Z",
+              "elapsed_ms": 86400000
+            },
+            "span_us": 86402000000,
+            "clip_from_us": 43199876544,
+            "clip_to_us": 86402000000,
+            "allocated_elapsed_ms": 43201124
+          },
+          {
+            "record_id": "b385da03-df9d-4549-9e68-5e6e1e1b0190",
+            "task_id": "634ca5649df648c594a648d6c3afdfe4",
+            "task_title": null,
+            "task_missing": true,
+            "record_revision": 3,
+            "interval": {
+              "interval_id": "ee226ef7-5121-4e7a-a9bc-f0e172da0814",
+              "segment_id": "cd3ec4a9-8775-4a29-bd79-9f84052fffb4",
+              "clock_session_id": "10000000-0000-4000-8000-000000000002",
+              "sequence": 1,
+              "started_at": "2030-10-18T15:59:59.999999Z",
+              "ended_at": "2030-10-18T16:00:00.001001Z",
+              "elapsed_ms": 1
+            },
+            "span_us": 1002,
+            "clip_from_us": 1,
+            "clip_to_us": 1002,
+            "allocated_elapsed_ms": 1
+          }
+        ],
+        "unknown_gaps": [
+          {
+            "record_id": "b385da03-df9d-4549-9e68-5e6e1e1b0190",
+            "task_id": "634ca5649df648c594a648d6c3afdfe4",
+            "task_title": null,
+            "task_missing": true,
+            "record_revision": 3,
+            "gap": {
+              "gap_id": "d2779700-7976-435a-828a-655c3239ab4d",
+              "segment_id": "cd3ec4a9-8775-4a29-bd79-9f84052fffb4",
+              "reason": "process_interrupted",
+              "observed_start_at": "2030-10-18T16:00:00.123456Z",
+              "observed_end_at": "2030-10-18T15:59:00Z"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "label": "focus_deleted_current_facts",
+      "period": "day",
+      "anchor": "2030-10-19",
+      "response": {
+        "contract_version": 1,
+        "user_id": "8c96532c145c49de98e7d550b8ba96ba",
+        "period": "day",
+        "anchor": "2030-10-19",
+        "timezone": "Asia/Shanghai",
+        "timezone_policy": "fixed_utc_plus_08",
+        "period_start": "2030-10-19T00:00:00+08:00",
+        "period_end": "2030-10-20T00:00:00+08:00",
+        "as_of": "2030-10-19T01:00:00Z",
+        "snapshot_digest": "5472eb173405d172981163a5a4773d5025a59dae7cf22e2958ada7cfa36decf8",
+        "totals": {
+          "current_completed_count": 2,
+          "current_unscheduled_count": 0,
+          "confirmed_elapsed_ms": 1,
+          "unknown_gap_count": 1
+        },
+        "completed_tasks": [
+          {
+            "task_id": "273a456149c34648a66a1697cac1bd6f",
+            "title": "同名合成任务",
+            "task_version": 2,
+            "status": "completed",
+            "created_at": "2030-10-19T01:00:00Z",
+            "start_at": null,
+            "end_at": null,
+            "completed_at": "2030-10-19T01:00:00Z",
+            "completion_operation_id": "b269136f-eab3-5927-80fc-1b92444b4523",
+            "completion_evidence": "operation_receipt"
+          },
+          {
+            "task_id": "4e1ac693723840d3a557565100d3ff26",
+            "title": "旧完成：只有任务时间",
+            "task_version": 2,
+            "status": "completed",
+            "created_at": "2030-10-19T01:00:00Z",
+            "start_at": null,
+            "end_at": null,
+            "completed_at": "2030-10-19T00:30:00+08:00",
+            "completion_operation_id": null,
+            "completion_evidence": "current_task_time"
+          }
+        ],
+        "unscheduled_tasks": [],
+        "unattributed_completed_tasks": [
+          {
+            "task_id": "51dbea02e1fd459295c71d399e8bc587",
+            "title": "旧完成：无归期",
+            "task_version": 2,
+            "status": "completed",
+            "created_at": "2030-10-19T01:00:00Z",
+            "start_at": null,
+            "end_at": null,
+            "completed_at": null,
+            "completion_operation_id": null,
+            "completion_evidence": "unattributed"
+          }
+        ],
+        "focus_intervals": [
+          {
+            "record_id": "b385da03-df9d-4549-9e68-5e6e1e1b0190",
+            "task_id": "634ca5649df648c594a648d6c3afdfe4",
+            "task_title": null,
+            "task_missing": true,
+            "record_revision": 3,
+            "interval": {
+              "interval_id": "ee226ef7-5121-4e7a-a9bc-f0e172da0814",
+              "segment_id": "cd3ec4a9-8775-4a29-bd79-9f84052fffb4",
+              "clock_session_id": "10000000-0000-4000-8000-000000000002",
+              "sequence": 1,
+              "started_at": "2030-10-18T15:59:59.999999Z",
+              "ended_at": "2030-10-18T16:00:00.001001Z",
+              "elapsed_ms": 1
+            },
+            "span_us": 1002,
+            "clip_from_us": 1,
+            "clip_to_us": 1002,
+            "allocated_elapsed_ms": 1
+          }
+        ],
+        "unknown_gaps": [
+          {
+            "record_id": "b385da03-df9d-4549-9e68-5e6e1e1b0190",
+            "task_id": "634ca5649df648c594a648d6c3afdfe4",
+            "task_title": null,
+            "task_missing": true,
+            "record_revision": 3,
+            "gap": {
+              "gap_id": "d2779700-7976-435a-828a-655c3239ab4d",
+              "segment_id": "cd3ec4a9-8775-4a29-bd79-9f84052fffb4",
+              "reason": "process_interrupted",
+              "observed_start_at": "2030-10-18T16:00:00.123456Z",
+              "observed_end_at": "2030-10-18T15:59:00Z"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "label": "fixed_eight_historical_dst_date",
+      "period": "week",
+      "anchor": "1990-07-15",
+      "response": {
+        "contract_version": 1,
+        "user_id": "8c96532c145c49de98e7d550b8ba96ba",
+        "period": "week",
+        "anchor": "1990-07-15",
+        "timezone": "Asia/Shanghai",
+        "timezone_policy": "fixed_utc_plus_08",
+        "period_start": "1990-07-09T00:00:00+08:00",
+        "period_end": "1990-07-16T00:00:00+08:00",
+        "as_of": "2030-10-19T01:00:00Z",
+        "snapshot_digest": "6e6a48bcfa1cb330004d5a131189127b77ab851e9042ff38b79e0b8cbeb8a41b",
+        "totals": {
+          "current_completed_count": 0,
+          "current_unscheduled_count": 0,
+          "confirmed_elapsed_ms": 0,
+          "unknown_gap_count": 0
+        },
+        "completed_tasks": [],
+        "unscheduled_tasks": [],
+        "unattributed_completed_tasks": [
+          {
+            "task_id": "51dbea02e1fd459295c71d399e8bc587",
+            "title": "旧完成：无归期",
+            "task_version": 2,
+            "status": "completed",
+            "created_at": "2030-10-19T01:00:00Z",
+            "start_at": null,
+            "end_at": null,
+            "completed_at": null,
+            "completion_operation_id": null,
+            "completion_evidence": "unattributed"
+          }
+        ],
+        "focus_intervals": [],
+        "unknown_gaps": []
+      }
+    }
+  ],
+  "errors": [
+    {
+      "period": "day",
+      "anchor": "2030-02-30",
+      "status_code": 422,
+      "response": {
+        "detail": "回看日期或范围无效，请重新选择。",
+        "code": "REVIEW_INVALID"
+      }
+    },
+    {
+      "period": "week",
+      "anchor": "9999-12-31",
+      "status_code": 422,
+      "response": {
+        "detail": "回看日期或范围无效，请重新选择。",
+        "code": "REVIEW_INVALID"
+      }
+    }
+  ]
+}

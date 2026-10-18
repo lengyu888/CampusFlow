@@ -8,10 +8,13 @@ import { localDrafts } from '../services/LocalDrafts';
 import { DraftLease } from '../utils/DraftStore';
 import { TaskStatusController, TaskStatusState } from '../utils/TaskStatusController';
 import { timetableOperationId } from '../utils/TimetableMaintenance';
-import { FocusController, FocusState, emptyFocusState } from '../utils/FocusController';
+import { FocusController, FocusState, FocusLocalView, FocusPendingView, emptyFocusState } from '../utils/FocusController';
 import { localFocus } from '../services/LocalFocus';
 import { PlatformFocusClock } from '../services/PlatformFocusClock';
 import { FocusPage } from './FocusPage';
+import { ReviewPage } from './ReviewPage';
+import { ReviewPeriod } from '../model/ReviewModels';
+import { reviewRange } from '../utils/ReviewTime';
 import { TaskStatusPanel } from '../components/TaskStatusPanel';
 import { localHistory } from '../services/LocalHistory';
 import { historyScope } from '../utils/LocalHistoryStore';
@@ -75,6 +78,11 @@ struct Index {
   @State private focusClearConfirm: boolean = false;
   @State private focusCompletingTask: boolean = false;
   private focusTaskRequestRevision: number = 0;
+  @State private reviewPageOpen: boolean = false;
+  @State private reviewPeriod: ReviewPeriod = 'day';
+  @State private reviewAnchor: string = '';
+  @State private reviewBackRevision: number = 0;
+  @State private reviewEntryRevision: number = 0;
   @State private draftLease: DraftLease | null = null;
   @State private draftNotice: string = '';
   @State private draftCleanupNeeded: boolean = false;
@@ -130,11 +138,52 @@ struct Index {
     this.authRevision++;
     this.resetTaskStatuses();
     this.resetFocus();
+    this.resetReview();
     this.reminders?.dispose();
     this.reminders = null;
   }
 
   private serviceBaseUrl(): string { return this.token.length > 0 && this.authBaseUrl.length > 0 ? this.authBaseUrl : this.baseUrl; }
+
+  private resetReview(): void { this.reviewPageOpen = false; this.reviewAnchor = ''; this.reviewBackRevision++; }
+
+  private reviewCallbackAllowed(revision: number): boolean {
+    return this.pageActive && this.voiceForeground && this.reviewPageOpen && this.token.length > 0 && revision === this.authRevision;
+  }
+
+  private openReview(period: ReviewPeriod, anchor: string): void {
+    if (!this.pageActive || !this.voiceForeground || this.token.length === 0 || this.taskStatusOpen || this.quickCaptureOpen || reviewRange(period, anchor) === null) { return; }
+    this.closeFocus(); this.reviewPeriod = period; this.reviewAnchor = anchor; this.reviewEntryRevision++; this.reviewPageOpen = true;
+  }
+
+  private closeReview(revision: number): void {
+    if (this.reviewCallbackAllowed(revision)) { this.reviewPageOpen = false; }
+  }
+
+  private reviewTaskRequested(taskId: string, revision: number): void {
+    if (!this.reviewCallbackAllowed(revision) || taskId.trim().length === 0 || taskId.length > 128) { return; }
+    this.reviewPageOpen = false; this.openPlanDetails(taskId, '');
+  }
+
+  private reviewFocusRequested(recordId: string, revision: number): void {
+    if (!this.reviewCallbackAllowed(revision) || recordId.length > 128) { return; }
+    this.reviewPageOpen = false; this.openFocus();
+    if (recordId.length > 0) { this.selectFocusRecord(recordId); }
+  }
+
+  private reviewSummaryRequested(text: string, revision: number): void {
+    if (!this.reviewCallbackAllowed(revision) || text.trim().length === 0 || text.length > 8000) { return; }
+    this.reviewPageOpen = false;
+    this.openAgentWithPrompt(text); // Existing offerPrompt preserves drafts and never sends automatically.
+  }
+
+  private reviewPendingRecordCount(): number {
+    const ids = this.focusState.pendingOperations.map((item: FocusPendingView) => item.recordId);
+    this.focusState.localRecords.forEach((record: FocusLocalView) => {
+      if (record.elapsedMs > record.confirmedElapsedMs || record.saveState === 'pending' || record.saveState === 'error') { ids.push(record.recordId); }
+    });
+    return new Set<string>(ids).size;
+  }
 
   private resetFocus(): void {
     this.focusManager?.dispose(); this.focusManager = null;
@@ -394,6 +443,7 @@ struct Index {
 
   onBackPress(): boolean {
     if (this.taskStatusOpen) { this.taskStatusOpen = false; return true; }
+    if (this.reviewPageOpen) { this.reviewBackRevision++; return true; }
     if (this.focusPageOpen) { this.closeFocus(); return true; }
     if (this.pendingLogoutConfirm) { this.pendingLogoutConfirm = false; this.pendingServiceUrl = ''; return true; }
     if (this.quickCaptureOpen) { this.planBackRevision++; return true; }
@@ -424,6 +474,7 @@ struct Index {
     const revision = ++this.authRevision;
     this.resetTaskStatuses();
     this.resetFocus();
+    this.resetReview();
     this.offlineHistory = false;
     this.cacheNotice = '';
     this.authBaseUrl = this.baseUrl;
@@ -480,6 +531,7 @@ struct Index {
     const revision = ++this.authRevision;
     this.resetTaskStatuses();
     this.resetFocus();
+    this.resetReview();
     const api = new CampusFlowApi(this.authBaseUrl || this.baseUrl, this.token);
     this.authBaseUrl = '';
     this.draftLease = null;
@@ -664,9 +716,9 @@ struct Index {
   @Builder
   private pageContent() {
     Stack({ alignContent: Alignment.TopStart }) {
-      HomePage({ onOpenFocus: (task: PlanningTask) => this.openFocus(task), onOpenFocusRecords: () => this.openFocus(), statusLockedTaskIds: this.taskStatusState.lockedTaskIds,
+      HomePage({ onOpenReview: (period: ReviewPeriod, anchor: string) => this.openReview(period, anchor), onOpenFocus: (task: PlanningTask) => this.openFocus(task), onOpenFocusRecords: () => this.openFocus(), statusLockedTaskIds: this.taskStatusState.lockedTaskIds,
         onTaskStatus: (task: PlanningTask) => this.changeTaskStatus(task), onOpenStatus: (id: string) => this.openTaskStatus(id), baseUrl: this.serviceBaseUrl(), token: this.token, user: this.user,
-        refreshKey: this.homeRefresh, active: this.activeTab === 0 && !this.quickCaptureOpen && !this.focusPageOpen && !this.taskStatusOpen && this.voiceForeground,
+        refreshKey: this.homeRefresh, active: this.activeTab === 0 && !this.quickCaptureOpen && !this.focusPageOpen && !this.reviewPageOpen && !this.taskStatusOpen && this.voiceForeground,
         onOpenCapture: (intent: TaskCaptureIntent) => this.openCapture(intent),
         onOpenCourseRoute: (intent: CourseRouteIntent) => this.openCourseRoute(intent),
         onOpenAgent: () => this.applyNavigation(selectRoot(this.navigation, 1, true)),
@@ -679,7 +731,7 @@ struct Index {
         .visibility(this.activeTab === 0 && !this.quickCaptureOpen ? Visibility.Visible : Visibility.Hidden)
       AgentPage({ statusLockedTaskIds: this.taskStatusState.lockedTaskIds, onOpenStatus: (id: string) => this.openTaskStatus(id), baseUrl: this.serviceBaseUrl(), token: this.token, userId: this.user.user_id,
         requestedSessionId: this.requestedSessionId, resumeRevision: this.sessionResumeRevision, draftLease: this.draftLease, initialPrompt: this.agentPrompt,
-        voiceActive: this.activeTab === 1 && !this.focusPageOpen && !this.taskStatusOpen && this.voiceForeground,
+        voiceActive: this.activeTab === 1 && !this.focusPageOpen && !this.reviewPageOpen && !this.taskStatusOpen && this.voiceForeground,
         historyScope: this.cacheScope, deletedSessionId: this.deletedSessionId,
         deletionRevision: this.deletionRevision,
         deletionBusy: this.historyDeleteBusy,
@@ -691,9 +743,9 @@ struct Index {
         onOpenTaskDetails: (id) => this.openPlanDetails(id, ''),
         onOpenPlanDetails: (id) => this.openPlanDetails('', id), onOpenProfile: () => this.selectTab(4) })
         .visibility(this.activeTab === 1 ? Visibility.Visible : Visibility.Hidden)
-      PlanCenterPage({ onOpenFocus: (task: PlanningTask) => this.openFocus(task), statusLockedTaskIds: this.taskStatusState.lockedTaskIds,
+      PlanCenterPage({ onOpenReview: (period: ReviewPeriod, anchor: string) => this.openReview(period, anchor), onOpenFocus: (task: PlanningTask) => this.openFocus(task), statusLockedTaskIds: this.taskStatusState.lockedTaskIds,
         onTaskStatus: (task: PlanningTask) => this.changeTaskStatus(task), onOpenStatus: (id: string) => this.openTaskStatus(id), baseUrl: this.serviceBaseUrl(), token: this.token, draftLease: this.draftLease,
-        refreshKey: this.planRefresh, active: (this.activeTab === 2 || this.quickCaptureOpen) && !this.focusPageOpen && !this.taskStatusOpen && this.voiceForeground,
+        refreshKey: this.planRefresh, active: (this.activeTab === 2 || this.quickCaptureOpen) && !this.focusPageOpen && !this.reviewPageOpen && !this.taskStatusOpen && this.voiceForeground,
         captureOnly: this.quickCaptureOpen, captureIntent: this.captureIntent, captureRevision: this.captureRevision,
         onCloseCapture: () => this.closeCapture(),
         focusTaskId: this.focusTaskId, focusPlanId: this.focusPlanId, focusRevision: this.focusRevision,
@@ -750,10 +802,19 @@ struct Index {
         onBack: () => this.goBack(), onOpenProfile: () => this.selectTab(4),
         onOpenAgent: (prompt) => this.openAgentWithPrompt(prompt) })
         .visibility(this.activeTab === 7 ? Visibility.Visible : Visibility.Hidden)
-      TimetablePage({ baseUrl: this.serviceBaseUrl(), token: this.token, draftLease: this.draftLease, active: this.activeTab === 9 && !this.focusPageOpen && !this.taskStatusOpen && this.voiceForeground,
+      TimetablePage({ baseUrl: this.serviceBaseUrl(), token: this.token, draftLease: this.draftLease, active: this.activeTab === 9 && !this.focusPageOpen && !this.reviewPageOpen && !this.taskStatusOpen && this.voiceForeground,
         onBack: () => this.goBack(), onTimetableChanged: () => this.timetableChanged(),
         onOpenPlan: () => this.openPlanList('agenda') })
         .visibility(this.activeTab === 9 ? Visibility.Visible : Visibility.Hidden)
+      ReviewPage({ baseUrl: this.serviceBaseUrl(), token: this.token, userId: this.user.user_id, draftLease: this.draftLease,
+        active: this.reviewPageOpen && this.voiceForeground && !this.taskStatusOpen,
+        initialPeriod: this.reviewPeriod, initialAnchor: this.reviewAnchor, backRevision: this.reviewBackRevision,
+        accountRevision: this.authRevision, entryRevision: this.reviewEntryRevision, localPendingRecordCount: this.reviewPendingRecordCount(),
+        onBack: (revision: number) => this.closeReview(revision),
+        onOpenTask: (id: string, revision: number) => this.reviewTaskRequested(id, revision),
+        onOpenFocus: (id: string, revision: number) => this.reviewFocusRequested(id, revision),
+        onOfferSummary: (text: string, revision: number) => this.reviewSummaryRequested(text, revision) })
+        .visibility(this.reviewPageOpen ? Visibility.Visible : Visibility.Hidden)
       if (this.focusPageOpen) {
         FocusPage({ state: this.focusState, active: this.voiceForeground && !this.taskStatusOpen,
           taskId: this.focusEntryTaskId, taskTitle: this.focusEntryTitle, notice: this.focusNotice, completingTask: this.focusCompletingTask,
@@ -859,24 +920,24 @@ struct Index {
         if (this.pendingLogoutConfirm) {
           Column({ space: 8 }) {
             Text(this.pendingServiceUrl.length > 0 ? '更换服务前，请核对本机内容' : '退出前，请核对本机内容').fontSize(AppTheme.sectionTitle).fontColor(AppTheme.warning).width('100%')
-            Text('退出会清除本机未同步专注区间、草稿和恢复标识，清除后不能从本机找回。服务器已确认记录仍保留；已收到的操作仍可能生效，退出不等于取消。')
+            Text('退出会清除本机未同步专注区间、草稿（含回看感受）和恢复标识，清除后不能从本机找回。服务器已确认记录仍保留；已收到的操作仍可能生效，退出不等于取消。')
               .fontSize(AppTheme.bodySize).fontColor(AppTheme.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
             Button('保留登录，继续核对').constraintSize({ minHeight: 48 }).width('100%')
               .onClick(() => { this.pendingLogoutConfirm = false; this.pendingServiceUrl = ''; if (this.hasLocalFocus()) { this.openFocus(); } else if (this.taskStatusState.pendingCount > 0) { this.openTaskStatus(); } })
             Button('仍退出并清除本机记录').constraintSize({ minHeight: 48 }).width('100%').onClick(() => this.confirmAccountExit())
           }.padding(16).backgroundColor(AppTheme.warningSoft).width('100%')
         }
-        if (!this.focusPageOpen && !this.taskStatusOpen && (this.focusState.localRecords.length > 0 || this.focusState.pendingOperations.length > 0 || this.focusState.activeRecord !== null || this.focusCleanupNeeded)) {
+        if (!this.focusPageOpen && !this.reviewPageOpen && !this.taskStatusOpen && (this.focusState.localRecords.length > 0 || this.focusState.pendingOperations.length > 0 || this.focusState.activeRecord !== null || this.focusCleanupNeeded)) {
           Button(this.focusState.local?.localState === 'running' ? '专注正在记录 · 打开查看' : '专注记录与待同步内容 · 打开核对')
             .width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize).fontColor(AppTheme.accent)
             .backgroundColor(AppTheme.accentSoft).onClick(() => this.openFocus())
         }
-        if (!this.focusPageOpen && !this.taskStatusOpen && this.taskStatusState.items.length > 0) {
+        if (!this.focusPageOpen && !this.reviewPageOpen && !this.taskStatusOpen && this.taskStatusState.items.length > 0) {
           Button(this.taskStatusState.pendingCount > 0 ? `${this.taskStatusState.pendingCount} 项完成 / 恢复结果待核对` : '查看本次完成 / 恢复记录')
             .width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize).fontColor(AppTheme.accent)
             .backgroundColor(AppTheme.accentSoft).onClick(() => this.openTaskStatus())
         }
-        if (!this.focusPageOpen && !this.taskStatusOpen && !this.quickCaptureOpen && isRootRoute(this.activeTab) && !(this.activeTab === 2 && this.planInnerActive)) {
+        if (!this.focusPageOpen && !this.reviewPageOpen && !this.taskStatusOpen && !this.quickCaptureOpen && isRootRoute(this.activeTab) && !(this.activeTab === 2 && this.planInnerActive)) {
           Row({ space: 4 }) {
             this.navItem(0, 'home', '今日')
             this.navItem(1, 'assistant', '助手')

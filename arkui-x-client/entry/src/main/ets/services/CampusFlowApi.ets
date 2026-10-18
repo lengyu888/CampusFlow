@@ -1,4 +1,5 @@
 import http from '@ohos.net.http';
+import { ReviewPeriod, ReviewSnapshot } from '../model/ReviewModels';
 import { validFocusRequest } from '../utils/FocusValidation';
 import { FocusRequest, FocusOperation, FocusActive, FocusDetail, FocusList } from '../model/FocusModels';
 import {
@@ -85,6 +86,10 @@ export class CampusFlowApi {
   }
 
   async models(): Promise<ModelCatalog> { return this.request('/api/v1/models', http.RequestMethod.GET); }
+  async review(period: ReviewPeriod, anchor: string): Promise<ReviewSnapshot> {
+    return this.request<ReviewSnapshot>(`/api/v1/reviews?period=${encodeURIComponent(period)}&anchor=${encodeURIComponent(anchor)}`,
+      http.RequestMethod.GET);
+  }
   async learningPreferences(): Promise<LearningPreferenceSnapshot> { return this.request('/api/v1/learning-preferences', http.RequestMethod.GET); }
   async saveLearningPreferences(payload: LearningPreferenceWrite): Promise<LearningPreferenceSnapshot> {
     return this.request('/api/v1/learning-preferences', http.RequestMethod.PUT, JSON.stringify(payload));
@@ -159,7 +164,7 @@ export class CampusFlowApi {
           throw this.importFailure(response.responseCode, text);
         }
         if (path === '/api/v1/sessions' || path.startsWith('/api/v1/sessions/') || path === '/api/v1/onboarding' || path.startsWith('/api/v1/onboarding/') || path === '/api/v1/models' || path === '/api/v1/learning-preferences' || path.startsWith('/api/v1/knowledge/') || path === '/api/v1/chat' || path.startsWith('/api/v1/agent-runs') || path.startsWith('/api/v1/actions/') || path.startsWith('/api/v1/planning/') ||
-          path.startsWith('/api/v1/focus-records') || path.startsWith('/api/v1/focus-operations/') ||
+          path.startsWith('/api/v1/focus-records') || path.startsWith('/api/v1/focus-operations/') || path.startsWith('/api/v1/reviews?') ||
           path === '/api/v1/tasks' || path.startsWith('/api/v1/tasks/') || path.startsWith('/api/v1/task-status-operations/') ||
           path === '/api/v1/me/timetable' || path.startsWith('/api/v1/me/timetable/') || path.startsWith('/api/v1/weather?')) {
           throw requestFailure(response.responseCode, text);

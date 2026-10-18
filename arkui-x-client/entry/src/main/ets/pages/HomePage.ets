@@ -1,3 +1,4 @@
+import { ReviewPeriod } from '../model/ReviewModels';
 import { PlanningOverview, PlanningTask, PlanSummary, TimetableEntry, UserProfile, DataEvidence } from '../model/ApiModels';
 import { CampusFlowApi } from '../services/CampusFlowApi';
 import { CampusFlowRequestError } from '../utils/AgentFeedback';
@@ -33,6 +34,7 @@ export struct HomePage {
   onTaskStatus: (task: PlanningTask) => void = () => {};
   onOpenStatus: (taskId: string) => void = () => {};
   onOpenFocus: (task: PlanningTask) => void = () => {};
+  onOpenReview: (period: ReviewPeriod, anchor: string) => void = () => {};
   onOpenFocusRecords: () => void = () => {};
   @State private courses: TimetableEntry[] = [];
   @State private overview: PlanningOverview = {
@@ -276,6 +278,10 @@ export struct HomePage {
           location: course.location, teacher: course.teacher }, timetableRevision: this.timetableRevision,
         evidence: evidence });
     }
+  }
+
+  private reviewRequested(): void {
+    if (this.active) { this.onOpenReview('day', shanghaiDate(this.nowMs)); }
   }
 
   @Builder
@@ -668,6 +674,8 @@ export struct HomePage {
         }.width('100%').constraintSize({ minHeight: 76 }).padding(AppTheme.cardInset)
           .backgroundColor(AppTheme.accentSoft).borderRadius(AppTheme.cardRadius).onClick(() => this.onOpenAgent())
         this.FocusEntry()
+        Button('回看这一天').width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
+          .fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft).borderRadius(AppTheme.controlRadius).onClick(() => this.reviewRequested())
         Column({ space: 12 }) {
           this.SectionTitle('目标进展', '查看全部', 'goals')
           if (this.activePlans().length > 0) {

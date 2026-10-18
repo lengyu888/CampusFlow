@@ -56,6 +56,8 @@ from .knowledge import KnowledgeHit, KnowledgeSearchResponse, KnowledgeService
 from .learning_preferences import register_learning_preferences
 from .model_catalog import ModelCatalog
 from .replanning import ReplanError, ReplanningService
+from .review_schemas import ReviewSnapshot
+from .review_service import ReviewError, ReviewService
 from .run_service import RunError, RunService
 from .schedule_subscription import (
     ScheduleSubscriptionError,
@@ -260,6 +262,7 @@ def create_app(
     action_service = action_service or ActionService(account_store, store)
     task_status_service = action_service.task_status_service()
     focus_service = FocusService(action_service)
+    review_service = ReviewService(focus_service, task_status_service)
     skill_store = skill_store or SkillStore(settings.database_path)
     api_key_vault = api_key_vault or ApiKeyVault(settings)
     hduhelp_service = hduhelp_service or HDUHelpService(settings)
@@ -297,6 +300,12 @@ def create_app(
     )
     app.state.run_service = run_service
 
+    @app.exception_handler(ReviewError)
+    async def review_error_handler(request: Request, exc: ReviewError) -> JSONResponse:
+        return JSONResponse(
+            status_code=exc.status_code, content={"detail": exc.detail, "code": exc.code}
+        )
+
     @app.exception_handler(FocusError)
     async def focus_error_handler(request: Request, exc: FocusError) -> JSONResponse:
         return JSONResponse(
@@ -305,6 +314,11 @@ def create_app(
 
     @app.exception_handler(RequestValidationError)
     async def request_error_handler(request: Request, exc: RequestValidationError):
+        if request.url.path == "/api/v1/reviews":
+            return JSONResponse(
+                status_code=422,
+                content={"detail": "回看日期或范围无效，请重新选择。", "code": "REVIEW_INVALID"},
+            )
         if request.url.path.startswith(("/api/v1/focus-records", "/api/v1/focus-operations")):
             return JSONResponse(
                 status_code=422,
@@ -362,6 +376,7 @@ def create_app(
     app.state.action_service = action_service
     app.state.task_status_service = task_status_service
     app.state.focus_service = focus_service
+    app.state.review_service = review_service
     app.state.replanning_service = replanning_service
     app.state.timetable_service = timetable_service
 
@@ -1391,6 +1406,14 @@ def create_app(
             raise CampusFlowError(
                 500, "保存结果暂时无法核实，请先读取规划核对。", "ACTION_FAILED"
             ) from exc
+
+    @app.get("/api/v1/reviews", response_model=ReviewSnapshot)
+    async def review(
+        user: CurrentUser,
+        period: str = Query(pattern=r"^(day|week)$"),
+        anchor: str = Query(pattern=r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"),
+    ) -> ReviewSnapshot:
+        return review_service.snapshot(user.user_id, period, anchor)
 
     @app.post("/api/v1/focus-records/{record_id}/operations", response_model=FocusOperation)
     async def submit_focus_operation(

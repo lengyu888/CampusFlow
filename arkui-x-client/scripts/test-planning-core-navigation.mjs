@@ -237,3 +237,5 @@ test('task detail focus entry keeps exact current ID and existing detail stack w
  page.onOpenFocus=value=>opened.push(value);page.focusRequested(original);assert.equal(opened[0],page.overview.tasks[0]);assert.equal(opened[0].title,'最新任务标题');
  assert.deepEqual(page.detailStack,before);assert.deepEqual(calls,[]);page.focusRequested(task('missing'));page.active=false;page.focusRequested(original);assert.equal(opened.length,1);
 });
+
+test('review entry preserves selected date and task draft and does not escape home capture',()=>{const {page}=fixture(),calls=[];page.active=true;page.selectedDate='2030-10-24';page.title='未写完的待办';page.onOpenReview=(...args)=>calls.push(args);page.reviewRequested();assert.deepEqual(calls,[['week','2030-10-24']]);assert.equal(page.title,'未写完的待办');page.captureOnly=true;page.reviewRequested();page.captureOnly=false;page.active=false;page.reviewRequested();assert.equal(calls.length,1);});

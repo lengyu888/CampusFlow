@@ -327,3 +327,5 @@ test('focus entry uses an exact current task and a bounded honest shortcut list 
  page.taskPhase='stale';page.focusRequested(old);assert.deepEqual(page.focusCandidates(),[]);assert.equal(opened.length,1);
  page.taskPhase='ready';page.active=false;page.focusRequested(old);assert.equal(opened.length,1);
 });
+
+test('review entry uses exact campus today and is inert while hidden',()=>{const {page}=setup(),calls=[];page.active=true;page.onOpenReview=(...args)=>calls.push(args);page.reviewRequested();assert.deepEqual(calls,[['day','2026-10-19']]);page.active=false;page.reviewRequested();assert.equal(calls.length,1);});
