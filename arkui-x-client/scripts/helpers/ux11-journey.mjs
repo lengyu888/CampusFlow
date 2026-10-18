@@ -15,12 +15,16 @@ export async function eventually(predicate, label, maximum = 300) {
   for (let index=0; index<maximum; index++) { if (await predicate()) return; await new Promise(resolve=>setTimeout(resolve,10)); }
   throw Error(`Journey condition timed out: ${label}`);
 }
+export function journeyPython(root = repository, env = process.env, platform = process.platform) {
+  if (env.CAMPUSFLOW_TEST_PYTHON) return env.CAMPUSFLOW_TEST_PYTHON;
+  const localPython = path.join(root, 'agent-service', '.venv', ...(platform === 'win32' ? ['Scripts', 'python.exe'] : ['bin', 'python']));
+  return existsSync(localPython) ? localPython : platform === 'win32' ? 'python' : 'python3';
+}
 export class JourneyBridge {
   #next=0; #pending=new Map(); #closed=false; #child;
   diagnostics=[];
   constructor() {
-    const localPython=path.join(repository,'agent-service/.venv/bin/python');
-    const python=process.env.CAMPUSFLOW_TEST_PYTHON ?? (existsSync(localPython)?localPython:'python3');
+    const python=journeyPython();
     this.#child=spawn(python,['-u','tests/ux11_journey_bridge.py'],{cwd:path.join(repository,'agent-service'),
       env:{...process.env,PYTHONPATH:'src',PYTHONUNBUFFERED:'1'},stdio:['pipe','pipe','pipe']});
     createInterface({input:this.#child.stdout}).on('line',line=>{

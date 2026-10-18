@@ -55,6 +55,19 @@ python -m uvicorn campusflow_agent.main:app --host 0.0.0.0 --port 8000
 - 删除计划卡片并保留其待办：`DELETE /api/v1/plans/{plan_id}`
 - 确认事务：`POST /api/v1/actions/{proposal_id}/confirm`
 
+## 依赖更新与跨平台回归
+
+拉取包含依赖变更的提交后，在现有虚拟环境重新执行 `python -m pip install -e ".[dev]"`。
+项目已把 `tzdata` 声明为正式运行依赖：Windows 等没有系统 IANA 时区库的环境也能加载
+`Asia/Shanghai`，启动天气与其他 API，并解析带时区的课表。只拉取代码不会自动补齐依赖。
+
+离线回归运行 `python -m pytest`；默认排除会访问真实模型的 `integration` 用例。
+`tests/test_platform_portability.py` 会在独立子进程关闭系统时区库，验证 API 健康检查与
+命名时区课表解析；另用 loopback socketpair 模拟 Windows 的 asyncio 内部唤醒通道。
+普通 localhost/TCP、DNS、UDP 请求仍被隔离器阻止，不会借此访问模型或校园服务。
+真正修改进程时区的检查只在支持 `time.tzset` 的系统运行；课表时间语义仍在全部平台测试。
+这些模拟测试不能代替干净 Windows 环境的运行结果，更不代表三端 App 原生编译通过。
+
 ## HDUHelp Connect
 
 推荐由用户在客户端填写 HDUHelp 个人访问令牌（PAT）。`PUT /api/v1/hduhelp/pat` 会先向

@@ -12,7 +12,7 @@ $devEcoRoot = if ($env:DEVECO_STUDIO_HOME) {
 }
 $hvigor = Join-Path $devEcoRoot 'tools\hvigor\bin\hvigorw.bat'
 $ide = Join-Path $devEcoRoot 'bin\devecostudio64.exe'
-$projectRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+$projectRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 $localProperties = Join-Path $projectRoot 'local.properties'
 
 . (Join-Path $PSScriptRoot 'arkuix-sdk-path.ps1')
@@ -98,5 +98,5 @@ if ($RestartIDE) {
   if ($runningIde) {
     throw 'DevEco Studio is still running. Save your work, exit it completely, then rerun with -RestartIDE.'
   }
-  Start-Process -FilePath $ide -ArgumentList @($projectRoot)
+  Start-Process -FilePath $ide -ArgumentList @(('"{0}"' -f $projectRoot))
 }

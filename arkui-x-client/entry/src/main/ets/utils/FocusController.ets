@@ -499,7 +499,11 @@ export class FocusController {
     this.networkBusy = false; this.localBusy = false; const generation = this.generation; const foreground = this.state.foreground;
     this.state = emptyFocusState(); this.state.foreground = foreground; this.publish();
     try { await this.store.clear(); if (generation === this.generation) { this.state.phase = 'ready'; this.state.message = '本机专注缓存已清理；这不取消已发往服务器的操作。'; this.publish(); } }
-    catch (error) { if (generation === this.generation) { this.state.phase = 'error'; this.fail(error as Error, '本机清理未完成，不能切换账号继续写入，请重试清理。'); } throw error; }
+    catch (error) {
+      const failure: Error = error instanceof Error ? error : new Error('FOCUS_LOCAL_CLEAR_FAILED');
+      if (generation === this.generation) { this.state.phase = 'error'; this.fail(failure, '本机清理未完成，不能切换账号继续写入，请重试清理。'); }
+      throw failure;
+    }
   }
   dispose(): void { this.stopSamples(); this.disposed = true; this.generation++; this.lease = null; this.timer = null; }
 }

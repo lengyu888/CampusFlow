@@ -152,7 +152,10 @@ export struct HistoryPage {
           await new CampusFlowApi(this.baseUrl, this.token).deleteSession(session.session_id);
         } catch (error) {
           // This endpoint reports 404 when the authenticated user's session is already gone.
-          if (!(error instanceof CampusFlowRequestError) || error.statusCode !== 404) { throw error; }
+          if (!(error instanceof CampusFlowRequestError) || error.statusCode !== 404) {
+            const failure: Error = error instanceof Error ? error : new Error('HISTORY_DELETE_FAILED');
+            throw failure;
+          }
         }
         // A committed delete must finish even if the user changes tabs. Only an
         // account/storage-generation change may prevent local cleanup.

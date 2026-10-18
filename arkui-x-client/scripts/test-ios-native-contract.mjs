@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
 // Offline source/wiring contracts ONLY. These checks do not execute Objective-C,
 // compile against an Apple/ArkUI-X SDK, grant permissions or prove device delivery.
@@ -211,7 +212,7 @@ test('permission descriptions disclose system speech processing without backgrou
 
 test('available host plist parser validates plist and pbxproj syntax without invoking Xcode', { skip: process.platform !== 'darwin' }, () => {
   for (const path of ['app/Info.plist', 'app.xcodeproj/project.pbxproj']) {
-    const result = spawnSync('/usr/bin/plutil', ['-lint', new URL(path, native).pathname], { encoding: 'utf8' });
+    const result = spawnSync('/usr/bin/plutil', ['-lint', fileURLToPath(new URL(path, native))], { encoding: 'utf8' });
     assert.equal(result.status, 0, result.stdout + result.stderr);
   }
 });

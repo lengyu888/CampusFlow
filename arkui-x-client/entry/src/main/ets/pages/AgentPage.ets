@@ -265,7 +265,8 @@ export struct AgentPage {
         try { context = await new CampusFlowApi(this.baseUrl, this.token).sessionContext(target); }
         catch (error) {
           // A queued first turn has no completed history. Its owned run remains the authority.
-          if ((targetRun.length === 0 && this.switchDraftId !== target) || this.safeFailure(error).code !== 'SESSION_NOT_FOUND') { throw error; }
+          const failure: CampusFlowRequestError = this.safeFailure(error as Error);
+          if ((targetRun.length === 0 && this.switchDraftId !== target) || failure.code !== 'SESSION_NOT_FOUND') { throw failure; }
           if (targetRun.length > 0) {
           const run = await new CampusFlowApi(this.baseUrl, this.token).agentRun(targetRun);
           if (run.run_id !== targetRun || run.session_id !== target) { throw localRequestFailure('INVALID_RESPONSE'); }

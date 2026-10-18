@@ -1,5 +1,7 @@
 # 行简（CampusFlow）ArkUI-X 客户端
 
+当前协作版本统一使用 `dev/haohao`。历史阶段后的编译配置与 Windows 兼容修复、实际检查边界见 [兼容修复说明](../docs/compatibility-repair.md)；分支操作见 [协作约定](../docs/haohao-collaboration.md)。
+
 这是行简的 ArkUI-X/ArkTS 客户端。仓库保留 HarmonyOS、Android、iOS 宿主工程及 ArkUI-X 6.1.1 / API 24 配置；包名和路径继续使用 CampusFlow。本轮 UX01–UX12 未安装原生环境，也未执行三端构建或设备验证，工程配置不能当作运行证据。先看[本轮交接入口](../docs/ux-12-handoff.md)与[设备验收表](../docs/ux-12-competition-acceptance.md)。共享代码覆盖以下核心流程：
 
 - 登录与注册（无需模型密钥也可录课、管理任务与查看回看；使用模型前另行配置）

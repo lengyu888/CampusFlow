@@ -13,7 +13,7 @@ async function driverFixture(){
  open:async p=>{const file=await fs.open(p,'w');handles.set(file.fd,file);return {fd:file.fd};},
  write:async(fd,text)=>(await handles.get(fd).write(Buffer.from(text,'utf8'))).bytesWritten,fsync:fd=>handles.get(fd).sync(),
  close:async file=>{await handles.get(file.fd).close();handles.delete(file.fd);},rename:async(a,b)=>{if(failRename)throw Error('rename');await fs.rename(a,b);},unlink:p=>wrap(()=>fs.unlink(p))};
- let source=readFileSync(new URL('../entry/src/main/ets/services/LocalFocus.ets',import.meta.url),'utf8').replace(/^import [^\n]+;\n/gm,'').replace(/^export /gm,'');
+ let source=readFileSync(new URL('../entry/src/main/ets/services/LocalFocus.ets',import.meta.url),'utf8').replace(/^import [^\n]+;\r?\n/gm,'').replace(/^export /gm,'');
  const {FileFocusDriver}=new Function('fs','FocusStore','MAX_FOCUS_BYTES','focusBytes',stripTypeScriptTypes(source)+'\nreturn {FileFocusDriver};')(bridge,FocusStore,stores.MAX_FOCUS_BYTES,stores.focusBytes);
  const driver=new FileFocusDriver();driver.configure(directory);return {directory,driver,setFailure:value=>{failRename=value;},cleanup:()=>fs.rm(directory,{recursive:true,force:true})};
 }

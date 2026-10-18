@@ -1,7 +1,7 @@
 import { accessSync, constants, existsSync, readFileSync, statSync } from 'node:fs';
-import { delimiter, dirname, join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { homedir } from 'node:os';
-import { spawnSync } from 'node:child_process';
+import { findHostCommand, spawnHostCommandSync } from './helpers/host-command.mjs';
 import { fileURLToPath } from 'node:url';
 
 // Read-only prerequisite discovery. Do not invoke ACE, Gradle, Hvigor, SDK
@@ -22,17 +22,8 @@ const executable = (path) => {
   } catch { return false; }
 };
 const firstDirectory = (paths) => paths.filter(Boolean).find(directory);
-const findCommand = (name) => {
-  const extensions = windows ? ['', '.exe', '.cmd', '.bat'] : [''];
-  for (const folder of (process.env.PATH || process.env.Path || '').split(delimiter).filter(Boolean)) {
-    for (const suffix of extensions) {
-      const candidate = join(folder.replace(/^"|"$/g, ''), name + suffix);
-      if (executable(candidate)) return candidate;
-    }
-  }
-  return undefined;
-};
-const probe = (command, args) => spawnSync(command, args, {
+const findCommand = name => findHostCommand(name);
+const probe = (command, args) => spawnHostCommandSync(command, args, {
   encoding: 'utf8', timeout: 5000, maxBuffer: 64 * 1024, windowsHide: true, shell: false
 });
 const commandFile = (id, name) => {

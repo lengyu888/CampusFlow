@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import os
 import socket
 import subprocess
 import sys
@@ -148,17 +149,23 @@ def test_jsonl_subprocess_correlates_requests_and_shutdown_cleans_tempdir():
     inputs = [
         {"id": 1, "method": "init", "params": {"wall_time": "2030-10-21T07:00:00+08:00"}},
         {"id": 2, "method": "clock.read", "params": {}},
-        {"id": 3, "method": "shutdown", "params": {}},
+        {"id": 3, "method": "unknown", "params": {}},
+        {"id": 4, "method": "shutdown", "params": {}},
     ]
     result = subprocess.run(
         [sys.executable, str(script)],
         input="".join(json.dumps(value) + "\n" for value in inputs),
-        text=True, capture_output=True, timeout=20, check=True,
+        env=dict(os.environ, PYTHONIOENCODING="ascii"),
+        text=True, encoding="utf-8", capture_output=True, timeout=20, check=True,
     )
     replies = {value["id"]: value for value in map(json.loads, result.stdout.splitlines())}
-    assert set(replies) == {1, 2, 3}
-    assert all(value["ok"] for value in replies.values())
-    assert replies[3]["result"] == {"closed": True}
+    assert set(replies) == {1, 2, 3, 4}
+    assert all(replies[index]["ok"] for index in (1, 2, 4))
+    assert not replies[3]["ok"]
+    assert replies[3]["error"] == {
+        "code": "BRIDGE_METHOD_UNKNOWN", "message": "未知测试桥接方法。",
+    }
+    assert replies[4]["result"] == {"closed": True}
     assert result.stderr == ""
 
 

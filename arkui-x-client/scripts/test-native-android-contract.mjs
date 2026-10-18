@@ -149,7 +149,7 @@ test('pure Java: production NativePolicy bounds and complete Unicode chunking (n
 }, () => {
   const temp = mkdtempSync(join(tmpdir(), 'campusflow-native-policy-'));
   try {
-    const compile = spawnSync('javac', ['-d', temp, fileURLToPath(new URL('NativePolicy.java', javaRoot)),
+    const compile = spawnSync('javac', ['-encoding', 'UTF-8', '-d', temp, fileURLToPath(new URL('NativePolicy.java', javaRoot)),
       fileURLToPath(new URL('fixtures/NativePolicyTest.java', import.meta.url))], { encoding: 'utf8' });
     assert.equal(compile.status, 0, compile.stderr);
     const run = spawnSync('java', ['-cp', temp, 'com.campusflow.agent.NativePolicyTest'], { encoding: 'utf8' });

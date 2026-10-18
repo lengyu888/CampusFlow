@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { stripTypeScriptTypes } from 'node:module';
-import { execFileSync } from 'node:child_process';
+import { runModuleSource } from './helpers/run-module.mjs';
 import { test } from 'node:test';
 const source = readFileSync(new URL('../entry/src/main/ets/utils/QuickCaptureParser.ets', import.meta.url), 'utf8');
 const moduleUrl = `data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(source)).toString('base64')}`;
@@ -83,7 +83,7 @@ test('manual 23:59 without duration is explicitly flagged instead of becoming an
 });
 test('duration calculation crosses midnight and is independent of the device timezone', () => {
   const script = `import {parseQuickCapture,captureEndAt} from ${JSON.stringify(moduleUrl)};console.log(JSON.stringify([parseQuickCapture('明晚八点复习一小时','2026-10-18'),captureEndAt('2026-12-31','23:30',120)]));`;
-  const results = ['UTC', 'America/Los_Angeles', 'Asia/Shanghai'].map(TZ => execFileSync(process.execPath, ['--input-type=module', '-e', script], { env: { ...process.env, TZ }, encoding: 'utf8' }));
+  const results = ['UTC', 'America/Los_Angeles', 'Asia/Shanghai'].map(TZ => runModuleSource(script, { env: { ...process.env, TZ } }));
   assert.equal(new Set(results).size, 1); assert.equal(JSON.parse(results[0])[1], '2027-01-01T01:30:00+08:00');
 });
 test('names are never truncated and date/time-only input asks for a title', () => {

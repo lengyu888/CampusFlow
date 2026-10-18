@@ -1,0 +1,535 @@
+{
+  "checked_at": "2026-10-18",
+  "scope": "All current 91 tracked client ArkTS/TS sources; targeted source risk scan, not a compiler or general proof of ArkTS compatibility.",
+  "count": 91,
+  "targeted_patterns": {
+    "arbitrary_literal_throw": [],
+    "typed_catch_statement": [],
+    "dynamic_javascript_evaluation": [],
+    "unsupported_globalthis_reference": [],
+    "unbounded_catch_rethrow_candidate": [
+      {
+        "path": "entry/src/main/ets/services/PlatformFocusClock.ets",
+        "line": 68,
+        "source": "if (error instanceof FocusClockError) { throw error; }"
+      }
+    ]
+  },
+  "remaining_catch_rethrow_review": "Only PlatformFocusClock.ets:68 remains; it is narrowed via instanceof FocusClockError, which extends Error. No further modification justified by this check.",
+  "platform_imports": [
+    {
+      "path": "entry/src/main/ets/entryability/EntryAbility.ets",
+      "line": 1,
+      "source": "import AbilityConstant from '@ohos.app.ability.AbilityConstant';"
+    },
+    {
+      "path": "entry/src/main/ets/entryability/EntryAbility.ets",
+      "line": 2,
+      "source": "import UIAbility from '@ohos.app.ability.UIAbility';"
+    },
+    {
+      "path": "entry/src/main/ets/entryability/EntryAbility.ets",
+      "line": 3,
+      "source": "import Want from '@ohos.app.ability.Want';"
+    },
+    {
+      "path": "entry/src/main/ets/entryability/EntryAbility.ets",
+      "line": 4,
+      "source": "import window from '@ohos.window';"
+    },
+    {
+      "path": "entry/src/main/ets/pages/AgentPage.ets",
+      "line": 15,
+      "source": "import common from '@ohos.app.ability.common';"
+    },
+    {
+      "path": "entry/src/main/ets/pages/Index.ets",
+      "line": 3,
+      "source": "import { KeyboardAvoidMode } from '@ohos.arkui.UIContext';"
+    },
+    {
+      "path": "entry/src/main/ets/pages/Index.ets",
+      "line": 4,
+      "source": "import common from '@ohos.app.ability.common';"
+    },
+    {
+      "path": "entry/src/main/ets/services/CampusFlowApi.ets",
+      "line": 1,
+      "source": "import http from '@ohos.net.http';"
+    },
+    {
+      "path": "entry/src/main/ets/services/HarmonyFocusClock.ets",
+      "line": 1,
+      "source": "import systemDateTime from '@ohos.systemDateTime';"
+    },
+    {
+      "path": "entry/src/main/ets/services/HarmonyReminderDriver.ets",
+      "line": 1,
+      "source": "import common from '@ohos.app.ability.common';"
+    },
+    {
+      "path": "entry/src/main/ets/services/HarmonyReminderDriver.ets",
+      "line": 2,
+      "source": "import fs from '@ohos.file.fs';"
+    },
+    {
+      "path": "entry/src/main/ets/services/HarmonyReminderDriver.ets",
+      "line": 3,
+      "source": "import { BusinessError } from '@ohos.base';"
+    },
+    {
+      "path": "entry/src/main/ets/services/HarmonyReminderDriver.ets",
+      "line": 4,
+      "source": "import { reminderAgentManager } from '@kit.BackgroundTasksKit';"
+    },
+    {
+      "path": "entry/src/main/ets/services/HarmonyReminderDriver.ets",
+      "line": 5,
+      "source": "import { notificationManager } from '@kit.NotificationKit';"
+    },
+    {
+      "path": "entry/src/main/ets/services/HarmonyVoiceDriver.ets",
+      "line": 1,
+      "source": "import common from '@ohos.app.ability.common';"
+    },
+    {
+      "path": "entry/src/main/ets/services/HarmonyVoiceDriver.ets",
+      "line": 2,
+      "source": "import abilityAccessCtrl from '@ohos.abilityAccessCtrl';"
+    },
+    {
+      "path": "entry/src/main/ets/services/HarmonyVoiceDriver.ets",
+      "line": 3,
+      "source": "import { speechRecognizer, textToSpeech } from '@kit.CoreSpeechKit';"
+    },
+    {
+      "path": "entry/src/main/ets/services/LocalDrafts.ets",
+      "line": 1,
+      "source": "import fs from '@ohos.file.fs';"
+    },
+    {
+      "path": "entry/src/main/ets/services/LocalDrafts.ets",
+      "line": 2,
+      "source": "import { BusinessError } from '@ohos.base';"
+    },
+    {
+      "path": "entry/src/main/ets/services/LocalFocus.ets",
+      "line": 1,
+      "source": "import fs from '@ohos.file.fs';"
+    },
+    {
+      "path": "entry/src/main/ets/services/LocalFocus.ets",
+      "line": 2,
+      "source": "import { BusinessError } from '@ohos.base';"
+    },
+    {
+      "path": "entry/src/main/ets/services/LocalHistory.ets",
+      "line": 1,
+      "source": "import fs from '@ohos.file.fs';"
+    },
+    {
+      "path": "entry/src/main/ets/services/LocalHistory.ets",
+      "line": 2,
+      "source": "import { BusinessError } from '@ohos.base';"
+    },
+    {
+      "path": "entry/src/main/ets/services/PlatformFocusClock.ets",
+      "line": 1,
+      "source": "import deviceInfo from '@ohos.deviceInfo';"
+    },
+    {
+      "path": "entry/src/main/ets/services/PlatformReminderDriver.ets",
+      "line": 1,
+      "source": "import common from '@ohos.app.ability.common';"
+    },
+    {
+      "path": "entry/src/main/ets/services/PlatformReminderDriver.ets",
+      "line": 2,
+      "source": "import deviceInfo from '@ohos.deviceInfo';"
+    },
+    {
+      "path": "entry/src/main/ets/services/PlatformVoiceDriver.ets",
+      "line": 1,
+      "source": "import common from '@ohos.app.ability.common';"
+    },
+    {
+      "path": "entry/src/main/ets/services/PlatformVoiceDriver.ets",
+      "line": 2,
+      "source": "import deviceInfo from '@ohos.deviceInfo';"
+    }
+  ],
+  "pending_native_checks": [
+    "CoreSpeechKit actual API24 declarations and engines",
+    "Harmony reminder/notification APIs",
+    "Dynamic platform imports and Android/iOS cold starts",
+    "ArkUI component/type compilation across all pages",
+    "Android Java/Gradle build",
+    "iOS Objective-C/Xcode build"
+  ],
+  "files": [
+    {
+      "path": "entry/hvigorfile.ts",
+      "sha256": "68e6b5524128d80b24e7b4c4a9e6e32da5c3f30fae77cc76e6b05086dcedc6fd"
+    },
+    {
+      "path": "entry/src/main/ets/components/AgentProposalSummary.ets",
+      "sha256": "ab01ee542548012acd310035b3fa988ea02fd0594c20ba4e76ae7ccfba43ee72"
+    },
+    {
+      "path": "entry/src/main/ets/components/AppIcon.ets",
+      "sha256": "4b394371500e3451fec156f79e17c730d9b92b42cb73b6a532f63d04849966db"
+    },
+    {
+      "path": "entry/src/main/ets/components/AppIllustration.ets",
+      "sha256": "41912db9f94e0a14e1f80e77770288ac77c8b508d3c4187385ec543edd897c32"
+    },
+    {
+      "path": "entry/src/main/ets/components/CampusKnowledgePanel.ets",
+      "sha256": "b4192c172ec6ad31e8e9f70bc76f776e20153a1ee184bae271cc1502903b7e75"
+    },
+    {
+      "path": "entry/src/main/ets/components/CourseReviewPanel.ets",
+      "sha256": "2375f920d1958df122f01adac6a7d4f4fe183318525c4dcb121ea8292b09a938"
+    },
+    {
+      "path": "entry/src/main/ets/components/EvidencePanel.ets",
+      "sha256": "034f4950e6ac6dc9ab62dacc634c2c0a8fe9f7c2915f8a655ba50efeecdf65e7"
+    },
+    {
+      "path": "entry/src/main/ets/components/FeedbackPanel.ets",
+      "sha256": "8c091f905ffd1daa1f725a5a366e5154b232a22b2981c41d58a12eea63622a19"
+    },
+    {
+      "path": "entry/src/main/ets/components/LearningPreferencesPanel.ets",
+      "sha256": "e6d4cdb82e66582f582bb0ab424cf43bcddc7cebef1507daf34d048bae1a7521"
+    },
+    {
+      "path": "entry/src/main/ets/components/MessageContent.ets",
+      "sha256": "3c9277d99642391a590c20780f07128c275be4b2d83a2ecb12d155da60bfdd7e"
+    },
+    {
+      "path": "entry/src/main/ets/components/PlanningActionPanel.ets",
+      "sha256": "5567de7492003376fad0c0268ee306a551a8198ef853ec2fa071ef248d8a67a4"
+    },
+    {
+      "path": "entry/src/main/ets/components/PlanningConflictsPanel.ets",
+      "sha256": "b9ba181938c281622d1ce7a594fbe23324a7cefebebe8a1528f1dedc5529e312"
+    },
+    {
+      "path": "entry/src/main/ets/components/RouteMap.ets",
+      "sha256": "7f0ccf0f2b7c9dea38fbf348527769e186f3f9f797c376a4b45b61ec24a6285e"
+    },
+    {
+      "path": "entry/src/main/ets/components/TaskScheduleDetails.ets",
+      "sha256": "4aa4982e9ba7208ea84f8916e9db38e34b80c573e4cddd2de41f64f440ba8e9f"
+    },
+    {
+      "path": "entry/src/main/ets/components/TaskStatusPanel.ets",
+      "sha256": "99f9f8cbf10451b40465065993b7d8b6ec1c8b0879e4b3e655b7aa04353f5b6f"
+    },
+    {
+      "path": "entry/src/main/ets/components/TimetableEntryEditor.ets",
+      "sha256": "ed8d8d0adeb09cf58ce1d402b77ed06a7746b8a6f6dd2fd79cc88781f159dbfe"
+    },
+    {
+      "path": "entry/src/main/ets/components/TimetableImportPanel.ets",
+      "sha256": "8b867e3c62c379e86214ee73d1a1469b499814d7a42a36dc1b680fb527207675"
+    },
+    {
+      "path": "entry/src/main/ets/entryability/EntryAbility.ets",
+      "sha256": "936371f0bb5dfbe204872aa78c4d60858ac337bed2c4f53e20bb68399def626b"
+    },
+    {
+      "path": "entry/src/main/ets/model/ApiModels.ets",
+      "sha256": "e1ce75e2d20c05c47d4124b910eef7a63e4a1f9bc055f982eaf4c347a06f010f"
+    },
+    {
+      "path": "entry/src/main/ets/model/FocusModels.ets",
+      "sha256": "b127e525314a14946bf9f29358527669894b05fdba99333496ab9f240ea8407b"
+    },
+    {
+      "path": "entry/src/main/ets/model/ReviewModels.ets",
+      "sha256": "662b24f67b2c2b409cc8846fd3bbe7b7c883f5bad3a3c4874fc070ab8e14b41f"
+    },
+    {
+      "path": "entry/src/main/ets/pages/AgentPage.ets",
+      "sha256": "1b366877f7edfc4d0f4af478146cddaf74bbed8a2f43fe9784f9bc6eed32b624"
+    },
+    {
+      "path": "entry/src/main/ets/pages/CampusPage.ets",
+      "sha256": "7b64c346d1f1b156f0776a5029e2aca2ba547302c2f701ba40d40f304fa394d6"
+    },
+    {
+      "path": "entry/src/main/ets/pages/CampusServicesPage.ets",
+      "sha256": "6fee3c7b78aba89fa3683c7dfc0cc3a8e38e782660c70185b5a5b919d860be2c"
+    },
+    {
+      "path": "entry/src/main/ets/pages/FocusPage.ets",
+      "sha256": "92651dce87e363cc8bd85f97f4b3dc5a86ea59ebb5b3879c48c7fa5eb1ccbd90"
+    },
+    {
+      "path": "entry/src/main/ets/pages/HistoryPage.ets",
+      "sha256": "502f1a2a6b53f231fdf0be29876670f05b085511535212b8f3f7e0837a1bb105"
+    },
+    {
+      "path": "entry/src/main/ets/pages/HomePage.ets",
+      "sha256": "ef35bb179efb53e48779db308fad6bf8e1b67d197f3d451aa814ebfc1085c0ce"
+    },
+    {
+      "path": "entry/src/main/ets/pages/Index.ets",
+      "sha256": "b755063f03c6696c6d5cb8792bfc591af56b2232b2759256d0057d8811582e64"
+    },
+    {
+      "path": "entry/src/main/ets/pages/LoginPage.ets",
+      "sha256": "b4b7215aa1b636830089eb162003951dedd1532b6ef3c7d568207f10b75e4862"
+    },
+    {
+      "path": "entry/src/main/ets/pages/OnboardingPage.ets",
+      "sha256": "20f4e74189acb4baa84541e28ee0ee1d5bc90a621338f3ce658fe2398f65b41d"
+    },
+    {
+      "path": "entry/src/main/ets/pages/PlanCenterPage.ets",
+      "sha256": "4f8c11d107ad3fd78225a1eb291858a03ba164051e26e1e0dc744ea3618beaaf"
+    },
+    {
+      "path": "entry/src/main/ets/pages/PlanPage.ets",
+      "sha256": "bf27a0a31b766a95656d0e9df0b9f746083e1fd50b91048dec8bc2306c0315b9"
+    },
+    {
+      "path": "entry/src/main/ets/pages/ProfilePage.ets",
+      "sha256": "6dbf6c9d2c0bef8b28e254a24a914190a3be0a46a4d0d1474323a5242bd96a52"
+    },
+    {
+      "path": "entry/src/main/ets/pages/ReviewPage.ets",
+      "sha256": "799fedbf67ec496403c39b20f82729f78976c303251026aa9c8872c9ab169aef"
+    },
+    {
+      "path": "entry/src/main/ets/pages/RoutePage.ets",
+      "sha256": "e938caf9615ff5ee1990d7108308ed7502a15491a0b858672c83a8a2f7f1061c"
+    },
+    {
+      "path": "entry/src/main/ets/pages/SkillsPage.ets",
+      "sha256": "8cbfe508e614e6fd3efb90a215803923b27f5d33b5da03db963abe8be14f6dd9"
+    },
+    {
+      "path": "entry/src/main/ets/pages/TimetablePage.ets",
+      "sha256": "4e0f944bc35aeaa0050510fa004cb7688e56de2f62d2ba1ed32cdce2c96a904f"
+    },
+    {
+      "path": "entry/src/main/ets/services/CampusFlowApi.ets",
+      "sha256": "2be0dd2042c454440dde259e0ed5ca135b983a1d6f762e7065d814cd7f7679cb"
+    },
+    {
+      "path": "entry/src/main/ets/services/HarmonyFocusClock.ets",
+      "sha256": "2867969ef0a78208aee61789a0e9c090dcb0432648321577f42e18051363399d"
+    },
+    {
+      "path": "entry/src/main/ets/services/HarmonyReminderDriver.ets",
+      "sha256": "db99b043a5835277d7c044058d5374e957406b0d256dde386012c087a510b39d"
+    },
+    {
+      "path": "entry/src/main/ets/services/HarmonyVoiceDriver.ets",
+      "sha256": "ff461bd36f869e89829afaa51ff14715b2145f1b5d0105a801b9cc95ab7c4e02"
+    },
+    {
+      "path": "entry/src/main/ets/services/LocalDrafts.ets",
+      "sha256": "ea65ef174eaa803f2de191bc05d3d79407037dc88aedeef1b6da0a15040abd65"
+    },
+    {
+      "path": "entry/src/main/ets/services/LocalFocus.ets",
+      "sha256": "8124f019d32d380af5ffbf9c9364fe3aadfaa5f18027a9bebab90c9ab14866fe"
+    },
+    {
+      "path": "entry/src/main/ets/services/LocalHistory.ets",
+      "sha256": "a0349820dbdb23e48c1ccbe96ded6082ef4c31e8bd402879b8aedfbf86c4ebfb"
+    },
+    {
+      "path": "entry/src/main/ets/services/NativeBridgeVoiceDriver.ets",
+      "sha256": "92248c62b7b2d610bb9c237afeaa8d8b7a8cfbf223e6b3ddf8f1a484ab0bf6c7"
+    },
+    {
+      "path": "entry/src/main/ets/services/NativePlatformBridge.ets",
+      "sha256": "d0c8853dbdaf7a54dab4ca4847925795f2c8537366ae7045ef8c3b12d326d69c"
+    },
+    {
+      "path": "entry/src/main/ets/services/PlatformFocusClock.ets",
+      "sha256": "9ab6171d41476a26a97d53b65ec30d8b78aae63e025211f55293a7ea5fb37e00"
+    },
+    {
+      "path": "entry/src/main/ets/services/PlatformReminderDriver.ets",
+      "sha256": "c9a782875d14d32c2f32332946b83f370cfcea8e1e79a489283b01826a0ee575"
+    },
+    {
+      "path": "entry/src/main/ets/services/PlatformVoiceDriver.ets",
+      "sha256": "8da82c041da3d87bdaa9565010ef4614b0d49c840ff3f90d5acaeb5cfed4cfe3"
+    },
+    {
+      "path": "entry/src/main/ets/theme/AppTheme.ets",
+      "sha256": "1e0613f871e3209878d208709148992fcebff066fc4d8251086a7f09187ebb19"
+    },
+    {
+      "path": "entry/src/main/ets/utils/ActionReliability.ets",
+      "sha256": "d9e2036e093b2360173f105c11467bb16b83aea1665517c912b87efafc38c0fa"
+    },
+    {
+      "path": "entry/src/main/ets/utils/AgentFeedback.ets",
+      "sha256": "7ed8420f310c3f318d050479b9df8484f4337f6b6bdbdec8c24b8e58c8dbaf0e"
+    },
+    {
+      "path": "entry/src/main/ets/utils/AgentRun.ets",
+      "sha256": "35c154bc8308a94c83e33804e0aa829ff213c6400dc9915dde6482815fee3126"
+    },
+    {
+      "path": "entry/src/main/ets/utils/AppNavigation.ets",
+      "sha256": "b5b8af60b36c5774e4ecd5ef542bb8400fbdad25d92e6b25b34c5ba2c80cdb4c"
+    },
+    {
+      "path": "entry/src/main/ets/utils/ConversationPresentation.ets",
+      "sha256": "6bd07eb0ccf6c6af43ddcda66e8b0b454de55a8bbc8333cc0ee64a14b75ec1dc"
+    },
+    {
+      "path": "entry/src/main/ets/utils/CourseReview.ets",
+      "sha256": "bc4e3f24f568638ba10e0f6d28daad17f1c12f7c26a0fdf97fd8ff1c7fcf8174"
+    },
+    {
+      "path": "entry/src/main/ets/utils/CourseRouteIntent.ets",
+      "sha256": "18657b93187c1e812c94b3f3e05adea982d80d2299066814cd509fa64bd5c727"
+    },
+    {
+      "path": "entry/src/main/ets/utils/DailyAgenda.ets",
+      "sha256": "889b2115d924ba40cf55ee8835d1f1695fc3fa8b88061f717e450736d1ae4709"
+    },
+    {
+      "path": "entry/src/main/ets/utils/DraftStore.ets",
+      "sha256": "09b8d2ff403461f7a54a32b78619ab28f40ea711a349c3861277ca251ca9561a"
+    },
+    {
+      "path": "entry/src/main/ets/utils/EvidencePresentation.ets",
+      "sha256": "d87c302ef4578fb75db4c13f9f19e3d53ae7b3b7f22ddf8689c529a87a0594a4"
+    },
+    {
+      "path": "entry/src/main/ets/utils/FocusController.ets",
+      "sha256": "0089249972426687af38d02905fddb8fa6c3e47046836b6dee41ac931d992361"
+    },
+    {
+      "path": "entry/src/main/ets/utils/FocusDigest.ets",
+      "sha256": "abc35ad919b4848188e8c252796851c51b45dbb4addc114a0b3044a02e42480a"
+    },
+    {
+      "path": "entry/src/main/ets/utils/FocusStore.ets",
+      "sha256": "7a28b7d19fa2f3d12cec46750e8d79f3babafc6bde365e28cc364902b9ff6474"
+    },
+    {
+      "path": "entry/src/main/ets/utils/FocusTimer.ets",
+      "sha256": "05ec726c071374e0f0962d7ba3eb984d62d77401ab41dd732a3981fef15b6cdc"
+    },
+    {
+      "path": "entry/src/main/ets/utils/FocusValidation.ets",
+      "sha256": "e4f253589ed2622b926ff7176026750343792e8b34032ccdef5ae256b5060383"
+    },
+    {
+      "path": "entry/src/main/ets/utils/FreeWindows.ets",
+      "sha256": "c0e5e6ff83e4ee169a8159f7be896c8e9009d12d2c377addbe2028aebca5947c"
+    },
+    {
+      "path": "entry/src/main/ets/utils/KnowledgePresentation.ets",
+      "sha256": "86fe085baae688c7cbbdb6a8be04ffbbc82bf68dc3919b9e1c7014b42102f4b2"
+    },
+    {
+      "path": "entry/src/main/ets/utils/LearningPreferences.ets",
+      "sha256": "f9050b2a2b2066478c4a704cf9f940bc61308d2dd933e1e8d6147c0ecb4f9f48"
+    },
+    {
+      "path": "entry/src/main/ets/utils/LocalHistoryStore.ets",
+      "sha256": "bf12ecde88c5a5ad4382518a27a15f8c6f9f2cab3b3ae8d3e919123295ddba10"
+    },
+    {
+      "path": "entry/src/main/ets/utils/MessageBlocks.ets",
+      "sha256": "b4577b1e15d74f4dd83f562a6eb2549cef7ad33e5be1583ff85bf2ac2cd2cb93"
+    },
+    {
+      "path": "entry/src/main/ets/utils/MessageText.ets",
+      "sha256": "06ec9f965fd13b5d4346932cf162ff19c8c152ddefe5f1d0a8611e75108be09a"
+    },
+    {
+      "path": "entry/src/main/ets/utils/ModelCatalog.ets",
+      "sha256": "fb90bf85d4adc7efb4634a4735f04568c4f5b20e2631143cfde8d05e1ba896de"
+    },
+    {
+      "path": "entry/src/main/ets/utils/OnboardingTimetable.ets",
+      "sha256": "64fddbf9a48fc493f2f2c87a02d2bcdf4cb6bc80ef52ff6c9adb14f25c97313f"
+    },
+    {
+      "path": "entry/src/main/ets/utils/PlanPresentation.ets",
+      "sha256": "bc7b89a2eee9473a4f49817ec72fc75e6b5736a65ae9906bc2659d849b1e6a7a"
+    },
+    {
+      "path": "entry/src/main/ets/utils/PlanningAction.ets",
+      "sha256": "7b72e6bc014541165f44f1e4c7d29a92f3ec94dc10b2868bf868be3b17315d57"
+    },
+    {
+      "path": "entry/src/main/ets/utils/PlanningOverview.ets",
+      "sha256": "1dcf6279d755d2072b2e6c5fc63bd4bcdcb39edd1c41234810175135d6ae5466"
+    },
+    {
+      "path": "entry/src/main/ets/utils/PlanningReplan.ets",
+      "sha256": "3a483e1bf38e6e1690b18407fb9d7dbd99491b9160a90b156fb50d8ec9bed3ea"
+    },
+    {
+      "path": "entry/src/main/ets/utils/QuickCaptureParser.ets",
+      "sha256": "4722912cfafad366b8561e062f3305cc11f9b9f17ee13bdb045a7f74055de7bb"
+    },
+    {
+      "path": "entry/src/main/ets/utils/ReminderCoordinator.ets",
+      "sha256": "0c3f26d3d14b01aeca6f44ca899c02de36f236829280777e86d2e7b89d51d820"
+    },
+    {
+      "path": "entry/src/main/ets/utils/ReviewController.ets",
+      "sha256": "29bb70de52d3325ecdbcdac3f9f917f0a2160149f183650bfcd440544c88b80f"
+    },
+    {
+      "path": "entry/src/main/ets/utils/ReviewSummary.ets",
+      "sha256": "feb04a7c4e651ecddcb7180cab8d727bbd7acc356ad829506fcefa62873f9172"
+    },
+    {
+      "path": "entry/src/main/ets/utils/ReviewTime.ets",
+      "sha256": "59d49a2b5ad27fbdff83ecd6eebfdb843619f5fb65f3304379c71d14a3ef33a7"
+    },
+    {
+      "path": "entry/src/main/ets/utils/ReviewValidation.ets",
+      "sha256": "95e562fd617f89d7d009d21f1f1b5f36b5ce04fb57ed0efc534907528422937f"
+    },
+    {
+      "path": "entry/src/main/ets/utils/RouteGeometry.ets",
+      "sha256": "b21044fbb37f8ef184a719178d8a7f90ad1bf3c744ed4f329557067d48b2e117"
+    },
+    {
+      "path": "entry/src/main/ets/utils/TaskCaptureTypes.ets",
+      "sha256": "981cc6454838b9435179ace982686f77ef293e6f62c00293bf7a7bcdc85d545d"
+    },
+    {
+      "path": "entry/src/main/ets/utils/TaskStatusController.ets",
+      "sha256": "45533a8a249e69160bda220f237056b9321d9150bd0fd146acc1090d3b9e53bc"
+    },
+    {
+      "path": "entry/src/main/ets/utils/TaskStatusValidation.ets",
+      "sha256": "03c227d2714291d7942984cf325ff2b420a298e428d52c7a0e97fb27c410c170"
+    },
+    {
+      "path": "entry/src/main/ets/utils/TimetableImportReview.ets",
+      "sha256": "eb7e3d6005f75f782784f10ed63e7016d73f9f2252c5c1416364147680494dc1"
+    },
+    {
+      "path": "entry/src/main/ets/utils/TimetableMaintenance.ets",
+      "sha256": "7bdbdcf8cdf2a39cdab4a78022744f43a809b7529e65bbac6a51dec27e7a19d2"
+    },
+    {
+      "path": "entry/src/main/ets/utils/VoiceInteraction.ets",
+      "sha256": "8381845439478bed3921d59d78c357a5942dacb968f5c3a7ba8eb3134e123f00"
+    },
+    {
+      "path": "hvigorfile.ts",
+      "sha256": "b58f022e80a75eb34e278344c57fe549b0bf2f9ad9d3a2c2fd3d4f0d89e3cb69"
+    }
+  ]
+}

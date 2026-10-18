@@ -257,21 +257,27 @@ def test_custom_zone_calendar_hint_and_missing_zone_database_are_not_guessed(mon
     assert "TIMEZONE_UNAVAILABLE" in codes(parse_icalendar(calendar(event())).rows[0])
 
 
-def test_floating_and_minute_compatibility_is_explicit_and_independent_of_process_timezone():
+def floating_minute_preview():
+    return parse_icalendar(
+        calendar(event(start="DTSTART:20261019T0800", end="DTEND:20261019T0900"))
+    )
+
+
+def test_floating_and_minute_compatibility_is_explicit():
+    preview = floating_minute_preview()
+    assert codes(preview.rows[0]) == {"FLOATING_CAMPUS_TIME", "MINUTE_PRECISION_INPUT"}
+    assert require_complete_subscription(preview)[0].start_time == "08:00"
+
+
+@pytest.mark.skipif(not hasattr(time, "tzset"), reason="process TZ switching needs Unix tzset")
+def test_floating_and_minute_compatibility_is_independent_of_process_timezone():
     before = os.environ.get("TZ")
     try:
         serialized = []
         for zone in ["UTC", "Pacific/Honolulu"]:
             os.environ["TZ"] = zone
             time.tzset()
-            preview = parse_icalendar(
-                calendar(
-                    event(
-                        start="DTSTART:20261019T0800",
-                        end="DTEND:20261019T0900",
-                    )
-                )
-            )
+            preview = floating_minute_preview()
             assert codes(preview.rows[0]) == {"FLOATING_CAMPUS_TIME", "MINUTE_PRECISION_INPUT"}
             assert require_complete_subscription(preview)[0].start_time == "08:00"
             serialized.append(preview.model_dump_json())
@@ -298,6 +304,10 @@ def test_floating_and_minute_compatibility_is_explicit_and_independent_of_proces
         (calendar(event()) + "\n" + calendar(event()), "IMPORT_INVALID_CALENDAR"),
         (calendar(*([event()] * 501)), "IMPORT_TOO_MANY_EVENTS"),
         ("BEGIN:VCALENDAR\n" + "A" * MAX_CALENDAR_BYTES, "IMPORT_TOO_LARGE"),
+    ],
+    ids=[
+        "no-events", "truncated", "nested-event", "unknown-component", "end-parameters",
+        "multiple-calendars", "too-many-events", "oversized-calendar",
     ],
 )
 def test_unreliable_or_oversized_calendar_rejects_whole_input(text, code):
@@ -349,6 +359,7 @@ def test_write_gate_rejects_old_preview_without_diagnostics():
         (200, "text/calendar", b"\xff\xfe", "IMPORT_INVALID_CALENDAR"),
         (200, "text/calendar", b"x" * (MAX_CALENDAR_BYTES + 1), "IMPORT_TOO_LARGE"),
     ],
+    ids=["redirect", "html", "unavailable", "invalid-encoding", "oversized-body"],
 )
 async def test_fetch_is_bounded_and_does_not_expose_remote_error_or_follow_redirect(
     status,

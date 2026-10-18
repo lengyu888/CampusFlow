@@ -16,7 +16,7 @@ $hvigor = Join-Path $devEcoRoot 'tools\hvigor\bin\hvigorw.bat'
 $nodeRoot = Join-Path $devEcoRoot 'tools\node'
 $javaRoot = Join-Path $devEcoRoot 'jbr'
 $devEcoSdkRoot = Join-Path $devEcoRoot 'sdk'
-$projectRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+$projectRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 
 . (Join-Path $PSScriptRoot 'arkuix-sdk-path.ps1')
 $arkUiXSdkRoot = Resolve-ArkUiXSdkRoot -RequestedPath $SdkPath -ProjectRoot $projectRoot
@@ -47,14 +47,20 @@ $propertyLines = if (Test-Path -LiteralPath $localProperties) {
 $propertyLines += "arkui-x.dir=$normalizedSdkRoot"
 Set-Content -LiteralPath $localProperties -Value $propertyLines -Encoding utf8
 
-& $hvigor --stop-daemon 2>$null
-
-& $hvigor assembleHap --mode module -p product=default -p "buildMode=$BuildMode" --no-daemon --stacktrace
-if ($LASTEXITCODE -ne 0) {
-  exit $LASTEXITCODE
+$buildExitCode = 0
+Push-Location -LiteralPath $projectRoot
+try {
+  & $hvigor --stop-daemon 2>$null
+  & $hvigor assembleHap --mode module -p product=default -p "buildMode=$BuildMode" --no-daemon --stacktrace
+  $buildExitCode = $LASTEXITCODE
+} finally {
+  Pop-Location
+}
+if ($buildExitCode -ne 0) {
+  exit $buildExitCode
 }
 
-$artifactRoot = Join-Path $PSScriptRoot '..\entry\build\default\outputs\default'
+$artifactRoot = Join-Path $projectRoot 'entry\build\default\outputs\default'
 $artifacts = Get-ChildItem -LiteralPath $artifactRoot -Filter '*.hap' -File -ErrorAction SilentlyContinue
 if (-not $artifacts) {
   throw "Build completed but no HAP artifact was found in $artifactRoot."

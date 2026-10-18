@@ -2,7 +2,7 @@
 // Print a reviewable build plan by default. No SDK installation, ace create/repair, or device command.
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { spawnHostCommandSync } from './helpers/host-command.mjs';
 const root = resolve(import.meta.dirname, '..');
 const argumentsIn = process.argv.slice(2);
 const platform = argumentsIn[0];
@@ -26,11 +26,11 @@ if (!execute) { console.log('当前只显示命令，未调用任何原生工具
 if (platform === 'ios' && process.platform !== 'darwin') { console.error('iOS 构建需要 macOS。'); process.exit(2); }
 const cli = process.env.CAMPUSFLOW_ACE_BIN || 'ace';
 if (process.env.CAMPUSFLOW_ACE_BIN && !existsSync(cli)) { console.error('CAMPUSFLOW_ACE_BIN 指向的现有工具不存在。'); process.exit(2); }
-const checked = spawnSync(cli, ['--version'], {cwd:root, encoding:'utf8', shell:false, timeout:15000});
+const checked = spawnHostCommandSync(cli, ['--version'], {cwd:root, encoding:'utf8', timeout:15000});
 if (checked.error || checked.status !== 0) { console.error('找不到可用的现有 ace CLI；未尝试安装。'); process.exit(2); }
 console.log(`现有 ace 版本：${checked.stdout.trim().slice(0,200)}`);
 console.log('开始调用已有工具链；其本身可能解析/下载项目构建依赖，SDK 与原生环境须由开发者预先准备。');
-const result = spawnSync(cli, args, {cwd:root, stdio:'inherit', shell:false});
+const result = spawnHostCommandSync(cli, args, {cwd:root, stdio:'inherit'});
 if (result.error || result.status !== 0) { console.error('构建未确认成功，请以工具链错误修复环境/源码，不能据静态检查宣称可安装。'); process.exit(result.status || 1); }
 const stamp = {platform, command:[cli,...args], ace:checked.stdout.trim().slice(0,200), completed_at:new Date().toISOString(), verification:'native_build_command_succeeded', device_verified:false};
 writeFileSync(resolve(root, `.native-build-${platform}.local.json`), JSON.stringify(stamp,null,2)+'\n');

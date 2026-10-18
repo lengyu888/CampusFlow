@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { runModuleSource } from './helpers/run-module.mjs';
 import { readFileSync } from 'node:fs';
 import { stripTypeScriptTypes } from 'node:module';
 import { test } from 'node:test';
@@ -35,8 +35,7 @@ test('clock and offset-free legacy timestamps do not depend on device timezone',
     const now=${now}; const task=${JSON.stringify(task({ start_at: '2026-10-19T10:00', end_at: '2026-10-19 11:00:00.123456' }))};
     console.log(JSON.stringify([shanghaiDate(now),shanghaiTime(now),buildDailyAgenda([], [task], now)]));`;
   const results = ['UTC', 'America/Los_Angeles', 'Asia/Tokyo'].map((timezone) =>
-    execFileSync(process.execPath, ['--input-type=module', '-e', script],
-      { encoding: 'utf8', env: { ...process.env, TZ: timezone } }).trim());
+    runModuleSource(script, { env: { ...process.env, TZ: timezone } }).trim());
   assert.equal(new Set(results).size, 1);
   const [, , agenda] = JSON.parse(results[0]);
   assert.equal(agenda.rows[0].startTime, '10:00');

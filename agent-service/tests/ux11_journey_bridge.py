@@ -1,6 +1,6 @@
 """Offline JSONL transport for the UX11 production-client journey.
 
-No listener, seed writes, fake receipts, or model-service requests. The real app,
+No application listener, seed writes, fake receipts, or model-service requests. The real app,
 SQLite, authentication, agent loop and tools run here. Only the provider stream,
 subscription transport and business wall clock are replaced. Execute with the
 existing test Python environment; stdout is exclusively bounded JSONL RPC.
@@ -12,7 +12,6 @@ import asyncio
 import importlib
 import json
 import logging
-import socket
 import sys
 from collections import deque
 from contextlib import ExitStack
@@ -24,6 +23,7 @@ from unittest.mock import patch
 
 import httpx
 from cryptography.fernet import Fernet
+from offline_network import deny_network
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
@@ -201,22 +201,7 @@ class JourneyBridge:
         self.patches.enter_context(patch.object(
             httpx.AsyncHTTPTransport, "handle_async_request", blocked_async_network
         ))
-        original_connect = socket.socket.connect
-        original_connect_ex = socket.socket.connect_ex
-
-        def connect(sock, address):
-            if sock.family in {socket.AF_INET, socket.AF_INET6}:
-                blocked_network()
-            return original_connect(sock, address)
-
-        def connect_ex(sock, address):
-            if sock.family in {socket.AF_INET, socket.AF_INET6}:
-                blocked_network()
-            return original_connect_ex(sock, address)
-
-        self.patches.enter_context(patch.object(socket.socket, "connect", connect))
-        self.patches.enter_context(patch.object(socket.socket, "connect_ex", connect_ex))
-        self.patches.enter_context(patch.object(socket, "getaddrinfo", blocked_network))
+        self.patches.enter_context(deny_network(blocked_network))
 
     def _subscription(self, request: httpx.Request) -> httpx.Response:
         if str(request.url) != SUBSCRIPTION_URL or request.method != "GET":
@@ -417,8 +402,9 @@ async def serve():
             line = json.dumps({"id": value.get("id"), "ok": False, "error": {
                 "code": "BRIDGE_RESPONSE_LIMIT", "message": "测试响应超出单条容量。"
             }})
-        sys.stdout.write(line + "\n")
-        sys.stdout.flush()
+        # Node reads UTF-8 JSONL; Windows' console code page must not change the wire format.
+        sys.stdout.buffer.write(line.encode("utf-8") + b"\n")
+        sys.stdout.buffer.flush()
 
     async def execute(request):
         identity = request["id"]

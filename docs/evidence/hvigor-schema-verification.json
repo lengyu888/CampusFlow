@@ -1,0 +1,111 @@
+{
+  "checked_at": "2026-10-18",
+  "method": "Only downloaded official registry metadata and archives; verified registry SHA512, inspected text members. No install or plugin/SDK execution.",
+  "packages": [
+    {
+      "name": "@ohos/hvigor-ohos-arkui-x-plugin",
+      "version": "4.24.2",
+      "url": "https://repo.harmonyos.com/npm/@ohos/hvigor-ohos-arkui-x-plugin/-/@ohos/hvigor-ohos-arkui-x-plugin-4.24.2.tgz",
+      "bytes": 240079,
+      "sha256": "9b97a92592a7d5d05f41c3850eb5e3152ce6ac66c8bc993d28c29930bb492446",
+      "registry_integrity_verified": "sha512-lebXCzIB4pbT5HbiXqzLNaC8paGjelDn7qMIhtBUrJQbNnNUuDIardJrSKpTZEcw1bJM0w5FpRgJk4bElyJfgQ=="
+    },
+    {
+      "name": "@ohos/hvigor-ohos-plugin",
+      "version": "6.24.2",
+      "url": "https://repo.harmonyos.com/npm/@ohos/hvigor-ohos-plugin/-/@ohos/hvigor-ohos-plugin-6.24.2.tgz",
+      "bytes": 30249237,
+      "sha256": "348a2c16f5f9e205fed02dc46ca0f6e7f4b9c18f6c44336b4a8589ef8976464b",
+      "registry_integrity_verified": "sha512-c0ruA5ilozoK9eYN4+NPUL5cstvX7pPNDkWFQi1m4+wJK90pvx5WG41uC+cBdiASmzhwKLb7HEOjcMdXKEYYtA=="
+    }
+  ],
+  "arkui_x_declared_development_companion": {
+    "@ohos/hvigor-ohos-plugin": "6.24.2",
+    "@ohos/hvigor": "6.24.2"
+  },
+  "schema_path": "package/res/schemas/arkui-x-config-schema.json",
+  "schema_sha256": "fa54a4f12ced3af7b9315f05581b5da40a1ead0bcea580b647ae178193610c37",
+  "schema": {
+    "title": "ArkUI-X Cross-Platform Project Configuration",
+    "description": "This document describes how to configure the arkui-x-config.json5 file of the ArkUI-X cross-platform project.",
+    "type": "object",
+    "propertyNames": {
+      "enum": [
+        "crossplatform",
+        "modules",
+        "buildOption"
+      ]
+    },
+    "properties": {
+      "crossplatform": {
+        "description": "Cross-platform application build enable flag",
+        "type": "boolean"
+      },
+      "modules": {
+        "description": "Describe the cross-platform modules required by Openharmony.",
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "minItems": 1
+      },
+      "buildOption": {
+        "description": "build option filter tool for filtering resources of less commonly used languages before the resource copying task.",
+        "type": "object",
+        "propertyNames": {
+          "enum": [
+            "resConfigs",
+            "ignoreCrossPlatform"
+          ]
+        },
+        "properties": {
+          "resConfigs": {
+            "description": "ResConfig is the value of the collection of minority languages for multi-channel configuration.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "ignoreCrossPlatform": {
+            "description": "Whether to suppress errors for unsupported cross-platform APIs.",
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "required": [
+      "crossplatform",
+      "modules"
+    ]
+  },
+  "type_declaration": "export declare namespace ArkUIXConfigJson {\n    interface ConfigObj {\n        crossplatform: boolean;\n        modules: string[];\n        buildOption?: {\n            resConfigs?: string[];\n            ignoreCrossPlatform?: boolean;\n        };\n    }\n}\n",
+  "runtime_configuration_reader": "isIgnoreCrossPlatformCheckModule(e){var t;return!!(null===(t=null==e?void 0:e.buildOption)||void 0===t?void 0:t.ignoreCrossPlatform)}",
+  "conclusion": "ignoreCrossPlatform is supported under buildOption, rejected at root. Keep crossplatform true and all platform voice implementations.",
+  "not_verified": [
+    "Exact base plugin resolved on senior workstation",
+    "CompileArkTS",
+    "assembleHap",
+    "Android build",
+    "iOS build",
+    "SDK voice APIs",
+    "Device behavior"
+  ],
+  "official_schema_validation": {
+    "validator": "pre-existing Python jsonschema 4.26.0",
+    "original_accepted": false,
+    "original_errors": [
+      "'ignoreCrossPlatform' is not one of ['crossplatform', 'modules', 'buildOption']"
+    ],
+    "current_accepted": true,
+    "current_config": {
+      "crossplatform": true,
+      "modules": [
+        "entry"
+      ],
+      "buildOption": {
+        "ignoreCrossPlatform": true
+      }
+    },
+    "native_compile_performed": false
+  }
+}

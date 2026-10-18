@@ -1,10 +1,10 @@
 """Exercise reviewed retrieval, tool permissions and real authenticated ASGI routes offline."""
 
 import json
-import socket
 
 import pytest
 from httpx import ASGITransport, AsyncClient
+from offline_network import deny_network
 from pydantic import ValidationError
 
 from campusflow_agent.accounts import AccountStore
@@ -23,12 +23,12 @@ from campusflow_agent.tools import CURRENT_USER_ID, build_tools
 
 
 @pytest.fixture(autouse=True)
-def no_network(monkeypatch):
+def no_network():
     def denied(*args, **kwargs):
         pytest.fail("knowledge retrieval must not open network connections")
 
-    monkeypatch.setattr(socket, "create_connection", denied)
-    monkeypatch.setattr(socket.socket, "connect", denied)
+    with deny_network(denied):
+        yield
 
 
 @pytest.fixture

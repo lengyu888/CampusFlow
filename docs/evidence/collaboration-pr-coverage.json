@@ -1,0 +1,451 @@
+{
+  "checked_on": "2026-10-18",
+  "method": "Authenticated GET PR listing plus git merge-base --is-ancestor for each author-owned PR head; all included in cumulative parent before repair",
+  "author": "haohao6666666",
+  "active_branch": "dev/haohao",
+  "boundary": "Contains prior work; not native build evidence. Old branch references are retained.",
+  "repositories": {
+    "haohao6666666/CampusFlow-Personal": {
+      "main_at_start": "3043f0c6a65f4aa60fdb81dcee1c55426ba75888",
+      "pulls": [
+        {
+          "number": 20,
+          "branch": "feat/ux-12-handoff",
+          "commit": "a9f6f782288f81f8fd79bdc30413c990345fc297",
+          "state": "open",
+          "title": "UX12：行简最终对照与赛事交接",
+          "url": "https://github.com/haohao6666666/CampusFlow-Personal/pull/20",
+          "included_in_cumulative_head": true
+        },
+        {
+          "number": 19,
+          "branch": "feat/ux-11-experience-polish",
+          "commit": "fce0e1d2f46329d1d3552924be890ca0653866d3",
+          "state": "open",
+          "title": "UX11：行简全流程与体验收口",
+          "url": "https://github.com/haohao6666666/CampusFlow-Personal/pull/19",
+          "included_in_cumulative_head": true
+        },
+        {
+          "number": 18,
+          "branch": "feat/ux-10-evidence-review",
+          "commit": "ffdc1c33c6460fe4b55d7d9fa4495d1760d80727",
+          "state": "open",
+          "title": "UX10：日周回看与可选本机感受",
+          "url": "https://github.com/haohao6666666/CampusFlow-Personal/pull/18",
+          "included_in_cumulative_head": true
+        },
+        {
+          "number": 17,
+          "branch": "feat/ux-09-focus-records",
+          "commit": "fde13376ffaff7103ec1e7913f430e04dc767a7f",
+          "state": "open",
+          "title": "行简 UX09：专注计时与可恢复执行记录",
+          "url": "https://github.com/haohao6666666/CampusFlow-Personal/pull/17",
+          "included_in_cumulative_head": true
+        },
+        {
+          "number": 16,
+          "branch": "feat/ux-08-safe-task-recovery",
+          "commit": "9d9743b70098cc28a241b711a59047cbd657a68f",
+          "state": "open",
+          "title": "UX08：核对完成回执并安全恢复待办",
+          "url": "https://github.com/haohao6666666/CampusFlow-Personal/pull/16",
+          "included_in_cumulative_head": true
+        },
+        {
+          "number": 15,
+          "branch": "feat/ux-07-campus-forms",
+          "commit": "4ffac0a2aada9061f6eb942a91bbfcc73d812add",
+          "state": "open",
+          "title": "行简 UX07：连续录课、完整导入核对与清楚的校园设置",
+          "url": "https://github.com/haohao6666666/CampusFlow-Personal/pull/15",
+          "included_in_cumulative_head": true
+        },
+        {
+          "number": 14,
+          "branch": "feat/ux-06-planning-overview",
+          "commit": "7fca04550400a56628e73c12b601c4988d5494e8",
+          "state": "open",
+          "title": "行简 UX06：一周安排、任务检索与课内重叠核对",
+          "url": "https://github.com/haohao6666666/CampusFlow-Personal/pull/14",
+          "included_in_cumulative_head": true
+        },
+        {
+          "number": 13,
+          "branch": "feat/ux-05-assistant-flow",
+          "commit": "3e2f7a966a9f94829bde82b3b0449ba657881c8c",
+          "state": "open",
+          "title": "行简 UX05：会话接续与课内安排核对",
+          "url": "https://github.com/haohao6666666/CampusFlow-Personal/pull/13",
+          "included_in_cumulative_head": true
+        },
+        {
+          "number": 12,
+          "branch": "feat/ux-04-today-capture",
+          "commit": "f909fe0b87023b29a3925f8ed2fc44e433720f14",
+          "state": "open",
+          "title": "UX04：顺手记事与可确认的课内安排",
+          "url": "https://github.com/haohao6666666/CampusFlow-Personal/pull/12",
+          "included_in_cumulative_head": true
+        },
+        {
+          "number": 11,
+          "branch": "feat/ux-03-onboarding-drafts",
+          "commit": "d4a45e8f475f9df5070d9db782c515c12be05578",
+          "state": "open",
+          "title": "行简 UX03：渐进引导与可恢复草稿",
+          "url": "https://github.com/haohao6666666/CampusFlow-Personal/pull/11",
+          "included_in_cumulative_head": true
+        },
+        {
+          "number": 10,
+          "branch": "feat/ux-02-visual-foundation",
+          "commit": "5c1d77f5a50808032088e08c1659ad46cd8d91d0",
+          "state": "open",
+          "title": "UX02：行简纸页主题与原创插图",
+          "url": "https://github.com/haohao6666666/CampusFlow-Personal/pull/10",
+          "included_in_cumulative_head": true
+        },
+        {
+          "number": 9,
+          "branch": "feat/ux-01-brand-directions",
+          "commit": "1e0eeecc991f1e51a1acbf03eacdd6b01d2c560d",
+          "state": "open",
+          "title": "UX01：行简品牌、三方向原型与课内安排提醒",
+          "url": "https://github.com/haohao6666666/CampusFlow-Personal/pull/9",
+          "included_in_cumulative_head": true
+        },
+        {
+          "number": 8,
+          "branch": "feat/stage-16-selected-enhancements",
+          "commit": "c09446bb7b561f1dae1f0967c7932bb7ab4bb8eb",
+          "state": "open",
+          "title": "feat(agent): 第十六阶段模型适配、学习偏好与校园知识",
+          "url": "https://github.com/haohao6666666/CampusFlow-Personal/pull/8",
+          "included_in_cumulative_head": true
+        },
+        {
+          "number": 7,
+          "branch": "feat/stage-15-native-capabilities",
+          "commit": "c04b9eadf8d3b6625feca0c5b470a11fdac8bfd5",
+          "state": "open",
+          "title": "feat(platform): 第十五阶段语音与系统提醒",
+          "url": "https://github.com/haohao6666666/CampusFlow-Personal/pull/7",
+          "included_in_cumulative_head": true
+        },
+        {
+          "number": 6,
+          "branch": "feat/stage-14-data-evidence",
+          "commit": "06d9b9e0db3174f04618b0f1f938e56660fd3b04",
+          "state": "open",
+          "title": "feat(data): 第十四阶段真实数据与依据",
+          "url": "https://github.com/haohao6666666/CampusFlow-Personal/pull/6",
+          "included_in_cumulative_head": true
+        },
+        {
+          "number": 5,
+          "branch": "feat/stage-13-agent-runtime",
+          "commit": "ebe89a0d3331cc1eb28908f4b1fda2592c83db9f",
+          "state": "open",
+          "title": "feat(agent): 第十三阶段持久运行与恢复",
+          "url": "https://github.com/haohao6666666/CampusFlow-Personal/pull/5",
+          "included_in_cumulative_head": true
+        },
+        {
+          "number": 4,
+          "branch": "feat/stage-12-reliable-planning",
+          "commit": "d1e1b8cbd4484f2d42cb5e454a34398847aaf604",
+          "state": "open",
+          "title": "feat(planning): 第十二阶段计划执行可靠性",
+          "url": "https://github.com/haohao6666666/CampusFlow-Personal/pull/4",
+          "included_in_cumulative_head": true
+        },
+        {
+          "number": 3,
+          "branch": "feat/stage-11-unified-experience",
+          "commit": "f2f19860487d8d1bc0aeb2a33b41c2b9492c9752",
+          "state": "open",
+          "title": "feat(client): 第十一阶段全应用体验与课表维护",
+          "url": "https://github.com/haohao6666666/CampusFlow-Personal/pull/3",
+          "included_in_cumulative_head": true
+        },
+        {
+          "number": 2,
+          "branch": "feat/stage-10-core-pages",
+          "commit": "969935950c298dbf41ddd7a17211dcf6de5783ec",
+          "state": "open",
+          "title": "feat(client): 第十阶段核心页面与连续导航",
+          "url": "https://github.com/haohao6666666/CampusFlow-Personal/pull/2",
+          "included_in_cumulative_head": true
+        },
+        {
+          "number": 1,
+          "branch": "feat/stage-09-product-design",
+          "commit": "0d02bc2138849ce6d0f30734d5eb28a006de92f7",
+          "state": "open",
+          "title": "feat(design): 第九阶段整体设计与交互原型",
+          "url": "https://github.com/haohao6666666/CampusFlow-Personal/pull/1",
+          "included_in_cumulative_head": true
+        }
+      ]
+    },
+    "lengyu888/CampusFlow": {
+      "main_at_start": "41955b068ec150197faf04bdc8341f7306f45b54",
+      "pulls": [
+        {
+          "number": 29,
+          "branch": "feat/ux-12-handoff",
+          "commit": "47e6aba88e7964842f80096cd072cfa4f0df7880",
+          "state": "open",
+          "title": "UX12：行简最终对照与赛事交接",
+          "url": "https://github.com/lengyu888/CampusFlow/pull/29",
+          "included_in_cumulative_head": true
+        },
+        {
+          "number": 28,
+          "branch": "feat/ux-11-experience-polish",
+          "commit": "3fc225f1c31e68381452ab09151ae278aae61500",
+          "state": "open",
+          "title": "UX11：行简全流程与体验收口",
+          "url": "https://github.com/lengyu888/CampusFlow/pull/28",
+          "included_in_cumulative_head": true
+        },
+        {
+          "number": 27,
+          "branch": "feat/ux-10-evidence-review",
+          "commit": "a165158450389cc26423a212db361ef7be9a2560",
+          "state": "open",
+          "title": "UX10：日周回看与可选本机感受",
+          "url": "https://github.com/lengyu888/CampusFlow/pull/27",
+          "included_in_cumulative_head": true
+        },
+        {
+          "number": 26,
+          "branch": "feat/ux-09-focus-records",
+          "commit": "a49012c0266ece8e6ba41a64d561fe96b1a2f0d8",
+          "state": "open",
+          "title": "行简 UX09：专注计时与可恢复执行记录",
+          "url": "https://github.com/lengyu888/CampusFlow/pull/26",
+          "included_in_cumulative_head": true
+        },
+        {
+          "number": 25,
+          "branch": "feat/ux-08-safe-task-recovery",
+          "commit": "6820cb7e5854b033bbe009468fb23bb0c7fcf1c1",
+          "state": "open",
+          "title": "UX08：核对完成回执并安全恢复待办",
+          "url": "https://github.com/lengyu888/CampusFlow/pull/25",
+          "included_in_cumulative_head": true
+        },
+        {
+          "number": 24,
+          "branch": "feat/ux-07-campus-forms",
+          "commit": "e475d35bf3008b404f63574522dc2523523c1d84",
+          "state": "open",
+          "title": "行简 UX07：连续录课、完整导入核对与清楚的校园设置",
+          "url": "https://github.com/lengyu888/CampusFlow/pull/24",
+          "included_in_cumulative_head": true
+        },
+        {
+          "number": 23,
+          "branch": "feat/ux-06-planning-overview",
+          "commit": "5cf84dde409386088894f6eede9bf77f7094e754",
+          "state": "open",
+          "title": "行简 UX06：一周安排、任务检索与课内重叠核对",
+          "url": "https://github.com/lengyu888/CampusFlow/pull/23",
+          "included_in_cumulative_head": true
+        },
+        {
+          "number": 22,
+          "branch": "feat/ux-05-assistant-flow",
+          "commit": "0c0b89a32304b20cbfd18f86c152f9a3c3b33971",
+          "state": "open",
+          "title": "行简 UX05：会话接续与课内安排核对",
+          "url": "https://github.com/lengyu888/CampusFlow/pull/22",
+          "included_in_cumulative_head": true
+        },
+        {
+          "number": 21,
+          "branch": "feat/ux-04-today-capture",
+          "commit": "9c88d277552093ddfdbaa6b147f0ded424880a55",
+          "state": "open",
+          "title": "UX04：顺手记事与可确认的课内安排",
+          "url": "https://github.com/lengyu888/CampusFlow/pull/21",
+          "included_in_cumulative_head": true
+        },
+        {
+          "number": 20,
+          "branch": "feat/ux-03-onboarding-drafts",
+          "commit": "59649ed82b1d19e51f09bd0d8bf98f639eb4624e",
+          "state": "open",
+          "title": "行简 UX03：渐进引导与可恢复草稿",
+          "url": "https://github.com/lengyu888/CampusFlow/pull/20",
+          "included_in_cumulative_head": true
+        },
+        {
+          "number": 19,
+          "branch": "feat/ux-02-visual-foundation",
+          "commit": "39e8d5fee46ddf0ca47dc90fb3dd982027fac691",
+          "state": "open",
+          "title": "UX02：行简纸页主题与原创插图",
+          "url": "https://github.com/lengyu888/CampusFlow/pull/19",
+          "included_in_cumulative_head": true
+        },
+        {
+          "number": 18,
+          "branch": "feat/ux-01-brand-directions",
+          "commit": "e8fb9d4a6852bfc9649d14dca44af27079218b8e",
+          "state": "open",
+          "title": "UX01：行简品牌、三方向原型与课内安排提醒",
+          "url": "https://github.com/lengyu888/CampusFlow/pull/18",
+          "included_in_cumulative_head": true
+        },
+        {
+          "number": 17,
+          "branch": "feat/stage-16-selected-enhancements",
+          "commit": "38d5b20c9efe95dcfc3bb0dbbb74ce2c0d8d056c",
+          "state": "open",
+          "title": "feat(agent): 第十六阶段模型适配、学习偏好与校园知识",
+          "url": "https://github.com/lengyu888/CampusFlow/pull/17",
+          "included_in_cumulative_head": true
+        },
+        {
+          "number": 16,
+          "branch": "feat/stage-15-native-capabilities",
+          "commit": "ffc3b4c404b3e5a88b487a23e255168c36e18d2d",
+          "state": "open",
+          "title": "feat(platform): 第十五阶段语音与系统提醒",
+          "url": "https://github.com/lengyu888/CampusFlow/pull/16",
+          "included_in_cumulative_head": true
+        },
+        {
+          "number": 15,
+          "branch": "feat/stage-14-data-evidence",
+          "commit": "fc44c95f69a7f8aac6306569fea8ed3210912983",
+          "state": "open",
+          "title": "feat(data): 第十四阶段真实数据与依据",
+          "url": "https://github.com/lengyu888/CampusFlow/pull/15",
+          "included_in_cumulative_head": true
+        },
+        {
+          "number": 14,
+          "branch": "feat/stage-13-agent-runtime",
+          "commit": "f2f7b4c47750694cec4870f5df873a3e87175668",
+          "state": "open",
+          "title": "feat(agent): 第十三阶段持久运行与恢复",
+          "url": "https://github.com/lengyu888/CampusFlow/pull/14",
+          "included_in_cumulative_head": true
+        },
+        {
+          "number": 13,
+          "branch": "feat/stage-12-reliable-planning",
+          "commit": "00cc87c3ce364e9b827240e564e4f1775116c330",
+          "state": "open",
+          "title": "feat(planning): 第十二阶段计划执行可靠性",
+          "url": "https://github.com/lengyu888/CampusFlow/pull/13",
+          "included_in_cumulative_head": true
+        },
+        {
+          "number": 12,
+          "branch": "feat/stage-11-unified-experience",
+          "commit": "b8cab4df065c7a8dbaf90b9d979076da9d67109a",
+          "state": "open",
+          "title": "feat(client): 第十一阶段全应用体验与课表维护",
+          "url": "https://github.com/lengyu888/CampusFlow/pull/12",
+          "included_in_cumulative_head": true
+        },
+        {
+          "number": 11,
+          "branch": "feat/stage-10-core-pages",
+          "commit": "7214a2d6fcf6115b86bbbe71cb514cdf0beb4983",
+          "state": "open",
+          "title": "feat(client): 第十阶段核心页面与连续导航",
+          "url": "https://github.com/lengyu888/CampusFlow/pull/11",
+          "included_in_cumulative_head": true
+        },
+        {
+          "number": 10,
+          "branch": "feat/stage-09-product-design",
+          "commit": "82b522755715430ce964c6b32ede49086d4f0ac3",
+          "state": "open",
+          "title": "feat(design): 第九阶段整体设计与交互原型",
+          "url": "https://github.com/lengyu888/CampusFlow/pull/10",
+          "included_in_cumulative_head": true
+        },
+        {
+          "number": 9,
+          "branch": "feat/timetable-conflict-replanning",
+          "commit": "6c514b0ba650177c8e099ac5572bfbfa3080df4b",
+          "state": "open",
+          "title": "feat(planning): 第八阶段课表冲突提示与原任务改期",
+          "url": "https://github.com/lengyu888/CampusFlow/pull/9",
+          "included_in_cumulative_head": true
+        },
+        {
+          "number": 8,
+          "branch": "feat/onboarding-timetable-preview",
+          "commit": "97ca748c6aecf6832a566d33b9fbaf4c142d21c8",
+          "state": "open",
+          "title": "feat(onboarding): 第七阶段首次引导、手动课表与导入预览",
+          "url": "https://github.com/lengyu888/CampusFlow/pull/8",
+          "included_in_cumulative_head": true
+        },
+        {
+          "number": 7,
+          "branch": "feat/agent-voice-interaction",
+          "commit": "a36d5f1ceb92a3c867403c13346169f2423ae9bc",
+          "state": "open",
+          "title": "feat(agent): 第六阶段语音输入、识别核对与回答播报",
+          "url": "https://github.com/lengyu888/CampusFlow/pull/7",
+          "included_in_cumulative_head": true
+        },
+        {
+          "number": 6,
+          "branch": "feat/core-page-polish",
+          "commit": "2cddc3209211dff86cd848d02a6ea7f0f114b3e9",
+          "state": "open",
+          "title": "feat(ui): 第五阶段首页、Agent 与规划页质感提升",
+          "url": "https://github.com/lengyu888/CampusFlow/pull/6",
+          "included_in_cumulative_head": true
+        },
+        {
+          "number": 5,
+          "branch": "feat/local-conversation-history",
+          "commit": "f9f5b03637c41f40ea21c87a12a4d70a43b6164e",
+          "state": "open",
+          "title": "feat(history): 第四阶段本地会话保存与离线回看",
+          "url": "https://github.com/lengyu888/CampusFlow/pull/5",
+          "included_in_cumulative_head": true
+        },
+        {
+          "number": 4,
+          "branch": "fix/mobile-content-layout",
+          "commit": "d639f4aa41b71dc954a4eb77bb49b7d334b85aec",
+          "state": "closed",
+          "title": "fix(ui): 第三阶段长内容、输入区与地图适配",
+          "url": "https://github.com/lengyu888/CampusFlow/pull/4",
+          "included_in_cumulative_head": true
+        },
+        {
+          "number": 3,
+          "branch": "feat/agent-feedback-recovery",
+          "commit": "4e34ae5b237851bd4985676936efc68a9609ee96",
+          "state": "closed",
+          "title": "feat(agent): 第二阶段工具结果摘要与失败恢复",
+          "url": "https://github.com/lengyu888/CampusFlow/pull/3",
+          "included_in_cumulative_head": true
+        },
+        {
+          "number": 2,
+          "branch": "fix/plan-preview-completeness",
+          "commit": "5f27a58d3e91791730a4df9a7c2d4b4ec63ea422",
+          "state": "closed",
+          "title": "feat(ui): 完整预览计划并展示确认后的里程碑任务",
+          "url": "https://github.com/lengyu888/CampusFlow/pull/2",
+          "included_in_cumulative_head": true
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,67 @@
+name: Cross-platform compatibility
+
+on:
+  push:
+    branches: [dev/haohao]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: compatibility-${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  offline-checks:
+    name: Offline checks (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    env:
+      PYTHONUTF8: '1'
+      PYTHONIOENCODING: utf-8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: agent-service/pyproject.toml
+      - name: Install declared Python dependencies
+        run: python -m pip install -e "./agent-service[dev]"
+      - name: Record exact revision and existing tools
+        run: |
+          git rev-parse HEAD
+          node --version
+          python --version
+      - name: Backend lint
+        working-directory: agent-service
+        run: python -m ruff check src tests
+      - name: Backend offline tests (no real model)
+        working-directory: agent-service
+        run: python -m pytest -q -m "not integration" --junitxml=../backend-tests.xml
+      - name: Client logic and portable fixtures
+        working-directory: arkui-x-client
+        run: npm test
+      - name: Project and configuration preflight (not native compilation)
+        working-directory: arkui-x-client
+        run: npm run check
+      - name: Continuous offline client and backend journey
+        working-directory: arkui-x-client
+        run: npm run test:journey
+      - name: Upload backend test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-tests-${{ matrix.os }}
+          path: backend-tests.xml
+          if-no-files-found: ignore
