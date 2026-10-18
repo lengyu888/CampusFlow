@@ -37,6 +37,17 @@ test('nearest sixty are deterministic and beyond a year is explicitly deferred',
 test('configure never prompts and authorized account reconciles full list',async()=>{
   const {driver,states,coordinator}=setup();coordinator.configure('A',async()=>overview([task()]));await tick();assert.equal(driver.calls.some(c=>c[0]==='authorize'),false);assert.equal(driver.calls.find(c=>c[0]==='replace')[2][0].id,'cf_t1');assert.equal(states.at(-1).scheduled,1);assert.match(states.at(-1).message,/系统已接受/);
 });
+test('published reminder state cannot mutate the coordinator or leak into later defaults',async()=>{
+  const driver=new Driver(),states=[];
+  const coordinator=new ReminderCoordinator(driver,state=>{
+    states.push({...state});
+    state.phase='injected';state.message='injected';state.scheduled=999;state.skipped=999;state.limited=true;state.enabled=false;
+  },()=>now);
+  coordinator.configure('A',async()=>overview([task()]));await tick();
+  assert.equal(coordinator.current.phase,'ready');assert.equal(coordinator.current.scheduled,1);assert.equal(coordinator.current.skipped,0);assert.equal(coordinator.current.limited,false);assert.equal(coordinator.current.enabled,true);
+  assert.equal(states.at(-1).scheduled,1);coordinator.refresh();await tick();
+  assert.equal(states.at(-1).scheduled,1);assert.equal(states.at(-1).skipped,0);assert.equal(states.at(-1).limited,false);coordinator.dispose();
+});
 test('unauthorized account waits for explicit enable and OS acceptance',async()=>{
   const driver=new Driver();driver.state={...driver.state,scope:'',permission:'unknown'};const {coordinator,states}=setup(driver);let loads=0;coordinator.configure('A',async()=>{loads++;return overview([task()]);});await tick();assert.equal(loads,0);driver.authorize=async scope=>{driver.state={...driver.state,scope,permission:'granted'};return {...driver.state};};await coordinator.enable();await tick();assert.equal(loads,1);assert.equal(states.at(-1).enabled,true);
 });

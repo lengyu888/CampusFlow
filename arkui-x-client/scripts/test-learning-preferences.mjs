@@ -4,7 +4,7 @@ import { stripTypeScriptTypes } from 'node:module';
 import { test } from 'node:test';
 const read=name=>readFileSync(new URL(`../entry/src/main/ets/utils/${name}.ets`,import.meta.url),'utf8').replace(/^import [^\n]+;\r?\n/gm,'');
 const feedback=await import(`data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(read('AgentFeedback'))).toString('base64')}`);
-const names=['LearningPreferencesController','validPreferenceSnapshot','defaultPreferenceDraft','preferenceIssues','preferenceOperationId'];
+const names=['LearningPreferencesController','validPreferenceSnapshot','defaultPreferenceDraft','copyPreferenceDraft','preferenceIssues','preferenceOperationId'];
 const code=stripTypeScriptTypes(read('LearningPreferences')).replace(/^export /gm,'');
 const api=new Function('CampusFlowRequestError',code+`\nreturn {${names.join(',')}};`)(feedback.CampusFlowRequestError);
 const value=(extra={})=>({revision:0,enabled:false,session_minutes:50,break_minutes:10,preferred_period:'any',daily_minutes:120,updated_at:null,...extra});
@@ -39,6 +39,24 @@ test('save is CAS-bound and double taps create only one UUID/write; published sn
  f.states.at(-1).draft.session='100';assert.equal(f.c.snapshot().draft.session,'60');
  waiting.resolve(value({revision:1,enabled:true,session_minutes:60,preferred_period:'evening',updated_at:'2026-10-18T08:00:00Z'}));await write;
  assert.equal(f.c.snapshot().phase,'applied');assert.equal(f.c.snapshot().dirty,false);
+});
+test('preference copies isolate server values, incoming drafts, issues and every published state field',async()=>{
+ const server=value(),f=setup({get:()=>server});await tick();
+ const initial=f.c.snapshot();assert.deepEqual(initial.snapshot,value());assert.deepEqual(initial.draft,api.defaultPreferenceDraft());
+ server.session_minutes=120;initial.snapshot.session_minutes=100;initial.phase='injected';initial.message='injected';initial.confirmClear=true;initial.canRetry=true;
+ assert.equal(f.c.snapshot().snapshot.session_minutes,50);assert.equal(f.c.snapshot().phase,'editing');assert.equal(f.c.snapshot().confirmClear,false);assert.equal(f.c.snapshot().canRetry,false);
+ const draft={...api.defaultPreferenceDraft(),enabled:true,session:''};f.c.edit(draft);draft.session='90';await f.c.save();
+ const invalid=f.c.snapshot();assert.equal(invalid.dirty,true);assert.equal(invalid.draft.session,'');assert.match(invalid.issues[0].message,/15–120/);
+ invalid.draft.session='80';invalid.issues[0].message='injected';invalid.issues.push({field:'daily',message:'injected'});invalid.dirty=false;
+ assert.equal(f.c.snapshot().draft.session,'');assert.equal(f.c.snapshot().issues.length,1);assert.match(f.c.snapshot().issues[0].message,/15–120/);assert.equal(f.c.snapshot().dirty,true);
+});
+test('a gateway cannot mutate the retained retry payload or accepted server snapshot',async()=>{
+ let receipt,attempt=0;const f=setup({save:p=>{
+   if(++attempt===1){p.base_revision=99;p.operation_id='mutated';p.enabled=false;p.session_minutes=99;p.break_minutes=30;p.preferred_period='morning';p.daily_minutes=480;throw Error('unknown');}
+   receipt=value({...p,revision:p.base_revision+1,updated_at:'2026-10-18T08:00:00Z'});return receipt;
+ }});await tick();edit(f.c);await f.c.save();assert.equal(f.c.snapshot().phase,'unknown');await f.c.retry();
+ const writes=f.calls.filter(call=>call[0]==='save').map(call=>call[1]);assert.deepEqual(writes[1],writes[0]);assert.equal(f.ids(),1);
+ assert.equal(f.c.snapshot().phase,'applied');receipt.session_minutes=120;assert.equal(f.c.snapshot().snapshot.session_minutes,60);
 });
 test('unknown write freezes payload/UUID and only explicit retry replays that same operation',async()=>{
  let attempt=0;const f=setup({save:p=>{if(++attempt===1)throw Error('secret transport');return value({...p,revision:1,updated_at:'2026-10-18T08:00:00Z'});}});await tick();edit(f.c);await f.c.save();
@@ -98,7 +116,8 @@ function panelFixture(){
  const page=new Panel();page.baseUrl='server';page.token='token';page.userId='a';page.aboutToAppear();return{page,calls};
 }
 test('real preference panel keeps raw numeric draft and toggle local until explicit save, including hidden settings routes',async()=>{
- const f=panelFixture();await tick();f.page.setEnabled(true);f.page.editField('session','');assert.equal(f.page.state.draft.session,'');
+ const f=panelFixture();await tick();const initial=f.page.state;f.page.setEnabled(true);assert.equal(initial.draft.enabled,false);
+ const toggled=f.page.state;f.page.editField('session','');assert.equal(toggled.draft.session,'50');assert.equal(f.page.state.draft.session,'');
  await f.page.instance().save();assert.match(f.page.fieldError('session'),/15–120/);assert.equal(f.calls.filter(x=>x[0]==='save').length,0);
  f.page.editField('session','60');f.page.active=false;f.page.activityChanged();f.page.active=true;f.page.activityChanged();assert.equal(f.page.state.draft.session,'60');
  await f.page.instance().save();const save=f.calls.find(x=>x[0]==='save')[1];assert.equal(save.enabled,true);assert.equal(save.session_minutes,60);assert.equal(save.base_revision,0);

@@ -1,6 +1,7 @@
 import { PlanningOverview } from '../model/ApiModels';
+import { PlatformReminderItem } from '../model/PlatformServiceTypes';
 
-export interface ReminderItem { id: string; fire_at_ms: number; }
+export type ReminderItem = PlatformReminderItem;
 export interface ReminderStatus { permission: string; scope: string; scheduled: number; mode: string; limited: boolean; cleanup_required?: boolean; }
 export interface ReminderDriver {
   status(): Promise<ReminderStatus>;
@@ -79,7 +80,11 @@ export class ReminderCoordinator {
   private publish(phase: string, message: string, scheduled: number = this.current.scheduled,
     skipped: number = this.current.skipped, limited: boolean = this.current.limited): void {
     this.current = { phase: phase, message: message, scheduled: scheduled, skipped: skipped, limited: limited, enabled: this.enabled };
-    if (!this.disposed) { this.notify({ ...this.current }); }
+    if (!this.disposed) {
+      const snapshot: ReminderState = { phase: this.current.phase, message: this.current.message,
+        scheduled: this.current.scheduled, skipped: this.current.skipped, limited: this.current.limited, enabled: this.current.enabled };
+      this.notify(snapshot);
+    }
   }
   private live(revision: number): boolean { return !this.disposed && revision === this.revision; }
   private run(work: () => Promise<void>): Promise<void> {

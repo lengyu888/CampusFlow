@@ -151,14 +151,28 @@ export struct CampusPage {
   }
 
   @Builder
-  private Entry(icon: string, title: string, description: string, action: () => void, illustration: Resource | undefined = undefined) {
+  private Entry(icon: string, title: string, description: string, action: () => void) {
     Button({ type: ButtonType.Normal }) {
       Row({ space: 12 }) {
-        if (illustration !== undefined) {
-          AppIllustration({ source: illustration, imageWidth: 44, imageHeight: 44, fallbackIcon: icon })
-        } else {
-          Stack() { AppIcon({ name: icon, iconSize: 24, color: AppTheme.accent }) }.width(44).height(44)
-        }
+        Stack() { AppIcon({ name: icon, iconSize: 24, color: AppTheme.accent }) }.width(44).height(44)
+        Column({ space: 5 }) {
+          Text(title).fontSize(AppTheme.bodySize).fontWeight(FontWeight.Medium)
+            .fontColor(AppTheme.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
+          Text(description).fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet)
+            .width('100%').wordBreak(WordBreak.BREAK_WORD)
+        }.layoutWeight(1).alignItems(HorizontalAlign.Start)
+        AppIcon({ name: 'chevron', iconSize: 16, color: AppTheme.quiet })
+      }.width('100%')
+    }.width('100%').constraintSize({ minHeight: 84 }).padding(AppTheme.cardInset)
+      .backgroundColor(AppTheme.surface).borderRadius(AppTheme.cardRadius)
+      .accessibilityText(`${title}，${description}`).onClick(action)
+  }
+
+  @Builder
+  private IllustratedEntry(icon: string, title: string, description: string, action: () => void, illustration: Resource) {
+    Button({ type: ButtonType.Normal }) {
+      Row({ space: 12 }) {
+        AppIllustration({ source: illustration, imageWidth: 44, imageHeight: 44, fallbackIcon: icon })
         Column({ space: 5 }) {
           Text(title).fontSize(AppTheme.bodySize).fontWeight(FontWeight.Medium)
             .fontColor(AppTheme.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
@@ -188,8 +202,8 @@ export struct CampusPage {
             .accessibilityText('打开个人设置').onClick(() => this.onOpenProfile())
         }.width('100%')
         Column({ space: 12 }) {
-          this.Entry('calendar', '我的课表', '手动维护、预览导入与检查变更', () => this.onOpenTimetable(), $r('app.media.xj_course_entry'))
-          this.Entry('route', '校园导航', '选择地点，查看路线和步行估算', () => this.onOpenRoute(), $r('app.media.xj_campus_entry'))
+          this.IllustratedEntry('calendar', '我的课表', '手动维护、预览导入与检查变更', () => this.onOpenTimetable(), $r('app.media.xj_course_entry'))
+          this.IllustratedEntry('route', '校园导航', '选择地点，查看路线和步行估算', () => this.onOpenRoute(), $r('app.media.xj_campus_entry'))
           this.Entry('classroom', '校园服务', '教室、借阅与个人校园信息', () => this.onOpenServices())
         }.width('100%')
         this.WeatherCard()

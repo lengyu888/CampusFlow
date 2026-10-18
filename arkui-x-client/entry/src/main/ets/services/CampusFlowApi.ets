@@ -1,7 +1,13 @@
 import http from '@ohos.net.http';
-import { ReviewPeriod, ReviewSnapshot } from '../model/ReviewModels';
+import { ReviewPeriod, ReviewSnapshot, ReviewGateway } from '../model/ReviewModels';
 import { validFocusRequest } from '../utils/FocusValidation';
-import { FocusRequest, FocusOperation, FocusActive, FocusDetail, FocusList } from '../model/FocusModels';
+import { FocusRequest, FocusOperation, FocusActive, FocusDetail, FocusList, FocusGateway } from '../model/FocusModels';
+import { AgentRunGateway } from '../utils/AgentRun';
+import { PlanningActionGateway } from '../utils/PlanningAction';
+import { ReplanGateway } from '../utils/PlanningReplan';
+import { TimetableGateway } from '../utils/TimetableMaintenance';
+import { TaskStatusGateway } from '../utils/TaskStatusController';
+import { PreferenceGateway } from '../utils/LearningPreferences';
 import {
   CourseAcknowledgement,
   CoursePermissionChoice,
@@ -76,7 +82,8 @@ interface ApiErrorPayload {
 
 const PATCH_METHOD: http.RequestMethod = 'PATCH' as http.RequestMethod;
 
-export class CampusFlowApi {
+export class CampusFlowApi implements ReviewGateway, FocusGateway, AgentRunGateway, PlanningActionGateway,
+  ReplanGateway, TimetableGateway, TaskStatusGateway, PreferenceGateway {
   private baseUrl: string;
   private accessToken: string;
 

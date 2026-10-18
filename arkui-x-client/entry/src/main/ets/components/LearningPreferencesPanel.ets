@@ -1,5 +1,5 @@
 import { CampusFlowApi } from '../services/CampusFlowApi';
-import { LearningPreferencesController, PreferenceState, PreferenceIssue, PreferenceDraft, defaultPreferenceDraft } from '../utils/LearningPreferences';
+import { LearningPreferencesController, PreferenceState, PreferenceIssue, PreferenceDraft, defaultPreferenceDraft, copyPreferenceDraft } from '../utils/LearningPreferences';
 import { AppTheme } from '../theme/AppTheme';
 import { FeedbackPanel } from './FeedbackPanel';
 import { formatPlanDateTime } from '../utils/PlanPresentation';
@@ -38,14 +38,18 @@ export struct LearningPreferencesPanel {
   private busy(): boolean { return this.state.phase === 'loading' || this.state.phase === 'saving'; }
   private fieldError(field: string): string { return this.state.issues.find((item: PreferenceIssue) => item.field === field)?.message ?? ''; }
   private editField(field: string, value: string): void {
-    const draft: PreferenceDraft = { ...this.state.draft };
+    const draft: PreferenceDraft = copyPreferenceDraft(this.state.draft);
     if (field === 'session') { draft.session = value; }
     else if (field === 'rest') { draft.rest = value; }
     else if (field === 'daily') { draft.daily = value; }
     else if (field === 'period') { draft.period = value; }
     this.discardConfirm = false; this.instance().edit(draft);
   }
-  private setEnabled(enabled: boolean): void { this.discardConfirm = false; this.instance().edit({ ...this.state.draft, enabled: enabled }); }
+  private setEnabled(enabled: boolean): void {
+    const draft: PreferenceDraft = copyPreferenceDraft(this.state.draft);
+    draft.enabled = enabled;
+    this.discardConfirm = false; this.instance().edit(draft);
+  }
   private periodLabel(period: string): string {
     return period === 'morning' ? '上午' : period === 'afternoon' ? '下午' : period === 'evening' ? '晚上' : '不限';
   }

@@ -1,10 +1,10 @@
 import common from '@ohos.app.ability.common';
 import deviceInfo from '@ohos.deviceInfo';
 import { ReminderDriver, ReminderItem, ReminderStatus, validReminderStatus } from '../utils/ReminderCoordinator';
+import { PlatformServicePort, PlatformServiceResult } from '../model/PlatformServiceTypes';
 
-interface ReminderNativeArguments { scope?: string; reminders?: ReminderItem[]; }
-interface ReminderNativeResult { permission?: string; scope?: string; scheduled?: number; mode?: string; limited?: boolean; cleanup_required?: boolean; }
-interface ReminderNativePort { request(op: string, args?: ReminderNativeArguments): Promise<ReminderNativeResult>; }
+type ReminderNativeResult = PlatformServiceResult;
+type ReminderNativePort = PlatformServicePort;
 
 export class PlatformReminderDriver implements ReminderDriver {
   private context: common.UIAbilityContext | undefined;

@@ -14,6 +14,19 @@ export interface PreferenceGateway {
 }
 interface PreferenceOperation { kind: string; payload: LearningPreferenceWrite; }
 export function defaultPreferenceDraft(): PreferenceDraft { return { enabled: false, session: '50', rest: '10', period: 'any', daily: '120' }; }
+export function copyPreferenceDraft(value: PreferenceDraft): PreferenceDraft {
+  return { enabled: value.enabled, session: value.session, rest: value.rest, period: value.period, daily: value.daily };
+}
+function copyPreferenceSnapshot(value: LearningPreferenceSnapshot): LearningPreferenceSnapshot {
+  return { revision: value.revision, updated_at: value.updated_at, enabled: value.enabled,
+    session_minutes: value.session_minutes, break_minutes: value.break_minutes,
+    preferred_period: value.preferred_period, daily_minutes: value.daily_minutes };
+}
+function copyPreferenceWrite(value: LearningPreferenceWrite): LearningPreferenceWrite {
+  return { base_revision: value.base_revision, operation_id: value.operation_id, enabled: value.enabled,
+    session_minutes: value.session_minutes, break_minutes: value.break_minutes,
+    preferred_period: value.preferred_period, daily_minutes: value.daily_minutes };
+}
 export function preferenceIssues(draft: PreferenceDraft): PreferenceIssue[] {
   const issues: PreferenceIssue[] = [];
   if (typeof draft.enabled !== 'boolean') { issues.push({ field: 'enabled', message: '请选择是否启用学习偏好。' }); }
@@ -58,8 +71,12 @@ export class LearningPreferencesController {
   constructor(api: PreferenceGateway, onChange: (state: PreferenceState) => void, idFactory: () => string = preferenceOperationId) {
     this.api = api; this.notify = onChange; this.idFactory = idFactory;
   }
-  snapshot(): PreferenceState { return { ...this.state, snapshot: this.state.snapshot === null ? null : { ...this.state.snapshot },
-    draft: { ...this.state.draft }, issues: this.state.issues.map((item: PreferenceIssue) => ({ ...item })) }; }
+  snapshot(): PreferenceState {
+    return { phase: this.state.phase, snapshot: this.state.snapshot === null ? null : copyPreferenceSnapshot(this.state.snapshot),
+      draft: copyPreferenceDraft(this.state.draft), dirty: this.state.dirty, message: this.state.message,
+      issues: this.state.issues.map((item: PreferenceIssue): PreferenceIssue => ({ field: item.field, message: item.message })),
+      confirmClear: this.state.confirmClear, canRetry: this.state.canRetry };
+  }
   private publish(): void { this.state.canRetry = this.operation !== null && !this.writing; if (!this.disposed) { this.notify(this.snapshot()); } }
   configure(scope: string, api: PreferenceGateway): void {
     if (this.disposed) { return; }
@@ -79,7 +96,7 @@ export class LearningPreferencesController {
   editable(): boolean { return !this.disposed && this.active && this.operation === null && !this.writing && this.state.snapshot !== null && !['loading', 'stale'].includes(this.state.phase); }
   edit(draft: PreferenceDraft): void {
     if (!this.editable()) { return; }
-    this.state.draft = { ...draft }; this.state.issues = []; this.state.confirmClear = false;
+    this.state.draft = copyPreferenceDraft(draft); this.state.issues = []; this.state.confirmClear = false;
     this.state.dirty = !sameDraft(draft, draftFrom(this.state.snapshot as LearningPreferenceSnapshot));
     this.state.phase = 'editing'; this.state.message = ''; this.publish();
   }
@@ -92,7 +109,7 @@ export class LearningPreferencesController {
       const result = await this.api.learningPreferences();
       if (!this.current(revision, generation)) { return; }
       if (!validPreferenceSnapshot(result)) { throw new Error('INVALID_PREFERENCES'); }
-      this.state.snapshot = { ...result };
+      this.state.snapshot = copyPreferenceSnapshot(result);
       if (!keep) { this.state.draft = draftFrom(result); }
       this.state.dirty = !sameDraft(this.state.draft, draftFrom(result));
       this.state.phase = this.operation === null ? 'editing' : 'unknown';
@@ -126,12 +143,12 @@ export class LearningPreferencesController {
     this.writing = true; this.state.phase = 'saving'; this.state.message = operation.kind === 'clear' ? '正在清除学习偏好。' : '正在保存学习偏好。'; this.publish();
     try {
       const result = operation.kind === 'clear' ? await this.api.clearLearningPreferences({ base_revision: operation.payload.base_revision, operation_id: operation.payload.operation_id }) :
-        await this.api.saveLearningPreferences({ ...operation.payload });
+        await this.api.saveLearningPreferences(copyPreferenceWrite(operation.payload));
       if (!this.current(request, generation)) { return; }
       if (!validPreferenceSnapshot(result) || result.revision <= operation.payload.base_revision) { throw new Error('INVALID_PREFERENCE_RECEIPT'); }
       const expected = operation.kind === 'clear' ? defaultPreferenceDraft() : draftFrom(operation.payload);
       const matches = sameDraft(expected, draftFrom(result));
-      this.state.snapshot = { ...result }; this.operation = null;
+      this.state.snapshot = copyPreferenceSnapshot(result); this.operation = null;
       if (matches) { this.state.draft = draftFrom(result); this.state.issues = []; }
       this.state.dirty = !sameDraft(this.state.draft, draftFrom(result)); this.state.phase = 'applied';
       this.state.message = matches ? operation.kind === 'clear' ? '当前偏好已清除并停用。只影响后续请求；已开始的运行和历史记录不会撤回。' :

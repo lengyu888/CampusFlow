@@ -1,26 +1,10 @@
 import bridge from '@arkui-x.bridge';
+import { PlatformReminderItem, PlatformCommandArguments, PlatformServiceResult, PlatformServicePort } from '../model/PlatformServiceTypes';
 
-export interface NativeReminderItem { id: string; fire_at_ms: number; }
-export interface NativeCommandArguments {
-  operation_id?: string;
-  text?: string;
-  scope?: string;
-  reminders?: NativeReminderItem[];
-}
+export type NativeReminderItem = PlatformReminderItem;
+export type NativeCommandArguments = PlatformCommandArguments;
 interface NativeCommand extends NativeCommandArguments { v: number; request_id: string; op: string; }
-export interface NativePlatformResult {
-  wall_ms?: number;
-  monotonic_ms?: number;
-  recognition?: boolean;
-  synthesis?: boolean;
-  reminders?: boolean;
-  permission?: string;
-  scope?: string;
-  scheduled?: number;
-  mode?: string;
-  limited?: boolean;
-  cleanup_required?: boolean;
-}
+export type NativePlatformResult = PlatformServiceResult;
 export interface NativeVoiceEvent {
   v: number;
   kind: string;
@@ -79,7 +63,7 @@ function asciiId(value: string, maximum: number): boolean {
   return typeof value === 'string' && value.length > 0 && value.length <= maximum && /^[A-Za-z0-9._-]+$/.test(value);
 }
 
-export class NativePlatformBridge {
+export class NativePlatformBridge implements PlatformServicePort {
   private transport: NativeBridgeTransport;
   private clock: NativeBridgeClock;
   private registration: Promise<void> | null = null;

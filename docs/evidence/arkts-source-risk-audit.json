@@ -1,7 +1,7 @@
 {
   "checked_at": "2026-10-18",
-  "scope": "All current 91 tracked client ArkTS/TS sources; targeted source risk scan, not a compiler or general proof of ArkTS compatibility.",
-  "count": 91,
+  "scope": "All current 92 client ArkTS/TS sources; targeted source risk scan and named manual rule review, not a compiler or general proof of ArkTS compatibility.",
+  "count": 92,
   "targeted_patterns": {
     "arbitrary_literal_throw": [],
     "typed_catch_statement": [],
@@ -10,12 +10,12 @@
     "unbounded_catch_rethrow_candidate": [
       {
         "path": "entry/src/main/ets/services/PlatformFocusClock.ets",
-        "line": 68,
+        "line": 69,
         "source": "if (error instanceof FocusClockError) { throw error; }"
       }
     ]
   },
-  "remaining_catch_rethrow_review": "Only PlatformFocusClock.ets:68 remains; it is narrowed via instanceof FocusClockError, which extends Error. No further modification justified by this check.",
+  "remaining_catch_rethrow_review": "Only the recorded PlatformFocusClock candidate remains; it is narrowed via instanceof FocusClockError, which extends Error.",
   "platform_imports": [
     {
       "path": "entry/src/main/ets/entryability/EntryAbility.ets",
@@ -133,6 +133,11 @@
       "source": "import { BusinessError } from '@ohos.base';"
     },
     {
+      "path": "entry/src/main/ets/services/NativePlatformBridge.ets",
+      "line": 1,
+      "source": "import bridge from '@arkui-x.bridge';"
+    },
+    {
       "path": "entry/src/main/ets/services/PlatformFocusClock.ets",
       "line": 1,
       "source": "import deviceInfo from '@ohos.deviceInfo';"
@@ -201,7 +206,7 @@
     },
     {
       "path": "entry/src/main/ets/components/LearningPreferencesPanel.ets",
-      "sha256": "e6d4cdb82e66582f582bb0ab424cf43bcddc7cebef1507daf34d048bae1a7521"
+      "sha256": "3e38124db6730aeb9fa61fd3e1a76acad21c1caee6578ff71519583ea8425050"
     },
     {
       "path": "entry/src/main/ets/components/MessageContent.ets",
@@ -248,6 +253,10 @@
       "sha256": "b127e525314a14946bf9f29358527669894b05fdba99333496ab9f240ea8407b"
     },
     {
+      "path": "entry/src/main/ets/model/PlatformServiceTypes.ets",
+      "sha256": "29df14b8b147cd220c4681621c4d6a6d82772a3cf3d2a9bea1360f4c583e8483"
+    },
+    {
       "path": "entry/src/main/ets/model/ReviewModels.ets",
       "sha256": "662b24f67b2c2b409cc8846fd3bbe7b7c883f5bad3a3c4874fc070ab8e14b41f"
     },
@@ -257,7 +266,7 @@
     },
     {
       "path": "entry/src/main/ets/pages/CampusPage.ets",
-      "sha256": "7b64c346d1f1b156f0776a5029e2aca2ba547302c2f701ba40d40f304fa394d6"
+      "sha256": "c39fb97d7964253cb45fe48dde4b9812e9a9de475212d70ffc1d17a8f1c29115"
     },
     {
       "path": "entry/src/main/ets/pages/CampusServicesPage.ets",
@@ -317,11 +326,11 @@
     },
     {
       "path": "entry/src/main/ets/services/CampusFlowApi.ets",
-      "sha256": "2be0dd2042c454440dde259e0ed5ca135b983a1d6f762e7065d814cd7f7679cb"
+      "sha256": "2b643ae549620f5aa0783a8b058c5e9127b28e453ae478458f80eb07faef37e9"
     },
     {
       "path": "entry/src/main/ets/services/HarmonyFocusClock.ets",
-      "sha256": "2867969ef0a78208aee61789a0e9c090dcb0432648321577f42e18051363399d"
+      "sha256": "31ddde5905e5727b52651d11b06f8ef2bee78f97ab20561bed37609f581b8fb0"
     },
     {
       "path": "entry/src/main/ets/services/HarmonyReminderDriver.ets",
@@ -349,15 +358,15 @@
     },
     {
       "path": "entry/src/main/ets/services/NativePlatformBridge.ets",
-      "sha256": "d0c8853dbdaf7a54dab4ca4847925795f2c8537366ae7045ef8c3b12d326d69c"
+      "sha256": "45e6996d72639d8feb90c5a86a8db293617e509fb0ac6ed4611400bf0b0287e0"
     },
     {
       "path": "entry/src/main/ets/services/PlatformFocusClock.ets",
-      "sha256": "9ab6171d41476a26a97d53b65ec30d8b78aae63e025211f55293a7ea5fb37e00"
+      "sha256": "9f6f7ed92f19ce741f7397bb71091ff42857690b81a7b2c5391a0955eaf9d099"
     },
     {
       "path": "entry/src/main/ets/services/PlatformReminderDriver.ets",
-      "sha256": "c9a782875d14d32c2f32332946b83f370cfcea8e1e79a489283b01826a0ee575"
+      "sha256": "6b8ed1879ae3e098b9d6b2864a8e8bf20c84c1cf833a965efee4c833bd5b4c7b"
     },
     {
       "path": "entry/src/main/ets/services/PlatformVoiceDriver.ets",
@@ -437,7 +446,7 @@
     },
     {
       "path": "entry/src/main/ets/utils/LearningPreferences.ets",
-      "sha256": "f9050b2a2b2066478c4a704cf9f940bc61308d2dd933e1e8d6147c0ecb4f9f48"
+      "sha256": "facf6df642fc0b0d4d4f64380fe621446867a1043b46b735856021dfcb5d9240"
     },
     {
       "path": "entry/src/main/ets/utils/LocalHistoryStore.ets",
@@ -481,7 +490,7 @@
     },
     {
       "path": "entry/src/main/ets/utils/ReminderCoordinator.ets",
-      "sha256": "0c3f26d3d14b01aeca6f44ca899c02de36f236829280777e86d2e7b89d51d820"
+      "sha256": "94747b10b9656ddf86c01e8170d79b086f7e0832dbdb6e60b86d51892a1ee503"
     },
     {
       "path": "entry/src/main/ets/utils/ReviewController.ets",
@@ -530,6 +539,23 @@
     {
       "path": "hvigorfile.ts",
       "sha256": "b58f022e80a75eb34e278344c57fe549b0bf2f9ad9d3a2c2fd3d4f0d89e3cb69"
+    }
+  ],
+  "manual_rules_review": [
+    {
+      "rule": "arkts-no-spread / 10605099",
+      "result": "Object spreads replaced with explicit field copies in LearningPreferences, LearningPreferencesPanel and ReminderCoordinator; snapshot and retry isolation behavior covered by tests.",
+      "source": "https://github.com/openharmony/docs/blob/master/zh-cn/application-dev/quick-start/typescript-to-arkts-migration-guide.md"
+    },
+    {
+      "rule": "arkts-no-structural-typing / 10605030",
+      "result": "CampusFlowApi explicitly implements eight consumed gateways. Clock and reminder boundaries share named contracts through implements, extends and aliases. Shared declarations do not initialize native services.",
+      "source": "https://github.com/openharmony/docs/blob/master/zh-cn/application-dev/quick-start/typescript-to-arkts-migration-guide.md"
+    },
+    {
+      "rule": "@Builder argument restrictions",
+      "result": "CampusPage uses separate icon and illustrated builders; illustration Resource is required, never undefined.",
+      "source": "https://github.com/openharmony/docs/blob/master/zh-cn/application-dev/ui/state-management/arkts-builder.md"
     }
   ]
 }

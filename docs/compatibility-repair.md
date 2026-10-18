@@ -11,6 +11,7 @@
 | [#7](https://github.com/lengyu888/CampusFlow/pull/7#discussion_r4305505046) | 顶层 ignoreCrossPlatform 不符合工程所用插件 schema，触发 00303038 | 将字段移入 buildOption。保持 crossplatform:true、语音驱动和 Android/iOS Bridge，不通过删除功能规避检查。 |
 | [#15](https://github.com/lengyu888/CampusFlow/pull/15#discussion_r4305505209) | 缺少系统时区数据库时后端导入失败 | 正式运行依赖声明 tzdata；保留真实 IANA 时区规则，不用默认 UTC 或全局固定 UTC+8 掩盖缺库。 |
 | [#29](https://github.com/lengyu888/CampusFlow/pull/29#pullrequestreview-5561208616) | Windows 下测试脚本和夹具失败 | 修复 CRLF、文件 URL 转路径、超长命令参数、pytest 超长 ID、Unix 专用 tzset 和禁网夹具误伤内部 socketpair。保留原测试断言和禁止外网规则。 |
+| 新增 ArkTS 定向复核 | 对象展开、缺少明确接口关系、Builder 可空参数 | 显式复制学习偏好与提醒快照；API 实现 8 个 Gateway；平台接口统一具名类型；校园图标与插图入口分离。保留隔离、惰性加载和点击行为。 |
 | 全部累计脚本关联检查 | Windows 工具探测/启动、中文空格路径和编码 | 识别 PATHEXT 中的 cmd/bat，通过固定参数的受控启动调用已有工具；支持 Windows venv 路径；Java 源明确 UTF-8；PowerShell 构建回到项目目录。 |
 
 ## 配置修复依据
@@ -62,11 +63,11 @@ npm run test:journey
 
 ## 当前验证记录
 
-2026-10-18 本地 Mac 实际执行结果：后端 947 passed、2 项真实模型 integration 排除；Ruff 通过。客户端 1154 项，1150 passed、0 failed、4 skipped（本机无 JDK 的既有检查 1 项、仅 Windows 执行的测试 3 项）。工程预检覆盖 91 个 ArkTS/TS、21 个配置文件。连续客户端/后端流程 14 步通过，本轮实际 89 次 ASGI 请求，全程合成账号和脚本模型。
+2026-10-18 本地 Mac 实际执行结果：后端 947 passed、2 项真实模型 integration 排除；Ruff 通过。补充 ArkTS 修复后的客户端 1157 项，1153 passed、0 failed、4 skipped（本机无 JDK 的既有检查 1 项、仅 Windows 执行的测试 3 项）。补充修复后工程预检覆盖 92 个 ArkTS/TS、21 个配置文件。连续客户端/后端流程 14 步通过，最初 89 次、补充修复后 88 次 ASGI 请求（含轮询，次数可随调度变化），全程合成账号和脚本模型。
 
 另在中文和空格隔离路径，将全部客户端文本转为 CRLF，运行当时完整 1152 项客户端测试：1150 passed、0 failed、2 skipped；随后新增的两项 Windows 专用测试不在该次结果内。本机模拟不是 Windows 实跑。
 
-全 91 个 ArkTS/TS 的定向同类风险检查见 [源码核查记录](evidence/arkts-source-risk-audit.json)，它不检查全部 ArkUI 编译规则。
+补充修复后共 92 个 ArkTS/TS（新增一个仅类型声明的共享文件），定向同类风险检查见 [源码核查记录](evidence/arkts-source-risk-audit.json)，它不检查全部 ArkUI 编译规则。补充的对象复制、类型关系与 Builder 参数依据官方规则，详见同一证据文件；原生编译仍待学长执行。
 
 首轮 GitHub Windows 实跑发现旧超时测试假设 25ms 内一定已开始工具，在较慢磁盘上实际可以先正常到期。已将该测试改为在工具开始后控制真实 asyncio.Timeout 的到期时刻，并新增工具开始前到期的检查；不改变产品超时，也不删除失败断言。修订后结果以新提交的 CI 为准。
 

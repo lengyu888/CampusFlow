@@ -1,10 +1,11 @@
 import deviceInfo from '@ohos.deviceInfo';
 import { FocusClock, FocusClockSample } from '../model/FocusModels';
+import { PlatformClockReading, PlatformClockSource, PlatformServicePort } from '../model/PlatformServiceTypes';
 import { timetableOperationId } from '../utils/TimetableMaintenance';
 
-interface FocusClockReading { wall_ms?: number; monotonic_ms?: number; }
-interface FocusClockSource { read(): Promise<FocusClockReading>; }
-interface FocusClockNativePort { request(op: string): Promise<FocusClockReading>; }
+type FocusClockReading = PlatformClockReading;
+type FocusClockSource = PlatformClockSource;
+type FocusClockNativePort = PlatformServicePort;
 export interface FocusClockEnvironment {
   platform(): string;
   harmony(): Promise<FocusClockSource>;
