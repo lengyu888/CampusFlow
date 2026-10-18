@@ -3,6 +3,10 @@
 感谢参与 CampusFlow 开发。仓库的 `main` 分支已启用保护，协作者不能直接向
 `main` 推送代码。所有更改必须在独立分支完成，通过 Pull Request（PR）审查后合并。
 
+自 2026-10-18 起，采用每人一个持续协作分支与一个当前 PR。haohao 的完整版本在
+`dev/haohao`，累计功能、修复和验证记录见 [协作分支说明](docs/haohao-collaboration.md)。
+原阶段分支保留历史，后续更新集中到个人协作分支，不向其他成员分支提交。
+
 ## 1. 首次准备
 
 确认已安装 Git，并接受仓库协作者邀请。首次克隆：
@@ -16,30 +20,22 @@ git pull --ff-only origin main
 
 开发前按照 [README](README.md) 完成后端与 ArkUI-X 客户端环境配置。
 
-## 2. 从最新 main 创建工作分支
+## 2. 创建或继续自己的协作分支
 
-不要直接在 `main` 上修改。每项任务使用一个短期分支：
+不要直接在 `main` 上修改。每位成员首次从 main 创建自己的分支，后续持续使用同一分支：
 
 ```powershell
 git switch main
 git pull --ff-only origin main
-git switch -c feature/short-description
+git switch -c dev/your-name
 ```
 
-分支命名建议：
-
-- `feature/...`：新功能
-- `fix/...`：问题修复
-- `docs/...`：文档调整
-- `test/...`：测试补充
-- `refactor/...`：不改变外部行为的重构
-
-使用简短的英文小写名称和连字符，例如：
+已有个人分支时直接跟踪远程版本。haohao 的分支已包含全部累计功能，不要重新从 main 创建同名分支：
 
 ```text
-feature/calendar-reminder
-fix/agent-hduhelp-context
-docs/setup-guide
+git fetch origin
+git switch dev/haohao
+git pull --ff-only origin dev/haohao
 ```
 
 ## 3. 开发与提交
@@ -82,14 +78,16 @@ ArkUI-X 客户端变更至少运行：
 
 ```powershell
 cd arkui-x-client
-npm run fix:deveco
+npm test
 npm run check
+# 已有原生环境的队友继续执行；不要把前两项当成原生编译。
 npm run build:hap
 cd ..
 ```
 
 涉及客户端交互、Agent Tool Calling 或 HDUHelp 数据的变更，还应在 Phone 模拟器完成对应
-流程测试。PR 中需要写明已执行的测试以及尚未覆盖的部分。
+流程测试。PR 中需要写明已执行的测试以及尚未覆盖的部分。当前用户不安装原生环境，
+原生编译及设备验证由已有环境的队友完成；缺少这部分证据时保留 Draft，不宣称原生通过。
 
 ## 5. 推送前同步 main
 
@@ -97,31 +95,25 @@ cd ..
 
 ```powershell
 git fetch origin
-git rebase origin/main
+git merge origin/main
 ```
 
 如果发生冲突，修改冲突文件后继续：
 
 ```powershell
 git add <已解决的文件>
-git rebase --continue
+git merge --continue
 ```
 
-不要使用 `git reset --hard` 或强制覆盖他人的工作。已经推送过且经过 rebase 的个人分支，
-如确实需要更新远程，请只对自己的分支使用：
-
-```powershell
-git push --force-with-lease
-```
-
-禁止对 `main` 使用强制推送。
+不要使用 `git reset --hard` 或强制覆盖他人的工作。已共享的个人分支采用追加提交，
+不通过 rebase 后强推改写审查历史。main 的原保护与审查规则保持有效。
 
 ## 6. 推送工作分支
 
 首次推送：
 
 ```powershell
-git push -u origin feature/short-description
+git push -u origin dev/your-name
 ```
 
 后续更新：
@@ -145,7 +137,7 @@ git push
 也可以使用 GitHub CLI：
 
 ```powershell
-gh pr create --base main --head feature/short-description `
+gh pr create --base main --head dev/your-name `
   --title "feat(agent): add weekly planning" `
   --body "说明变更内容、测试结果和已知限制"
 ```
@@ -183,25 +175,25 @@ gh pr create --base main --head feature/short-description `
 收到修改意见后，在原工作分支继续修改并正常 `git push`，PR 会自动更新；不要为同一任务
 重复创建 PR。审查通过后，由仓库维护者在 GitHub 合并。
 
-## 9. 合并后的本地清理
+## 9. 合并后继续使用个人分支
 
-PR 合并后同步本地 `main` 并删除已完成分支：
+PR 合并后保留个人分支，先同步 main，再开始下一轮工作。已合并的 PR 不能继续追加审查，
+下一轮仍用同一分支开一个新 PR，不按功能或阶段另建分支：
 
 ```powershell
-git switch main
-git pull --ff-only origin main
-git branch -d feature/short-description
-git push origin --delete feature/short-description
+git fetch origin
+git switch dev/your-name
+git merge origin/main
 ```
 
-远程分支已经由 GitHub 自动删除时，最后一条命令可以省略。
+如果远程分支被自动删除，应先核对 main 和本地历史，再恢复自己的同名分支；不删除其他成员的分支。
 
 ## 完整命令示例
 
 ```powershell
-git switch main
-git pull --ff-only origin main
-git switch -c fix/agent-hduhelp-context
+git fetch origin
+git switch dev/your-name
+git pull --ff-only origin dev/your-name
 
 # 修改代码并运行测试
 git status
@@ -209,11 +201,11 @@ git add agent-service/src agent-service/tests
 git commit -m "fix(agent): expose synced HDUHelp context"
 
 git fetch origin
-git rebase origin/main
-git push -u origin fix/agent-hduhelp-context
+git merge origin/main
+git push -u origin dev/your-name
 
-gh pr create --base main --head fix/agent-hduhelp-context `
+gh pr create --base main --head dev/your-name `
   --title "fix(agent): 修复 HDUHelp 上下文读取" `
-  --body "已补充测试并完成 Phone 模拟器验证。"
+  --body "填写实际执行的检查结果与尚未验证的部分。"
 ```
 
