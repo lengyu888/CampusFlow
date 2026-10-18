@@ -1,0 +1,496 @@
+{
+  "provenance": "Actual local authenticated ASGI + SQLite; MockTransport calendars. No model, campus network or credentials in output.",
+  "responses": {
+    "mixed": {
+      "provider": "hduhelp",
+      "calendar_name": "合成课表",
+      "event_count": 0,
+      "entries": [],
+      "warnings": [
+        "2 条事件需要逐条核对，兼容列表未返回部分课表。"
+      ],
+      "diagnostics_version": 1,
+      "source_event_count": 5,
+      "rows": [
+        {
+          "source_index": 0,
+          "status": "ready",
+          "input": {
+            "date": "2026-10-19",
+            "title": "同名课程",
+            "start_time": "07:30",
+            "end_time": "08:30",
+            "location": "一教101",
+            "teacher": "陈老师"
+          },
+          "entry": {
+            "date": "2026-10-19",
+            "title": "同名课程",
+            "start_time": "07:30",
+            "end_time": "08:30",
+            "location": "一教101",
+            "teacher": "陈老师"
+          },
+          "source_time": {
+            "start_value": "20261018T233000Z",
+            "end_value": "20261019T003000Z",
+            "start_tzid": null,
+            "end_tzid": null,
+            "start_value_type": null,
+            "end_value_type": null
+          },
+          "issues": []
+        },
+        {
+          "source_index": 1,
+          "status": "ready",
+          "input": {
+            "date": "2026-10-19",
+            "title": "同名课程",
+            "start_time": "07:30",
+            "end_time": "08:30",
+            "location": "一教101",
+            "teacher": "陈老师"
+          },
+          "entry": {
+            "date": "2026-10-19",
+            "title": "同名课程",
+            "start_time": "07:30",
+            "end_time": "08:30",
+            "location": "一教101",
+            "teacher": "陈老师"
+          },
+          "source_time": {
+            "start_value": "20261019T073000",
+            "end_value": "20261019T083000",
+            "start_tzid": "Asia/Shanghai",
+            "end_tzid": "Asia/Shanghai",
+            "start_value_type": null,
+            "end_value_type": null
+          },
+          "issues": []
+        },
+        {
+          "source_index": 2,
+          "status": "ready",
+          "input": {
+            "date": "2026-10-19",
+            "title": "另一门重叠课程",
+            "start_time": "08:15",
+            "end_time": "09:15",
+            "location": "一教101",
+            "teacher": "陈老师"
+          },
+          "entry": {
+            "date": "2026-10-19",
+            "title": "另一门重叠课程",
+            "start_time": "08:15",
+            "end_time": "09:15",
+            "location": "一教101",
+            "teacher": "陈老师"
+          },
+          "source_time": {
+            "start_value": "20261019T081500",
+            "end_value": "20261019T091500",
+            "start_tzid": "Asia/Shanghai",
+            "end_tzid": "Asia/Shanghai",
+            "start_value_type": null,
+            "end_value_type": null
+          },
+          "issues": []
+        },
+        {
+          "source_index": 3,
+          "status": "invalid",
+          "input": {
+            "date": "2026-10-19",
+            "title": "结束早于开始",
+            "start_time": "08:00",
+            "end_time": "07:00",
+            "location": "一教101",
+            "teacher": "陈老师"
+          },
+          "entry": null,
+          "source_time": {
+            "start_value": "20261019T080000",
+            "end_value": "20261019T070000",
+            "start_tzid": "Asia/Shanghai",
+            "end_tzid": "Asia/Shanghai",
+            "start_value_type": null,
+            "end_value_type": null
+          },
+          "issues": [
+            {
+              "field": "end_time",
+              "code": "END_NOT_AFTER_START",
+              "severity": "error",
+              "message": "结束时间必须晚于开始时间，请核对这条课程。"
+            }
+          ]
+        },
+        {
+          "source_index": 4,
+          "status": "unsupported",
+          "input": {
+            "date": "2026-10-19",
+            "title": "待核对系列",
+            "start_time": "08:00",
+            "end_time": "09:00",
+            "location": "一教101",
+            "teacher": "陈老师"
+          },
+          "entry": null,
+          "source_time": {
+            "start_value": "20261019T080000",
+            "end_value": "20261019T090000",
+            "start_tzid": "Asia/Shanghai",
+            "end_tzid": "Asia/Shanghai",
+            "start_value_type": null,
+            "end_value_type": null
+          },
+          "issues": [
+            {
+              "field": "event",
+              "code": "RECURRENCE_UNSUPPORTED",
+              "severity": "error",
+              "message": "重复系列及例外尚未展开，不能只把首场当作完整课程。"
+            }
+          ]
+        }
+      ],
+      "timezone_policy": "campus-utc+08:00"
+    },
+    "all_ready": {
+      "provider": "hduhelp",
+      "calendar_name": "合成课表",
+      "event_count": 3,
+      "entries": [
+        {
+          "date": "2026-10-19",
+          "title": "不同地点同名",
+          "start_time": "08:00",
+          "end_time": "09:00",
+          "location": "二教202",
+          "teacher": "陈老师"
+        },
+        {
+          "date": "2026-10-19",
+          "title": "不同地点同名",
+          "start_time": "08:00",
+          "end_time": "09:00",
+          "location": "一教101",
+          "teacher": "陈老师"
+        },
+        {
+          "date": "2026-10-19",
+          "title": "新增课",
+          "start_time": "11:00",
+          "end_time": "12:00",
+          "location": "一教101",
+          "teacher": "陈老师"
+        }
+      ],
+      "warnings": [],
+      "diagnostics_version": 1,
+      "source_event_count": 3,
+      "rows": [
+        {
+          "source_index": 0,
+          "status": "ready",
+          "input": {
+            "date": "2026-10-19",
+            "title": "新增课",
+            "start_time": "11:00",
+            "end_time": "12:00",
+            "location": "一教101",
+            "teacher": "陈老师"
+          },
+          "entry": {
+            "date": "2026-10-19",
+            "title": "新增课",
+            "start_time": "11:00",
+            "end_time": "12:00",
+            "location": "一教101",
+            "teacher": "陈老师"
+          },
+          "source_time": {
+            "start_value": "20261019T030000Z",
+            "end_value": "20261019T040000Z",
+            "start_tzid": null,
+            "end_tzid": null,
+            "start_value_type": null,
+            "end_value_type": null
+          },
+          "issues": []
+        },
+        {
+          "source_index": 1,
+          "status": "ready",
+          "input": {
+            "date": "2026-10-19",
+            "title": "不同地点同名",
+            "start_time": "08:00",
+            "end_time": "09:00",
+            "location": "二教202",
+            "teacher": "陈老师"
+          },
+          "entry": {
+            "date": "2026-10-19",
+            "title": "不同地点同名",
+            "start_time": "08:00",
+            "end_time": "09:00",
+            "location": "二教202",
+            "teacher": "陈老师"
+          },
+          "source_time": {
+            "start_value": "20261019T080000",
+            "end_value": "20261019T090000",
+            "start_tzid": "Asia/Shanghai",
+            "end_tzid": "Asia/Shanghai",
+            "start_value_type": null,
+            "end_value_type": null
+          },
+          "issues": []
+        },
+        {
+          "source_index": 2,
+          "status": "ready",
+          "input": {
+            "date": "2026-10-19",
+            "title": "不同地点同名",
+            "start_time": "08:00",
+            "end_time": "09:00",
+            "location": "一教101",
+            "teacher": "陈老师"
+          },
+          "entry": {
+            "date": "2026-10-19",
+            "title": "不同地点同名",
+            "start_time": "08:00",
+            "end_time": "09:00",
+            "location": "一教101",
+            "teacher": "陈老师"
+          },
+          "source_time": {
+            "start_value": "20261019T080000",
+            "end_value": "20261019T090000",
+            "start_tzid": "Asia/Shanghai",
+            "end_tzid": "Asia/Shanghai",
+            "start_value_type": null,
+            "end_value_type": null
+          },
+          "issues": []
+        }
+      ],
+      "timezone_policy": "campus-utc+08:00"
+    },
+    "duplicate": {
+      "provider": "hduhelp",
+      "calendar_name": "合成课表",
+      "event_count": 2,
+      "entries": [
+        {
+          "date": "2026-10-19",
+          "title": "课程",
+          "start_time": "08:00",
+          "end_time": "09:00",
+          "location": "一教101",
+          "teacher": "陈老师"
+        },
+        {
+          "date": "2026-10-19",
+          "title": "课程",
+          "start_time": "08:00",
+          "end_time": "09:00",
+          "location": "一教101",
+          "teacher": "李老师"
+        }
+      ],
+      "warnings": [
+        "1 条六字段完全重复事件仅列入兼容课表一次；源行均保留。"
+      ],
+      "diagnostics_version": 1,
+      "source_event_count": 3,
+      "rows": [
+        {
+          "source_index": 0,
+          "status": "ready",
+          "input": {
+            "date": "2026-10-19",
+            "title": "课程",
+            "start_time": "08:00",
+            "end_time": "09:00",
+            "location": "一教101",
+            "teacher": "陈老师"
+          },
+          "entry": {
+            "date": "2026-10-19",
+            "title": "课程",
+            "start_time": "08:00",
+            "end_time": "09:00",
+            "location": "一教101",
+            "teacher": "陈老师"
+          },
+          "source_time": {
+            "start_value": "20261019T080000",
+            "end_value": "20261019T090000",
+            "start_tzid": "Asia/Shanghai",
+            "end_tzid": "Asia/Shanghai",
+            "start_value_type": null,
+            "end_value_type": null
+          },
+          "issues": []
+        },
+        {
+          "source_index": 1,
+          "status": "ready",
+          "input": {
+            "date": "2026-10-19",
+            "title": "课程",
+            "start_time": "08:00",
+            "end_time": "09:00",
+            "location": "一教101",
+            "teacher": "陈老师"
+          },
+          "entry": {
+            "date": "2026-10-19",
+            "title": "课程",
+            "start_time": "08:00",
+            "end_time": "09:00",
+            "location": "一教101",
+            "teacher": "陈老师"
+          },
+          "source_time": {
+            "start_value": "20261019T080000",
+            "end_value": "20261019T090000",
+            "start_tzid": "Asia/Shanghai",
+            "end_tzid": "Asia/Shanghai",
+            "start_value_type": null,
+            "end_value_type": null
+          },
+          "issues": []
+        },
+        {
+          "source_index": 2,
+          "status": "ready",
+          "input": {
+            "date": "2026-10-19",
+            "title": "课程",
+            "start_time": "08:00",
+            "end_time": "09:00",
+            "location": "一教101",
+            "teacher": "李老师"
+          },
+          "entry": {
+            "date": "2026-10-19",
+            "title": "课程",
+            "start_time": "08:00",
+            "end_time": "09:00",
+            "location": "一教101",
+            "teacher": "李老师"
+          },
+          "source_time": {
+            "start_value": "20261019T080000",
+            "end_value": "20261019T090000",
+            "start_tzid": "Asia/Shanghai",
+            "end_tzid": "Asia/Shanghai",
+            "start_value_type": null,
+            "end_value_type": null
+          },
+          "issues": []
+        }
+      ],
+      "timezone_policy": "campus-utc+08:00"
+    },
+    "unsupported": {
+      "provider": "hduhelp",
+      "calendar_name": "合成课表",
+      "event_count": 0,
+      "entries": [],
+      "warnings": [
+        "2 条事件需要逐条核对，兼容列表未返回部分课表。"
+      ],
+      "diagnostics_version": 1,
+      "source_event_count": 2,
+      "rows": [
+        {
+          "source_index": 0,
+          "status": "unsupported",
+          "input": {
+            "date": "2026-10-19",
+            "title": "课程",
+            "start_time": "08:00",
+            "end_time": "09:00",
+            "location": "一教101",
+            "teacher": "陈老师"
+          },
+          "entry": null,
+          "source_time": {
+            "start_value": "20261019T080000",
+            "end_value": "20261019T090000",
+            "start_tzid": "Asia/Shanghai",
+            "end_tzid": "Asia/Shanghai",
+            "start_value_type": null,
+            "end_value_type": null
+          },
+          "issues": [
+            {
+              "field": "event",
+              "code": "RECURRENCE_UNSUPPORTED",
+              "severity": "error",
+              "message": "重复系列及例外尚未展开，不能只把首场当作完整课程。"
+            }
+          ]
+        },
+        {
+          "source_index": 1,
+          "status": "unsupported",
+          "input": {
+            "date": "2026-10-19",
+            "title": "课程",
+            "start_time": "23:00",
+            "end_time": "01:00",
+            "location": "一教101",
+            "teacher": "陈老师"
+          },
+          "entry": null,
+          "source_time": {
+            "start_value": "20261019T150000Z",
+            "end_value": "20261019T170000Z",
+            "start_tzid": null,
+            "end_tzid": null,
+            "start_value_type": null,
+            "end_value_type": null
+          },
+          "issues": [
+            {
+              "field": "date",
+              "code": "CROSS_DAY_UNSUPPORTED",
+              "severity": "error",
+              "message": "转换后跨北京时间日期，现有课程字段不能无损保存。"
+            }
+          ]
+        }
+      ],
+      "timezone_policy": "campus-utc+08:00"
+    }
+  },
+  "preview_unchanged_timetable": true,
+  "base_draft": [
+    {
+      "date": "2026-10-19",
+      "title": "同名课程",
+      "start_time": "07:30",
+      "end_time": "08:30",
+      "location": "一教101",
+      "teacher": "陈老师"
+    }
+  ],
+  "expected_mixed_categories_against_base": [
+    "duplicate",
+    "duplicate",
+    "overlap",
+    "invalid",
+    "invalid"
+  ]
+}

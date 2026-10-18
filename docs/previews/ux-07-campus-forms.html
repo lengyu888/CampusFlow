@@ -1,0 +1,649 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none';style-src 'unsafe-inline';script-src 'unsafe-inline';connect-src 'none';form-action 'none'"><title>行简 · 录课与校园｜UX07 离线交互原型</title><style>
+:root{font:16px/1.55 -apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;color:#29352F;background:#F6F4EF;--ink:#29352F;--green:#416454;--muted:#626E65;--line:#DCE2D8;--paper:#FFFEFB;--soft:#E7EEE6;--ochre:#795321;--warm:#FBF2DF;--red:#923F32;--red-soft:#F9ECE7}*{box-sizing:border-box}body{margin:0}button,input,select,textarea{font:inherit}button{min-height:48px;border:0;border-radius:12px;background:var(--soft);color:var(--green);padding:10px 16px;cursor:pointer;line-height:1.4}button:hover{filter:brightness(.97)}button:active{filter:brightness(.9)}button:disabled{cursor:not-allowed;opacity:.6}button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid #9B573B;outline-offset:3px}.primary{background:var(--green);color:var(--paper)}.quiet{background:transparent;color:var(--muted)}.border{background:var(--paper);border:1px solid var(--line)}.danger{color:var(--red);background:var(--red-soft)}input,select,textarea{border:1px solid #A5B1A5;background:var(--paper);color:var(--ink);border-radius:10px;padding:12px;min-width:0;max-width:100%;min-height:48px}input[type=checkbox]{width:22px;height:22px;min-height:22px;accent-color:var(--green)}textarea{width:100%;resize:vertical;min-height:116px}h1,h2,h3,p{margin:0}h1{font-size:28px;letter-spacing:-.5px}h2{font-size:22px;line-height:1.4}h3{font-size:17px}p+ p{margin-top:8px}small,.meta{font-size:13px;color:var(--muted)}.muted{color:var(--muted)}.eyebrow{font-size:12px;letter-spacing:1.5px;color:var(--green);font-weight:650}.page{max-width:1192px;margin:auto;padding:28px 28px 48px}.intro{display:flex;justify-content:space-between;align-items:flex-start;gap:24px;margin-bottom:24px}.intro p{max-width:610px;margin-top:8px}.demo-tools{display:flex;flex-wrap:wrap;gap:8px}.layout{display:grid;grid-template-columns:minmax(0,740px) minmax(280px,1fr);gap:24px;align-items:start}.app{background:var(--paper);border:1px solid #CCD5CB;border-radius:24px;overflow:hidden;box-shadow:0 8px 24px #29352F06;min-width:0}.app-head{padding:24px 24px 12px}.head-row{display:flex;justify-content:space-between;align-items:center;gap:12px}.brand{display:flex;align-items:center;gap:8px;margin-bottom:12px;font-size:13px;color:var(--muted)}.brand-mark{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;background:var(--soft);border-radius:7px;color:var(--green);font-weight:700}.app-title{font-size:30px;font-weight:700;letter-spacing:1px}.icon{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex:none}.icon-button{width:48px;padding:12px}.segmented{display:flex;gap:4px;padding:4px;background:#F0F1EA;border-radius:13px;margin-top:20px}.segmented button{flex:1;padding:10px 8px;background:transparent;color:var(--muted);border-radius:10px}.segmented button[aria-selected=true]{background:var(--paper);color:var(--green);font-weight:650;box-shadow:0 1px 3px #29352F12}.app-body{padding:16px 24px 24px}.section{margin-top:24px}.section:first-child{margin-top:0}.section-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}.rowline{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.week-tools{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}.week-tools h2{font-size:20px}.week-nav{display:flex;gap:4px;flex:none}.week-nav button{padding:8px;width:48px}.switch{display:flex;gap:4px}.switch button{background:transparent;padding:8px 12px;color:var(--muted)}.switch button[aria-pressed=true]{background:var(--soft);color:var(--green)}.selected-line{border-top:1px solid var(--line);margin-top:12px;padding-top:12px;display:flex;align-items:center;justify-content:space-between;gap:12px}.selected-line button{padding:8px 12px}.notice{border-left:3px solid #886023;padding:12px 14px;background:var(--warm);color:var(--ochre);border-radius:0 10px 10px 0;font-size:14px}.notice.error{background:var(--red-soft);color:var(--red);border-color:var(--red)}.notice.info{background:#EEF1EB;border-color:var(--green);color:var(--green)}.notice button{background:transparent;text-decoration:underline;padding:6px 0;display:block;color:inherit}.load{background:#F4F5EE;border:1px solid #E3E7DB;border-radius:16px;padding:16px;margin-top:16px}.load-total{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin:4px 0}.load-total strong{font-size:28px;font-weight:650;color:var(--green)}.load-breakdown{display:flex;gap:16px;flex-wrap:wrap;font-size:14px}.union-line{height:5px;display:flex;gap:3px;margin:14px 0 10px}.union-line span{background:#577361;border-radius:3px;min-width:3px}.union-line span:nth-child(2){background:#AC8750}.union-line span:nth-child(3){background:#839382}.load .meta{margin-top:8px}.goal-note{font-size:13px;color:var(--ochre);margin-top:8px}.day-block{border-top:1px solid var(--line);margin-top:20px;padding-top:12px}.day-block:first-child{margin-top:12px}.day-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:4px}.day-button{display:flex;gap:10px;align-items:baseline;background:transparent;color:var(--ink);padding:8px 0;text-align:left}.day-button strong{font-size:20px}.day-button[aria-pressed=true]{color:var(--green)}.selected-dot{display:inline-block;width:6px;height:6px;background:var(--green);border-radius:50%;margin:0 6px 3px 0}.agenda-row{display:grid;grid-template-columns:58px minmax(0,1fr) 48px;gap:12px;align-items:center;border-bottom:1px solid #EDF0E8;padding:8px 0}.agenda-row:last-child{border-bottom:0}.agenda-time{font-size:14px;color:var(--muted);align-self:start;padding-top:14px;line-height:1.5;font-variant-numeric:tabular-nums}.agenda-time strong{display:block;font-weight:600;color:var(--ink)}.entry{border-radius:8px;background:transparent;text-align:left;padding:8px 0;color:var(--ink);min-width:0;width:100%;overflow-wrap:anywhere}.entry strong{font-weight:550;display:block}.entry .meta{display:block;margin-top:3px}.entry .pill{margin:6px 4px 0 0}.complete{border-radius:10px;padding:12px;background:transparent;display:flex;align-items:center;justify-content:center;width:48px;height:48px;align-self:start;margin-top:3px;color:var(--green)}.check-circle{width:20px;height:20px;border:1.5px solid #7A8E7B;border-radius:50%;display:flex;align-items:center;justify-content:center}.complete[aria-pressed=true] .check-circle{background:var(--green);color:var(--paper);border-color:var(--green)}.completed .entry strong{text-decoration:line-through;color:var(--muted)}.pill{display:inline-block;font-size:12px;line-height:1.5;padding:2px 7px;border-radius:5px;color:var(--muted);background:#F0F1EA;vertical-align:middle}.pill.course{background:#EDF0E6;color:#5B6650}.pill.conflict{background:var(--red-soft);color:var(--red)}.pill.accepted{background:var(--soft);color:var(--green)}.pill.review{background:var(--warm);color:var(--ochre)}.empty-day{padding:12px 0 10px;color:var(--muted);font-size:14px}.all-day{border-top:1px dashed var(--line);margin-top:8px;padding-top:8px}.mini-label{font-size:12px;color:var(--muted);letter-spacing:.4px}.all-day .agenda-row{grid-template-columns:58px minmax(0,1fr) 48px}.footer-note{font-size:12px;color:var(--muted);padding:12px 24px;border-top:1px solid var(--line);background:#FAFAF4}.sidebar{display:flex;flex-direction:column;gap:20px}.panel{background:var(--paper);border:1px solid var(--line);border-radius:16px;padding:20px;min-width:0}.panel h2{font-size:18px}.panel p{font-size:14px;margin-top:8px}.panel .section-head{margin-bottom:8px}.panel label{display:block;font-size:13px;color:var(--muted);margin-top:12px}.panel select{width:100%;margin-top:4px}.audit-row{padding:14px 0;border-top:1px solid var(--line)}.audit-row:first-of-type{margin-top:12px}.audit-row strong{font-size:15px;display:block;margin-top:8px}.audit-row p{font-size:13px;margin:4px 0 8px}.audit-row button{width:100%;text-align:left;padding:8px 12px}.audit-row .pill{font-size:12px}.method{font-size:13px;color:var(--muted)}details summary{cursor:pointer;min-height:48px;display:flex;align-items:center;color:var(--green);list-style:none}details summary::after{content:'＋';margin-left:auto}details[open] summary::after{content:'−'}.filters{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:16px 0}.filters label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted)}.filters .full{grid-column:1/-1}.filters input,.filters select{width:100%}.search-line{position:relative}.search-line input{width:100%;padding-left:40px}.search-line .icon{position:absolute;left:13px;top:15px;color:var(--muted)}.result-line{display:flex;align-items:center;justify-content:space-between;gap:8px}.result-line button{padding:8px 12px}.task-list .agenda-row{grid-template-columns:minmax(0,1fr) 48px;gap:12px}.pager{display:flex;align-items:center;justify-content:space-between;gap:8px;border-top:1px solid var(--line);padding-top:16px;margin-top:16px}.pager button{padding:8px 12px}.no-results{padding:36px 4px;text-align:center}.no-results h3{font-size:19px}.no-results p{margin:8px 0 20px;color:var(--muted);font-size:14px}.plan-sheet{border-top:1px solid var(--line);padding-top:20px;margin-top:16px}.plan-sheet ol{padding-left:24px}.plan-sheet li{padding:8px 0}.progress{height:5px;border-radius:3px;background:#E7EEE6;margin:12px 0}.progress span{display:block;width:33.33%;height:100%;background:var(--green);border-radius:3px}.bottom-nav{display:flex;justify-content:space-around;padding:8px 8px 12px;border-top:1px solid var(--line)}.bottom-nav button{display:flex;flex-direction:column;gap:2px;align-items:center;justify-content:center;background:transparent;color:var(--muted);font-size:12px;min-width:56px}.bottom-nav button[aria-current=page]{color:var(--green);font-weight:650;background:#F1F4EB}.bottom-nav .icon{width:22px;height:22px}dialog{width:min(560px,calc(100vw - 32px));max-height:calc(100dvh - 32px);border:1px solid var(--line);border-radius:20px;padding:0;color:var(--ink);background:var(--paper);box-shadow:0 16px 60px #182A432A;overflow:auto}dialog::backdrop{background:#25392D55}.dialog-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:20px 20px 8px}.dialog-head h2{padding-top:8px}.dialog-content{padding:8px 20px 24px}.dialog-content p{margin:8px 0}.dialog-content label{display:block;font-size:14px;color:var(--muted);margin:16px 0 4px}.dialog-content input{width:100%}.dialog-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:20px}.dialog-actions button{flex:1}.fact{display:grid;grid-template-columns:76px minmax(0,1fr);gap:12px;padding:12px 0;border-bottom:1px solid var(--line);font-size:14px}.fact span{color:var(--muted)}.fact strong{font-weight:500;overflow-wrap:anywhere}.compare{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:16px 0}.compare>div{background:#F3F4ED;border-radius:12px;padding:12px}.compare .after{background:var(--soft)}.compare strong{display:block;font-size:18px;margin-top:8px}.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);max-width:calc(100% - 32px);background:var(--ink);color:var(--paper);padding:12px 20px;border-radius:12px;box-shadow:0 4px 20px #29352F20;z-index:10;font-size:14px;pointer-events:none}.toast:empty{display:none}.large{font-size:20px}.large .meta,.large small,.large .notice,.large .load-breakdown,.large .empty-day,.large .entry .meta,.large .fact,.large .panel p,.large .panel label{font-size:16px}.large .pill,.large .mini-label,.large .footer-note,.large .method,.large .goal-note{font-size:14px}.large .agenda-time{font-size:16px}.large .agenda-row{grid-template-columns:60px minmax(0,1fr) 48px;gap:8px}.large .task-list .agenda-row{grid-template-columns:minmax(0,1fr) 48px}.large .filters label{font-size:16px}.large .app-title{font-size:34px}.large .panel h2{font-size:22px}.large .audit-row strong{font-size:18px}[hidden]{display:none!important}@media(max-width:850px){.layout{grid-template-columns:minmax(0,1fr)}.sidebar{display:grid;grid-template-columns:1fr 1fr}.intro{flex-direction:column}.page{padding:24px 16px}.app{border-radius:20px}.sidebar .panel:last-child{grid-column:1/-1}}@media(max-width:540px){.page{padding:20px 12px 36px}.intro{gap:16px}.intro h1{font-size:24px}.intro p{font-size:14px}.layout{gap:20px}.sidebar{display:flex}.app-head{padding:20px 16px 12px}.app-body{padding:12px 16px 20px}.week-tools{align-items:flex-start;gap:8px}.week-tools h2{font-size:18px}.selected-line{align-items:flex-start}.selected-line button{max-width:116px;flex:none}.agenda-row{gap:8px;grid-template-columns:52px minmax(0,1fr) 48px}.load{padding:12px}.load-breakdown{gap:8px 16px}.section-head{flex-wrap:wrap}.panel{padding:16px}.filters{gap:10px}.compare{grid-template-columns:1fr}.large .week-tools{flex-wrap:wrap}.large .week-nav{margin-left:auto}.large .selected-line{flex-wrap:wrap}.large .selected-line button{max-width:100%;width:100%}.large .segmented button{padding:10px 4px;font-size:18px}.large .app-head,.large .app-body{padding-left:12px;padding-right:12px}.large .day-heading{align-items:flex-start}.large .day-heading>.meta{text-align:right}.large .filters{grid-template-columns:1fr}.large .filters .full{grid-column:auto}.large .fact{grid-template-columns:1fr;gap:4px}.large .bottom-nav button{font-size:14px}.large .bottom-nav{padding-left:4px;padding-right:4px}.large .bottom-nav button{min-width:52px;padding:8px}.large .pager{flex-wrap:wrap}.large .pager .meta{width:100%;order:-1;text-align:center}}@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
+
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px 12px}.form-grid label{display:flex;flex-direction:column;gap:6px;font-size:14px;color:var(--muted);min-width:0}.form-grid input{width:100%}.form-grid .full{grid-column:1/-1}.field-error{display:block;font-size:13px;color:var(--red);line-height:1.5}.has-error{border:2px solid var(--red)}.toolbar{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0}.editor-box{padding:16px;border:1px solid var(--line);border-radius:14px;margin:16px 0}.course-list .course-line{padding:14px 0;border-bottom:1px solid var(--line)}.course-line .head-row{align-items:flex-start}.course-line strong{overflow-wrap:anywhere}.course-line p{font-size:14px;color:var(--muted);margin-top:4px}.course-line button{flex:none}.course-line small{display:block;margin-top:4px}.app-head .segmented button{white-space:nowrap}.entry-list{border:1px solid var(--line);border-radius:16px;overflow:hidden}.entry-link{display:flex;gap:16px;align-items:center;width:100%;text-align:left;padding:16px;background:var(--paper);border-bottom:1px solid var(--line);border-radius:0;min-height:80px}.entry-link:last-child{border-bottom:0}.entry-symbol{width:44px;height:44px;display:flex;align-items:center;justify-content:center;border-radius:12px;background:var(--soft);color:var(--green);flex:none}.entry-link .entry-copy{flex:1;min-width:0}.entry-copy strong{font-weight:600;color:var(--ink);display:block}.entry-copy small{display:block;margin-top:3px;overflow-wrap:anywhere}.entry-link .chev{color:var(--muted);font-size:22px}.compact-weather{margin:20px 0;padding:14px 16px;border-radius:14px;background:#F2F3EC;display:flex;align-items:center;justify-content:space-between;gap:12px}.compact-weather strong{font-size:16px}.compact-weather .meta{margin-top:2px}.query-panel{margin-top:12px;padding:16px;border:1px solid var(--line);border-radius:14px}.query-panel textarea{margin-top:12px}.query-examples{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.query-examples button{padding:8px 12px;font-size:14px}.source-card{padding:16px;background:#F2F4EC;border-radius:12px;margin-top:16px}.source-card p{font-size:14px}.profile-head{display:flex;gap:12px;align-items:center;margin-bottom:20px}.avatar{width:48px;height:48px;background:var(--soft);color:var(--green);border-radius:50%;display:flex;align-items:center;justify-content:center;flex:none;font-size:20px}.review-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:16px 0}.review-summary div{padding:10px;background:#F1F4EB;border-radius:10px;text-align:center}.review-summary strong{display:block;font-size:22px;color:var(--green)}.review-summary span{font-size:12px;color:var(--muted)}.review-row{border:1px solid var(--line);border-radius:14px;padding:16px;margin-top:12px;overflow-wrap:anywhere}.review-row h3{margin:8px 0}.review-row p{font-size:14px;margin-top:6px}.review-row .actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}.review-row details{font-size:13px;color:var(--muted)}.review-row details p{font-size:13px}.review-row.excluded{background:#F4F4F0}.overlap-fact{border-left:3px solid #A48250;padding:8px 12px;background:var(--warm);margin-top:10px;color:var(--ochre)}.filter-chips{display:flex;flex-wrap:wrap;gap:6px;margin:16px 0}.filter-chips button{padding:8px 12px;font-size:14px}.filter-chips button[aria-pressed=true]{background:var(--green);color:var(--paper)}.review-row .field-error{margin-top:6px}.back-row{display:flex;align-items:center;gap:12px;margin-bottom:20px}.back-row h2{font-size:22px}.inline-hint{font-size:13px;color:var(--muted);margin-top:8px}.accepted-warning{margin:12px 0}.profile-section .form-grid{margin-top:16px}.section-subtitle{margin-top:6px;color:var(--muted)}.demo-note{font-size:13px;line-height:1.6;color:var(--muted);border-top:1px solid var(--line);padding-top:12px;margin-top:16px}.steps{margin:12px 0 0;padding-left:20px;color:var(--muted);font-size:14px}.steps li{padding:8px 0}.steps strong{color:var(--ink);display:block}.import-options select{width:100%;margin:8px 0}.large .form-grid label,.large .field-error,.large .inline-hint,.large .demo-note,.large .course-line p,.large .query-examples button,.large .review-row p,.large .source-card p{font-size:16px}.large .review-row details,.large .review-row details p{font-size:15px}.large .entry-copy small{font-size:16px}.large .review-summary span{font-size:14px}.profile-section .profile-entry{margin-top:16px}@media(max-width:540px){.editor-box{padding:12px}.entry-link{padding:14px 12px;gap:12px}.form-grid{gap:14px 10px}.review-row{padding:12px}.review-row .actions button{width:100%}.large .form-grid{grid-template-columns:1fr}.large .form-grid .full{grid-column:auto}.large .review-summary{grid-template-columns:repeat(2,1fr)}.large .compact-weather{align-items:flex-start;flex-direction:column}.large .course-line .head-row{flex-wrap:wrap}.large .toolbar button{width:100%}.large .query-examples button{width:100%}.large .entry-link{gap:10px}.large .entry-symbol{width:40px;height:40px}}
+</style></head><body><main class="page"><header class="intro"><div><div class="eyebrow">行简 · UX07</div><h1>录课少一点重复，找事少绕一步</h1><p class="muted">可离线操作的浏览器近似稿。课表与账号均为合成示例；导入样例来自本地鉴权 ASGI + 模拟日历响应。不连接真实账户，不代表 ArkUI 原生截图或设备验收。</p></div><div class="demo-tools"><button id="large" aria-pressed="false">大字模式</button><button id="reset" class="border">重置示例</button></div></header><div class="layout"><section class="app" aria-label="UX07 校园与课表近似原型"><header class="app-head"><div class="brand"><span class="brand-mark">行</span>行简 / 合成示例</div><nav class="segmented" aria-label="本原型页面"><button data-page="campus" aria-selected="true">校园</button><button data-page="timetable" aria-selected="false">课表维护</button><button data-page="profile" aria-selected="false">个人设置</button></nav></header><div id="content" class="app-body"></div><div class="footer-note">草稿仅在当前页面内存中；不会读取凭据、保存到账号或安装系统能力</div></section><aside class="sidebar"><section class="panel"><h2>这次先做好三件事</h2><ol class="steps"><li><strong>连续录入，减少重复输入</strong>加入后继续下一门；沿用前一门必须点击，并再核对日期、课程名与周次。</li><li><strong>每条源记录都有去处</strong>新增、完全重复、重叠与待修正分开看；明确排除或处理后才加入本地草稿。</li><li><strong>常用入口先出现</strong>课表、路线与服务始终可找；查询按需展开，设置按五类进入。</li></ol></section><section class="panel"><h2>切换边界状态</h2><label for="connection">校园服务连接</label><select id="connection"><option value="missing">未连接校园账号</option><option value="connected">合成已连接状态</option></select><label for="knowledge-status">资料查询返回</label><select id="knowledge-status"><option value="found">命中示例资料卡</option><option value="missing">没有可靠命中</option><option value="unsupported">校区尚未收录</option><option value="error">请求失败</option></select><label class="rowline" style="display:flex;min-height:48px"><input id="long-school" type="checkbox">长校名 / 校区文案</label><label for="scope">当前合成账户范围</label><select id="scope"><option value="a">示例账户 A</option><option value="b">示例账户 B（全新范围）</option></select><p class="method">切换范围会清理本页草稿与导入选择，不让 A 的内容落进 B。不是登录或退出真实账号。</p></section><section class="panel"><details><summary>数据与验收边界</summary><p>课表规范、周重复、完整行诊断、六字段去重、重叠确认和最终组装使用实际生产纯函数的内嵌去类型副本。</p><p>导入未发网络请求；“保存”“已连接”等若出现，只描述明确标记的本地演示。本页不验证原生选择器、系统键盘、真实权限或云端保存回执。</p></details></section></aside></div></main><dialog id="dialog" aria-labelledby="dialog-title"><div class="dialog-head"><h2 id="dialog-title"></h2><button id="close-dialog" class="icon-button quiet" aria-label="关闭对话框">×</button></div><div id="dialog-content" class="dialog-content"></div></dialog><div id="toast" class="toast" role="status" aria-live="polite"></div>
+<script>
+/* BEGIN PRODUCTION HELPERS */
+/* Actual production pure functions, without UI, native or network capabilities.
+ * OnboardingTimetable SHA256 64fddbf9a48fc493f2f2c87a02d2bcdf4cb6bc80ef52ff6c9adb14f25c97313f
+ * TimetableImportReview SHA256 eb7e3d6005f75f782784f10ed63e7016d73f9f2252c5c1416364147680494dc1 */
+const Rules=(()=>{
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+function textValue(value        )         {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function emptyEntry()                 {
+  return { date: '', title: '', start_time: '', end_time: '', location: '', teacher: '' };
+}
+
+// Explicitly copy the public fields. Normalization never truncates content or mutates its source.
+function normalizeTimetableEntry(entry                )                 {
+  if (entry === null || typeof entry !== 'object' || Array.isArray(entry)) {
+    return emptyEntry();
+  }
+  return {
+    date: textValue(entry.date),
+    title: textValue(entry.title),
+    start_time: textValue(entry.start_time),
+    end_time: textValue(entry.end_time),
+    location: textValue(entry.location),
+    teacher: textValue(entry.teacher)
+  };
+}
+
+function validDate(value        )          {
+  if (!new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$').test(value)) {
+    return false;
+  }
+  const year = Number(value.substring(0, 4));
+  const month = Number(value.substring(5, 7));
+  const day = Number(value.substring(8, 10));
+  // Python's date schema accepts years 0001..9999; do not impose a different client range.
+  if (year < 1 || year > 9999 || month < 1 || month > 12 || day < 1) {
+    return false;
+  }
+  const leap = year % 400 === 0 || (year % 4 === 0 && year % 100 !== 0);
+  const monthDays           = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  return day <= monthDays[month - 1];
+}
+
+function validTime(value        )          {
+  return new RegExp('^([01][0-9]|2[0-3]):[0-5][0-9]$').test(value);
+}
+
+function validateTimetableEntry(entry                )                           {
+  const normalized = normalizeTimetableEntry(entry);
+  const errors                       = {
+    date: '', title: '', start_time: '', end_time: '', location: '', teacher: ''
+  };
+  if (entry === null || typeof entry !== 'object' || Array.isArray(entry)) {
+    errors.title = '课程数据格式无效，请重新填写或导入。';
+    return { valid: false, entry: normalized, errors: errors };
+  }
+  if (!validDate(normalized.date)) {
+    errors.date = '请填写真实日期，格式为 YYYY-MM-DD（年份 0001–9999）。';
+  }
+  if (normalized.title.length === 0) {
+    errors.title = '请填写课程名称。';
+  } else if (Array.from(normalized.title).length > 100) {
+    errors.title = '课程名称最多 100 字，原文已保留，请编辑缩短。';
+  }
+  if (!validTime(normalized.start_time)) {
+    errors.start_time = '开始时间须为 HH:mm，例如 08:05。';
+  }
+  if (!validTime(normalized.end_time)) {
+    errors.end_time = '结束时间须为 HH:mm，例如 09:40。';
+  } else if (errors.start_time.length === 0 && normalized.end_time <= normalized.start_time) {
+    errors.end_time = '结束时间须晚于开始时间，且在同一天。';
+  }
+  if (entry.location !== undefined && typeof entry.location !== 'string') {
+    errors.location = '上课地点须为文字，可留空。';
+  } else if (Array.from(normalized.location).length > 120) {
+    errors.location = '上课地点最多 120 字，原文已保留，请编辑缩短。';
+  }
+  if (entry.teacher !== undefined && typeof entry.teacher !== 'string') {
+    errors.teacher = '教师姓名须为文字，可留空。';
+  } else if (Array.from(normalized.teacher).length > 80) {
+    errors.teacher = '教师姓名最多 80 字，原文已保留，请编辑缩短。';
+  }
+  const valid = errors.date.length === 0 && errors.title.length === 0 && errors.start_time.length === 0 &&
+    errors.end_time.length === 0 && errors.location.length === 0 && errors.teacher.length === 0;
+  return { valid: valid, entry: normalized, errors: errors };
+}
+
+function listFailure(field        , message        )                      {
+  const issue                 = { index: -1, relatedIndex: -1, field: field, message: message };
+  return { valid: false, entries: [], errors: [issue], warnings: [] };
+}
+
+function appendFieldError(issues                  , index        , field        , message        )       {
+  if (message.length > 0) {
+    issues.push({ index: index, relatedIndex: -1, field: field, message: message });
+  }
+}
+
+function entryIdentity(entry                )         {
+  // JSON encoding keeps separators inside titles/locations from producing false duplicates.
+  return JSON.stringify([entry.date, entry.title, entry.start_time, entry.end_time, entry.location, entry.teacher]);
+}
+
+function validateTimetableList(entries                  , allowEmpty          = false)                      {
+  if (!Array.isArray(entries)) {
+    return listFailure('entries', '课表数据格式无效，原课表草稿未替换。');
+  }
+  if (entries.length > 500) {
+    return listFailure('entries', '课表最多 500 项，请减少课程后重试；未截取或替换原草稿。');
+  }
+  if (entries.length === 0 && !allowEmpty) {
+    return listFailure('entries', '没有可确认的课程，请先添加或导入；原课表草稿未替换。');
+  }
+  const normalized                   = [];
+  const errors                   = [];
+  const warnings                   = [];
+  const validRows            = [];
+  const identities           = [];
+  const seen = new Map                ();
+  const overlapWith           = [];
+  for (let index = 0; index < entries.length; index++) {
+    const checked = validateTimetableEntry(entries[index]);
+    normalized.push(checked.entry);
+    validRows.push(checked.valid);
+    overlapWith.push(-1);
+    const fields = checked.errors;
+    appendFieldError(errors, index, 'date', fields.date);
+    appendFieldError(errors, index, 'title', fields.title);
+    appendFieldError(errors, index, 'start_time', fields.start_time);
+    appendFieldError(errors, index, 'end_time', fields.end_time);
+    appendFieldError(errors, index, 'location', fields.location);
+    appendFieldError(errors, index, 'teacher', fields.teacher);
+    const identity = entryIdentity(checked.entry);
+    identities.push(identity);
+    if (checked.valid) {
+      const first = seen.get(identity);
+      if (first !== undefined) {
+        errors.push({ index: index, relatedIndex: first, field: 'duplicate',
+          message: `第 ${index + 1} 项与第 ${first + 1} 项课程完全相同，请编辑或删除重复项。` });
+      } else {
+        seen.set(identity, index);
+      }
+    }
+  }
+  for (let left = 0; left < normalized.length; left++) {
+    if (!validRows[left]) { continue; }
+    for (let right = left + 1; right < normalized.length; right++) {
+      if (!validRows[right] || identities[left] === identities[right]) { continue; }
+      const a = normalized[left];
+      const b = normalized[right];
+      if (a.date === b.date && a.start_time < b.end_time && b.start_time < a.end_time) {
+        if (overlapWith[left] < 0) { overlapWith[left] = right; }
+        if (overlapWith[right] < 0) { overlapWith[right] = left; }
+      }
+    }
+  }
+  // One warning per affected row bounds the UI output even for 500 overlapping courses.
+  for (let index = 0; index < overlapWith.length; index++) {
+    const other = overlapWith[index];
+    if (other >= 0) {
+      warnings.push({ index: index, relatedIndex: other, field: 'overlap',
+        message: `第 ${index + 1} 项与第 ${other + 1} 项课程时间重叠，请核对；未自动删除。` });
+    }
+  }
+  return { valid: errors.length === 0, entries: normalized, errors: errors, warnings: warnings };
+}
+
+// Parse an API JSON projection without trusting its compile-time type. Callers may
+// replace the editable draft only when valid is true; failures return no candidate rows.
+function parseTimetablePreview(json        )                      {
+  let preview                                ;
+  try {
+    preview = JSON.parse(json)                                  ;
+  } catch {
+    return listFailure('preview', '课表预览格式无效，请重新导入；原草稿未替换。');
+  }
+  if (preview === null || typeof preview !== 'object' || Array.isArray(preview) ||
+    !Array.isArray(preview.entries) || typeof preview.event_count !== 'number' ||
+    !Number.isInteger(preview.event_count) || preview.event_count !== preview.entries.length) {
+    return listFailure('preview', '课表预览结构或课程数量不一致，请重新导入；原草稿未替换。');
+  }
+  const result = validateTimetableList(preview.entries);
+  if (!result.valid) {
+    return { valid: false, entries: [], errors: result.errors, warnings: result.warnings };
+  }
+  if (preview.warnings !== undefined) {
+    if (!Array.isArray(preview.warnings) || preview.warnings.length > 20) {
+      return listFailure('preview', '课表预览提示格式无效，请重新导入；原草稿未替换。');
+    }
+    for (const warning of preview.warnings) {
+      if (typeof warning !== 'string') {
+        return listFailure('preview', '课表预览提示格式无效，请重新导入；原草稿未替换。');
+      }
+      if (warning.trim().length > 0) {
+        result.warnings.push({ index: -1, relatedIndex: -1, field: 'import', message: warning.trim() });
+      }
+    }
+  }
+  return result;
+}
+
+function expandWeeklyEntry(entry                , weeks        )                      {
+  if (!Number.isInteger(weeks) || weeks < 1 || weeks > 24) {
+    return listFailure('weeks', '重复周数须为 1 至 24 的整数，原课表草稿未替换。');
+  }
+  const initial = validateTimetableList([entry]);
+  if (!initial.valid) { return initial; }
+  const normalized = initial.entries[0];
+  // Avoid Date.UTC's special 1900 offset for years 00..99 and all local DST transitions.
+  const date = new Date(0);
+  date.setUTCFullYear(Number(normalized.date.substring(0, 4)), Number(normalized.date.substring(5, 7)) - 1,
+    Number(normalized.date.substring(8, 10)));
+  date.setUTCHours(0, 0, 0, 0);
+  const entries                   = [];
+  for (let week = 0; week < weeks; week++) {
+    if (date.getUTCFullYear() > 9999) {
+      return listFailure('date', '重复课程超出 9999 年，未生成部分课表；请减少周数。');
+    }
+    const item = normalizeTimetableEntry(normalized);
+    item.date = `${String(date.getUTCFullYear()).padStart(4, '0')}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`;
+    entries.push(item);
+    date.setUTCDate(date.getUTCDate() + 7);
+  }
+  return validateTimetableList(entries);
+}
+
+return {normalizeTimetableEntry,validateTimetableEntry,validateTimetableList,expandWeeklyEntry};
+})();
+const Review=(()=>{
+const {normalizeTimetableEntry,validateTimetableEntry,validateTimetableList}=Rules;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+function rawEntry(value                )          {
+  return value !== null && typeof value === 'object' && !Array.isArray(value) &&
+    typeof value.date === 'string' && typeof value.title === 'string' && typeof value.start_time === 'string' &&
+    typeof value.end_time === 'string' && typeof value.location === 'string' && typeof value.teacher === 'string';
+}
+function copyEntry(value                )                 {
+  return { date: value.date, title: value.title, start_time: value.start_time, end_time: value.end_time,
+    location: value.location, teacher: value.teacher };
+}
+function identity(value                )         {
+  return JSON.stringify([value.date, value.title, value.start_time, value.end_time, value.location, value.teacher]);
+}
+function nullableString(value               )          { return value === null || typeof value === 'string'; }
+function sourceTime(value                          )          {
+  return value !== null && typeof value === 'object' && !Array.isArray(value) &&
+    nullableString(value.start_value) && nullableString(value.end_value) && nullableString(value.start_tzid) &&
+    nullableString(value.end_tzid) && nullableString(value.start_value_type) && nullableString(value.end_value_type);
+}
+function validIssue(value                     )          {
+  return value !== null && typeof value === 'object' && !Array.isArray(value) &&
+    ['event', 'date', 'title', 'start_time', 'end_time', 'location', 'teacher'].includes(value.field) &&
+    typeof value.code === 'string' && value.code.length > 0 && typeof value.message === 'string' &&
+    value.message.trim().length > 0 && ['warning', 'error'].includes(value.severity);
+}
+function validSourceRow(row                   , index        )          {
+  if (row === null || typeof row !== 'object' || Array.isArray(row) || row.source_index !== index ||
+    !['ready', 'invalid', 'unsupported'].includes(row.status) || !rawEntry(row.input) || !sourceTime(row.source_time) ||
+    !Array.isArray(row.issues) || !row.issues.every((issue                     ) => validIssue(issue))) { return false; }
+  const hasError = row.issues.some((issue                     ) => issue.severity === 'error');
+  if (row.status !== 'ready') { return row.entry === null && hasError; }
+  if (!rawEntry(row.entry) || hasError) { return false; }
+  const checked = validateTimetableEntry(row.input);
+  return checked.valid && identity(checked.entry) === identity(row.entry);
+}
+function copyIssue(issue                     )                      {
+  return { field: issue.field, code: issue.code, severity: issue.severity, message: issue.message };
+}
+function copyRow(row                   )                    {
+  const source = row.source_time;
+  return { source_index: row.source_index, status: row.status, input: copyEntry(row.input),
+    entry: row.entry === null ? null : copyEntry(row.entry),
+    source_time: { start_value: source.start_value, end_value: source.end_value,
+      start_tzid: source.start_tzid, end_tzid: source.end_tzid,
+      start_value_type: source.start_value_type, end_value_type: source.end_value_type },
+    issues: row.issues.map((issue                     ) => copyIssue(issue)) };
+}
+function parseFailure(message        )                    {
+  return { valid: false, message: message, rows: [], sourceWarnings: [], calendarName: '', sourceCount: 0 };
+}
+
+// Only a complete, versioned diagnostic response can introduce source rows. The legacy
+// entries list cannot prove that malformed or unsupported calendar events were retained.
+function parseImportReview(json        )                    {
+  let value                                     = null;
+  try { value = JSON.parse(json)                                      ; }
+  catch { return parseFailure('导入返回内容不是有效 JSON，原课表草稿未改变。'); }
+  if (value === null || typeof value !== 'object' || Array.isArray(value) || value.diagnostics_version !== 1 ||
+    value.timezone_policy !== 'campus-utc+08:00') {
+    return parseFailure('服务端未提供受支持的完整行诊断，请更新或重试；没有采用旧列表替代核对。');
+  }
+  if (value.provider !== 'hduhelp' || typeof value.calendar_name !== 'string' || !Array.isArray(value.rows) ||
+    !Number.isInteger(value.source_event_count) || value.source_event_count < 1 || value.source_event_count > 500 ||
+    value.rows.length !== value.source_event_count || !value.rows.every((row                   , index        ) => validSourceRow(row, index)) ||
+    !Array.isArray(value.entries) || !Number.isInteger(value.event_count) || value.event_count !== value.entries.length ||
+    !Array.isArray(value.warnings) || value.warnings.length > 20 ||
+    !value.warnings.every((warning        ) => typeof warning === 'string')) {
+    return parseFailure('源事件数量、行编号或诊断内容不完整，原课表草稿未改变；请重新预览。');
+  }
+  const allReady = value.rows.every((row                   ) => row.status === 'ready');
+  if (!allReady && (value.event_count !== 0 || value.entries.length !== 0)) {
+    return parseFailure('含待核对事件的返回同时声称兼容课表可用，已拒绝部分导入。');
+  }
+  if (allReady) {
+    const expected           = [];
+    value.rows.forEach((row                   ) => {
+      if (row.entry !== null) { const key = identity(row.entry); if (!expected.includes(key)) { expected.push(key); } }
+    });
+    if (value.entries.length !== expected.length || !value.entries.every((entry                ) =>
+      rawEntry(entry) && validateTimetableEntry(entry).valid && identity(normalizeTimetableEntry(entry)) === identity(entry)) ||
+      new Set(value.entries.map((entry                ) => identity(entry))).size !== expected.length ||
+      !value.entries.every((entry                ) => expected.includes(identity(entry)))) {
+      return parseFailure('兼容课表与完整源行不一致，未采用截断、丢失或改写的课程。');
+    }
+  }
+  const warnings = value.warnings.filter((warning        ) => warning.trim().length > 0)
+    .map((warning        )                 => ({ index: -1, relatedIndex: -1, field: 'import', message: warning }));
+  return { valid: true, message: '', rows: value.rows.map((row                   ) => copyRow(row)),
+    sourceWarnings: warnings, calendarName: value.calendar_name, sourceCount: value.source_event_count };
+}
+
+function emptyChoice(index        )                  {
+  return { sourceIndex: index, mode: 'default', edited: null, sourceIssuesReviewed: false, overlapKey: '' };
+}
+function choiceFor(choices                   , index        )                  {
+  return choices.find((choice                 ) => choice.sourceIndex === index) ?? emptyChoice(index);
+}
+function validChoices(choices                   , size        )          {
+  if (!Array.isArray(choices) || choices.length > size) { return false; }
+  const indexes           = [];
+  for (const choice of choices) {
+    if (choice === null || typeof choice !== 'object' || Array.isArray(choice) ||
+      !Number.isInteger(choice.sourceIndex) || choice.sourceIndex < 0 || choice.sourceIndex >= size ||
+      indexes.includes(choice.sourceIndex) || !['default', 'include', 'exclude'].includes(choice.mode) ||
+      choice.edited !== null && !rawEntry(choice.edited) || typeof choice.sourceIssuesReviewed !== 'boolean' ||
+      typeof choice.overlapKey !== 'string') { return false; }
+    indexes.push(choice.sourceIndex);
+  }
+  return true;
+}
+function addFieldIssue(issues                  , index        , field        , message        )       {
+  if (message.length > 0) { issues.push({ index: index, relatedIndex: -1, field: field, message: message }); }
+}
+function fieldIssues(errors                      , index        )                   {
+  const result                   = [];
+  addFieldIssue(result, index, 'date', errors.date); addFieldIssue(result, index, 'title', errors.title);
+  addFieldIssue(result, index, 'start_time', errors.start_time); addFieldIssue(result, index, 'end_time', errors.end_time);
+  addFieldIssue(result, index, 'location', errors.location); addFieldIssue(result, index, 'teacher', errors.teacher);
+  return result;
+}
+function overlaps(left                , right                )          {
+  return left.date === right.date && left.start_time < right.end_time && right.start_time < left.end_time;
+}
+function classificationFailure(message        )                       {
+  return { valid: false, message: message, rows: [], addCount: 0, duplicateCount: 0, overlapCount: 0,
+    invalidCount: 0, excludedCount: 0, unresolvedCount: 0 };
+}
+
+
+function sourceFieldLabel(field        )         {
+  if (field === 'date') { return '日期'; }
+  if (field === 'title') { return '课程名'; }
+  if (field === 'start_time') { return '开始时间'; }
+  if (field === 'end_time') { return '结束时间'; }
+  if (field === 'location') { return '地点'; }
+  if (field === 'teacher') { return '教师'; }
+  return '源事件';
+}
+function sourceRowRanges(rows          )         {
+  const ranges           = [];
+  let first = rows[0]; let last = first;
+  for (let index = 1; index < rows.length; index++) {
+    const next = rows[index];
+    if (next === last + 1) { last = next; continue; }
+    ranges.push(first === last ? `${first}` : `${first}–${last}`); first = next; last = next;
+  }
+  ranges.push(first === last ? `${first}` : `${first}–${last}`);
+  return ranges.join('、');
+}
+function appendSourceWarning(groups                      , index        , issue                     )       {
+  // Group only identical reasons. Fields/codes/severity are part of identity, so an
+  // end-time interpretation or a different limitation never disappears into another.
+  const key = JSON.stringify([issue.field, issue.code, issue.severity, issue.message]);
+  let group = groups.find((value                    ) => value.key === key);
+  if (group === undefined) {
+    group = { key: key, field: issue.field, message: issue.message, rows: [], count: 0 }; groups.push(group);
+  }
+  group.count++;
+  if (!group.rows.includes(index + 1)) { group.rows.push(index + 1); }
+}
+function sourceWarnings(rows                   )                   {
+  const groups                       = [];
+  rows.forEach((row                 ) => {
+    if (!row.selected) { return; }
+    row.sourceIssues.forEach((issue                     ) => appendSourceWarning(groups, row.sourceIndex, issue));
+    if (row.original.status !== 'ready') {
+      // This preserves the manual reconstruction boundary, not an automated recovery claim.
+      appendSourceWarning(groups, row.sourceIndex, { field: 'event', code: 'MANUALLY_REBUILT_SINGLE_EVENT',
+        severity: 'warning', message: '已由用户核对为一门单次课程；没有自动展开或恢复源事件语义。' });
+    }
+  });
+  return groups.map((group                    )                 => ({ index: -1, relatedIndex: -1, field: 'import',
+    message: `${sourceFieldLabel(group.field)}：${group.message}（源第 ${sourceRowRanges(group.rows)} 行，共 ${group.rows.length} 行、${group.count} 处）` }));
+}
+
+// Always reclassify against the current draft and current edits. No title-based update
+// guessing, source-index rebinding, implicit overwrite, or partial acceptance occurs here.
+function classifyImportRows(rows                     , currentDraft                  ,
+  choices                    = [])                       {
+  if (!Array.isArray(rows) || rows.length < 1 || rows.length > 500 ||
+    !rows.every((row                   , index        ) => validSourceRow(row, index)) || !validChoices(choices, rows.length)) {
+    return classificationFailure('导入行或选择记录不完整，请重新核对；原草稿未改变。');
+  }
+  if (!Array.isArray(currentDraft) || !currentDraft.every((entry                ) => rawEntry(entry))) {
+    return classificationFailure('当前草稿格式无效，请先修正现有课程。');
+  }
+  const current = validateTimetableList(currentDraft, true);
+  if (!current.valid) { return classificationFailure('当前草稿有无效或重复课程，请先修正再合并导入。'); }
+  const result                       = { valid: true, message: '', rows: [], addCount: 0, duplicateCount: 0,
+    overlapCount: 0, invalidCount: 0, excludedCount: 0, unresolvedCount: 0 };
+  rows.forEach((original                   , index        ) => {
+    const choice = choiceFor(choices, index);
+    const input = copyEntry(choice.edited ?? original.input);
+    const checked = validateTimetableEntry(input);
+    const sourceReviewed = original.status === 'ready' || choice.edited !== null && choice.sourceIssuesReviewed;
+    const issues = fieldIssues(checked.errors, index);
+    if (!sourceReviewed) {
+      issues.push({ index: index, relatedIndex: -1, field: 'event',
+        message: '此源事件尚未被完整解释；修正六字段后，请明确核对为一门单次课程，或排除本行。' });
+    }
+    result.rows.push({ sourceIndex: index, original: copyRow(original), input: input,
+      entry: checked.valid ? copyEntry(checked.entry) : null,
+      category: checked.valid && sourceReviewed ? 'new' : 'invalid', selected: false, excluded: choice.mode === 'exclude',
+      issues: issues, sourceIssues: original.issues.map((issue                     ) => copyIssue(issue)),
+      overlaps: [], overlapKey: '', needsSourceReview: !sourceReviewed });
+  });
+  // Duplicates use all six normalized fields. Excluded/invalid earlier rows cannot
+  // suppress a later usable row; the first eligible source row represents that value.
+  const seen = current.entries.map((entry                ) => identity(entry));
+  result.rows.forEach((row                 ) => {
+    if (row.excluded || row.category === 'invalid' || row.entry === null) { return; }
+    const key = identity(row.entry);
+    if (seen.includes(key)) {
+      row.category = 'duplicate'; row.issues.push({ index: row.sourceIndex, relatedIndex: -1, field: 'duplicate',
+        message: '与当前草稿或本批前面的课程六字段完全相同，默认不重复加入；不会替换原课程。' });
+    } else { seen.push(key); }
+  });
+  result.rows.forEach((row                 ) => {
+    if (row.excluded || row.category === 'invalid' || row.category === 'duplicate' || row.entry === null) { return; }
+    const entry = row.entry;
+    current.entries.forEach((other                , index        ) => {
+      if (overlaps(entry, other)) { row.overlaps.push({ kind: 'draft', index: index, entry: copyEntry(other) }); }
+    });
+    result.rows.forEach((other                 ) => {
+      if (other.sourceIndex !== row.sourceIndex && !other.excluded && other.category !== 'invalid' &&
+        other.category !== 'duplicate' && other.entry !== null && overlaps(entry, other.entry)) {
+        row.overlaps.push({ kind: 'import', index: other.sourceIndex, entry: copyEntry(other.entry) });
+      }
+    });
+    if (row.overlaps.length > 0) {
+      row.category = 'overlap';
+      row.overlapKey = JSON.stringify([row.sourceIndex, identity(entry), row.overlaps.map((other               ) =>
+        JSON.stringify([other.kind, other.index, identity(other.entry)]))]);
+      row.issues.push({ index: row.sourceIndex, relatedIndex: -1, field: 'overlap',
+        message: `与 ${row.overlaps.length} 条课程时间重叠，请展开完整双方，明确保留才会加入。` });
+    }
+  });
+  result.rows.forEach((row                 ) => {
+    const choice = choiceFor(choices, row.sourceIndex);
+    if (row.excluded) { result.excludedCount++; return; }
+    if (row.category === 'invalid') { result.invalidCount++; result.unresolvedCount++; return; }
+    if (row.category === 'duplicate') {
+      result.duplicateCount++;
+      if (choice.mode === 'include') { result.unresolvedCount++; }
+      return;
+    }
+    if (row.category === 'overlap') {
+      result.overlapCount++;
+      row.selected = choice.mode === 'include' && choice.overlapKey === row.overlapKey;
+      if (!row.selected) { result.unresolvedCount++; }
+    } else { row.selected = true; }
+    if (row.selected) { result.addCount++; }
+  });
+  if (result.unresolvedCount > 0) { result.message = `还有 ${result.unresolvedCount} 行需要修正、确认重叠或明确排除；尚未加入草稿。`; }
+  return result;
+}
+
+function assembleSelectedImport(rows                     , currentDraft                  ,
+  choices                    = [])                 {
+  const classified = classifyImportRows(rows, currentDraft, choices);
+  const result                 = { valid: false, message: classified.message, entries: [], addedEntries: [],
+    warnings: [], excludedCount: classified.excludedCount, duplicateCount: classified.duplicateCount };
+  if (!classified.valid || classified.unresolvedCount > 0) { return result; }
+  classified.rows.forEach((row                 ) => {
+    if (row.selected && row.entry !== null) { result.addedEntries.push(copyEntry(row.entry)); }
+  });
+  if (result.addedEntries.length === 0) {
+    result.message = '没有选中可新增的课程。重复与明确排除项仍可查看，原草稿未改变。'; return result;
+  }
+  const checked = validateTimetableList(currentDraft.concat(result.addedEntries));
+  if (!checked.valid) {
+    result.addedEntries = []; result.message = checked.errors[0]?.message ?? '合并后的课表未通过完整校验，原草稿未改变。'; return result;
+  }
+  result.warnings = checked.warnings.concat(sourceWarnings(classified.rows));
+  if (result.excludedCount > 0 || result.duplicateCount > 0) {
+    result.warnings.push({ index: -1, relatedIndex: -1, field: 'import',
+      message: `本次明确排除 ${result.excludedCount} 行，按六字段完全重复未新增 ${result.duplicateCount} 行；没有覆盖原课程。` });
+  }
+  // Preserve every explanation, or refuse the merge before mutating the draft. The
+  // reserved 20 slots cover the complete preview's top-level source warnings.
+  if (result.warnings.length > 1980 || result.warnings.some((warning                ) => warning.message.length > 2048)) {
+    result.addedEntries = []; result.warnings = [];
+    result.message = '来源说明超出本地草稿的保存范围，请联系数据提供方精简重复诊断后重新预览；课程尚未加入草稿。';
+    return result;
+  }
+  result.valid = true; result.entries = checked.entries;
+  result.message = `已核对 ${rows.length} 个源事件，可向本地草稿新增 ${result.addedEntries.length} 门课程；尚未保存到账号。`;
+  return result;
+}
+
+return {parseImportReview,classifyImportRows,assembleSelectedImport};
+})();
+/* END PRODUCTION HELPERS */
+/* BEGIN ASGI FIXTURE */
+const ImportFixture={"provenance":"Actual local authenticated ASGI + SQLite; MockTransport calendars. No model, campus network or credentials in output.","responses":{"mixed":{"provider":"hduhelp","calendar_name":"合成课表","event_count":0,"entries":[],"warnings":["2 条事件需要逐条核对，兼容列表未返回部分课表。"],"diagnostics_version":1,"source_event_count":5,"rows":[{"source_index":0,"status":"ready","input":{"date":"2026-10-19","title":"同名课程","start_time":"07:30","end_time":"08:30","location":"一教101","teacher":"陈老师"},"entry":{"date":"2026-10-19","title":"同名课程","start_time":"07:30","end_time":"08:30","location":"一教101","teacher":"陈老师"},"source_time":{"start_value":"20261018T233000Z","end_value":"20261019T003000Z","start_tzid":null,"end_tzid":null,"start_value_type":null,"end_value_type":null},"issues":[]},{"source_index":1,"status":"ready","input":{"date":"2026-10-19","title":"同名课程","start_time":"07:30","end_time":"08:30","location":"一教101","teacher":"陈老师"},"entry":{"date":"2026-10-19","title":"同名课程","start_time":"07:30","end_time":"08:30","location":"一教101","teacher":"陈老师"},"source_time":{"start_value":"20261019T073000","end_value":"20261019T083000","start_tzid":"Asia/Shanghai","end_tzid":"Asia/Shanghai","start_value_type":null,"end_value_type":null},"issues":[]},{"source_index":2,"status":"ready","input":{"date":"2026-10-19","title":"另一门重叠课程","start_time":"08:15","end_time":"09:15","location":"一教101","teacher":"陈老师"},"entry":{"date":"2026-10-19","title":"另一门重叠课程","start_time":"08:15","end_time":"09:15","location":"一教101","teacher":"陈老师"},"source_time":{"start_value":"20261019T081500","end_value":"20261019T091500","start_tzid":"Asia/Shanghai","end_tzid":"Asia/Shanghai","start_value_type":null,"end_value_type":null},"issues":[]},{"source_index":3,"status":"invalid","input":{"date":"2026-10-19","title":"结束早于开始","start_time":"08:00","end_time":"07:00","location":"一教101","teacher":"陈老师"},"entry":null,"source_time":{"start_value":"20261019T080000","end_value":"20261019T070000","start_tzid":"Asia/Shanghai","end_tzid":"Asia/Shanghai","start_value_type":null,"end_value_type":null},"issues":[{"field":"end_time","code":"END_NOT_AFTER_START","severity":"error","message":"结束时间必须晚于开始时间，请核对这条课程。"}]},{"source_index":4,"status":"unsupported","input":{"date":"2026-10-19","title":"待核对系列","start_time":"08:00","end_time":"09:00","location":"一教101","teacher":"陈老师"},"entry":null,"source_time":{"start_value":"20261019T080000","end_value":"20261019T090000","start_tzid":"Asia/Shanghai","end_tzid":"Asia/Shanghai","start_value_type":null,"end_value_type":null},"issues":[{"field":"event","code":"RECURRENCE_UNSUPPORTED","severity":"error","message":"重复系列及例外尚未展开，不能只把首场当作完整课程。"}]}],"timezone_policy":"campus-utc+08:00"},"all_ready":{"provider":"hduhelp","calendar_name":"合成课表","event_count":3,"entries":[{"date":"2026-10-19","title":"不同地点同名","start_time":"08:00","end_time":"09:00","location":"二教202","teacher":"陈老师"},{"date":"2026-10-19","title":"不同地点同名","start_time":"08:00","end_time":"09:00","location":"一教101","teacher":"陈老师"},{"date":"2026-10-19","title":"新增课","start_time":"11:00","end_time":"12:00","location":"一教101","teacher":"陈老师"}],"warnings":[],"diagnostics_version":1,"source_event_count":3,"rows":[{"source_index":0,"status":"ready","input":{"date":"2026-10-19","title":"新增课","start_time":"11:00","end_time":"12:00","location":"一教101","teacher":"陈老师"},"entry":{"date":"2026-10-19","title":"新增课","start_time":"11:00","end_time":"12:00","location":"一教101","teacher":"陈老师"},"source_time":{"start_value":"20261019T030000Z","end_value":"20261019T040000Z","start_tzid":null,"end_tzid":null,"start_value_type":null,"end_value_type":null},"issues":[]},{"source_index":1,"status":"ready","input":{"date":"2026-10-19","title":"不同地点同名","start_time":"08:00","end_time":"09:00","location":"二教202","teacher":"陈老师"},"entry":{"date":"2026-10-19","title":"不同地点同名","start_time":"08:00","end_time":"09:00","location":"二教202","teacher":"陈老师"},"source_time":{"start_value":"20261019T080000","end_value":"20261019T090000","start_tzid":"Asia/Shanghai","end_tzid":"Asia/Shanghai","start_value_type":null,"end_value_type":null},"issues":[]},{"source_index":2,"status":"ready","input":{"date":"2026-10-19","title":"不同地点同名","start_time":"08:00","end_time":"09:00","location":"一教101","teacher":"陈老师"},"entry":{"date":"2026-10-19","title":"不同地点同名","start_time":"08:00","end_time":"09:00","location":"一教101","teacher":"陈老师"},"source_time":{"start_value":"20261019T080000","end_value":"20261019T090000","start_tzid":"Asia/Shanghai","end_tzid":"Asia/Shanghai","start_value_type":null,"end_value_type":null},"issues":[]}],"timezone_policy":"campus-utc+08:00"},"duplicate":{"provider":"hduhelp","calendar_name":"合成课表","event_count":2,"entries":[{"date":"2026-10-19","title":"课程","start_time":"08:00","end_time":"09:00","location":"一教101","teacher":"陈老师"},{"date":"2026-10-19","title":"课程","start_time":"08:00","end_time":"09:00","location":"一教101","teacher":"李老师"}],"warnings":["1 条六字段完全重复事件仅列入兼容课表一次；源行均保留。"],"diagnostics_version":1,"source_event_count":3,"rows":[{"source_index":0,"status":"ready","input":{"date":"2026-10-19","title":"课程","start_time":"08:00","end_time":"09:00","location":"一教101","teacher":"陈老师"},"entry":{"date":"2026-10-19","title":"课程","start_time":"08:00","end_time":"09:00","location":"一教101","teacher":"陈老师"},"source_time":{"start_value":"20261019T080000","end_value":"20261019T090000","start_tzid":"Asia/Shanghai","end_tzid":"Asia/Shanghai","start_value_type":null,"end_value_type":null},"issues":[]},{"source_index":1,"status":"ready","input":{"date":"2026-10-19","title":"课程","start_time":"08:00","end_time":"09:00","location":"一教101","teacher":"陈老师"},"entry":{"date":"2026-10-19","title":"课程","start_time":"08:00","end_time":"09:00","location":"一教101","teacher":"陈老师"},"source_time":{"start_value":"20261019T080000","end_value":"20261019T090000","start_tzid":"Asia/Shanghai","end_tzid":"Asia/Shanghai","start_value_type":null,"end_value_type":null},"issues":[]},{"source_index":2,"status":"ready","input":{"date":"2026-10-19","title":"课程","start_time":"08:00","end_time":"09:00","location":"一教101","teacher":"李老师"},"entry":{"date":"2026-10-19","title":"课程","start_time":"08:00","end_time":"09:00","location":"一教101","teacher":"李老师"},"source_time":{"start_value":"20261019T080000","end_value":"20261019T090000","start_tzid":"Asia/Shanghai","end_tzid":"Asia/Shanghai","start_value_type":null,"end_value_type":null},"issues":[]}],"timezone_policy":"campus-utc+08:00"},"unsupported":{"provider":"hduhelp","calendar_name":"合成课表","event_count":0,"entries":[],"warnings":["2 条事件需要逐条核对，兼容列表未返回部分课表。"],"diagnostics_version":1,"source_event_count":2,"rows":[{"source_index":0,"status":"unsupported","input":{"date":"2026-10-19","title":"课程","start_time":"08:00","end_time":"09:00","location":"一教101","teacher":"陈老师"},"entry":null,"source_time":{"start_value":"20261019T080000","end_value":"20261019T090000","start_tzid":"Asia/Shanghai","end_tzid":"Asia/Shanghai","start_value_type":null,"end_value_type":null},"issues":[{"field":"event","code":"RECURRENCE_UNSUPPORTED","severity":"error","message":"重复系列及例外尚未展开，不能只把首场当作完整课程。"}]},{"source_index":1,"status":"unsupported","input":{"date":"2026-10-19","title":"课程","start_time":"23:00","end_time":"01:00","location":"一教101","teacher":"陈老师"},"entry":null,"source_time":{"start_value":"20261019T150000Z","end_value":"20261019T170000Z","start_tzid":null,"end_tzid":null,"start_value_type":null,"end_value_type":null},"issues":[{"field":"date","code":"CROSS_DAY_UNSUPPORTED","severity":"error","message":"转换后跨北京时间日期，现有课程字段不能无损保存。"}]}],"timezone_policy":"campus-utc+08:00"}},"preview_unchanged_timetable":true,"base_draft":[{"date":"2026-10-19","title":"同名课程","start_time":"07:30","end_time":"08:30","location":"一教101","teacher":"陈老师"}],"expected_mixed_categories_against_base":["duplicate","duplicate","overlap","invalid","invalid"]};
+/* END ASGI FIXTURE */
+</script><script>
+'use strict';
+const $=id=>document.getElementById(id),esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const icons={calendar:'<rect x="4" y="6" width="16" height="15" rx="2"/><path d="M8 3v6m8-6v6M4 11h16m-12 4h3m2 0h3"/>',route:'<circle cx="6" cy="5" r="2"/><circle cx="18" cy="19" r="2"/><path d="M8 5h7a4 4 0 0 1 0 8H9a4 4 0 0 0 0 8h7"/>',services:'<path d="m3 9 9-6 9 6M5 10v11m14-11v11M3 21h18M8 12h2m4 0h2m-8 4h2m4 0h2"/>',book:'<path d="M12 5C7 2 3 4 3 4v16s4-2 9 1c5-3 9-1 9-1V4s-4-2-9 1ZM12 5v16"/>',person:'<circle cx="12" cy="7" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/>',setting:'<path d="M4 6h16M4 12h16M4 18h16"/><circle cx="8" cy="6" r="2"/><circle cx="16" cy="12" r="2"/><circle cx="10" cy="18" r="2"/>',voice:'<rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2m-7 9v3m-4 0h8"/>',history:'<path d="M4 8a9 9 0 1 1-1 8M4 3v5h5M12 7v6l4 2"/>'};const icon=n=>`<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">${icons[n]||icons.setting}</svg>`;
+const fields=[['title','课程名称'],['date','具体日期'],['start_time','开始时间'],['end_time','结束时间'],['location','上课地点'],['teacher','任课教师']];
+const blank=()=>({date:'2026-10-19',title:'',start_time:'08:00',end_time:'09:40',location:'',teacher:''});
+const emptyErrors=()=>({date:'',title:'',start_time:'',end_time:'',location:'',teacher:''});
+const fresh=()=>({page:'campus',section:'',knowledgeOpen:false,query:'',pendingExample:'',knowledgeResult:false,sourceOpen:false,connection:'missing',knowledgeStatus:'found',scope:'a',longSchool:false,entries:structuredClone(ImportFixture.base_draft),editor:blank(),editorOpen:false,editorDirty:false,editIndex:-1,lastEntry:null,lastWeeks:1,weeks:1,errors:emptyErrors(),message:'',notice:'',rows:[],choices:[],sourceWarnings:[],acceptedWarnings:[],importKind:'mixed',importFilter:'all',importPage:0,profile:{name:'同学 A',school:'杭州电子科技大学',campus:'下沙校区',semester:'2026–2027 第一学期',model:'',session:'45',rest:'10',daily:'120'},profileSaved:{name:'同学 A',school:'杭州电子科技大学',campus:'下沙校区',semester:'2026–2027 第一学期'}});
+let state=fresh(),importEditing=-1,dialogDraft=blank(),dialogErrors=emptyErrors(),timer=null;
+const labels={all:'全部',new:'新增',duplicate:'完全重复',overlap:'时间重叠',invalid:'需修正'};
+const schoolName=()=>state.longSchool?'杭州电子科技大学 · 信息工程与计算机学院联合培养项目（长文案合成示例）':state.profile.school;
+function toast(message){$('toast').textContent=message;clearTimeout(timer);timer=setTimeout(()=>$('toast').textContent='',3500)}
+function entryLink(key,title,subtitle,symbol='setting'){return `<button class="entry-link" data-entry="${key}"><span class="entry-symbol">${icon(symbol)}</span><span class="entry-copy"><strong>${title}</strong><small>${esc(subtitle)}</small></span><span class="chev" aria-hidden="true">›</span></button>`;}
+function openDialog(title,html){$('dialog-title').textContent=title;$('dialog-content').innerHTML=html;if(!$('dialog').open)$('dialog').showModal();}
+function closeDialog(){$('dialog').close();importEditing=-1;}
+function render(){document.querySelectorAll('[data-page]').forEach(b=>b.setAttribute('aria-selected',b.dataset.page===state.page));$('content').innerHTML=state.page==='campus'?campus():state.page==='profile'?profile():timetable();}
+function campus(){return `<div class="head-row"><h2 class="app-title">校园</h2><button id="avatar" class="icon-button border" aria-label="个人设置">${icon('person')}</button></div><p class="section-subtitle" id="campus-name">${esc(schoolName())} · ${esc(state.profile.campus)}</p><div class="entry-list section" id="campus-entries">${entryLink('timetable','我的课表','手动维护、预览导入与检查变更','calendar')}${entryLink('route','校园导航','自己选起点，再看路线与步行估算','route')}${entryLink('services','校园服务',state.connection==='missing'?'尚未连接 · 入口仍可查看':'合成连接 · 可查看服务说明','services')}</div><div class="compact-weather"><div><strong>今日天气</strong><p class="meta">城市级预报 · 不读取设备位置</p><p class="meta">本离线原型不提供当前天气</p></div><button id="weather-info" class="quiet">来源说明</button></div><button class="entry-link border" id="toggle-knowledge" aria-expanded="${state.knowledgeOpen}" style="border-radius:14px"><span class="entry-symbol">${icon('book')}</span><span class="entry-copy"><strong>校园资料</strong><small>精选官方指南，按需查询</small></span><span class="meta">${state.knowledgeOpen?'收起':'查询'}</span></button>${state.knowledgeOpen?knowledge():''}<div class="entry-list section">${entryLink('capabilities','能力管理','先看权限，再启用或停用')}${entryLink('profile','数据与连接','校园账号、模型与个人设置','person')}</div>`;}
+function knowledge(){let result='';if(state.knowledgeResult){if(state.knowledgeStatus==='found'){result=`<div class="source-card"><span class="pill">合成资料卡</span><h3 style="margin-top:8px">图书馆 · 校外访问指南</h3><p>此卡仅演示引用结构，不作为真实办事依据。查询范围是已收录资料，不代表实时开放或个人状态。</p><p class="meta">整理核对日期：2026-10-18；不是现行有效期。</p><button id="source-details" class="border">${state.sourceOpen?'收起出处':'查看出处层级'}</button>${state.sourceOpen?'<div class="notice info" style="margin-top:12px"><p>资料整理核对：2026-10-18</p><p>原文发布日期：本示例未提供</p><p>实时性：静态参考，不是实时查询</p><p>本页未读取官方网页，因此不伪造原文链接或引用。</p></div>':''}</div>`;}else{const messages={missing:['没有可靠命中','目前收录的资料中没有匹配项；不补写推测答案。'],unsupported:['当前校区尚未收录','支持范围不等于全校百科，请查阅学校正式渠道。'],error:['本次查询失败','不能把请求失败当成没有资料；输入保留，可重试。']};const m=messages[state.knowledgeStatus];result=`<div class="notice ${state.knowledgeStatus==='error'?'error':''}" style="margin-top:16px"><strong>${m[0]}</strong><p>${m[1]}</p></div>`;}}
+return `<section class="query-panel"><h3>有出处，再回答</h3><p class="meta">选一个已收录主题，或写下自己的问题；选择示例不会自动发送。</p><div class="query-examples"><button data-example="校外怎么访问图书馆数据库">校外访问数据库</button><button data-example="校园网络资源使用说明">校园网络说明</button></div>${state.pendingExample?`<div class="notice info" style="margin-top:12px">输入框已有问题。<div class="toolbar"><button id="keep-query">保留原问题</button><button id="apply-example">使用所选示例</button></div></div>`:''}<label for="knowledge-query" class="meta">问题（最多 200 字）</label><textarea id="knowledge-query" placeholder="例如：校外怎么访问图书馆数据库">${esc(state.query)}</textarea><button id="search-knowledge" class="primary" style="width:100%;margin-top:8px">查看本地示例结果</button>${result}</section>`;}
+function editorFields(entry,errors,prefix){return `<div class="form-grid">${fields.map(([key,label])=>`<label class="${key==='title'?'full':''}" for="${prefix}-${key}">${label}${['location','teacher'].includes(key)?'（可空）':''}<input id="${prefix}-${key}" data-field="${key}" data-editor="${prefix}" value="${esc(entry[key])}" class="${errors[key]?'has-error':''}" ${key==='date'?'placeholder="YYYY-MM-DD" inputmode="numeric"':key.includes('time')?'placeholder="HH:mm" inputmode="numeric"':''} aria-invalid="${Boolean(errors[key])}" aria-describedby="${prefix}-${key}-error"><span id="${prefix}-${key}-error" class="field-error">${esc(errors[key])}</span></label>`).join('')}</div>`;}
+function manualEditor(){return `<section class="editor-box" id="manual-editor"><div class="section-head"><h3>${state.editIndex<0?'添加一门课程':'修改本地草稿课程'}</h3><span class="meta">校园时区 · 北京时间</span></div>${editorFields(state.editor,state.errors,'course')}<div class="form-grid" style="margin-top:16px"><label for="repeat-weeks">连续周数<input type="number" id="repeat-weeks" min="1" max="24" value="${state.weeks}" ${state.editIndex>=0?'disabled':''}></label><p class="meta" style="align-self:center">当前明确日期：2026-10-19。重复只生成指定周数，不推断整个学期。</p></div><div class="toolbar"><button id="reuse-last" class="border" ${state.lastEntry===null||state.editIndex>=0?'disabled':''}>沿用上一门课程信息</button></div><p class="meta">只复制到新表单；需要再核对课程名、日期、时间与周次。</p><div class="toolbar"><button id="add-course" class="primary">${state.editIndex>=0?'应用修改':'加入本地草稿'}</button>${state.editIndex<0?'<button id="add-next" class="border">加入并继续下一门</button>':''}<button id="cancel-editor" class="quiet">取消本次输入</button></div></section>`;}
+function timetable(){return `<div class="back-row"><button id="back-campus" class="border">返回</button><h2>我的课表</h2></div><p class="section-subtitle">${esc(schoolName())} · ${esc(state.profile.campus)}</p><p class="meta">以具体日期记录课程；导入、编辑都先进入本地草稿。</p>${state.message?`<div class="notice error" id="form-message" role="alert" style="margin-top:16px">${esc(state.message)}</div>`:''}${state.notice?`<div class="notice info" id="form-notice" style="margin-top:16px">${esc(state.notice)}</div>`:''}<div class="toolbar"><button id="open-editor" class="primary">＋ 手动录课</button><button id="open-import" class="border">预览导入示例</button></div>${state.editorOpen?manualEditor():''}${state.rows.length?importPanel():''}<section class="section"><div class="section-head"><h3>本地草稿</h3><span class="pill" id="draft-count">${state.entries.length} 门 · 尚未保存到账号</span></div><div class="course-list" id="draft-list">${state.entries.map((c,i)=>`<div class="course-line" data-draft-index="${i}"><div class="head-row"><strong>${esc(c.title)}</strong><button class="quiet" data-edit-course="${i}">修改</button></div><p>${c.date} · ${c.start_time}–${c.end_time}</p><small>${esc(c.location||'地点未定')} · ${esc(c.teacher||'教师未填')}</small></div>`).join('')||'<p class="empty-day">还没有课程，先录一门也可以。</p>'}</div>${state.acceptedWarnings.length?`<details class="accepted-warning"><summary>保留的来源说明（${state.acceptedWarnings.length} 条）</summary>${state.acceptedWarnings.map(w=>`<p class="meta">${esc(w.message)}</p>`).join('')}</details>`:''}<button id="final-preview" class="border" style="width:100%;margin-top:16px">核对最终完整草稿</button><p class="demo-note">原型不执行账号保存。实际应用的版本核对、未知结果查询和原操作回执仍须由生产接口完成。</p></section>`;}
+function currentChoice(index){return state.choices.find(c=>c.sourceIndex===index)||{sourceIndex:index,mode:'default',edited:null,sourceIssuesReviewed:false,overlapKey:''};}
+function setChoice(next){state.choices=state.choices.filter(c=>c.sourceIndex!==next.sourceIndex).concat([next]);state.message='';}
+function classification(){return Review.classifyImportRows(state.rows,state.entries,state.choices);}
+function importPanel(){const c=classification(),filtered=c.rows.filter(r=>state.importFilter==='all'||r.category===state.importFilter),pages=Math.max(1,Math.ceil(filtered.length/6));state.importPage=Math.min(state.importPage,pages-1);return `<section class="section" id="import-review"><div class="section-head"><h3>逐条核对来源</h3><span class="pill">${state.rows.length} 个源事件</span></div><p class="meta">真实本地 ASGI 的合成响应。解析成功 ≠ 导入成功；尚未添加任何候选。</p><div class="review-summary"><div><strong>${c.addCount}</strong><span>可加入</span></div><div><strong>${c.duplicateCount}</strong><span>完全重复</span></div><div><strong>${c.overlapCount}</strong><span>时间重叠</span></div><div><strong>${c.invalidCount}</strong><span>需修正</span></div><div><strong>${c.excludedCount}</strong><span>明确排除</span></div><div><strong>${c.unresolvedCount}</strong><span>仍待处理</span></div></div>${state.sourceWarnings.map(w=>`<p class="notice" style="margin-top:8px">${esc(w.message)}</p>`).join('')}<div class="filter-chips">${Object.entries(labels).map(([key,label])=>`<button data-category="${key}" aria-pressed="${state.importFilter===key}">${label}</button>`).join('')}</div><div id="import-rows">${filtered.slice(state.importPage*6,state.importPage*6+6).map(importRow).join('')||'<p class="empty-day">这个分类暂无记录。</p>'}</div>${pages>1?`<div class="pager"><button id="import-prev" ${state.importPage===0?'disabled':''}>上一页</button><span>${state.importPage+1}/${pages}</span><button id="import-next" ${state.importPage===pages-1?'disabled':''}>下一页</button></div>`:''}<p id="import-status" class="notice" style="margin-top:16px">${esc(c.message||`已核对全部 ${state.rows.length} 行；只把所选 ${c.addCount} 门加入草稿。`)}</p><div class="toolbar"><button id="accept-import" class="primary" ${!c.valid||c.unresolvedCount||!c.addCount?'disabled':''}>将所选 ${c.addCount} 门加入草稿</button><button id="cancel-import" class="quiet">放弃本次预览</button></div></section>`;}
+function importRow(r){return `<article class="review-row ${r.excluded?'excluded':''}" data-source-index="${r.sourceIndex}"><div class="rowline"><span class="pill ${r.category==='overlap'?'review':r.category==='invalid'?'conflict':r.selected?'accepted':''}">源第 ${r.sourceIndex+1} 行 · ${labels[r.category]}</span><span class="meta">${r.excluded?'已明确排除':r.selected?'将加入':r.category==='duplicate'?'默认不重复加入':'待核对'}</span></div><h3>${esc(r.input.title||'尚无课程名称')}</h3><p>${esc(r.input.date||'日期未提供')} · ${esc(r.input.start_time||'未提供')}–${esc(r.input.end_time||'未提供')}</p><p class="meta">${esc(r.input.location||'地点未填')} · ${esc(r.input.teacher||'教师未填')}</p><details><summary>查看原始时间与时区</summary><p>原开始：${esc(r.original.source_time.start_value??'未提供')}<br>TZID：${esc(r.original.source_time.start_tzid??'未声明')} · VALUE：${esc(r.original.source_time.start_value_type??'未声明')}</p><p>原结束：${esc(r.original.source_time.end_value??'未提供')}<br>TZID：${esc(r.original.source_time.end_tzid??'未声明')}</p></details>${r.sourceIssues.map(i=>`<p class="${i.severity==='error'?'field-error':'meta'}">来源：${esc(i.message)}</p>`).join('')}${r.issues.map(i=>`<p class="${r.category==='invalid'?'field-error':'meta'}">${esc(i.message)}</p>`).join('')}${r.overlaps.map(o=>`<div class="overlap-fact"><strong>${o.kind==='draft'?'当前草稿':'本批源'}第 ${o.index+1} 行：${esc(o.entry.title)}</strong><p>${o.entry.date} · ${o.entry.start_time}–${o.entry.end_time}<br>${esc(o.entry.location||'地点未填')} · ${esc(o.entry.teacher||'教师未填')}</p></div>`).join('')}<div class="actions">${r.needsSourceReview?`<button data-source-review="${r.sourceIndex}" class="border">已核对，按这一次课程重建</button>`:''}${!r.excluded&&r.category==='overlap'&&!r.selected?`<button data-overlap="${r.sourceIndex}" class="border">保留以上重叠</button>`:''}<button data-edit-source="${r.sourceIndex}" class="border">修改这一行</button><button data-exclude="${r.sourceIndex}" class="quiet">${r.excluded?'重新纳入核对':'明确排除此行'}</button></div></article>`;}
+function profile(){const p=state.profile,dirty=['name','school','campus','semester'].some(k=>p[k]!==state.profileSaved[k]);let html=`<div class="head-row"><h2 class="app-title">个人设置</h2><button id="back-campus" class="quiet">返回校园</button></div><div class="profile-head section"><div class="avatar">${state.scope==='a'?'A':'B'}</div><div style="min-width:0"><strong>${esc(p.name)}</strong><p class="meta" style="overflow-wrap:anywhere">${esc(schoolName())} · ${esc(p.campus)}</p></div></div>`;if(!state.section)return html+`<div class="entry-list" id="profile-groups">${entryLink('account','账号与校园',dirty?'有未保存修改；返回仍保留':'昵称、学校、校区与学期','person')}${entryLink('learning','学习偏好','单次时长、休息与每日参考目标','book')}${entryLink('model','模型连接',p.model?'有新密钥尚未保存':'当前原型未连接模型','setting')}${entryLink('reminders','语音与提醒','明确权限、随时停止','voice')}${entryLink('data','历史与数据','本地草稿、会话与应用偏好','history')}</div>`;const titles={account:'账号与校园',learning:'学习偏好',model:'模型连接',reminders:'语音与提醒',data:'历史与数据',connections:'校园数据连接'};html+=`<div class="back-row"><button id="profile-back" class="border">返回</button><h2>${titles[state.section]}</h2></div><div class="profile-section">`;if(state.section==='account')html+=`<p class="notice info">${dirty?'有未保存修改；返回仍保留本页输入。':'当前输入与本页已保存示例一致。'}</p><div class="form-grid">${[['name','昵称'],['school','学校'],['campus','校区'],['semester','学期']].map(([k,label])=>`<label class="full" for="profile-${k}">${label}<input id="profile-${k}" data-profile="${k}" value="${esc(p[k])}"></label>`).join('')}</div><button id="save-profile-demo" class="primary" style="width:100%;margin-top:20px">保存为本页示例</button><div class="entry-list profile-entry">${entryLink('connections','校园数据连接','尚未提供任何凭据，不读取私有数据','services')}${entryLink('timetable','维护我的课表','进入当前本地草稿','calendar')}</div>`;else if(state.section==='learning')html+=`<p class="meta">只使用主动填写的偏好，不推断个人习惯。返回本页后仍保留输入。</p><div class="form-grid">${[['session','单次学习（分钟）'],['rest','单次休息（分钟）'],['daily','每日安排参考（分钟）']].map(([k,label])=>`<label class="full" for="profile-${k}">${label}<input id="profile-${k}" data-profile="${k}" inputmode="numeric" value="${p[k]}"></label>`).join('')}</div><p class="demo-note">仅演示输入保留，不提交偏好、不启动计时。</p>`;else if(state.section==='model')html+=`<p class="notice">请勿在原型填写真实密钥。下面仅用于演示新输入不会被旧保存结果清空。</p><label for="profile-model" style="display:block;margin-top:16px">合成密钥文字<input style="width:100%;margin-top:6px" id="profile-model" data-profile="model" value="${esc(p.model)}" placeholder="例如 demo-old"></label><button id="save-model-demo" class="primary" style="margin-top:16px;width:100%">模拟延迟保存（1 秒）</button><p id="model-message" class="meta" style="margin-top:12px">${esc(state.modelMessage||'这不是 API 调用。')}</p>`;else if(state.section==='reminders')html+=`<p>语音识别后先核对文字，由你手动发送；播报可以停止。</p><p class="notice info" style="margin-top:16px">提醒只对已确认且有明确时间的任务生效。系统接受不等于已送达。</p><button id="permission-explain" class="border" style="margin-top:16px;width:100%">查看将请求的权限</button>`;else if(state.section==='connections')html+=`<p class="notice">${state.connection==='missing'?'未连接校园服务。':'这是合成已连接状态，未访问任何校园账户。'}</p><p style="margin-top:16px">课表可以手动录入，也可以先读取订阅预览；逐行确认后只将最终课程加入草稿。</p><button id="open-timetable-settings" class="border" style="width:100%;margin-top:16px">进入课表维护</button>`;else html+=`<div class="entry-list">${entryLink('history','会话历史','本原型没有真实会话','history')}${entryLink('local-drafts','本地草稿',`${state.entries.length} 门课程 · 只在本页内存`,'calendar')}</div><div class="section notice"><strong>清除需要再确认</strong><p>只影响本页合成草稿；真实应用不在这里执行删除。</p><button id="clear-demo" class="danger" style="margin-top:12px">清除本页草稿示例</button></div>`;return html+'</div>';}
+function showImport(){if(state.editorDirty){state.message='表单还有未加入的输入，请先加入或取消，再读取导入预览。';render();return;}openDialog('选择本地导入样例',`<p>使用真实本地 ASGI 返回的合成 JSON，未请求订阅链接。</p><div class="import-options"><label for="import-kind">诊断样例</label><select id="import-kind"><option value="mixed">混合 5 行：重复、重叠、错误与不支持项</option><option value="all_ready">完整有效列表</option><option value="duplicate">完全重复源行</option><option value="unsupported">不支持的源事件</option><option value="malformed">缺少诊断版本（失败边界）</option></select></div><p class="meta">既有草稿不会被替换；坏行不会因兼容 entries 为空而消失。</p><div class="dialog-actions"><button id="load-import" class="primary">读取本地预览</button></div>`);}
+function loadImport(){state.importKind=$('import-kind').value;const response=structuredClone(ImportFixture.responses[state.importKind==='malformed'?'mixed':state.importKind]);if(state.importKind==='malformed')delete response.diagnostics_version;const parsed=Review.parseImportReview(JSON.stringify(response));closeDialog();if(!parsed.valid){state.message=parsed.message;render();return;}state.rows=parsed.rows;state.choices=[];state.sourceWarnings=parsed.sourceWarnings;state.importFilter='all';state.importPage=0;state.editorOpen=false;state.message='';state.notice='完整预览已读取。还没有把任何源行加入草稿。';render();}
+function addCourse(keepOpen){state.errors=Rules.validateTimetableEntry(state.editor).errors;const checked=Rules.validateTimetableEntry(state.editor);if(!checked.valid){state.message='请修正标出的字段；内容仍保留。';render();const key=fields.find(([k])=>state.errors[k])?.[0];if(key){$('course-'+key).focus();$('course-'+key).scrollIntoView({block:'center'});}return;}const expanded=Rules.expandWeeklyEntry(checked.entry,state.editIndex<0?state.weeks:1);if(!expanded.valid){state.message=expanded.errors[0].message;render();return;}const next=state.entries.slice();if(state.editIndex>=0)next[state.editIndex]=checked.entry;else next.push(...expanded.entries);const validated=Rules.validateTimetableList(next);if(!validated.valid){state.message=validated.errors[0].message;render();return;}if(state.editIndex<0){state.lastEntry=structuredClone(checked.entry);state.lastWeeks=state.weeks;}state.entries=validated.entries;state.editor=blank();state.editorDirty=false;state.editIndex=-1;state.weeks=1;state.errors=emptyErrors();state.editorOpen=keepOpen;state.message='';state.notice='课程已加入本页草稿，尚未保存到账号。';render();}
+function setPage(page){state.page=page;render();}
+function editSource(index){const r=classification().rows.find(r=>r.sourceIndex===index);if(!r)return;importEditing=index;dialogDraft=structuredClone(r.input);dialogErrors=Rules.validateTimetableEntry(dialogDraft).errors;sourceEditor();}
+function sourceEditor(){openDialog(`修正源第 ${importEditing+1} 行`,`${editorFields(dialogDraft,dialogErrors,'source')}<p class="notice info" style="margin-top:16px">应用后重新分类。非 ready 源事件还需要明确核对成单次课程；这不会自动展开重复系列。</p><div class="dialog-actions"><button id="save-source" class="primary">应用修改并重新核对</button></div>`);}
+function acceptImport(){const result=Review.assembleSelectedImport(state.rows,state.entries,state.choices);if(!result.valid){state.message=result.message;render();return;}state.entries=result.entries;state.acceptedWarnings=state.acceptedWarnings.concat(state.sourceWarnings,result.warnings);state.rows=[];state.choices=[];state.message='';state.notice=`已将 ${result.addedEntries.length} 门加入本地草稿；${result.duplicateCount} 行重复未新增，${result.excludedCount} 行明确排除。尚未保存到账号。`;render();}
+document.addEventListener('input',e=>{if(e.target.dataset.editor){const target=e.target.dataset.editor==='course'?state.editor:dialogDraft;target[e.target.dataset.field]=e.target.value;if(e.target.dataset.editor==='course')state.editorDirty=true;}if(e.target.dataset.profile){state.profile[e.target.dataset.profile]=e.target.value;}if(e.target.id==='knowledge-query')state.query=e.target.value;if(e.target.id==='repeat-weeks'){state.weeks=Number(e.target.value);state.editorDirty=true;}});
+document.addEventListener('change',e=>{if(e.target.id==='connection'){state.connection=e.target.value;render();}if(e.target.id==='knowledge-status'){state.knowledgeStatus=e.target.value;state.knowledgeResult=false;render();}if(e.target.id==='long-school'){state.longSchool=e.target.checked;render();}if(e.target.id==='scope'){const scope=e.target.value;state=fresh();state.scope=scope;state.profile.name=scope==='a'?'同学 A':'同学 B';state.profileSaved.name=state.profile.name;state.entries=[];closeDialog();render();toast('已进入全新合成范围，未带入之前草稿。');}});
+document.addEventListener('click',e=>{const b=e.target.closest('button');if(!b||b.disabled)return;
+if(b.dataset.page){setPage(b.dataset.page);return;}if(b.dataset.entry){const key=b.dataset.entry;if(key==='timetable'){setPage('timetable');return;}if(key==='profile'){state.section='';setPage('profile');return;}if(['account','learning','model','reminders','data','connections'].includes(key)){state.section=key;setPage('profile');return;}if(key==='local-drafts'){setPage('timetable');return;}const labels={route:'校园导航',services:'校园服务',capabilities:'能力管理',history:'会话历史'};openDialog(labels[key],`<p>${key==='services'?(state.connection==='missing'?'尚未连接校园账户；可以回到个人设置查看连接说明，课表与导航入口仍可用。':'这是合成已连接状态，未读取真实校园信息。'):'本原型只展示入口与返回；此处没有真实'+labels[key]+'数据。'}</p><div class="dialog-actions"><button id="dialog-back" class="primary">返回原页面</button></div>`);return;}
+if(b.dataset.example){if(state.query.trim()&&state.query!==b.dataset.example)state.pendingExample=b.dataset.example;else state.query=b.dataset.example;render();return;}
+if(b.dataset.category){state.importFilter=b.dataset.category;state.importPage=0;render();return;}
+if(b.hasAttribute('data-edit-course')){if(state.editorDirty){state.message='请先加入或取消当前输入。';render();return;}state.editIndex=Number(b.dataset.editCourse);state.editor=structuredClone(state.entries[state.editIndex]);state.editorOpen=true;state.weeks=1;state.errors=emptyErrors();render();return;}
+if(b.hasAttribute('data-edit-source')){editSource(Number(b.dataset.editSource));return;}
+if(b.hasAttribute('data-exclude')){const index=Number(b.dataset.exclude),r=classification().rows[index],c=currentChoice(index);setChoice({...c,mode:r.excluded?'default':'exclude',overlapKey:''});render();return;}
+if(b.hasAttribute('data-overlap')){const index=Number(b.dataset.overlap),r=classification().rows[index];setChoice({...currentChoice(index),mode:'include',overlapKey:r.overlapKey});render();return;}
+if(b.hasAttribute('data-source-review')){const index=Number(b.dataset.sourceReview),r=classification().rows[index];if(!Rules.validateTimetableEntry(r.input).valid){state.message='先修正这行的课程字段，再核对源记录。';render();return;}setChoice({...currentChoice(index),edited:structuredClone(r.input),sourceIssuesReviewed:true,mode:'default',overlapKey:''});render();return;}
+switch(b.id){case 'large':document.body.classList.toggle('large');b.setAttribute('aria-pressed',document.body.classList.contains('large'));break;case 'reset':location.reload();break;case 'avatar':state.section='';setPage('profile');break;case 'back-campus':setPage('campus');break;case 'toggle-knowledge':state.knowledgeOpen=!state.knowledgeOpen;render();break;case 'keep-query':state.pendingExample='';render();break;case 'apply-example':state.query=state.pendingExample;state.pendingExample='';render();break;case 'search-knowledge':if(!state.query.trim()||Array.from(state.query).length>200){toast('请填写 1–200 字，输入会保留。');break;}state.knowledgeResult=true;render();break;case 'source-details':state.sourceOpen=!state.sourceOpen;render();break;case 'weather-info':openDialog('天气来源说明','<p>真实页面读取有获取时间与有效期的城市级预报。本原型离线，因此不显示当前温度或伪造实时状态。</p><button id="dialog-back" class="primary" style="margin-top:16px">返回校园</button>');break;case 'open-editor':if(state.editorDirty){state.message='当前输入尚未加入，请先处理。';render();break;}state.editor=blank();state.weeks=1;state.editIndex=-1;state.editorOpen=true;state.errors=emptyErrors();state.message='';render();break;case 'cancel-editor':state.editor=blank();state.editorDirty=false;state.editIndex=-1;state.editorOpen=false;state.errors=emptyErrors();state.message='';render();break;case 'add-course':addCourse(false);break;case 'add-next':addCourse(true);break;case 'reuse-last':if(state.editorDirty){state.message='请先加入或取消当前输入，再沿用上一门信息。';render();break;}state.editor=structuredClone(state.lastEntry);state.weeks=state.lastWeeks;state.editorDirty=true;state.notice='已复制到新表单，请核对日期、课程名和周次；尚未加入课表。';render();break;case 'open-import':showImport();break;case 'load-import':loadImport();break;case 'cancel-import':state.rows=[];state.choices=[];state.sourceWarnings=[];state.message='';state.notice='本次预览已放弃，已有草稿未改变。';render();break;case 'import-prev':state.importPage--;render();break;case 'import-next':state.importPage++;render();break;case 'save-source':{const checked=Rules.validateTimetableEntry(dialogDraft);dialogErrors=checked.errors;if(!checked.valid){sourceEditor();const key=fields.find(([k])=>dialogErrors[k])?.[0];if(key)$('source-'+key).focus();break;}setChoice({...currentChoice(importEditing),edited:checked.entry,sourceIssuesReviewed:false,overlapKey:'',mode:'default'});closeDialog();render();break;}case 'accept-import':acceptImport();break;case 'final-preview':{if(state.editorDirty||state.rows.length){state.message='请先处理未加入的表单与导入预览，再核对最终草稿。';render();break;}openDialog(`完整草稿 · ${state.entries.length} 门`,`${state.entries.map((c,i)=>`<div class="fact"><span>第 ${i+1} 门</span><strong>${esc(c.title)}<br>${c.date} ${c.start_time}–${c.end_time}<br>${esc(c.location)} · ${esc(c.teacher)}</strong></div>`).join('')}<p class="notice info" style="margin-top:16px">这不是保存回执。原型不发送账号写入；实际应用仍需版本核对和明确确认。</p><button id="dialog-back" class="primary" style="margin-top:16px">返回继续编辑</button>`);break;}case 'profile-back':state.section=state.section==='connections'?'account':'';render();break;case 'save-profile-demo':state.profileSaved={name:state.profile.name,school:state.profile.school,campus:state.profile.campus,semester:state.profile.semester};toast('已保存到本页示例，未提交账号。');render();break;case 'save-model-demo':{const value=state.profile.model,scope=state.scope;if(!value){toast('请填写合成文字，不要使用真实密钥。');break;}state.modelMessage='正在等待本地模拟结果…';render();setTimeout(()=>{if(state.scope!==scope)return;if(state.profile.model===value)state.profile.model='';state.modelMessage=state.profile.model?'原示例保存已结束，后来填写的文字仍未提交。':'本地模拟结束，未调用真实模型。';if(state.page==='profile'&&state.section==='model')render();},1000);break;}case 'permission-explain':openDialog('权限说明','<p>真实语音功能可能请求麦克风与系统语音识别权限；提醒可能请求通知权限。</p><p class="notice info" style="margin-top:16px">此原型不会触发任何系统权限请求。</p><button id="dialog-back" class="primary" style="margin-top:16px">返回</button>');break;case 'open-timetable-settings':setPage('timetable');break;case 'clear-demo':openDialog('确认清除本页合成草稿？','<p>课程、未接受导入与编辑内容都会从本页内存移除。不影响任何真实账户。</p><div class="dialog-actions"><button id="confirm-clear-demo" class="danger">确认清除本页示例</button><button id="dialog-back" class="border">取消</button></div>');break;case 'confirm-clear-demo':state.entries=[];state.rows=[];state.choices=[];state.editor=blank();state.editorDirty=false;state.editorOpen=false;state.acceptedWarnings=[];closeDialog();render();break;case 'close-dialog':case 'dialog-back':closeDialog();break;}
+});
+window.__ux07={getState:()=>structuredClone(state),rules:Rules,review:Review,fixture:ImportFixture};render();
+</script></body></html>

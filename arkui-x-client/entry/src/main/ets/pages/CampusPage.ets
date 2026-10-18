@@ -16,6 +16,8 @@ export struct CampusPage {
   @Watch('connectionChanged') @Prop baseUrl: string;
   @Watch('connectionChanged') @Prop token: string;
   @Watch('activeChanged') @Prop active: boolean = true;
+  @State private knowledgeExpanded: boolean = false;
+  @State private weatherExpanded: boolean = false;
   @State private forecast: WeatherForecast | null = null;
   @State private weatherLoading: boolean = false;
   @State private weatherError: string = '';
@@ -24,6 +26,7 @@ export struct CampusPage {
   private weatherRevision: number = 0;
   private clock: number = -1;
   private weatherCampus: string = '';
+  private presentationScope: string = '';
   onOpenTimetable: () => void = () => {};
   onOpenRoute: () => void = () => {};
   onOpenServices: () => void = () => {};
@@ -32,7 +35,7 @@ export struct CampusPage {
   onOpenAgent: (prompt: string) => void = () => {};
   private scroller: Scroller = new Scroller();
 
-  aboutToAppear(): void { this.pageActive = true; this.activeChanged(); }
+  aboutToAppear(): void { this.pageActive = true; this.presentationScope = this.campusIdentity(); this.activeChanged(); }
   aboutToDisappear(): void { this.pageActive = false; this.invalidateWeather(); }
 
   private invalidateWeather(): void {
@@ -53,8 +56,13 @@ export struct CampusPage {
   }
 
   private campusIdentity(): string { return `${this.user.user_id}|${this.user.school ?? ''}|${this.user.campus ?? ''}`; }
-  private profileChanged(): void { if (this.weatherCampus !== this.campusIdentity()) { this.activeChanged(); } }
+  private profileChanged(): void {
+    const scope = this.campusIdentity();
+    if (this.presentationScope !== scope) { this.knowledgeExpanded = false; this.weatherExpanded = false; this.presentationScope = scope; }
+    if (this.weatherCampus !== scope) { this.activeChanged(); }
+  }
   private connectionChanged(): void {
+    this.knowledgeExpanded = false; this.weatherExpanded = false;
     this.forecast = null;
     this.weatherError = '';
     this.weatherCampus = '';
@@ -109,7 +117,7 @@ export struct CampusPage {
     Column({ space: 12 }) {
       Row({ space: 12 }) {
         Column({ space: 4 }) {
-          Text('出门前看看天气').fontSize(AppTheme.sectionTitle).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
+          Text('今日天气').fontSize(AppTheme.bodySize).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
           Text('城市级预报 · 不读取设备位置').fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet)
         }.layoutWeight(1).alignItems(HorizontalAlign.Start)
         Button('刷新').constraintSize({ minHeight: 48, minWidth: 64 }).fontSize(AppTheme.metaSize)
@@ -117,10 +125,9 @@ export struct CampusPage {
           .onClick(() => this.loadWeather())
       }.width('100%')
       if (this.weatherLoading) {
-        FeedbackPanel({ kind: 'loading', title: '正在查询天气', message: '从已配置的天气来源读取今日预报。' })
+        Text('正在读取今日预报…').fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
       } else if (this.weatherError.length > 0) {
-        FeedbackPanel({ kind: 'error', title: '天气暂不可用', message: this.weatherError,
-          actionLabel: '重试查询', onAction: () => this.loadWeather() })
+        Text(this.weatherError).fontSize(AppTheme.metaSize).fontColor(AppTheme.warning).width('100%').wordBreak(WordBreak.BREAK_WORD)
       }
       if (!this.weatherLoading && this.forecast !== null) {
         Text(`${this.forecast.location_label} · ${this.forecast.date}`).fontSize(AppTheme.bodySize)
@@ -135,7 +142,9 @@ export struct CampusPage {
           Text('暂无可用天气预报，请展开来源查看覆盖范围或获取状态。')
             .fontSize(AppTheme.bodySize).fontColor(AppTheme.quiet).width('100%').wordBreak(WordBreak.BREAK_WORD)
         }
-        EvidencePanel({ evidence: this.forecast.evidence, active: this.active })
+        Button(this.weatherExpanded ? '收起天气来源' : '查看天气来源').constraintSize({ minHeight: 48 }).fontSize(AppTheme.metaSize)
+          .fontColor(AppTheme.accent).backgroundColor(Color.Transparent).onClick(() => this.weatherExpanded = !this.weatherExpanded)
+        if (this.weatherExpanded) { EvidencePanel({ evidence: this.forecast.evidence, active: this.active }) }
       }
     }.width('100%').alignItems(HorizontalAlign.Start).padding(AppTheme.cardInset)
       .backgroundColor(AppTheme.surface).borderRadius(AppTheme.cardRadius)
@@ -178,15 +187,27 @@ export struct CampusPage {
           }.width(48).height(48).backgroundColor(AppTheme.accentSoft)
             .accessibilityText('打开个人设置').onClick(() => this.onOpenProfile())
         }.width('100%')
-        this.WeatherCard()
-        CampusKnowledgePanel({ baseUrl: this.baseUrl, token: this.token, campusScope: this.campusIdentity(), active: this.active })
         Column({ space: 12 }) {
           this.Entry('calendar', '我的课表', '手动维护、预览导入与检查变更', () => this.onOpenTimetable(), $r('app.media.xj_course_entry'))
           this.Entry('route', '校园导航', '选择地点，查看路线和步行估算', () => this.onOpenRoute(), $r('app.media.xj_campus_entry'))
           this.Entry('classroom', '校园服务', '教室、借阅与个人校园信息', () => this.onOpenServices())
-          this.Entry('skills', '能力管理', '查看权限，按需要启用或停用', () => this.onOpenSkills())
-          this.Entry('calendar', '数据与连接', '管理课表订阅、校园账号和模型配置', () => this.onOpenProfile())
         }.width('100%')
+        this.WeatherCard()
+        Button({ type: ButtonType.Normal }) {
+          Row({ space: 12 }) {
+            Column({ space: 5 }) {
+              Text('校园资料').fontSize(AppTheme.bodySize).fontWeight(FontWeight.Medium).fontColor(AppTheme.ink).width('100%')
+              Text('图书馆、校园网络等已收录官方指南').fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+            }.layoutWeight(1).alignItems(HorizontalAlign.Start)
+            Text(this.knowledgeExpanded ? '收起' : '查询').fontSize(AppTheme.metaSize).fontColor(AppTheme.accent)
+          }.width('100%')
+        }.width('100%').constraintSize({ minHeight: 72 }).padding(AppTheme.cardInset).backgroundColor(AppTheme.surface)
+          .borderRadius(AppTheme.cardRadius).accessibilityText(`校园资料，${this.knowledgeExpanded ? '已展开' : '已收起'}`)
+          .onClick(() => this.knowledgeExpanded = !this.knowledgeExpanded)
+        CampusKnowledgePanel({ baseUrl: this.baseUrl, token: this.token, campusScope: this.campusIdentity(), active: this.active && this.knowledgeExpanded })
+          .visibility(this.knowledgeExpanded ? Visibility.Visible : Visibility.None)
+        this.Entry('skills', '能力管理', '查看权限，按需要启用或停用', () => this.onOpenSkills())
+        this.Entry('calendar', '数据与连接', '校园账号、模型和个人设置', () => this.onOpenProfile())
         Button({ type: ButtonType.Normal }) {
           Row({ space: 12 }) {
             AppIcon({ name: 'assistant', iconSize: 24, color: AppTheme.accent })

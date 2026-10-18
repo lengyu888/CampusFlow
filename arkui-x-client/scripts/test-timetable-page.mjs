@@ -1,3 +1,4 @@
+import { importReview, diagnosticPreview, sourceRow, maximumWarningPreview } from './helpers/timetable-editor-fixture.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { stripTypeScriptTypes } from 'node:module';
@@ -17,7 +18,7 @@ const prefix = noImports(source.slice(0, source.indexOf('\n  @Builder')))
   .replace(/^@Component\r?\n/m, '').replace(/@(Prop|State)\s+|@Watch\('[^']+'\)\s*/g, '')
   .replace('export struct TimetablePage', 'class TimetablePage') + '\n}\n';
 const factory = new Function('CampusFlowApi', 'TimetableMaintenance', 'normalizeTimetableEntry', 'validateTimetableEntry',
-  'validateTimetableList', 'parseTimetablePreview', 'expandWeeklyEntry', 'shanghaiDate', 'Scroller', 'Edge', 'timetableOperationId', 'localDrafts',
+  'validateTimetableList', 'parseTimetablePreview', 'expandWeeklyEntry', 'shanghaiDate', 'Scroller', 'Edge', 'timetableOperationId', 'localDrafts', 'parseImportReview', 'assembleSelectedImport', 'CampusFlowRequestError',
   stripTypeScriptTypes(prefix) + '\nreturn TimetablePage;');
 const row = (title = '操作系统', date = '2026-10-20') => ({ date, title, start_time: '08:05', end_time: '09:40', location: '教学楼', teacher: '教师' });
 const clone = value => JSON.parse(JSON.stringify(value));
@@ -44,7 +45,7 @@ async function fixture(handlers = {}) {
   }
   class Scroller { scrollEdge() {} }
   const Page = factory(Api, TimetableMaintenance, validation.normalizeTimetableEntry, validation.validateTimetableEntry,
-    validation.validateTimetableList, validation.parseTimetablePreview, validation.expandWeeklyEntry, agenda.shanghaiDate, Scroller, { Top: 'top' }, () => '01234567-89ab-4def-8abc-0123456789ab', draftStore);
+    validation.validateTimetableList, validation.parseTimetablePreview, validation.expandWeeklyEntry, agenda.shanghaiDate, Scroller, { Top: 'top' }, () => '01234567-89ab-4def-8abc-0123456789ab', draftStore, importReview.parseImportReview, importReview.assembleSelectedImport, feedback.CampusFlowRequestError);
   const page = new Page(); page.draftLease = lease; page.onTimetableChanged = () => notifications.push(true); page.aboutToAppear(); await tick();
   return { page, calls, notifications, draftStore, lease, stored: () => storedText, setSnapshot: value => snapshot = clone(value) };
 }
@@ -72,10 +73,10 @@ test('weekly manual entry, edit and pending delete use exact indexes without ali
 test('empty or duplicate import cannot overwrite draft; accepted warnings survive review and URL is cleared', async () => {
   let result = { event_count: 0, entries: [] };
   const { page } = await fixture({ preview: async () => result }); page.selectSource('subscription'); page.updateScheduleUrl('https://private/?key=secret');
-  await page.previewImport(); assert.equal(page.importEntries.length, 0); assert.equal(page.entries.length, 1);
-  result = { event_count: 1, entries: [row()] }; await page.previewImport(); page.acceptImport();
-  assert.equal(page.entries.length, 1); assert.equal(page.importEntries.length, 1); assert.match(page.message, /完全相同/);
-  page.cancelPreview(); result = { event_count: 1, entries: [row('新课程', '2026-10-21')], warnings: ['来源仅涵盖本学期'] };
+  await page.previewImport(); assert.equal(page.importRows.length, 0); assert.equal(page.entries.length, 1);
+  result = diagnosticPreview([row()]); await page.previewImport(); page.acceptImport();
+  assert.equal(page.entries.length, 1); assert.equal(page.importRows.length, 1); assert.match(page.message, /没有选中可新增/);
+  page.cancelPreview(); result = diagnosticPreview([row('新课程', '2026-10-21')], ['来源仅涵盖本学期']);
   await page.previewImport(); page.reviewSave(); assert.equal(page.reviewOpen, false);
   page.acceptImport(); assert.equal(page.entries.length, 2); assert.equal(page.scheduleUrl, '');
   page.reviewSave(); assert.equal(page.reviewOpen, true); assert.equal(page.sourceWarnings[0].message, '来源仅涵盖本学期');
@@ -85,7 +86,7 @@ test('cancelled or hidden import ignores late response and never exposes private
   const late = deferred(); const { page } = await fixture({ preview: () => late.promise });
   page.selectSource('subscription'); page.updateScheduleUrl('https://private/?secret=123'); const read = page.previewImport();
   page.active = false; page.activityChanged(); late.resolve({ event_count: 1, entries: [row('晚到')] }); await read;
-  assert.equal(page.scheduleUrl, ''); assert.equal(page.importEntries.length, 0); assert.equal(page.entries.length, 1);
+  assert.equal(page.scheduleUrl, ''); assert.equal(page.importRows.length, 0); assert.equal(page.entries.length, 1);
   const g = await fixture({ preview: async () => { throw new Error('https://private/?secret=123'); } });
   g.page.selectSource('subscription'); g.page.updateScheduleUrl('https://private/?secret=123'); await g.page.previewImport();
   assert.doesNotMatch(g.page.message, /https:|secret|123/);
@@ -139,8 +140,8 @@ test('course draft and invalid editor restore explicitly after restart without r
   const first = await fixture(); first.page.anchorDate = '2026-10-18'; first.page.newEntry();
   first.page.updateEditor('title', '  未完成  '); first.page.updateEditor('date', '2026-');
   first.page.updateEditor('end_time', ''); first.page.scheduleUrl = 'https://private/?token=secret';
-  first.page.importEntries = [row('未接受候选')]; await first.page.flushDraft();
-  const disk = first.stored(); assert.doesNotMatch(disk, /private|secret|未接受候选|scheduleUrl|importEntries/);
+  first.page.importRows = [sourceRow(0, row('未接受候选'))]; await first.page.flushDraft();
+  const disk = first.stored(); assert.doesNotMatch(disk, /private|secret|未接受候选|scheduleUrl|importRows/);
   const second = await fixture({ initialDraftText: disk }); second.setSnapshot({ revision: 'c'.repeat(64), entries: [row('远端')] });
   assert.ok(second.page.recoverableDraft); second.page.restoreStoredDraft(); await tick();
   assert.equal(second.page.editor.title, '  未完成  '); assert.equal(second.page.editor.date, '2026-');
@@ -201,4 +202,55 @@ test('account switch invalidates hidden course callbacks and clears raw editor a
   pending.resolve({ operation_id: '01234567-89ab-4def-8abc-0123456789ab', status: 'applied', previous_revision: 'a'.repeat(64),
     revision: 'b'.repeat(64), entry_count: 1, applied_at: new Date().toISOString() }); await saving;
   assert.deepEqual(f.notifications, []); assert.deepEqual(f.page.entries, []); assert.equal(f.page.controller, null);
+});
+
+test('UX07 continuous five-course entry reuses only explicit last course and never writes remotely',async()=>{
+ const f=await fixture();f.page.newEntry();
+ for(let i=0;i<5;i++){const entry=row(`新课 ${i}`,`2026-10-${21+i}`);for(const [field,value] of Object.entries(entry))f.page.updateEditor(field,value);f.page.addEntry(true);assert.equal(f.page.entries.length,i+2);assert.equal(f.page.editorOpen,true);}
+ const old=clone(f.page.entries);f.page.reuseLastEntry();assert.equal(f.page.editor.title,'新课 4');assert.deepEqual(f.page.entries,old);f.page.updateEditor('date','2026-10-29');f.page.reuseLastEntry();assert.equal(f.page.editor.date,'2026-10-29');assert.match(f.page.message,/先加入或取消/);
+ f.page.addEntry(false);assert.equal(f.page.entries.length,7);assert.equal(f.page.editorOpen,false);assert.equal(f.calls.filter(c=>c[0]==='put').length,0);
+});
+
+test('UX07 invalid manual fields request first-error focus, preserve verbatim input and keep correction feedback',async()=>{
+ const f=await fixture();f.page.newEntry();f.page.updateEditor('title','😀'.repeat(101));f.page.updateEditor('date','2026-02-30');f.page.addEntry(true);assert.equal(f.page.focusRevision,1);assert.equal(f.page.entries.length,1);assert.equal(f.page.editor.title,'😀'.repeat(101));
+ f.page.updateEditor('title','修正标题');assert.equal(f.page.fieldErrors.title,'');assert.notEqual(f.page.fieldErrors.date,'');assert.equal(f.page.editorOpen,true);
+});
+
+test('UX07 a wholly invalid diagnostic preview still blocks save and clear until explicitly handled',async()=>{
+ const payload=diagnosticPreview([row('坏课')]);payload.rows[0]={...payload.rows[0],status:'invalid',input:{...row('坏课'),end_time:'00:00'},entry:null,issues:[{field:'end_time',code:'BAD_TIME',severity:'error',message:'结束早于开始'}]};payload.entries=[];payload.event_count=0;
+ const f=await fixture({preview:async()=>payload});f.page.selectSource('subscription');f.page.updateScheduleUrl('https://private/?token=secret');await f.page.previewImport();assert.equal(f.page.importRows.length,1);assert.equal(f.page.view.dirty,true,'unaccepted source review is pending');
+ f.page.reviewSave();assert.equal(f.page.reviewOpen,false);f.page.requestClear();assert.equal(f.page.clearRequested,false);f.page.acceptImport();assert.equal(f.page.entries.length,1);
+ f.page.changeImportChoices([{sourceIndex:0,mode:'exclude',edited:null,sourceIssuesReviewed:false,overlapKey:''}]);f.page.acceptImport();assert.equal(f.page.entries.length,1,'empty selection never clears existing timetable');assert.equal(f.page.importRows.length,1);f.page.cancelPreview();assert.equal(f.page.importRows.length,0);assert.equal(f.calls.filter(c=>c[0]==='put').length,0);
+});
+
+test('UX07 hidden maintenance retains in-memory review identity while account switch invalidates it',async()=>{
+ const f=await fixture({preview:async()=>diagnosticPreview([row('新课','2026-10-29')])});f.page.selectSource('subscription');f.page.updateScheduleUrl('https://private/');await f.page.previewImport();const generation=f.page.importGeneration;
+ f.page.active=false;f.page.activityChanged();assert.equal(f.page.importGeneration,generation,'hide is not a new source review');assert.equal(f.page.importRows.length,1);assert.equal(f.page.scheduleUrl,'');
+ f.page.draftLease=await f.draftStore.activate('other-service::other-user');f.page.draftLeaseChanged();assert.ok(f.page.importGeneration>generation);assert.equal(f.page.importRows.length,0);assert.equal(f.page.lastEntry,null);
+});
+
+test('UX07 editing an existing maintained course preserves all unaccepted import edits and exclusions until explicit discard',async()=>{
+ const f=await fixture({preview:async()=>diagnosticPreview([row('候选','2026-10-21')])});f.page.selectSource('subscription');f.page.updateScheduleUrl('https://private/');await f.page.previewImport();
+ f.page.changeImportChoices([{sourceIndex:0,mode:'exclude',edited:row('逐行修正','2026-10-21'),sourceIssuesReviewed:true,overlapKey:'current-facts'}]);const rows=clone(f.page.importRows),choices=clone(f.page.importChoices);
+ f.page.editEntry(0);assert.deepEqual(f.page.importRows,rows);assert.deepEqual(f.page.importChoices,choices);assert.equal(f.page.source,'subscription');assert.equal(f.page.editingIndex,-1);assert.match(f.page.message,/先加入所选课程或明确放弃/);
+ f.page.cancelPreview();f.page.editEntry(0);assert.equal(f.page.editingIndex,0);assert.equal(f.page.source,'manual');
+});
+
+test('UX07 all 500 diagnostic courses survive durable maintenance storage and complete-table save', async () => {
+  const result = maximumWarningPreview();
+  const f = await fixture({ get: async () => ({ revision: 'a'.repeat(64), entries: [] }), preview: async () => result });
+  f.page.selectSource('subscription'); f.page.updateScheduleUrl('https://fixture.invalid/private-subscription');
+  await f.page.previewImport(); assert.equal(f.page.importRows.length, 500);
+  f.page.acceptImport(); assert.deepEqual(f.page.entries, result.entries); assert.equal(f.page.draftMessage, '');
+  await f.page.flushDraft();
+  const restarted = new DraftStore({ read: async () => f.stored(), write: async () => {}, remove: async () => {} });
+  await restarted.initialize(); const restoredLease = await restarted.activate(f.lease.scope);
+  const restored = restarted.read(restoredLease, { kind: 'timetable', ownerId: 'main' });
+  assert.deepEqual(restored.payload.draftEntries, result.entries);
+  assert.equal(restored.payload.sourceWarnings.length, 6);
+  for (const warning of restored.payload.sourceWarnings.slice(2)) assert.match(warning.message, /500/);
+  f.page.reviewSave(); assert.equal(f.page.reviewOpen, true); await f.page.save();
+  const writes = f.calls.filter(call => call[0] === 'put');
+  assert.equal(writes.length, 1); assert.deepEqual(writes[0][1], result.entries);
+  assert.equal(f.notifications.length, 1);
 });

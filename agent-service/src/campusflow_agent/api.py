@@ -46,7 +46,11 @@ from .learning_preferences import register_learning_preferences
 from .model_catalog import ModelCatalog
 from .replanning import ReplanError, ReplanningService
 from .run_service import RunError, RunService
-from .schedule_subscription import ScheduleSubscriptionError, ScheduleSubscriptionService
+from .schedule_subscription import (
+    ScheduleSubscriptionError,
+    ScheduleSubscriptionService,
+    require_complete_subscription,
+)
 from .schemas import (
     ActionConfirmRequest,
     ActionTaskRequest,
@@ -842,7 +846,7 @@ def create_app(
         try:
             return await schedule_subscription_service.fetch(payload.url.get_secret_value())
         except ScheduleSubscriptionError as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
+            raise CampusFlowError(422, str(exc), exc.code) from exc
 
     @app.put(
         "/api/v1/schedule-subscriptions",
@@ -857,15 +861,16 @@ def create_app(
         expected_subscription = account_store.get_schedule_subscription_secret(user.user_id)
         try:
             preview = await schedule_subscription_service.fetch(raw_url)
+            entries = require_complete_subscription(preview)
             imported_count = timetable_service.replace_subscription(
                 user.user_id,
-                entries=preview.entries,
+                entries=entries,
                 expected_revision=expected_revision,
                 expected_subscription=expected_subscription,
                 encrypted_url=api_key_vault.encrypt(raw_url),
             )
         except ScheduleSubscriptionError as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
+            raise CampusFlowError(422, str(exc), exc.code) from exc
         except sqlite3.Error as exc:
             raise CampusFlowError(
                 500,
@@ -892,15 +897,16 @@ def create_app(
         try:
             raw_url = api_key_vault.decrypt(encrypted)
             preview = await schedule_subscription_service.fetch(raw_url)
+            entries = require_complete_subscription(preview)
             imported_count = timetable_service.replace_subscription(
                 user.user_id,
-                entries=preview.entries,
+                entries=entries,
                 expected_revision=expected_revision,
                 expected_subscription=encrypted,
                 encrypted_url=encrypted,
             )
         except ScheduleSubscriptionError as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
+            raise CampusFlowError(422, str(exc), exc.code) from exc
         except ValueError as exc:
             raise HTTPException(
                 status_code=503,

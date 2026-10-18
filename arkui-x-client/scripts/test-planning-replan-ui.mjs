@@ -131,7 +131,7 @@ function profileFixture(handler) {
     async syncSubscription() { calls.push(['sync']); return handler(); }
   }
   const Profile = component('pages/ProfilePage.ets', 'ProfilePage',
-    ['CampusFlowApi', 'CampusFlowRequestError'], [Api, CampusFlowRequestError]);
+    ['CampusFlowApi', 'CampusFlowRequestError', 'Scroller'], [Api, CampusFlowRequestError, class { scrollTo() {} }]);
   const page = new Profile(); page.scheduleUrl = 'https://test.invalid/private?token=fixture-secret';
   page.onTimetableChanged = () => changed.push(true);
   return { page, calls, changed };
@@ -299,4 +299,16 @@ test('confirmed replan unresolved task remains reachable after controller clears
  assert.equal(f.page.state.report,null);assert.ok(f.page.state.preview.unresolved.length);
  const opened=[];f.page.onOpenTask=id=>opened.push(id);f.page.openTask('unresolved-0');f.page.openTask('absent');
  assert.deepEqual(opened,['unresolved-0']);f.page.state.phase='uncertain';f.page.openTask('unresolved-0');assert.equal(opened.length,1);
+});
+
+
+test('subscription review-required response preserves timetable and uses an actionable safe message',async()=>{
+ const f=profileFixture(async()=>{throw new CampusFlowRequestError(422,'IMPORT_REVIEW_REQUIRED','raw private-url');});
+ await f.page.syncSubscription();assert.equal(f.page.timetableUpdated,false);assert.equal(f.changed.length,0);assert.equal(f.page.subscriptionNeedsCheck,false);
+ assert.match(f.page.message,/逐条核对/);assert.doesNotMatch(f.page.message,/private-url/);
+});
+
+test('successful subscription retains the controlled interpretation warnings next to its receipt',async()=>{
+ const f=profileFixture(async()=>({status:{configured:true},imported_count:2,warnings:['来源未提供时区，本次按北京时间解释，请核对。']}));
+ await f.page.syncSubscription();assert.equal(f.changed.length,1);assert.match(f.page.message,/北京时间/);
 });

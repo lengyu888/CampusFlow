@@ -1,10 +1,14 @@
-import { TimetableEntry } from '../model/ApiModels';
+import { TimetableEntry, ScheduleImportRow } from '../model/ApiModels';
+import { CampusFlowRequestError } from '../utils/AgentFeedback';
 import { CampusFlowApi } from '../services/CampusFlowApi';
 import { TimetableMaintenance, TimetableMaintenanceState, TimetableDraftSnapshot, timetableOperationId } from '../utils/TimetableMaintenance';
-import { TimetableFieldErrors, TimetableIssue, normalizeTimetableEntry, validateTimetableEntry, validateTimetableList, parseTimetablePreview, expandWeeklyEntry } from '../utils/OnboardingTimetable';
+import { TimetableFieldErrors, TimetableIssue, normalizeTimetableEntry, validateTimetableEntry, validateTimetableList, expandWeeklyEntry } from '../utils/OnboardingTimetable';
 import { DraftLease, DraftKey, DraftRecord, DraftSaveState, TimetableDraft } from '../utils/DraftStore';
 import { localDrafts } from '../services/LocalDrafts';
 import { shanghaiDate } from '../utils/DailyAgenda';
+import { ImportRowChoice, parseImportReview, assembleSelectedImport } from '../utils/TimetableImportReview';
+import { TimetableEntryEditor } from '../components/TimetableEntryEditor';
+import { TimetableImportPanel } from '../components/TimetableImportPanel';
 import { AppTheme } from '../theme/AppTheme';
 import { EvidencePanel } from '../components/EvidencePanel';
 import { AppIcon } from '../components/AppIcon';
@@ -14,8 +18,8 @@ interface CourseRow { index: number; entry: TimetableEntry; }
 
 @Component
 export struct TimetablePage {
-  @Prop baseUrl: string;
-  @Prop token: string;
+  @Watch('editorConnectionChanged') @Prop baseUrl: string;
+  @Watch('editorConnectionChanged') @Prop token: string;
   @Watch('draftLeaseChanged') @Prop draftLease: DraftLease | null = null;
   @Watch('activityChanged') @Prop active: boolean = true;
   onBack: () => void = () => {};
@@ -35,9 +39,10 @@ export struct TimetablePage {
   @State private draftRevision: number = 0;
   @State private pendingDelete: number = -1;
   @State private scheduleUrl: string = '';
-  @State private importEntries: TimetableEntry[] = [];
+  @State private importRows: ScheduleImportRow[] = [];
+  @State private importChoices: ImportRowChoice[] = [];
+  @State private importGeneration: number = 0;
   @State private importWarnings: TimetableIssue[] = [];
-  @State private importPage: number = 0;
   @State private sourceWarnings: TimetableIssue[] = [];
   @State private warnings: TimetableIssue[] = [];
   @State private showAllWarnings: boolean = false;
@@ -50,7 +55,10 @@ export struct TimetablePage {
   @State private reloadRequested: boolean = false;
   @State private recoverableDraft: DraftRecord | null = null;
   @State private draftMessage: string = '';
-  @State private optionalFieldsExpanded: boolean = false;
+  @State private focusRevision: number = 0;
+  @State private editorGeneration: number = 0;
+  private lastEntry: TimetableEntry | null = null;
+  private lastRepeatWeeks: number = 1;
   @State private latestExpanded: boolean = false;
   @State private latestPage: number = 0;
   private anchorDate: string = shanghaiDate(Date.now());
@@ -123,8 +131,8 @@ export struct TimetablePage {
     if (this.boundLease !== null && (lease === null || lease.scope !== this.boundLease.scope || lease.generation !== this.boundLease.generation)) {
       this.controllerGeneration++; this.requestRevision++; this.controller?.dispose(); this.controller = null;
       this.entries = []; this.editorDirty = false; this.editingIndex = -1; this.sourceWarnings = [];
-      this.importEntries = []; this.scheduleUrl = ''; this.localRevision = 0; this.trackedOperationId = '';
-      this.reviewOpen = false; this.anchorDate = shanghaiDate(Date.now());
+      this.importRows = []; this.importChoices = []; this.importGeneration++; this.scheduleUrl = ''; this.localRevision = 0; this.trackedOperationId = '';
+      this.reviewOpen = false; this.lastEntry = null; this.lastRepeatWeeks = 1; this.anchorDate = shanghaiDate(Date.now());
       this.resetEditor(); this.editorOpen = false; this.latestExpanded = false; this.latestPage = 0;
       this.view = { phase: 'idle', entries: [], revision: '', dirty: false, warnings: [], message: '', notice: '' };
       this.message = ''; this.notice = ''; this.draftMessage = ''; this.loading = false;
@@ -238,7 +246,7 @@ export struct TimetablePage {
     this.editorOpen = draft.editorOpen; this.editorDirty = draft.editorDirty; this.editingIndex = draft.editingIndex;
     this.repeatWeeks = draft.repeatWeeks; this.sourceWarnings = draft.sourceWarnings; this.anchorDate = draft.anchorDate;
     this.recoverableDraft = null; this.localRevision = record.localRevision;
-    this.trackedOperationId = submission?.operationId ?? ''; this.source = 'manual'; this.scheduleUrl = ''; this.importEntries = [];
+    this.trackedOperationId = submission?.operationId ?? ''; this.source = 'manual'; this.scheduleUrl = ''; this.importRows = []; this.importChoices = []; this.importGeneration++;
     this.reviewOpen = false; this.notice = '已恢复本机草稿，原日期和课表版本保持不变。';
     if (submission !== null) { this.controller.checkResult(); } else { this.controller.refresh(); }
   }
@@ -248,13 +256,21 @@ export struct TimetablePage {
   }
   private editable(): boolean { return this.recoverableDraft === null && this.controller !== null && this.controller.canEdit(); }
   private current(revision: number): boolean { return this.pageActive && this.active && this.requestRevision === revision; }
+  private editorConnectionChanged(): void {
+    this.editorGeneration++;
+    if (this.busyLabel === '正在读取课表预览…') { this.cancelPreview(); }
+    else { this.importRows = []; this.importChoices = []; this.importGeneration++; this.importWarnings = [];
+      this.controller?.setEditorPending(this.editorDirty || this.editingIndex >= 0);
+    }
+  }
   private resetEditor(): void {
+    this.editorGeneration++;
     this.editor = { date: this.anchorDate, title: '', start_time: '', end_time: '', location: '', teacher: '' };
     this.fieldErrors = { date: '', title: '', start_time: '', end_time: '', location: '', teacher: '' };
     this.editingIndex = -1; this.repeatWeeks = 1; this.editorDirty = false;
   }
   private syncPending(): void {
-    this.controller?.setEditorPending(this.editorDirty || this.editingIndex >= 0 || this.importEntries.length > 0);
+    this.controller?.setEditorPending(this.editorDirty || this.editingIndex >= 0 || this.importRows.length > 0);
     this.stageDraft();
   }
   private updateEditor(field: string, value: string): void {
@@ -269,17 +285,20 @@ export struct TimetablePage {
     else if (field === 'location') { next.location = value; }
     else if (field === 'teacher') { next.teacher = value; }
     this.editor = next; this.editorDirty = true; this.message = '';
-    this.fieldErrors = { date: '', title: '', start_time: '', end_time: '', location: '', teacher: '' };
+    if (this.fieldErrors.title.length + this.fieldErrors.date.length + this.fieldErrors.start_time.length +
+      this.fieldErrors.end_time.length + this.fieldErrors.location.length + this.fieldErrors.teacher.length > 0) {
+      this.fieldErrors = validateTimetableEntry(next).errors;
+    }
     this.syncPending();
   }
   private setRepeatWeeks(weeks: number): void {
     if (this.loading || !this.editable() || this.editingIndex >= 0) { return; }
     this.repeatWeeks = weeks; this.editorDirty = true; this.syncPending();
   }
-  private addEntry(): void {
+  private addEntry(keepOpen: boolean = false): void {
     if (this.loading || !this.editable()) { return; }
     const checked = validateTimetableEntry(this.editor); this.fieldErrors = checked.errors;
-    if (!checked.valid) { this.message = '请先修正课程表单中标出的内容。'; return; }
+    if (!checked.valid) { this.message = '请先修正课程表单中标出的内容。'; this.focusRevision++; this.scroller.scrollEdge(Edge.Top); return; }
     const additions = expandWeeklyEntry(checked.entry, this.editingIndex < 0 ? this.repeatWeeks : 1);
     if (!additions.valid) { this.message = additions.errors[0].message; return; }
     const next = this.entries.map((entry: TimetableEntry) => normalizeTimetableEntry(entry));
@@ -288,9 +307,25 @@ export struct TimetablePage {
       next[this.editingIndex] = checked.entry;
     } else { next.push(...additions.entries); }
     if (!this.controller?.replaceDraft(next)) { return; }
-    this.resetEditor(); this.editorOpen = false; this.syncPending();
+    const edited = this.editingIndex >= 0;
+    if (!edited) { this.lastEntry = normalizeTimetableEntry(checked.entry); this.lastRepeatWeeks = this.repeatWeeks; }
+    this.resetEditor(); this.editorOpen = keepOpen && !edited; this.syncPending();
     this.notice = '课程已加入本页草稿，尚未保存到账号。'; this.message = '';
   }
+  private reuseLastEntry(): void {
+    if (this.loading || !this.editable() || this.lastEntry === null || this.editingIndex >= 0) { return; }
+    if (this.editorDirty) { this.message = '请先加入或取消当前输入，再沿用上一门信息。'; return; }
+    this.editorGeneration++; this.editor = normalizeTimetableEntry(this.lastEntry);
+    this.repeatWeeks = this.lastRepeatWeeks; this.editorDirty = true; this.editorOpen = true;
+    this.fieldErrors = { date: '', title: '', start_time: '', end_time: '', location: '', teacher: '' };
+    this.notice = '已复制到新表单，请核对日期、时间与周次；尚未加入课表。';
+    this.message = ''; this.syncPending();
+  }
+  private changeImportChoices(choices: ImportRowChoice[]): void {
+    if (this.loading || !this.editable()) { return; }
+    this.importChoices = choices; this.message = '';
+  }
+
   private newEntry(): void {
     if (this.loading || !this.editable() || this.editorDirty || this.editingIndex >= 0) { return; }
     this.resetEditor(); this.source = 'manual'; this.editorOpen = true; this.message = ''; this.stageDraft();
@@ -298,7 +333,9 @@ export struct TimetablePage {
   private editEntry(index: number): void {
     if (this.loading || !this.editable() || index < 0 || index >= this.entries.length) { return; }
     if (this.editorDirty || this.editingIndex >= 0) { this.message = '请先加入或取消当前编辑，再编辑另一条课程。'; return; }
+    if (this.importRows.length > 0) { this.message = '请先加入所选课程或明确放弃本次预览，再编辑已有课程。'; return; }
     this.cancelPreview(); this.source = 'manual'; this.editor = normalizeTimetableEntry(this.entries[index]);
+    this.editorGeneration++;
     this.editingIndex = index; this.repeatWeeks = 1; this.editorDirty = false; this.editorOpen = true;
     this.reviewOpen = false; this.message = ''; this.syncPending(); this.scroller.scrollEdge(Edge.Top);
   }
@@ -320,52 +357,58 @@ export struct TimetablePage {
   private selectSource(source: string): void {
     if (this.loading || !this.editable() || source === this.source) { return; }
     if (this.editorDirty || this.editingIndex >= 0) { this.message = '请先加入或取消当前表单，再切换录入方式。'; return; }
+    if (this.importRows.length > 0) { this.message = '请先加入所选课程或明确放弃本次预览，再切换录入方式。'; return; }
     this.cancelPreview(); this.source = source; this.message = '';
   }
   private updateScheduleUrl(value: string): void {
     if (this.loading || !this.editable()) { return; }
-    this.requestRevision++; this.scheduleUrl = value; this.importEntries = []; this.importWarnings = []; this.importPage = 0;
+    this.requestRevision++; this.scheduleUrl = value; this.importRows = []; this.importChoices = []; this.importGeneration++; this.importWarnings = [];
     this.message = ''; this.syncPending();
   }
   private cancelPreview(): void {
-    this.requestRevision++; this.previewBusy = false; this.importEntries = []; this.importWarnings = []; this.importPage = 0;
+    this.requestRevision++; this.previewBusy = false; this.importRows = []; this.importChoices = []; this.importGeneration++; this.importWarnings = [];
     this.loading = ['loading', 'saving', 'checking'].includes(this.view.phase); this.busyLabel = ''; this.syncPending();
   }
   private async previewImport(): Promise<void> {
     if (this.loading || !this.editable() || !this.active || this.source !== 'subscription') { return; }
     const url = this.scheduleUrl.trim();
     if (url.length === 0 || url.length > 2048) { this.message = '请粘贴完整的 HDUHelp 课表订阅链接（不超过 2048 字符）。'; return; }
-    const revision = ++this.requestRevision; this.previewBusy = true; this.loading = true;
-    this.busyLabel = '正在读取课表预览…'; this.message = ''; this.importEntries = []; this.importWarnings = [];
+    const revision = ++this.requestRevision; const baseUrl = this.baseUrl; const token = this.token; this.previewBusy = true; this.loading = true;
+    this.busyLabel = '正在读取课表预览…'; this.message = ''; this.importRows = []; this.importChoices = []; this.importGeneration++; this.importWarnings = [];
     try {
-      const result = await new CampusFlowApi(this.baseUrl, this.token).previewSubscription(url);
-      if (!this.current(revision) || this.scheduleUrl.trim() !== url || this.source !== 'subscription') { return; }
-      const checked = parseTimetablePreview(JSON.stringify(result));
-      if (!checked.valid) { this.message = checked.errors[0].message; return; }
-      this.importEntries = checked.entries; this.importWarnings = checked.warnings; this.importPage = 0; this.syncPending();
+      const result = await new CampusFlowApi(baseUrl, token).previewSubscription(url);
+      if (!this.current(revision) || this.baseUrl !== baseUrl || this.token !== token || this.scheduleUrl.trim() !== url || this.source !== 'subscription') { return; }
+      const checked = parseImportReview(JSON.stringify(result));
+      if (!checked.valid) { this.message = checked.message; return; }
+      this.importRows = checked.rows; this.importChoices = []; this.importGeneration++; this.importWarnings = checked.sourceWarnings; this.syncPending();
       this.notice = '候选课程尚未加入草稿。核对后可加入；不会保存订阅链接。';
-    } catch {
-      if (this.current(revision)) { this.message = '预览读取失败，请检查连接或链接有效性；现有课表草稿未改动。'; }
+    } catch (error) {
+      if (this.current(revision) && this.baseUrl === baseUrl && this.token === token) {
+        this.message = error instanceof CampusFlowRequestError && error.code.startsWith('IMPORT_') ? error.message
+          : '预览读取失败，请检查连接或链接有效性；现有课表草稿未改动。';
+      }
     } finally {
       if (this.current(revision)) { this.previewBusy = false; this.loading = false; this.busyLabel = ''; }
     }
   }
   private acceptImport(): void {
-    if (this.loading || !this.editable() || this.importEntries.length === 0) { return; }
-    const checked = validateTimetableList(this.entries.concat(this.importEntries));
-    if (!checked.valid) { this.message = `无法合并：${checked.errors[0].message} 原草稿和候选均保留。`; return; }
+    if (this.loading || !this.editable() || this.importRows.length === 0) { return; }
+    const checked = assembleSelectedImport(this.importRows, this.entries, this.importChoices);
+    if (!checked.valid) { this.message = `尚未加入：${checked.message} 原草稿与预览均保留。`; return; }
     if (!this.controller?.replaceDraft(checked.entries)) { return; }
-    this.sourceWarnings = this.sourceWarnings.concat(this.importWarnings.filter((issue: TimetableIssue) => issue.index < 0));
-    this.cancelPreview(); this.scheduleUrl = ''; this.editorOpen = false; this.notice = '候选已加入草稿，可逐条编辑后保存。'; this.message = '';
+    this.sourceWarnings = this.sourceWarnings.concat(this.importWarnings, checked.warnings.filter((issue: TimetableIssue) => issue.index < 0));
+
+    const count = checked.addedEntries.length;
+    this.cancelPreview(); this.scheduleUrl = ''; this.editorOpen = false;
+    this.notice = `已将所选 ${count} 次课程加入草稿，重复 ${checked.duplicateCount} 条、明确排除 ${checked.excludedCount} 条；尚未保存到账号。`;
+    this.message = ''; this.syncPending();
   }
+
   private draftRows(): CourseRow[] {
     return this.entries.slice(this.pageIndex * 10, this.pageIndex * 10 + 10)
       .map((entry: TimetableEntry, index: number): CourseRow => ({ index: this.pageIndex * 10 + index, entry: entry }));
   }
-  private previewRows(): CourseRow[] {
-    return this.importEntries.slice(this.importPage * 10, this.importPage * 10 + 10)
-      .map((entry: TimetableEntry, index: number): CourseRow => ({ index: this.importPage * 10 + index, entry: entry }));
-  }
+
   private courseRange(): string {
     if (this.entries.length === 0) { return '尚未添加课程'; }
     const dates = this.entries.map((entry: TimetableEntry) => entry.date).sort();
@@ -373,14 +416,14 @@ export struct TimetablePage {
   }
   private requestClear(): void {
     if (this.loading || !this.editable()) { return; }
-    if (this.editorDirty || this.editingIndex >= 0 || this.importEntries.length > 0) {
+    if (this.editorDirty || this.editingIndex >= 0 || this.importRows.length > 0) {
       this.message = '请先处理表单或导入候选，再清空草稿。'; return;
     }
     this.clearRequested = true;
   }
   private clearDraft(): void {
     if (!this.clearRequested || this.loading || !this.editable()) { return; }
-    if (this.editorDirty || this.editingIndex >= 0 || this.importEntries.length > 0) {
+    if (this.editorDirty || this.editingIndex >= 0 || this.importRows.length > 0) {
       this.message = '表单或导入候选已变化，请先处理后再清空草稿。'; return;
     }
     if (this.controller?.replaceDraft([])) {
@@ -390,7 +433,7 @@ export struct TimetablePage {
   }
   private reviewSave(): void {
     if (this.loading || !this.editable() || this.view.phase === 'stale') { return; }
-    if (this.editorDirty || this.editingIndex >= 0 || this.importEntries.length > 0) {
+    if (this.editorDirty || this.editingIndex >= 0 || this.importRows.length > 0) {
       this.message = '请先加入、保存或取消表单及导入候选，再核对整份课表。'; return;
     }
     if (!this.view.dirty) { this.message = '课表没有未保存的修改。'; return; }
@@ -410,7 +453,7 @@ export struct TimetablePage {
     const revision = this.requestRevision;
     const loaded = await this.controller?.refresh(true);
     if (loaded && this.current(revision)) {
-      this.resetEditor(); this.editorOpen = false; this.importEntries = []; this.importWarnings = [];
+      this.resetEditor(); this.editorOpen = false; this.importRows = []; this.importChoices = []; this.importGeneration++; this.importWarnings = [];
       this.scheduleUrl = ''; this.sourceWarnings = []; this.reviewOpen = false; this.reloadRequested = false;
       this.message = ''; this.notice = ''; this.syncPending(); await this.discardStoredDraft();
     }
@@ -473,86 +516,33 @@ export struct TimetablePage {
   }
 
   @Builder
-  private Pagination(preview: boolean) {
+  private Pagination() {
     Row({ space: 8 }) {
       Button('上一页').layoutWeight(1).constraintSize({ minHeight: 48 }).fontSize(AppTheme.metaSize)
         .fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft)
-        .enabled((preview ? this.importPage : this.pageIndex) > 0)
-        .onClick(() => { if (preview) { this.importPage--; } else { this.pageIndex--; } })
-      Text(`${(preview ? this.importPage : this.pageIndex) + 1} / ${Math.max(1, Math.ceil((preview ? this.importEntries.length : this.entries.length) / 10))}`)
+        .enabled(this.pageIndex > 0)
+        .onClick(() => { this.pageIndex--; })
+      Text(`${this.pageIndex + 1} / ${Math.max(1, Math.ceil(this.entries.length / 10))}`)
         .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet)
       Button('下一页').layoutWeight(1).constraintSize({ minHeight: 48 }).fontSize(AppTheme.metaSize)
         .fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft)
-        .enabled(((preview ? this.importPage : this.pageIndex) + 1) * 10 <
-          (preview ? this.importEntries.length : this.entries.length))
-        .onClick(() => { if (preview) { this.importPage++; } else { this.pageIndex++; } })
+        .enabled((this.pageIndex + 1) * 10 <
+          this.entries.length)
+        .onClick(() => { this.pageIndex++; })
     }.width('100%')
   }
 
   @Builder
   private Editor() {
-    Column({ space: 16 }) {
-      Text(this.editingIndex >= 0 ? '修改这一次课程' : '添加一门课程')
-        .fontSize(AppTheme.sectionTitle).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink).width('100%')
-      this.FormField('课程名称 *', '例如：操作系统', this.editor.title, this.fieldErrors.title,
-        (value: string) => this.updateEditor('title', value))
-      this.FormField(this.editingIndex >= 0 ? '上课日期 *' : '第一次上课日期 *', 'YYYY-MM-DD，例如 2026-10-19',
-        this.editor.date, this.fieldErrors.date, (value: string) => this.updateEditor('date', value))
-      Row({ space: 12 }) {
-        Column() {
-          this.FormField('开始时间 *', '08:05', this.editor.start_time, this.fieldErrors.start_time,
-            (value: string) => this.updateEditor('start_time', value))
-        }.layoutWeight(1)
-        Column() {
-          this.FormField('结束时间 *', '09:40', this.editor.end_time, this.fieldErrors.end_time,
-            (value: string) => this.updateEditor('end_time', value))
-        }.layoutWeight(1)
-      }.width('100%').alignItems(VerticalAlign.Top)
-      Text('使用北京时间、24 小时制；每条课程对应一个具体日期，当天结束时间应晚于开始时间。')
-        .fontSize(AppTheme.metaSize).lineHeight(19).fontColor(AppTheme.quiet).width('100%')
-      Button(this.optionalFieldsExpanded ? '收起补充信息' : '地点、教师与重复周次（选填）')
-        .width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
-        .fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft)
-        .onClick(() => this.optionalFieldsExpanded = !this.optionalFieldsExpanded)
-      if (this.optionalFieldsExpanded || this.fieldErrors.location.length > 0 || this.fieldErrors.teacher.length > 0) {
-      this.FormField('上课地点（选填）', '例如：第7教研楼北406', this.editor.location, this.fieldErrors.location,
-        (value: string) => this.updateEditor('location', value))
-      this.FormField('任课教师（选填）', '老师姓名', this.editor.teacher, this.fieldErrors.teacher,
-        (value: string) => this.updateEditor('teacher', value))
-      if (this.editingIndex < 0) {
-        Text('每周同一天，连续添加').fontSize(AppTheme.bodySize).fontWeight(FontWeight.Medium).fontColor(AppTheme.ink).width('100%')
-        Row({ space: 6 }) {
-          ForEach([1, 4, 8, 16], (weeks: number) => {
-            Button(weeks === 1 ? '仅一次' : `${weeks} 周`).layoutWeight(1).constraintSize({ minHeight: 48 })
-              .fontSize(AppTheme.metaSize).fontColor(this.repeatWeeks === weeks ? AppTheme.onAccent : AppTheme.quiet)
-              .backgroundColor(this.repeatWeeks === weeks ? AppTheme.accent : AppTheme.field)
-              .borderRadius(AppTheme.controlRadius).enabled(!this.loading && this.editable())
-              .accessibilityText(`${weeks === 1 ? '仅添加一次' : `连续 ${weeks} 周`}${this.repeatWeeks === weeks ? '，已选择' : ''}`)
-              .onClick(() => this.setRepeatWeeks(weeks))
-          }, (weeks: number) => weeks.toString())
-        }.width('100%')
-        Text(this.repeatWeeks === 1 ? '默认仅添加一次，不会自动生成整学期。' :
-          `将生成 ${this.repeatWeeks} 个具体日期；单双周、节假日请在课表中逐条调整。`)
-          .fontSize(AppTheme.metaSize).lineHeight(19).fontColor(AppTheme.quiet).width('100%')
-      } else {
-        Text('此次只修改选中的日期，不会改变其他周的同名课程。')
-          .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
-      }
-      } else {
-        Text(this.repeatWeeks === 1 ? '先录入这一次即可；需要时再补充地点或连续周次。' : `已设置连续 ${this.repeatWeeks} 周，可展开调整。`)
-          .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
-      }
-      Button(this.editingIndex >= 0 ? '保存这次修改' : '加入课表草稿').width('100%')
-        .constraintSize({ minHeight: 50 }).fontSize(AppTheme.bodySize).fontColor(AppTheme.onAccent)
-        .backgroundColor(AppTheme.accent).borderRadius(AppTheme.controlRadius)
-        .enabled(!this.loading && this.editable()).onClick(() => this.addEntry())
-      if (this.editorDirty || this.editingIndex >= 0 || this.entries.length > 0) {
-        Button(this.editorDirty ? '放弃本次表单修改' : '收起表单').width('100%').constraintSize({ minHeight: 48 })
-          .fontSize(AppTheme.bodySize).fontColor(AppTheme.quiet).backgroundColor(Color.Transparent)
-          .enabled(!this.loading && this.editable()).onClick(() => this.cancelEdit())
-      }
-    }.width('100%').alignItems(HorizontalAlign.Start).padding(AppTheme.cardInset)
-      .backgroundColor(AppTheme.surface).borderRadius(AppTheme.cardRadius)
+    TimetableEntryEditor({ entry: this.editor, errors: this.fieldErrors, repeatWeeks: this.repeatWeeks,
+      editing: this.editingIndex >= 0, busy: this.loading || !this.editable(), active: this.pageActive && this.active,
+      anchorDate: this.anchorDate, idPrefix: 'timetable-main',
+      contextKey: `timetable-${this.boundLease?.generation ?? 0}-${this.editorGeneration}-${this.editingIndex}`,
+      focusRevision: this.focusRevision, canReuse: this.lastEntry !== null && this.editingIndex < 0,
+      onFieldChange: (field: string, value: string) => this.updateEditor(field, value),
+      onWeeksChange: (weeks: number) => this.setRepeatWeeks(weeks),
+      onSave: (keepOpen: boolean) => this.addEntry(keepOpen), onCancel: () => this.cancelEdit(),
+      onReuse: () => this.reuseLastEntry() })
   }
 
   @Builder
@@ -567,25 +557,13 @@ export struct TimetablePage {
       Button(this.loading && this.busyLabel === '正在读取课表预览…' ? '正在读取…' : '读取预览，不保存')
         .width('100%').constraintSize({ minHeight: 50 }).fontSize(AppTheme.bodySize).fontColor(AppTheme.onAccent)
         .backgroundColor(AppTheme.accent).borderRadius(AppTheme.controlRadius)
-        .enabled(!this.loading && this.editable() && this.importEntries.length === 0).onClick(() => this.previewImport())
-      if (this.importEntries.length > 0) {
-        Text(`预览共 ${this.importEntries.length} 次课程`).fontSize(AppTheme.bodySize).fontWeight(FontWeight.Medium)
-          .fontColor(AppTheme.ink).width('100%')
-        Text('下方为本次读取结果。加入草稿后，可逐条修改、移除，再统一确认。')
-          .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
-        ForEach(this.importWarnings, (warning: TimetableIssue) => {
-          Text(warning.message).fontSize(AppTheme.metaSize).fontColor(AppTheme.warning).width('100%')
-        }, (_warning: TimetableIssue, index: number) => `import-warning-${this.requestRevision}-${index}`)
-        ForEach(this.previewRows(), (row: CourseRow) => {
-          this.CourseCard(row, false)
-        }, (row: CourseRow) => `preview-${this.requestRevision}-${row.index}`)
-        if (this.importEntries.length > 10) { this.Pagination(true) }
-        Button('将这些课程加入草稿').width('100%').constraintSize({ minHeight: 50 })
-          .fontSize(AppTheme.bodySize).fontColor(AppTheme.onAccent).backgroundColor(AppTheme.accent)
-          .enabled(!this.loading && this.editable()).onClick(() => this.acceptImport())
-        Button('放弃本次预览').width('100%').constraintSize({ minHeight: 48 })
-          .fontSize(AppTheme.bodySize).fontColor(AppTheme.quiet).backgroundColor(Color.Transparent)
-          .enabled(!this.loading && this.editable()).onClick(() => this.cancelPreview())
+        .enabled(!this.loading && this.editable() && this.importRows.length === 0).onClick(() => this.previewImport())
+      if (this.importRows.length > 0) {
+        TimetableImportPanel({ rows: this.importRows, currentDraft: this.entries, choices: this.importChoices,
+          warnings: this.importWarnings, busy: this.loading || !this.editable(), active: this.pageActive && this.active,
+          anchorDate: this.anchorDate, contextKey: `timetable-${this.boundLease?.generation ?? 0}-${this.importGeneration}`,
+          onChoicesChanged: (choices: ImportRowChoice[]) => this.changeImportChoices(choices),
+          onAccept: () => this.acceptImport(), onCancel: () => this.cancelPreview() })
       }
     }.width('100%').alignItems(HorizontalAlign.Start).padding(AppTheme.cardInset)
       .backgroundColor(AppTheme.surface).borderRadius(AppTheme.cardRadius)
@@ -634,7 +612,7 @@ export struct TimetablePage {
       ForEach(this.draftRows(), (row: CourseRow) => {
         this.CourseCard(row, !this.reviewOpen)
       }, (row: CourseRow) => `draft-${this.draftRevision}-${row.index}-${this.reviewOpen}`)
-      if (this.entries.length > 10) { this.Pagination(false) }
+      if (this.entries.length > 10) { this.Pagination() }
     }.width('100%').alignItems(HorizontalAlign.Start)
   }
 
@@ -642,7 +620,7 @@ export struct TimetablePage {
   private DraftRecovery() {
     if (this.recoverableDraft !== null) {
       FeedbackPanel({ kind: 'info', title: '有一份本机课表草稿',
-        message: '可恢复未填完的表单与原课表版本。恢复不会自动保存到账号；待核对的保存会先查询原操作。',
+        message: '可恢复表单与原课表版本；未加入的订阅预览与逐行选择未存入本机，需重新读取。待核对的保存先查询原操作。',
         actionLabel: '恢复草稿', onAction: () => this.restoreStoredDraft() })
       if ((this.recoverableDraft.payload as TimetableDraft).submission === null) {
         Button('舍弃这份本机草稿').width('100%').constraintSize({ minHeight: 48 }).fontColor(AppTheme.quiet)

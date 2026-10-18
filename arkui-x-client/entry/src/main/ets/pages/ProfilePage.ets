@@ -29,6 +29,9 @@ export struct ProfilePage {
   onTimetableChanged: () => void = () => {};
   onOpenPlan: () => void = () => {};
   onOpenTimetable: () => void = () => {};
+  onOpenHistory: () => void = () => {};
+  onInnerNavigationChanged: (active: boolean) => void = () => {};
+  @Watch('backRequested') @Prop backRevision: number = 0;
   @Prop reminderState: ReminderState = { phase: 'disabled', message: '本机系统提醒尚未启用。', scheduled: 0, skipped: 0, limited: false, enabled: false };
   @Prop reminderCleanupBusy: boolean = false;
   onEnableReminders: () => void = () => {};
@@ -49,7 +52,8 @@ export struct ProfilePage {
     configured: false, provider: null, source_host: null, event_count: 0, last_synced_at: null
   };
   @State private message: string = '';
-  @State private expandedGroups: string[] = ['account'];
+  @State private section: string = '';
+  private pageScroller: Scroller = new Scroller();
   @State private profileMessage: string = '';
   @State private modelMessage: string = '';
   @State private profileError: boolean = false;
@@ -137,8 +141,41 @@ export struct ProfilePage {
     if (this.user.role === 'admin') { this.loadAdminUsers(); }
   }
   private toggleGroup(group: string): void {
-    this.expandedGroups = this.expandedGroups.includes(group) ?
-      this.expandedGroups.filter((item: string) => item !== group) : this.expandedGroups.concat([group]);
+    const next = group === 'preferences' ? 'data' : group;
+    if (!['account', 'learning', 'model', 'reminders', 'connections', 'data', 'admin'].includes(next) ||
+      next === 'admin' && this.user.role !== 'admin') { return; }
+    this.section = this.section === next ? '' : next;
+    this.onInnerNavigationChanged(this.section.length > 0 || this.showHduHelpData);
+    this.pageScroller.scrollTo({ xOffset: 0, yOffset: 0, animation: false });
+  }
+  private backRequested(): void { if (this.active && this.pageActive) { this.sectionBack(); } }
+  private sectionBack(): void {
+    if (this.showHduHelpData) { this.closeHduHelpData(); return; }
+    this.section = this.section === 'connections' ? 'account' : this.section === 'admin' ? 'data' : '';
+    this.onInnerNavigationChanged(this.section.length > 0);
+    this.pageScroller.scrollTo({ xOffset: 0, yOffset: 0, animation: false });
+  }
+  private closeHduHelpData(): void {
+    this.dataRevision++; this.hduHelpDataLoading = false; this.showHduHelpData = false;
+    this.onInnerNavigationChanged(this.section.length > 0);
+  }
+  private sectionTitle(): string {
+    if (this.section === 'account') { return '账号与校园'; }
+    if (this.section === 'learning') { return '学习偏好'; }
+    if (this.section === 'model') { return '模型连接'; }
+    if (this.section === 'reminders') { return '语音与提醒'; }
+    if (this.section === 'connections') { return '校园数据连接'; }
+    if (this.section === 'admin') { return '用户管理'; }
+    return '历史与数据';
+  }
+  private accountDirty(): boolean {
+    const saved = this.savedProfile ?? this.user;
+    return this.displayName !== saved.display_name || this.school !== (saved.school ?? '') ||
+      this.campus !== (saved.campus ?? '') || this.semester !== (saved.semester ?? '');
+  }
+  private sectionVisible(group: string): boolean {
+    return this.section.length === 0 && !['connections', 'admin'].includes(group) ||
+      this.section === 'account' && group === 'connections' || this.section === 'data' && group === 'admin';
   }
   private reminderBusy(): boolean {
     return this.reminderCleanupBusy || ['checking', 'requesting', 'clearing'].includes(this.reminderState.phase);
@@ -206,6 +243,7 @@ export struct ProfilePage {
     const request = ++this.dataRevision;
     this.getUIContext().animateTo({ duration: AppTheme.motion(200), curve: Curve.EaseOut }, () => {
       this.showHduHelpData = true;
+      this.onInnerNavigationChanged(true);
     });
     this.hduHelpDataLoading = true;
     this.hduHelpDataError = '';
@@ -357,17 +395,21 @@ export struct ProfilePage {
     if (modelOnly && this.newApiKey.trim().length === 0) { this.modelMessage = '请先填写新的 API Key。'; this.modelError = true; return; }
     const revision = this.pageRevision;
     const saved = this.savedProfile ?? this.user;
+    const submittedKey = this.newApiKey;
     this.settingsBusy = true;
     if (modelOnly) { this.modelMessage = ''; } else { this.profileMessage = ''; }
     try {
       const updated = await new CampusFlowApi(this.baseUrl, this.token).updateSettings(
         modelOnly ? saved.display_name : this.displayName, modelOnly ? saved.school ?? '' : this.school,
         modelOnly ? saved.campus ?? '' : this.campus, modelOnly ? saved.semester ?? '' : this.semester,
-        modelOnly ? this.newApiKey : ''
+        modelOnly ? submittedKey : ''
       );
       if (!this.current(revision)) { return; }
       this.savedProfile = updated;
-      if (modelOnly) { this.newApiKey = ''; this.modelMessage = '模型配置已保存。'; this.modelError = false; }
+      if (modelOnly) {
+        if (this.newApiKey === submittedKey) { this.newApiKey = ''; }
+        this.modelMessage = this.newApiKey.length > 0 ? '本次模型配置已保存；后来填写的新密钥仍未提交。' : '模型配置已保存。'; this.modelError = false;
+      }
       else { this.profileMessage = '账号与校园资料已保存；课程内容未改变。'; this.profileError = false; }
       this.onUserChanged(updated);
     } catch (error) {
@@ -400,6 +442,7 @@ export struct ProfilePage {
       if (error.statusCode === 401 || error.statusCode === 403) {
         return '当前登录或权限已失效，请重新登录后核对课表。';
       }
+      if (error.code === 'IMPORT_REVIEW_REQUIRED') { return '订阅含有需要逐条核对的内容，当前课表未被替换。请到课表维护预览并处理这些课程。'; }
       if (error.statusCode === 422) {
         return '订阅未通过服务校验，请检查链接是否有效，或稍后重试。';
       }
@@ -425,7 +468,7 @@ export struct ProfilePage {
       this.subscription = result.status;
       this.subscriptionLoaded = true;
       this.scheduleUrl = '';
-      this.message = `已导入 ${result.imported_count} 节课程。`;
+      this.message = `已导入 ${result.imported_count} 节课程。${(result.warnings ?? []).join(' ')}`;
       this.timetableUpdated = true;
       this.onTimetableChanged();
     } catch (error) {
@@ -453,7 +496,7 @@ export struct ProfilePage {
       if (!this.pageActive || revision !== this.subscriptionRevision) { return; }
       this.subscription = result.status;
       this.subscriptionLoaded = true;
-      this.message = `课表已同步，共 ${result.imported_count} 节。`;
+      this.message = `课表已同步，共 ${result.imported_count} 节。${(result.warnings ?? []).join(' ')}`;
       this.timetableUpdated = true;
       this.onTimetableChanged();
     } catch (error) {
@@ -508,7 +551,7 @@ export struct ProfilePage {
           AppIcon({ name: 'back', iconSize: 22, color: AppTheme.accent })
         }.width(48).constraintSize({ minHeight: 48 })
           .backgroundColor(AppTheme.surface).borderRadius(22)
-          .onClick(() => this.showHduHelpData = false)
+          .onClick(() => this.closeHduHelpData())
         Column({ space: 3 }) {
           Text('我的校园档案').fontSize(23).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
           Text('由 HDUHelp 同步，助手可按需调用').fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary)
@@ -593,23 +636,24 @@ export struct ProfilePage {
 
   @Builder
   private groupHeader(group: string, title: string, summary: string) {
-    Button({ type: ButtonType.Normal }) {
-      Row({ space: 12 }) {
-        Column({ space: 4 }) {
-          Text(title).fontSize(AppTheme.sectionTitle).fontWeight(FontWeight.Medium).fontColor(AppTheme.ink).width('100%')
-          Text(summary).fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
-        }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-        Text(this.expandedGroups.includes(group) ? '收起' : '展开').fontSize(AppTheme.metaSize).fontColor(AppTheme.accent)
-      }.width('100%')
-    }.width('100%').constraintSize({ minHeight: 64 }).padding(AppTheme.cardInset)
-      .backgroundColor(AppTheme.surface).borderRadius(AppTheme.cardRadius)
-      .accessibilityText(`${title}，${this.expandedGroups.includes(group) ? '已展开' : '已收起'}`)
-      .onClick(() => this.toggleGroup(group))
+    if (this.sectionVisible(group)) {
+      Button({ type: ButtonType.Normal }) {
+        Row({ space: 12 }) {
+          Column({ space: 5 }) {
+            Text(title).fontSize(AppTheme.bodySize).fontWeight(FontWeight.Medium).fontColor(AppTheme.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
+            Text(summary).fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+          }.alignItems(HorizontalAlign.Start).layoutWeight(1)
+          AppIcon({ name: 'chevron', iconSize: 18, color: AppTheme.quiet })
+        }.width('100%')
+      }.width('100%').constraintSize({ minHeight: 76 }).padding(AppTheme.cardInset)
+        .backgroundColor(AppTheme.surface).borderRadius(AppTheme.cardRadius)
+        .accessibilityText(`打开${title}，${summary}`).onClick(() => this.toggleGroup(group))
+    }
   }
 
   build() {
     Stack() {
-      Scroll() {
+      Scroll(this.pageScroller) {
         Column({ space: 16 }) {
           Row({ space: 12 }) {
             Text(this.user.display_name.slice(0, 1)).fontSize(20).fontWeight(FontWeight.Bold).fontColor(AppTheme.accent)
@@ -619,13 +663,21 @@ export struct ProfilePage {
               Text(this.user.email).fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%').wordBreak(WordBreak.BREAK_ALL)
             }.alignItems(HorizontalAlign.Start).layoutWeight(1)
           }.width('100%').padding({ top: 8, bottom: 8 })
+          if (this.section.length > 0) {
+            Row({ space: 10 }) {
+              Button('返回').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize).fontColor(AppTheme.accent)
+                .backgroundColor(Color.Transparent).onClick(() => this.sectionBack())
+              Text(this.sectionTitle()).fontSize(AppTheme.sectionTitle).fontWeight(FontWeight.Medium).fontColor(AppTheme.ink).layoutWeight(1)
+            }.width('100%')
+          }
           if (this.settingsNeedsCheck) {
             FeedbackPanel({ kind: 'warning', title: '保存结果待核对', message: '输入草稿仍在。先读取服务端资料，再决定是否重新保存。',
               actionLabel: '核对已保存资料', busy: this.settingsBusy, onAction: () => this.checkSettings() })
           }
-          this.groupHeader('account', '账号与校园', '昵称、学校、校区和学期')
-          if (this.expandedGroups.includes('account')) {
+          this.groupHeader('account', '账号与校园', this.accountDirty() ? '有未保存修改 · 昵称、学校与数据连接' : '昵称、学校、校区与数据连接')
+          if (this.section === 'account') {
             Column({ space: 16 }) {
+              Text(this.accountDirty() ? '有未保存修改，返回仍保留本页输入。' : '当前输入与已保存资料一致。').fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
               this.field('昵称', this.displayName, (value) => this.displayName = value)
               this.field('学校', this.school, (value) => this.school = value)
               this.field('校区', this.campus, (value) => this.campus = value)
@@ -643,10 +695,15 @@ export struct ProfilePage {
                 .onClick(() => this.onOpenTimetable())
             }.width('100%').padding(AppTheme.cardInset).backgroundColor(AppTheme.surface).borderRadius(AppTheme.cardRadius)
           }
-          LearningPreferencesPanel({ baseUrl: this.baseUrl, token: this.token, userId: this.user.user_id, active: this.active && !this.showHduHelpData })
-          this.groupHeader('reminders', '本机系统提醒', this.reminderState.message)
-          if (this.expandedGroups.includes('reminders')) {
+          this.groupHeader('learning', '学习偏好', '单次时长、休息与每日安排目标')
+          LearningPreferencesPanel({ baseUrl: this.baseUrl, token: this.token, userId: this.user.user_id, active: this.active && this.section === 'learning' && !this.showHduHelpData })
+            .visibility(this.section === 'learning' ? Visibility.Visible : Visibility.None)
+          this.groupHeader('reminders', '语音与提醒', '语音使用方式与本机系统通知')
+          if (this.section === 'reminders') {
             Column({ space: 12 }) {
+              Text('语音在助手输入框中开启。首次使用会请求麦克风及识别所需权限；识别文字先核对，再由你发送。回答播报可随时停止。')
+                .fontSize(AppTheme.bodySize).fontColor(AppTheme.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
+              Text('识别和播报是否可用，以设备实际支持和权限状态为准。').fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
               Text('仅对已确认、设置了具体时间和提前分钟数的未完成任务安排提醒。锁屏只显示通用提示，不显示任务内容。')
                 .fontSize(AppTheme.bodySize).fontColor(AppTheme.quiet).width('100%')
               FeedbackPanel({ kind: this.reminderState.phase === 'error' ? 'error' : this.reminderBusy() ? 'loading' : 'info',
@@ -660,7 +717,7 @@ export struct ProfilePage {
               Text('系统接受不等于已送达；通知设置、省电和系统调度可能影响提醒。退出账号会尝试清理本机提醒，后台切换不会取消。')
                 .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
               if (!this.reminderState.enabled) {
-                Button('启用本机提醒').width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
+                Button('请求通知权限并启用提醒').width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
                   .fontColor(AppTheme.onAccent).backgroundColor(AppTheme.accent).borderRadius(AppTheme.controlRadius)
                   .enabled(!this.reminderBusy()).onClick(() => this.onEnableReminders())
               }
@@ -672,9 +729,10 @@ export struct ProfilePage {
                 .enabled(!this.reminderBusy()).onClick(() => this.onDisableReminders())
             }.width('100%').padding(AppTheme.cardInset).backgroundColor(AppTheme.surface).borderRadius(AppTheme.cardRadius)
           }
-          this.groupHeader('model', '模型配置', `当前密钥 ${this.user.api_key_hint ?? '未配置'}`)
-          if (this.expandedGroups.includes('model')) {
+          this.groupHeader('model', '模型连接', this.newApiKey.length > 0 ? '有新密钥尚未保存' : `当前密钥 ${this.user.api_key_hint ?? '未配置'}`)
+          if (this.section === 'model') {
             Column({ space: 16 }) {
+              Text(this.newApiKey.length > 0 ? '新密钥尚未保存。' : '留空保留现有连接。').fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
               this.field('新的 DeepSeek API Key', this.newApiKey, (value) => this.newApiKey = value, true)
               Text('留空保留现有密钥。保存模型配置不会提交账号与校园的未保存草稿。')
                 .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
@@ -687,7 +745,7 @@ export struct ProfilePage {
             }.width('100%').padding(AppTheme.cardInset).backgroundColor(AppTheme.surface).borderRadius(AppTheme.cardRadius)
           }
           this.groupHeader('connections', '数据连接', 'HDUHelp 校园数据与课表订阅')
-          if (this.expandedGroups.includes('connections')) {
+          if (this.section === 'connections') {
         Column({ space: 12 }) {
           Row() {
             Column({ space: 4 }) {
@@ -793,9 +851,11 @@ export struct ProfilePage {
         }.width('100%').padding(AppTheme.cardInset).backgroundColor(AppTheme.surface).borderRadius(18)
 
           }
-          this.groupHeader('preferences', '应用偏好', '动态效果与当前服务地址')
-          if (this.expandedGroups.includes('preferences')) {
+          this.groupHeader('data', '历史与数据', '会话历史、本机草稿与应用偏好')
+          if (this.section === 'data') {
             Column({ space: 16 }) {
+              Button('打开会话历史').width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
+                .fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft).onClick(() => this.onOpenHistory())
               Row({ space: 12 }) {
                 Column({ space: 4 }) {
                   Text('减少动态效果').fontSize(AppTheme.bodySize).fontColor(AppTheme.ink)
@@ -820,7 +880,7 @@ export struct ProfilePage {
             }.width('100%').padding(AppTheme.cardInset).backgroundColor(AppTheme.surface).borderRadius(AppTheme.cardRadius)
           }
           if (this.user.role === 'admin') { this.groupHeader('admin', '用户管理', '管理员可查看的账号摘要') }
-        if (this.user.role === 'admin' && this.expandedGroups.includes('admin')) {
+        if (this.user.role === 'admin' && this.section === 'admin') {
           Column({ space: 12 }) {
             Row() {
               Text('用户管理').fontSize(17).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
@@ -855,9 +915,11 @@ export struct ProfilePage {
           }.width('100%').padding(AppTheme.cardInset).backgroundColor(AppTheme.surface).borderRadius(18)
         }
 
+          if (this.section === 'data') {
           Button('退出登录').width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
             .fontColor(AppTheme.danger).backgroundColor(AppTheme.dangerSoft).borderRadius(AppTheme.controlRadius)
             .onClick(() => this.onLogout())
+          }
         }.width('100%').alignItems(HorizontalAlign.Start)
           .padding({ left: AppTheme.pageInset, right: AppTheme.pageInset, top: 16, bottom: 24 })
       }.width('100%').height('100%').backgroundColor(AppTheme.canvas)

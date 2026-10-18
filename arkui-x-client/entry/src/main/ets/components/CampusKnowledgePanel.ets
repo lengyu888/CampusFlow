@@ -12,6 +12,7 @@ export struct CampusKnowledgePanel {
   @Watch('scopeChanged') @Prop campusScope: string;
   @Watch('activityChanged') @Prop active: boolean = true;
   @State private query: string = '';
+  @State private pendingExample: string = '';
   @State private result: KnowledgeSearch | null = null;
   @State private source: KnowledgeHit | null = null;
   @State private loading: boolean = false;
@@ -26,9 +27,18 @@ export struct CampusKnowledgePanel {
   aboutToDisappear(): void { this.alive = false; this.invalidate(); }
   private invalidate(): void { this.revision++; this.sourceRevision++; this.loading = false; this.sourceLoading = ''; }
   private activityChanged(): void { if (!this.active) { this.invalidate(); } }
-  private scopeChanged(): void { this.invalidate(); this.query = ''; this.result = null; this.source = null; this.message = ''; this.sourceMessage = ''; }
+  private scopeChanged(): void { this.invalidate(); this.query = ''; this.pendingExample = ''; this.result = null; this.source = null; this.message = ''; this.sourceMessage = ''; }
   private current(revision: number, base: string, token: string, scope: string): boolean {
     return this.alive && this.active && revision === this.revision && base === this.baseUrl && token === this.token && scope === this.campusScope;
+  }
+  private chooseExample(value: string): void {
+    if (!this.alive || !this.active || this.loading) { return; }
+    if (this.query.trim().length > 0 && this.query !== value) { this.pendingExample = value; return; }
+    this.query = value; this.pendingExample = '';
+  }
+  private applyExample(): void {
+    if (!this.alive || !this.active || this.loading || this.pendingExample.length === 0) { return; }
+    this.query = this.pendingExample; this.pendingExample = '';
   }
   private async search(): Promise<void> {
     if (!this.alive || !this.active || this.loading) { return; }
@@ -68,6 +78,8 @@ export struct CampusKnowledgePanel {
     Column({ space: 8 }) {
       Text(`${hit.title} · ${hit.section}`).fontSize(AppTheme.bodySize).fontWeight(FontWeight.Medium).fontColor(AppTheme.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
       Text(`适用范围：${hit.school} · ${hit.campus}`).fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
+      Text(`整理核对日期：${hit.reviewed_at}`).fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
+      Text('原文发布日期：资料未提供；这份参考资料不代表实时状态。').fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
       Text('原文摘录').fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
       Text(hit.excerpt).fontSize(AppTheme.bodySize).fontColor(AppTheme.ink).width('100%').copyOption(CopyOptions.LocalDevice)
       Text(hit.summary).fontSize(AppTheme.bodySize).fontColor(AppTheme.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
@@ -82,6 +94,15 @@ export struct CampusKnowledgePanel {
       Text('校园资料 · 有出处再回答').fontSize(AppTheme.sectionTitle).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink).width('100%')
       Text('查阅精选官方办事与使用指南，不查询实时开放、座位、考试或个人数据；无需模型密钥。')
         .fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
+      ForEach(['校外怎么访问图书馆数据库', '校园网络资源使用说明', '如何申请信息公开', '杭电文库如何征集'], (example: string) => {
+        Button(example).width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.metaSize).fontColor(AppTheme.accent)
+          .backgroundColor(AppTheme.accentSoft).enabled(!this.loading && this.active).onClick(() => this.chooseExample(example))
+      }, (example: string) => example)
+      if (this.pendingExample.length > 0) {
+        Text('输入框已有问题，是否改用所选示例？').fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
+        Button('保留原问题').constraintSize({ minHeight: 48 }).onClick(() => this.pendingExample = '')
+        Button('使用所选示例').constraintSize({ minHeight: 48 }).onClick(() => this.applyExample())
+      }
       TextInput({ text: this.query, placeholder: '例如：校外怎么访问图书馆数据库' }).height(48).fontSize(AppTheme.bodySize)
         .backgroundColor(AppTheme.field).borderRadius(AppTheme.controlRadius).onChange((text: string) => this.query = text)
         .accessibilityText('输入校园资料问题，最多200字')

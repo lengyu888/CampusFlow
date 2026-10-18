@@ -9,6 +9,7 @@ import pytest
 import pytest_asyncio
 from cryptography.fernet import Fernet
 from httpx import ASGITransport, AsyncClient
+from schedule_fixtures import preview_from_entries
 
 from campusflow_agent.accounts import AccountStore
 from campusflow_agent.api import create_app
@@ -60,9 +61,8 @@ class PreviewFetcher:
         validate_subscription_url(url)
         if self.error is not None:
             raise self.error
-        return ScheduleSubscriptionPreview(
-            calendar_name="测试预览",
-            event_count=2,
+        return preview_from_entries(
+            name="测试预览",
             entries=[COURSE, {**COURSE, "date": "2026-10-20", "title": "随后删除的课程"}],
             warnings=["合成预览提示，用于确认提示不被接口丢弃。"],
         )

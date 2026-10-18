@@ -14,12 +14,13 @@ import pytest
 import pytest_asyncio
 from cryptography.fernet import Fernet
 from httpx import ASGITransport, AsyncClient
+from schedule_fixtures import preview_from_entries
 
 from campusflow_agent.accounts import AccountStore
 from campusflow_agent.api import create_app
 from campusflow_agent.config import Settings
 from campusflow_agent.replanning import ReplanningService
-from campusflow_agent.schemas import ScheduleSubscriptionPreview, TimetableSaveRequest
+from campusflow_agent.schemas import TimetableSaveRequest
 from campusflow_agent.store import CampusStore
 from campusflow_agent.timetable_service import TimetableError, TimetableService
 
@@ -304,8 +305,8 @@ class Fetcher:
         self.started.set()
         if self.wait is not None:
             await self.wait.wait()
-        return ScheduleSubscriptionPreview(
-            calendar_name="测试导入", event_count=1, entries=[{**COURSE, "title": "订阅来源"}]
+        return preview_from_entries(
+            entries=[{**COURSE, "title": "订阅来源"}]
         )
 
 

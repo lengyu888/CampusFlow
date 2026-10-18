@@ -12,8 +12,8 @@ function component(name, api) {
   const controller = source.slice(0, boundary).replace(/^import[\s\S]*?;\r?\n/gm, '')
     .replace(/^@Component\r?\n/m, '').replace(/@(Prop|State)\s+|@(Watch|StorageLink)\('[^']+'\)\s*/g, '')
     .replace(`export struct ${name}`, `class ${name}`) + '\n}\n';
-  const Page = new Function('CampusFlowApi', 'CampusFlowRequestError', 'AppTheme', 'Curve',
-    stripTypeScriptTypes(controller) + `\nreturn ${name};`)(api, CampusFlowRequestError, { motion: n => n }, { EaseOut: 'ease' });
+  const Page = new Function('CampusFlowApi', 'CampusFlowRequestError', 'AppTheme', 'Curve', 'Scroller',
+    stripTypeScriptTypes(controller) + `\nreturn ${name};`)(api, CampusFlowRequestError, { motion: n => n }, { EaseOut: 'ease' }, class { scrollTo() {} });
   const page = new Page();
   page.baseUrl = 'http://fixture.invalid'; page.token = 'fixture-token';
   page.getUIContext = () => ({ animateTo: (_options, callback) => callback() });
@@ -146,4 +146,38 @@ test('local cleanup needs confirmation and cannot run twice while pending', asyn
   page.onClearLocalHistory = () => { count++; return response.promise; };
   await page.clearLocalHistory(); assert.equal(count, 0); page.confirmCleanup = true; const clearing = page.clearLocalHistory();
   await page.clearLocalHistory(); assert.equal(count, 1); response.resolve(); await clearing; assert.equal(page.confirmCleanup, false);
+});
+
+
+test('profile overview has five clear sections; campus connections and administration live below them',()=>{
+ const f=profileFixture();const p=f.page;
+ assert.equal(p.section,'');assert.deepEqual(['account','learning','model','reminders','data'].filter(x=>p.sectionVisible(x)),['account','learning','model','reminders','data']);
+ assert.equal(p.sectionVisible('connections'),false);assert.equal(p.sectionVisible('admin'),false);
+ p.toggleGroup('account');assert.equal(p.sectionVisible('connections'),true);p.toggleGroup('admin');assert.equal(p.section,'account','non-admin cannot enter management');
+});
+
+test('section back unwinds campus detail then connection then account, preserving all unsaved fields',async()=>{
+ const pending=deferred(),f=profileFixture({data:()=>pending.promise}),p=f.page,nav=[];p.onInnerNavigationChanged=v=>nav.push(v);
+ p.displayName='未保存昵称';p.newApiKey='SYNTHETIC_NEW';p.scheduleUrl='synthetic-url';
+ p.toggleGroup('account');p.toggleGroup('connections');const read=p.openHduHelpData();assert.equal(p.showHduHelpData,true);
+ p.sectionBack();assert.equal(p.section,'connections');assert.equal(p.showHduHelpData,false);
+ pending.resolve({status:{configured:true},sections:[{resource:'identity'}],suggested_prompts:[],sync_errors:{}});await read;assert.deepEqual(p.hduHelpSections,[],'closed overlay ignores late result');
+ p.sectionBack();assert.equal(p.section,'account');p.backRequested();assert.equal(p.section,'');assert.equal(nav.at(-1),false);
+ assert.deepEqual([p.displayName,p.newApiKey,p.scheduleUrl],['未保存昵称','SYNTHETIC_NEW','synthetic-url']);
+});
+
+test('unsaved status follows server receipt, and a later key draft is not cleared by an older successful save',async()=>{
+ const pending=deferred(),f=profileFixture({settings:()=>pending.promise}),p=f.page;
+ p.displayName='已保存昵称';p.school='已保存学校';p.campus='已保存校区';p.semester='已保存学期';assert.equal(p.accountDirty(),false);
+ p.displayName='后来输入';assert.equal(p.accountDirty(),true);p.newApiKey='SYNTHETIC_FIRST';const save=p.saveModel();p.newApiKey='SYNTHETIC_SECOND';
+ pending.resolve(user());await save;assert.equal(p.newApiKey,'SYNTHETIC_SECOND');assert.match(p.modelMessage,/后来填写/);assert.equal(p.accountDirty(),true);
+});
+
+test('internal navigation does not clear an unknown settings result or send another save',async()=>{
+ const f=profileFixture({settings:async()=>{throw new Error('timeout')}}),p=f.page;p.newApiKey='SYNTHETIC_KEY';await p.saveModel();
+ p.toggleGroup('account');p.sectionBack();p.toggleGroup('model');await p.saveModel();assert.equal(f.calls.length,1);assert.equal(p.settingsNeedsCheck,true);assert.equal(p.newApiKey,'SYNTHETIC_KEY');
+});
+
+test('hidden profile ignores back events while top-level entry remains intact',()=>{
+ const p=profileFixture().page;p.toggleGroup('learning');p.active=false;p.backRequested();assert.equal(p.section,'learning');p.active=true;p.backRequested();assert.equal(p.section,'');
 });

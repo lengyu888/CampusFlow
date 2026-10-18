@@ -3,6 +3,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
+from schedule_fixtures import preview_from_entries
 
 from campusflow_agent.accounts import AccountStore
 from campusflow_agent.agent import AgentReply
@@ -78,9 +79,8 @@ class FakeVisionService:
 class FakeScheduleSubscriptionService:
     async def fetch(self, url: str) -> ScheduleSubscriptionPreview:
         assert url.startswith("https://neo.hduhelp.com/")
-        return ScheduleSubscriptionPreview(
-            calendar_name="测试订阅课表",
-            event_count=2,
+        return preview_from_entries(
+            name="测试订阅课表",
             entries=[
                 TimetableEntry(
                     date="2026-10-05",

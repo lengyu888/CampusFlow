@@ -1,0 +1,111 @@
+{
+  "stage": "UX07",
+  "backend": {
+    "passed": 753,
+    "deselected": 2,
+    "command": "PYTHONPATH=src ../../audit-venv/bin/python -m pytest -q -m 'not integration'",
+    "ruff": "passed"
+  },
+  "client": {
+    "tests": 932,
+    "passed": 931,
+    "failed": 0,
+    "skipped": 1,
+    "skip": "Existing Pure Java NativePolicy test needs unavailable JDK; no installation"
+  },
+  "static": {
+    "arkts_ts_files": 72,
+    "config_files": 18
+  },
+  "cross_language_contract": {
+    "checks": 14,
+    "passed": true,
+    "source": "Actual authenticated ASGI/SQLite subscription diagnostic JSON through actual ArkTS import parser, classification and explicit exclusion/edit/overlap assembly; no network/model/native"
+  },
+  "browser": {
+    "checks": 28,
+    "passed": [
+      "Offline production helpers / actual synthetic ASGI fixture match source hashes and parse",
+      "Timetable, navigation and campus-service entry precede collapsed knowledge even while unconnected",
+      "Knowledge collapse / return preserves the question and does not send on selecting examples",
+      "Source detail separates reviewed date, original publication unknown and non-realtime status",
+      "No match, unsupported campus and request failure are separate query states with input preserved",
+      "Profile exposes the five categories and account text survives nested connections / return",
+      "Learning preference inputs survive a return without implicit submission",
+      "A late model-save simulation cannot clear text entered after the original request",
+      "Sensitive clear is away from the five-entry root and remains cancellable",
+      "Field validation preserves inputs and focuses the first visible invalid field",
+      "Invalid same-day times stay next to fields and do not create a course",
+      "Five successive courses use explicit reuse, retain context defaults and create no duplicate rows",
+      "Dirty new input blocks reuse instead of silently replacing it",
+      "Complete draft preview exposes all courses and never presents account-save success",
+      "Real ASGI mixed fixture displays all five indexed rows and leaves the base draft untouched",
+      "Overlap shows both complete counterpart facts before explicit acknowledgement",
+      "Source correction clears earlier confirmations, validates fields, then requires source-semantic review",
+      "Explicit exclusion resolves the final unsupported event without losing its displayed source row",
+      "Only after every row is handled can selected courses merge into the existing draft",
+      "A malformed diagnostic response rejects the whole preview and preserves the current draft",
+      "Canceling an unread or unresolved import has no effect on accepted draft rows",
+      "Account-scope change clears prior queries, edited fields and unaccepted choices",
+      "360px large type / long school text has no horizontal overflow and common entries remain reachable",
+      "Large-type invalid dates and times remain fully readable, with first-error focus and no clipping",
+      "Large-type mixed review preserves complete source rows, counterpart facts and usable touch targets",
+      "Large-type profile editor and nested return preserve the long school draft",
+      "Landscape and reduced motion remain overflow-free",
+      "The entire run has no page errors or HTTP requests"
+    ],
+    "errors": [],
+    "externalRequests": [],
+    "sourceHashes": {
+      "OnboardingTimetable": "64fddbf9a48fc493f2f2c87a02d2bcdf4cb6bc80ef52ff6c9adb14f25c97313f",
+      "TimetableImportReview": "eb7e3d6005f75f782784f10ed63e7016d73f9f2252c5c1416364147680494dc1"
+    },
+    "fixtureSHA256": "a502e90fa2db4a0af3ac05ca9fd1611946b586467e4971c9c6f5ecb4af7a2e29",
+    "nativeValidation": false,
+    "browserApproximation": true,
+    "syntheticData": true,
+    "screenshots": [
+      "wide-campus.png",
+      "wide-import.png",
+      "narrow-campus-large.png",
+      "narrow-form-errors-large.png",
+      "narrow-import-large.png",
+      "narrow-profile-large.png"
+    ]
+  },
+  "visual_review": "Root inspected actual wide campus/import and 360px large form-error/profile screenshots; browser approximation only",
+  "independent_review": "Fixed old onboarding finish caller crossing account scope after awaited baseline; preserved unresolved import when editing existing rows; compacted repeated source warnings within durable draft capacity while retaining all 500 courses",
+  "native_build": false,
+  "device_validation": false,
+  "real_model_calls": false,
+  "logs": [
+    {
+      "file": "ux07-backend-full.log",
+      "sha256": "05838898b94b162606ddab9f5c660a111ac0be38c28ad045981953c98b06223d"
+    },
+    {
+      "file": "ux07-client-full.log",
+      "sha256": "1843ede6004020990d8ff13a491411497eecc42122e36770dc1556cb596f95dc"
+    },
+    {
+      "file": "ux07-static-final.log",
+      "sha256": "6c10cb4b072c6d02217c5afe2b1eeafacbe8cb7fcfd30bc88cd5d8f050f78300"
+    },
+    {
+      "file": "ux07-cross-contract-result.json",
+      "sha256": "834d3e7fcf5e764624a0ed1a230a7b3ce249925748bbfac919b7c6c46d22ee22"
+    },
+    {
+      "file": "ux07-import-contract-fixture.json",
+      "sha256": "a502e90fa2db4a0af3ac05ca9fd1611946b586467e4971c9c6f5ecb4af7a2e29"
+    },
+    {
+      "file": "ux07-root-final.log",
+      "sha256": "a582fc2a496e78ab389352449c4f3e1184f5232379108cc86434c9934d55d207"
+    },
+    {
+      "file": "ux07-client-final.log",
+      "sha256": "5a5f249e975c023f80003136eb590d74e875d6215dae3c13421208f5449053b9"
+    }
+  ]
+}

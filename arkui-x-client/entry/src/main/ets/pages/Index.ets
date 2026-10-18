@@ -76,6 +76,8 @@ struct Index {
   @State private planRequestedView: string = '';
   @State private planViewRevision: number = 0;
   @State private planBackRevision: number = 0;
+  @State private profileBackRevision: number = 0;
+  @State private profileInnerActive: boolean = false;
   @State private planInnerActive: boolean = false;
   private focusOrigin: AppNavigationState | null = null;
   @State private contentOpacity: number = 1;
@@ -336,7 +338,7 @@ struct Index {
     this.focusOrigin = null;
     this.planRequestedView = '';
     this.planViewRevision++;
-    this.planInnerActive = false;
+    this.planInnerActive = false; this.profileInnerActive = false;
   }
 
   private applyNavigation(next: AppNavigationState): void {
@@ -388,6 +390,7 @@ struct Index {
   }
 
   private goBack(): void {
+    if (this.activeTab === 4 && this.profileInnerActive) { this.profileBackRevision++; return; }
     this.applyNavigation(backNavigation(this.navigation));
   }
 
@@ -505,6 +508,8 @@ struct Index {
         this.SecondaryHeader('个人设置')
         Column() {
           ProfilePage({ baseUrl: this.baseUrl, token: this.token, user: this.user,
+            backRevision: this.profileBackRevision, onInnerNavigationChanged: (active) => this.profileInnerActive = active,
+            onOpenHistory: () => this.selectTab(5),
             draftNotice: this.draftNotice, draftClearConfirm: this.draftClearConfirm,
             draftCleanupBusy: this.draftCleanupBusy, onClearDrafts: () => this.clearLocalDrafts(),
             onCancelClearDrafts: () => this.draftClearConfirm = false,

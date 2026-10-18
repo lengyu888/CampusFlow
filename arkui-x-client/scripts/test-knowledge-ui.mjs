@@ -52,7 +52,18 @@ test('source lookup replacement, close and disposal invalidate in-flight reads w
  const read=deferred(),g=fixture({search:()=>read.promise});const search=g.page.search();g.page.aboutToDisappear();read.resolve(result());await search;assert.equal(g.page.result,null);assert.equal(g.page.query,'图书馆');
 });
 test('Campus and Agent use the shared evidence component without claiming live university page checks',()=>{
- assert.match(read('pages/CampusPage'),/CampusKnowledgePanel\(\{ baseUrl: this.baseUrl, token: this.token, campusScope: this.campusIdentity\(\), active: this.active \}\)/);
+ assert.match(read('pages/CampusPage'),/CampusKnowledgePanel\(\{ baseUrl: this.baseUrl, token: this.token, campusScope: this.campusIdentity\(\), active: this.active && this.knowledgeExpanded \}\)/);
  assert.match(source,/查看摘录与出处/);assert.match(source,/EvidencePanel\(\{ evidence: this.result.evidence/);
  assert.match(read('pages/AgentPage'),/EvidencePanel\(\{ evidence: item.evidence \?\? \[\], active: this.voiceActive/);
+});
+
+
+test('examples never send automatically and preserve an existing query until explicit replacement',()=>{
+ const f=fixture();f.page.query='我的原问题';f.page.chooseExample('校外怎么访问图书馆数据库');assert.equal(f.page.query,'我的原问题');assert.equal(f.calls.length,0);
+ f.page.applyExample();assert.equal(f.page.query,'校外怎么访问图书馆数据库');assert.equal(f.calls.length,0);assert.equal(f.page.pendingExample,'');
+ f.page.chooseExample('校园网络资源使用说明');f.page.scopeChanged();assert.equal(f.page.pendingExample,'');assert.equal(f.page.query,'');
+});
+
+test('source details distinguish reviewed date from unknown publication date and live validity',()=>{
+ assert.match(source,/整理核对日期/);assert.match(source,/原文发布日期：资料未提供/);assert.match(source,/不代表实时状态/);
 });

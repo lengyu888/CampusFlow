@@ -64,6 +64,7 @@ interface RequestHeaders {
 }
 
 interface ApiErrorPayload {
+  code?: string;
   detail?: string;
   message?: string;
 }
@@ -110,6 +111,23 @@ export class CampusFlowApi {
     return `请求失败（${responseCode}）：${detail}`;
   }
 
+  private importFailure(status: number, text: string): CampusFlowRequestError {
+    let code = '';
+    try {
+      const payload = JSON.parse(text) as ApiErrorPayload | null;
+      if (payload !== null && typeof payload.code === 'string') { code = payload.code; }
+    } catch { /* Never display a subscription URL or transport body. */ }
+    let message = '';
+    if (code === 'IMPORT_URL_INVALID') { message = '课表链接格式不受支持，请检查完整的 HDUHelp HTTPS 订阅链接。'; }
+    else if (code === 'IMPORT_INVALID_CALENDAR') { message = '读取结果不是受支持的课表文件，现有课表未改动。'; }
+    else if (code === 'IMPORT_NO_EVENTS') { message = '订阅中没有课程，现有课表未改动。'; }
+    else if (code === 'IMPORT_TOO_MANY_EVENTS') { message = '订阅超过 500 条，请缩小范围后重新读取；本次未截取导入。'; }
+    else if (code === 'IMPORT_TOO_LARGE') { message = '课表文件超过大小限制，本次未导入。'; }
+    else if (code === 'IMPORT_FETCH_FAILED') { message = '暂时无法读取课表订阅，请检查连接或链接有效性。'; }
+    else if (code === 'IMPORT_REVIEW_REQUIRED') { message = '订阅中有需逐条核对的课程，请到课表维护读取预览并处理；现有课表未改动。'; }
+    return message.length > 0 ? new CampusFlowRequestError(status, code, message) : requestFailure(status, text);
+  }
+
   private async request<T>(path: string, method: http.RequestMethod, body: string = ''): Promise<T> {
     const client = http.createHttp();
     const headers: RequestHeaders = {
@@ -133,6 +151,9 @@ export class CampusFlowApi {
       }
       const text = response.result as string;
       if (response.responseCode < 200 || response.responseCode >= 300) {
+        if (path === '/api/v1/schedule-subscriptions' || path.startsWith('/api/v1/schedule-subscriptions/')) {
+          throw this.importFailure(response.responseCode, text);
+        }
         if (path === '/api/v1/sessions' || path.startsWith('/api/v1/sessions/') || path === '/api/v1/onboarding' || path.startsWith('/api/v1/onboarding/') || path === '/api/v1/models' || path === '/api/v1/learning-preferences' || path.startsWith('/api/v1/knowledge/') || path === '/api/v1/chat' || path.startsWith('/api/v1/agent-runs') || path.startsWith('/api/v1/actions/') || path.startsWith('/api/v1/planning/') ||
           path === '/api/v1/tasks' || path.startsWith('/api/v1/tasks/') ||
           path === '/api/v1/me/timetable' || path.startsWith('/api/v1/me/timetable/') || path.startsWith('/api/v1/weather?')) {

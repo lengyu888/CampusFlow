@@ -107,6 +107,6 @@ test('real panel resets drafts for changed accounts and Profile keeps it mounted
  const f=panelFixture();await tick();f.page.editField('session','100');f.page.userId='b';f.page.token='other';f.page.connectionChanged();await tick();assert.equal(f.page.state.draft.session,'50');assert.equal(f.page.state.dirty,false);
  f.page.aboutToDisappear();assert.equal(f.page.controller,null);
  const profile=readFileSync(new URL('../entry/src/main/ets/pages/ProfilePage.ets',import.meta.url),'utf8');
- assert.match(profile,/LearningPreferencesPanel\(\{ baseUrl: this.baseUrl, token: this.token, userId: this.user.user_id, active: this.active && !this.showHduHelpData \}\)/);
+ assert.match(profile,/LearningPreferencesPanel\(\{ baseUrl: this.baseUrl, token: this.token, userId: this.user.user_id, active: this.active && this.section === 'learning' && !this.showHduHelpData \}\)/);
  assert.match(profile,/\.visibility\(this.showHduHelpData \? Visibility.Hidden : Visibility.Visible\)/);
 });

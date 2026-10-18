@@ -70,3 +70,12 @@ test('onboarding typed errors reach UI without private backend messages',async()
  assert.equal(f.destroyed(),1);
  }
 });
+
+test('UX07 all subscription paths retain safe import codes without disclosing URLs or response bodies',async()=>{
+ const codes=['IMPORT_URL_INVALID','IMPORT_INVALID_CALENDAR','IMPORT_NO_EVENTS','IMPORT_TOO_MANY_EVENTS','IMPORT_TOO_LARGE','IMPORT_FETCH_FAILED','IMPORT_REVIEW_REQUIRED'];
+ for(const code of codes){for(const method of ['previewSubscription','saveSubscription','syncSubscription']){
+  const f=setup({responseCode:422,result:JSON.stringify({code,detail:'https://private.example/?token=secret'})});
+  await assert.rejects(f.client[method]('https://private.example/?token=secret'),e=>e.code===code&&!/private|secret|https:/.test(e.message));assert.equal(f.destroyed(),1);
+ }}
+ for(const code of ['UNKNOWN_IMPORT','<private>']) {const f=setup({responseCode:500,result:JSON.stringify({code,detail:'secret-url'})});await assert.rejects(f.client.previewSubscription('https://private/'),e=>e.code==='HTTP_ERROR'&&!e.message.includes('secret'));}
+});

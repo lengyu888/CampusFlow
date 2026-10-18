@@ -531,12 +531,50 @@ class ScheduleSubscriptionRequest(BaseModel):
     url: SecretStr = Field(min_length=1, max_length=2048)
 
 
+class ScheduleImportInput(BaseModel):
+    date: str
+    title: str
+    start_time: str
+    end_time: str
+    location: str
+    teacher: str
+
+
+class ScheduleImportSourceTime(BaseModel):
+    start_value: str | None
+    end_value: str | None
+    start_tzid: str | None
+    end_tzid: str | None
+    start_value_type: str | None
+    end_value_type: str | None
+
+
+class ScheduleImportIssue(BaseModel):
+    field: Literal["event", "date", "title", "start_time", "end_time", "location", "teacher"]
+    code: str
+    severity: Literal["warning", "error"]
+    message: str
+
+
+class ScheduleImportRow(BaseModel):
+    source_index: int = Field(ge=0, le=499)
+    status: Literal["ready", "invalid", "unsupported"]
+    input: ScheduleImportInput
+    entry: TimetableEntry | None
+    source_time: ScheduleImportSourceTime
+    issues: list[ScheduleImportIssue]
+
+
 class ScheduleSubscriptionPreview(BaseModel):
     provider: Literal["hduhelp"] = "hduhelp"
     calendar_name: str
     event_count: int = Field(ge=0, le=500)
     entries: list[TimetableEntry] = Field(default_factory=list, max_length=500)
     warnings: list[str] = Field(default_factory=list, max_length=20)
+    diagnostics_version: Literal[1] = 1
+    source_event_count: int = Field(ge=1, le=500)
+    rows: list[ScheduleImportRow] = Field(min_length=1, max_length=500)
+    timezone_policy: Literal["campus-utc+08:00"] = "campus-utc+08:00"
 
 
 class ScheduleSubscriptionStatus(BaseModel):

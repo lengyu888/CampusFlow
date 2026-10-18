@@ -508,3 +508,13 @@ test('switching history selection immediately revokes the previous successful co
   wait.resolve(messages('b'));await reading;assert.equal(h.page.verifiedRemoteSessionId,'b');
   h.page.goBack();assert.equal(h.page.canContinue(),false);
 });
+
+
+test('Index routes back through the personal-settings inner page before popping its root route',()=>{
+ const Index=createIndex({},historyScope,class {},{setOrCreate(){}}),index=new Index();
+ index.navigation=navigation.openSecondary(navigation.createNavigation(),4);index.activeTab=4;index.profileInnerActive=true;
+ const before=structuredClone(index.navigation);index.goBack();assert.equal(index.profileBackRevision,1);assert.deepEqual(index.navigation,before);
+ index.applyNavigation=next=>{index.navigation=next;index.activeTab=navigation.currentRoute(next);};
+ index.profileInnerActive=false;index.goBack();assert.equal(index.activeTab,0);
+ index.profileInnerActive=true;index.resetNavigation();assert.equal(index.profileInnerActive,false);
+});

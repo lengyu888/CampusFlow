@@ -63,12 +63,42 @@ export interface TimetableSaveReceipt {
   applied_at: string;
 }
 
+export interface ScheduleImportIssue {
+  field: string;
+  code: string;
+  severity: string;
+  message: string;
+}
+
+export interface ScheduleImportSourceTime {
+  start_value: string | null;
+  end_value: string | null;
+  start_tzid: string | null;
+  end_tzid: string | null;
+  start_value_type: string | null;
+  end_value_type: string | null;
+}
+
+export interface ScheduleImportRow {
+  source_index: number;
+  status: string;
+  input: TimetableEntry;
+  entry: TimetableEntry | null;
+  source_time: ScheduleImportSourceTime;
+  issues: ScheduleImportIssue[];
+}
+
 export interface ScheduleSubscriptionPreview {
   provider: string;
   calendar_name: string;
   event_count: number;
   entries: TimetableEntry[];
   warnings: string[];
+  // Optional for wire compatibility; the editable import review requires diagnostics v1.
+  diagnostics_version?: number;
+  source_event_count?: number;
+  timezone_policy?: string;
+  rows?: ScheduleImportRow[];
 }
 
 export interface CampusMapSummary {

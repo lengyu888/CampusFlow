@@ -205,3 +205,10 @@ test('weather API is authenticated encoded GET, with safe errors and released HT
   fail = true; await assert.rejects(api.weather('2026-10-18'), error => !error.message.includes('SECRET') && error instanceof feedback.CampusFlowRequestError);
   assert.equal(destroyed, 2);
 });
+
+
+test('unrelated profile update never folds a query just because weather failed, while campus switch resets presentation',async()=>{
+ const f=campusSetup(async()=>{throw new Error('offline');});f.page.aboutToAppear();await flush();f.page.knowledgeExpanded=true;
+ f.page.user={...f.page.user,display_name:'新昵称'};f.page.profileChanged();await flush();assert.equal(f.page.knowledgeExpanded,true);
+ f.page.user={...f.page.user,campus:'另一校区'};f.page.profileChanged();await flush();assert.equal(f.page.knowledgeExpanded,false);f.page.aboutToDisappear();
+});
