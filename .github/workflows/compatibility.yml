@@ -2,7 +2,7 @@ name: Cross-platform compatibility
 
 on:
   push:
-    branches: [dev/haohao]
+    branches: [main, dev/haohao]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -37,6 +37,7 @@ jobs:
           cache: pip
           cache-dependency-path: agent-service/pyproject.toml
       - name: Install declared Python dependencies
+        id: dependencies
         run: python -m pip install -e "./agent-service[dev]"
       - name: Record exact revision and existing tools
         run: |
@@ -47,15 +48,19 @@ jobs:
         working-directory: agent-service
         run: python -m ruff check src tests
       - name: Backend offline tests (no real model)
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
         working-directory: agent-service
-        run: python -m pytest -q -m "not integration" --junitxml=../backend-tests.xml
+        run: python -m pytest -q -m "not integration" --durations=10 --junitxml=../backend-tests.xml
       - name: Client logic and portable fixtures
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
         working-directory: arkui-x-client
         run: npm test
       - name: Project and configuration preflight (not native compilation)
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
         working-directory: arkui-x-client
         run: npm run check
       - name: Continuous offline client and backend journey
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
         working-directory: arkui-x-client
         run: npm run test:journey
       - name: Upload backend test report

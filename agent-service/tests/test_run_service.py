@@ -172,15 +172,48 @@ async def test_failure_is_safe_and_partial_is_not_full_history(scene, failure, s
     await service.shutdown()
 
 
-async def test_whole_run_deadline_stops_wait_and_no_more_steps(scene):
+async def test_whole_run_deadline_stops_wait_and_no_more_steps(scene, monkeypatch):
     service, store, runtime = scene
     service.settings.agent_timeout_seconds = 0.025
-    run = service.start("u", request(), "private-test-provider-value")
-    final = await settle(service, run.run_id)
-    assert final.status == "timed_out" and final.error_code == "RUN_TIMEOUT"
-    assert final.tool_progress[0].state == "running"
-    assert store.get_history("u", "session") == []
-    await service.shutdown()
+    deadline = asyncio.Timeout(None)
+    requested_delays = []
+
+    def controlled_deadline(delay):
+        requested_delays.append(delay)
+        return deadline
+
+    # Keep asyncio's real timeout/cancellation path, but make the point of expiry
+    # explicit. A Windows SQLite commit need not finish within 25 milliseconds.
+    monkeypatch.setattr("campusflow_agent.run_service.asyncio.timeout", controlled_deadline)
+    try:
+        run = service.start("u", request(), "private-test-provider-value")
+        await asyncio.wait_for(runtime.started.wait(), timeout=5)
+        assert requested_delays == [0.025]
+        deadline.reschedule(asyncio.get_running_loop().time())
+        final = await settle(service, run.run_id)
+        assert deadline.expired()
+        assert final.status == "timed_out" and final.error_code == "RUN_TIMEOUT"
+        assert final.result is None and final.partial_answer == "部分回答"
+        assert len(final.tool_progress) == 1 and final.tool_progress[0].state == "running"
+        assert not runtime.release.is_set() and runtime.calls == 1
+        assert store.get_history("u", "session") == []
+    finally:
+        await service.shutdown()
+
+
+async def test_deadline_before_first_tool_does_not_invent_progress(scene):
+    service, store, runtime = scene
+    # Force expiry at the first suspension, independent of disk or scheduler speed.
+    service.settings.agent_timeout_seconds = 0
+    try:
+        run = service.start("u", request(), "private-test-provider-value")
+        final = await settle(service, run.run_id)
+        assert final.status == "timed_out" and final.error_code == "RUN_TIMEOUT"
+        assert final.result is None and final.tool_progress == []
+        assert not runtime.started.is_set() and runtime.calls == 1
+        assert store.get_history("u", "session") == []
+    finally:
+        await service.shutdown()
 
 
 @pytest.mark.parametrize(
