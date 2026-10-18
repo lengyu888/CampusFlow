@@ -63,6 +63,8 @@ struct Index {
   @State private captureRevision: number = 0;
   @State private courseRouteIntents: RootCourseIntent[] = [];
   private courseRouteRevision: number = 0;
+  @State private requestedSessionId: string = '';
+  @State private sessionResumeRevision: number = 0;
   @State private agentPrompt: string = '';
   @State private promptRevision: number = 0;
   @State private homeRefresh: number = 0;
@@ -324,6 +326,7 @@ struct Index {
   }
 
   private resetNavigation(): void {
+    this.requestedSessionId = ''; this.sessionResumeRevision++;
     this.quickCaptureOpen = false; this.captureIntent = null; this.courseRouteIntents = [];
     this.navigation = createNavigation();
     this.activeTab = 0;
@@ -386,6 +389,13 @@ struct Index {
 
   private goBack(): void {
     this.applyNavigation(backNavigation(this.navigation));
+  }
+
+  private continueAgentSession(sessionId: string): void {
+    if (sessionId.length === 0 || this.token.length === 0 || this.historyDeleteBusy) { return; }
+    this.requestedSessionId = sessionId;
+    this.sessionResumeRevision++;
+    this.applyNavigation(selectRoot(this.navigation, 1, true));
   }
 
   private openAgentWithPrompt(prompt: string): void {
@@ -456,7 +466,8 @@ struct Index {
         onOpenRoute: () => this.selectTab(6),
         onOpenServices: () => this.selectTab(7), onOpenProfile: () => this.selectTab(4) })
         .visibility(this.activeTab === 0 && !this.quickCaptureOpen ? Visibility.Visible : Visibility.Hidden)
-      AgentPage({ baseUrl: this.baseUrl, token: this.token, draftLease: this.draftLease, initialPrompt: this.agentPrompt,
+      AgentPage({ baseUrl: this.baseUrl, token: this.token, userId: this.user.user_id,
+        requestedSessionId: this.requestedSessionId, resumeRevision: this.sessionResumeRevision, draftLease: this.draftLease, initialPrompt: this.agentPrompt,
         voiceActive: this.activeTab === 1 && this.voiceForeground,
         historyScope: this.cacheScope, deletedSessionId: this.deletedSessionId,
         deletionRevision: this.deletionRevision,
@@ -510,6 +521,7 @@ struct Index {
           chatBusy: this.agentChatBusy,
           remoteDeleteBusy: this.historyDeleteBusy,
           accountRevision: this.authRevision,
+          onContinueSession: (id: string) => this.continueAgentSession(id),
           onSessionDeleted: (id, revision) => this.sessionDeleted(id, revision),
           onDeleteBusyChange: (busy, revision) => this.deletionBusyChanged(busy, revision),
           onBack: () => this.goBack() })

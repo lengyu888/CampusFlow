@@ -1,0 +1,17 @@
+const {chromium}=require(process.env.PLAYWRIGHT_MODULE || 'playwright');
+const fs=require('fs'),path=require('path'),assert=require('assert');
+(async()=>{const out=path.resolve(process.env.PREVIEW_OUTPUT || 'work/ux05-visual');fs.mkdirSync(out,{recursive:true});const browser=await chromium.launch({executablePath:process.env.CHROME_EXECUTABLE || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',headless:true});const page=await browser.newPage({viewport:{width:1280,height:1150}});const errors=[];page.on('pageerror',e=>errors.push(e.message));await page.goto('file://'+path.resolve(__dirname,'ux-05-assistant.html'));let checks=0;
+await page.screenshot({path:out+'/wide.png',fullPage:true});assert(await page.locator('#ack').isDisabled());assert(await page.locator('#confirm').isDisabled());checks++;
+await page.click('#permission');assert(await page.locator('#ack').isEnabled());assert(await page.locator('#confirm').isDisabled());checks++;
+await page.click('#ack');assert(await page.locator('#confirm').isEnabled());checks++;
+await page.click('#permission');assert(await page.locator('#confirm').isDisabled());assert.equal(await page.locator('#ack').getAttribute('aria-pressed'),'false');checks++;
+await page.click('#permission');await page.click('#ack');await page.click('#confirm');assert.match(await page.locator('#result').innerText(),/演示回执/);assert(await page.locator('#confirm').isDisabled());checks++;
+await page.click('#model');assert(await page.locator('#model-panel').isVisible());await page.click('#model-close');assert(await page.locator('#model-panel').isHidden());checks++;
+const original=await page.inputValue('#input');await page.click('#voice');await page.click('#voice-close');assert.equal(await page.inputValue('#input'),original);checks++;
+await page.click('#new');await page.click('#stay');assert.equal(await page.inputValue('#input'),original);await page.click('#new');await page.click('#save-switch');assert.equal(await page.inputValue('#input'),'');assert.equal(await page.locator('#topic').innerText(),'新对话');assert.match(await page.locator('#messages').innerText(),/新的事情/);assert.equal(await page.locator('#messages .candidate').count(),0);checks+=2;
+await page.reload();await page.click('#adjust');assert.match(await page.inputValue('#input'),/25 分钟/);assert(await page.locator('#confirm').isDisabled());checks++;
+await page.setViewportSize({width:360,height:900});await page.click('#large');await page.click('#keyboard');await page.fill('#input',Array(9).fill('请调整到下课后的空档，并保留原始任务说明。').join('\n'));await page.locator('#input').evaluate(el=>el.dispatchEvent(new Event('input')));await page.click('#latest');
+assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);checks++;
+assert(await page.locator('#input').evaluate(el=>el.clientHeight<=128&&el.scrollHeight>el.clientHeight));checks++;
+assert(await page.evaluate(()=>{const answer=document.getElementById('last-answer').getBoundingClientRect(),area=document.getElementById('messages').getBoundingClientRect();return answer.bottom<=area.bottom+1&&answer.bottom>area.top}));checks++;
+await page.screenshot({path:out+'/narrow-keyboard-large.png',fullPage:true});assert.deepEqual(errors,[]);checks++;fs.writeFileSync(out+'/checks.json',JSON.stringify({checks,errors,nativeValidation:false,screenshots:['wide.png','narrow-keyboard-large.png']},null,2));await browser.close();console.log(JSON.stringify({checks,errors,out}));})().catch(e=>{console.error(e);process.exitCode=1});

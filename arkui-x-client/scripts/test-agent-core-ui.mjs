@@ -1,3 +1,4 @@
+import { conversationDependencies } from './helpers/conversation-fixture.mjs';
 import { reliability } from './helpers/course-review-fixture.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -22,7 +23,7 @@ const controllerSource = source.slice(0, boundary)
   .replace('export struct AgentPage', 'class AgentPage') + '\n}\n';
 const create = new Function('CampusFlowApi', 'Scroller', 'CampusFlowRequestError', 'displayToolTraces',
   'mergeActions', 'restoreDraft', 'localRequestFailure', 'AppTheme', 'localHistory', 'Edge',
-  'AgentRunController', 'localDrafts', 'shanghaiDate', ...Object.keys(catalog), ...Object.keys(reliability), stripTypeScriptTypes(controllerSource) + '\nreturn AgentPage;');
+  'AgentRunController', 'localDrafts', 'shanghaiDate', ...Object.keys(catalog), ...Object.keys(reliability), ...Object.keys(conversationDependencies), stripTypeScriptTypes(controllerSource) + '\nreturn AgentPage;');
 
 function pending(id, title = '相同标题') {
   return { proposal_id: id, action: 'create', kind: 'task', title, start_at: null, end_at: null,
@@ -63,7 +64,7 @@ async function harness(handlers = {}) {
   }
   const drafts = await makeDraftFixture();
   const Page = create(Api, Scroller, helper.CampusFlowRequestError, helper.displayToolTraces,
-    helper.mergeActions, helper.restoreDraft, helper.localRequestFailure, {}, {}, { Bottom: 'bottom' }, makeRunController(helper.CampusFlowRequestError, helper.localRequestFailure), drafts.store, shanghaiDate, ...Object.values(catalog), ...Object.values(reliability));
+    helper.mergeActions, helper.restoreDraft, helper.localRequestFailure, {}, {}, { Bottom: 'bottom' }, makeRunController(helper.CampusFlowRequestError, helper.localRequestFailure), drafts.store, shanghaiDate, ...Object.values(catalog), ...Object.values(reliability), ...Object.values(conversationDependencies));
   const page = new Page();
   page.baseUrl = 'http://fixture.invalid';
   page.token = 'fixture-token';

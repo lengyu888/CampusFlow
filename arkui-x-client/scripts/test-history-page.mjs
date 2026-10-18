@@ -476,3 +476,35 @@ test('return from detail restores the list source and saved reading position', a
   assert.deepEqual(h.page.listScroller.position, { xOffset: 0, yOffset: 620, animation: false });
   assert.equal(h.apiCalls.length, 0);
 });
+
+test('continue is offered only for a successfully read remote conversation and emits only its ID', async () => {
+  const h=harness({handlers:{history:async()=>messages()}}),continued=[];
+  h.page.onContinueSession=id=>continued.push(id);
+  await h.page.openSession(session('remote-a'));
+  assert.equal(h.page.canContinue(),true);h.page.continueSession();
+  assert.deepEqual(continued,['remote-a']);
+  assert.deepEqual(h.apiCalls.map(c=>c.method),['history'],'history page does not execute or restore any proposal');
+  h.page.chatBusy=true;assert.equal(h.page.canContinue(),true,'Agent handles draft flush and pending-write protection before switching');h.page.chatBusy=false;
+  for(const flag of ['loading','deleting','remoteDeleteBusy','offlineOnly']){
+    h.page[flag]=true;assert.equal(h.page.canContinue(),false);h.page.continueSession();h.page[flag]=false;
+  }
+  assert.deepEqual(continued,['remote-a']);
+});
+
+test('cached, failed, empty and obsolete remote reads cannot become a continue-session intent', async () => {
+  for(const response of ['failed','empty']){
+    const h=harness({cached:[{summary:session('a'),history:messages('old cache')}],handlers:{history:async()=>{if(response==='failed')throw Error('offline');return [];}}});
+    await h.page.openSession(session('a'));assert.equal(h.page.canContinue(),false);
+  }
+  const wait=deferred(),h=harness({handlers:{history:()=>wait.promise}});
+  const reading=h.page.openSession(session('a'));h.page.aboutToDisappear();wait.resolve(messages());await reading;
+  assert.equal(h.page.verifiedRemoteSessionId,'');assert.equal(h.page.canContinue(),false);
+});
+
+test('switching history selection immediately revokes the previous successful continue target', async () => {
+  const wait=deferred(),h=harness({handlers:{history:id=>id==='a'?Promise.resolve(messages('a')):wait.promise}});
+  await h.page.openSession(session('a'));assert.equal(h.page.canContinue(),true);
+  const reading=h.page.openSession(session('b'));assert.equal(h.page.canContinue(),false);
+  wait.resolve(messages('b'));await reading;assert.equal(h.page.verifiedRemoteSessionId,'b');
+  h.page.goBack();assert.equal(h.page.canContinue(),false);
+});

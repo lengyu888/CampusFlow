@@ -18,7 +18,9 @@ export function makeRunController(errorType, localRequestFailure) {
 
 export function runSnapshot(request, result, extra = {}) {
   const now = '2028-10-20T08:00:00+08:00';
-  return { ...request, status: 'succeeded', created_at: now, updated_at: now, seq: 2,
+  return { ...request, session_mode: request.session_mode ?? null,
+    input_context_revision: request.session_mode === 'continue' ? request.expected_context_revision : 'a'.repeat(64),
+    status: 'succeeded', created_at: now, updated_at: now, seq: 2,
     partial_answer: '', tool_progress: [], model_calls: 1, tool_calls: 0,
     result: result === null || typeof result !== 'object' ? result : { ...result, session_id: request.session_id },
     error_code: null, error_message: null, ...extra };

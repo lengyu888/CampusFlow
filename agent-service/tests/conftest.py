@@ -31,12 +31,15 @@ class FakeAgentService:
         api_key: str,
         model_name: str,
         message: str,
+        frozen_history=None,
+        persist_history: bool = True,
     ) -> AgentReply:
         assert api_key
         assert model_name in {"deepseek-v4-pro", "deepseek-flash"}
         answer = f"测试回复：{message}"
-        self.store.append_history(user_id, session_id, "user", message)
-        self.store.append_history(user_id, session_id, "assistant", answer)
+        if persist_history:
+            self.store.append_history(user_id, session_id, "user", message)
+            self.store.append_history(user_id, session_id, "assistant", answer)
         return AgentReply(message=answer)
 
 

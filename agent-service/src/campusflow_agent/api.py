@@ -95,6 +95,7 @@ from .schemas import (
     ScheduleSubscriptionRequest,
     ScheduleSubscriptionStatus,
     ScheduleSubscriptionSyncResponse,
+    SessionContext,
     SessionRenameRequest,
     SessionSummary,
     SkillAuditEntry,
@@ -112,6 +113,7 @@ from .schemas import (
     UserSettingsUpdate,
     WeatherForecast,
 )
+from .session_service import SessionError
 from .skills import SkillStore
 from .store import CampusStore
 from .timetable_service import TimetableError, TimetableService
@@ -276,6 +278,12 @@ def create_app(
 
     @app.exception_handler(RunError)
     async def run_error_handler(request: Request, exc: RunError) -> JSONResponse:
+        return JSONResponse(
+            status_code=exc.status_code, content={"detail": exc.detail, "code": exc.code}
+        )
+
+    @app.exception_handler(SessionError)
+    async def session_error_handler(request: Request, exc: SessionError) -> JSONResponse:
         return JSONResponse(
             status_code=exc.status_code, content={"detail": exc.detail, "code": exc.code}
         )
@@ -1199,13 +1207,21 @@ def create_app(
             raise HTTPException(status_code=403, detail="请先完成首次配置。")
         load_user_context(user)
         try:
+            frozen = run_service.prepare_session(user.user_id, request)
             reply = await agent_service.chat(
                 user_id=user.user_id,
                 session_id=request.session_id,
                 api_key=selected_model_key(user, request.model),
                 model_name=request.model,
                 message=request.message,
+                frozen_history=frozen.messages,
+                persist_history=False,
             )
+            run_service.sessions.append_checked(
+                frozen, request.message, reply.message, request.model
+            )
+        except SessionError:
+            raise
         except AgentConfigurationError as exc:
             raise CampusFlowError(
                 status_code=exc.status_code,
@@ -1240,6 +1256,10 @@ def create_app(
     )
     async def history(session_id: str, user: CurrentUser) -> list[HistoryMessage]:
         return store.get_history(user.user_id, session_id)
+
+    @app.get("/api/v1/sessions/{session_id}/context", response_model=SessionContext)
+    async def session_context(session_id: str, user: CurrentUser) -> SessionContext:
+        return run_service.session_context(user.user_id, session_id)
 
     @app.get("/api/v1/sessions", response_model=list[SessionSummary])
     async def sessions(user: CurrentUser, query: str = "") -> list[SessionSummary]:

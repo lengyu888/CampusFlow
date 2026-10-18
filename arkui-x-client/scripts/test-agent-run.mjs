@@ -274,3 +274,106 @@ test('invalid IDs, inputs and malformed snapshot shapes do not send or promote a
   }
   assert.equal(isRunTerminal('queued'), false); assert.equal(isRunTerminal('interrupted'), true);
 });
+
+test('new and continued runs freeze explicit context conditions while omitted legacy conditions remain absent', async () => {
+  for (const conditions of [[], [null], [null, null], ['new'], ['new', null], ['continue', 'a'.repeat(64)]]) {
+    const f = fixture({ start: request => run({ session_mode: request.session_mode ?? null,
+      input_context_revision: request.session_mode ? 'a'.repeat(64) : null }) });
+    let saved;
+    f.controller.setBeforeSubmit(async request => { saved = clone(request); });
+    await f.controller.start('session-a', 'deepseek-flash', '安排复习', ...conditions);
+    assert.equal(f.controller.snapshot().phase, 'running');
+    const expected = { run_id: firstId, session_id: 'session-a', model: 'deepseek-flash', message: '安排复习' };
+    if (conditions.length > 0) expected.session_mode = conditions[0];
+    if (conditions.length > 1) expected.expected_context_revision = conditions[1];
+    assert.deepEqual(f.calls[0][1], expected);
+    assert.deepEqual(saved, expected);
+    if (conditions.length === 0) assert.deepEqual(Object.keys(saved), ['run_id', 'session_id', 'model', 'message']);
+  }
+});
+
+test('invalid continuation conditions never allocate an ID, save a pointer or contact the API', async () => {
+  for (const conditions of [['continue'], ['continue', null], ['continue', 'bad'], ['continue', 'A'.repeat(64)],
+    ['new', 'a'.repeat(64)], [undefined, 'a'.repeat(64)], [null, 'a'.repeat(64)], ['resume'], [3]]) {
+    const f = fixture(); let saved = 0;
+    f.controller.setBeforeSubmit(async () => { saved++; });
+    await f.controller.start('session-a', 'deepseek-flash', '安排复习', ...conditions);
+    assert.equal(f.idCalls(), 0); assert.equal(saved, 0); assert.deepEqual(f.calls, []);
+    assert.equal(f.controller.snapshot().errorCode, 'SESSION_MODE_INVALID');
+  }
+});
+
+test('unknown continuation and cold recovery retain the identical original UUID and context revision on explicit retry only', async () => {
+  const revision = 'a'.repeat(64); let attempts = 0;
+  const f = fixture({ start: request => {
+    if (++attempts === 1) throw new CampusFlowRequestError(500, 'RUN_FAILED', 'safe');
+    return run({ session_mode: request.session_mode, input_context_revision: request.expected_context_revision });
+  } });
+  await f.controller.start('session-a', 'deepseek-flash', '安排复习', 'continue', revision);
+  assert.equal(f.controller.snapshot().phase, 'unknown');
+  await f.controller.retryStart();
+  assert.deepEqual(f.calls[0][1], f.calls[1][1]); assert.equal(f.idCalls(), 1);
+  const request = clone(f.calls[0][1]);
+  const cold = fixture({ status: () => { throw new CampusFlowRequestError(404, 'RUN_NOT_FOUND', 'missing'); },
+    start: value => run({ session_mode: value.session_mode, input_context_revision: value.expected_context_revision }) });
+  await cold.controller.recoverRequest({ ...request, token: 'must-not-post', arbitrary: { payload: 'not-allowed' } });
+  assert.deepEqual(cold.calls, [['status', firstId]]); assert.equal(cold.idCalls(), 0);
+  request.expected_context_revision = 'b'.repeat(64);
+  await cold.controller.retryStart();
+  assert.deepEqual(cold.calls[1][1], f.calls[0][1]);
+  assert.equal(cold.controller.snapshot().phase, 'running');
+});
+
+test('malformed durable continuation cannot be turned into an unguarded legacy replay', async () => {
+  for (const request of [null, [], { run_id: firstId, session_id: 'session-a', model: 'deepseek-flash', message: '安排复习', session_mode: 'continue' },
+    { run_id: firstId, session_id: 'session-a', model: 'deepseek-flash', message: '安排复习', session_mode: 'new', expected_context_revision: 'a'.repeat(64) }]) {
+    const f = fixture(); await f.controller.recoverRequest(request); await f.controller.retryStart();
+    assert.deepEqual(f.calls, []); assert.equal(f.controller.snapshot().runId, '');
+  }
+});
+
+test('run snapshots must preserve accepted session mode and exact input context through polling', async () => {
+  for (const values of [
+    { session_mode: null, input_context_revision: null },
+    { session_mode: 'new', input_context_revision: 'a'.repeat(64) },
+    { session_mode: 'continue', input_context_revision: 'b'.repeat(64) },
+    { session_mode: 'continue', input_context_revision: 'bad' },
+  ]) {
+    const f = fixture({ start: () => run({ session_mode: 'continue', input_context_revision: 'a'.repeat(64), partial_answer: '保留片段' }),
+      status: () => run({ ...values, seq: 2, partial_answer: '不该接受' }) });
+    await f.controller.start('session-a', 'deepseek-flash', '安排复习', 'continue', 'a'.repeat(64));
+    await f.controller.refresh();
+    assert.equal(f.controller.snapshot().phase, 'unknown');
+    assert.equal(f.controller.snapshot().snapshot.partial_answer, '保留片段');
+    assert.equal(f.completed.length, 0);
+  }
+  for (const bad of [run({ session_mode: 'continue' }), run({ session_mode: 'new', input_context_revision: null }),
+    run({ session_mode: 'resume', input_context_revision: 'a'.repeat(64) }), run({ input_context_revision: 'bad' })]) {
+    assert.equal(validRunSnapshot(bad), false);
+  }
+  assert.equal(validRunSnapshot(run()), true);
+  assert.equal(validRunSnapshot(run({ session_mode: null, input_context_revision: null })), true);
+});
+
+test('authoritative session rejection stops retries and keeps the request for explicit user handling', async () => {
+  for (const code of ['SESSION_NOT_FOUND', 'SESSION_DELETED', 'SESSION_CONTEXT_CHANGED', 'SESSION_EXISTS', 'SESSION_MODE_INVALID']) {
+    const f = fixture({ start: () => { throw new CampusFlowRequestError(code === 'SESSION_DELETED' ? 410 : 409, code, localRequestFailure(code).message); } });
+    await f.controller.start('session-a', 'deepseek-flash', '安排复习', 'continue', 'a'.repeat(64));
+    assert.equal(f.controller.snapshot().phase, 'error'); assert.equal(f.controller.snapshot().errorCode, code);
+    assert.equal(f.controller.snapshot().request.expected_context_revision, 'a'.repeat(64));
+    assert.equal(f.controller.snapshot().canRetryStart, false); assert.equal(f.controller.blocksNewRun(), false);
+    assert.equal(f.clock.jobs.size, 0); await f.controller.retryStart(); assert.equal(f.calls.length, 1);
+  }
+});
+
+test('a deleted session during status recovery cannot schedule or retry and contextual terminal errors use safe messages', async () => {
+  const f = fixture({ status: () => { throw new CampusFlowRequestError(410, 'SESSION_DELETED', 'private data'); } });
+  await f.controller.start('session-a', 'deepseek-flash', '安排复习'); await f.controller.refresh();
+  assert.equal(f.controller.snapshot().phase, 'error'); assert.equal(f.clock.jobs.size, 0);
+  assert.equal(f.controller.snapshot().canRetryStart, false); assert.doesNotMatch(f.controller.snapshot().message, /private/);
+  const failed = fixture({ start: () => run({ status: 'failed', session_mode: 'continue', input_context_revision: 'a'.repeat(64),
+    error_code: 'SESSION_CONTEXT_CHANGED', error_message: 'private raw exception' }) });
+  await failed.controller.start('session-a', 'deepseek-flash', '安排复习', 'continue', 'a'.repeat(64));
+  assert.equal(failed.controller.snapshot().message, localRequestFailure('SESSION_CONTEXT_CHANGED').message);
+  assert.equal(failed.completed.length, 0);
+});

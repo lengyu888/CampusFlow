@@ -1,3 +1,4 @@
+import { conversationDependencies, assistantDraftKey } from './helpers/conversation-fixture.mjs';
 import { reliability } from './helpers/course-review-fixture.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -17,9 +18,10 @@ const controller = source.slice(0, source.indexOf('\n  @Builder')).replace(/^imp
   .replace(/^@Component\r?\n/m, '').replace(/@(Prop|State)\s+|@Watch\('[^']+'\)\s*/g, '')
   .replace('export struct AgentPage', 'class AgentPage') + '\n}\n';
 const makePage = new Function('CampusFlowApi', 'Scroller', 'localDrafts', 'shanghaiDate', 'AgentRunController',
-  'localHistory', 'AppTheme', ...Object.keys(feedback), ...Object.keys(reliability),
+  'localHistory', 'AppTheme', ...Object.keys(feedback), ...Object.keys(reliability), ...Object.keys(conversationDependencies),
   stripTypeScriptTypes(controller) + '\nreturn AgentPage;');
-const key = { kind: 'assistant', ownerId: 'main' };
+const key = assistantDraftKey('old-session');
+const legacyKey = { kind: 'assistant', ownerId: 'main' };
 const id = '01234567-0123-4123-8123-012345678901';
 const scope = JSON.stringify(['https://fixture.invalid', 'account-a']);
 const deferred = () => { let resolve, reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; };
@@ -50,8 +52,9 @@ async function harness(handlers = {}, saved = null, bind = true) {
   }
   const Page = makePage(Api, class {}, drafts.store, shanghaiDate,
     makeRunController(feedback.CampusFlowRequestError, feedback.localRequestFailure),
-    { save: async () => true, isRemoved: () => false }, {}, ...Object.values(feedback), ...Object.values(reliability));
+    { save: async () => true, isRemoved: () => false }, {}, ...Object.values(feedback), ...Object.values(reliability), ...Object.values(conversationDependencies));
   const page = new Page(); page.baseUrl = 'https://fixture.invalid'; page.token = 'never-persist-this-token';
+  page.sessionId = 'old-session';
   page.voiceActive = true; page.historyScope = scope; page.draftLease = drafts.lease;
   page.newRunId = () => id;
   if (bind) page.draftLeaseChanged();
@@ -59,7 +62,7 @@ async function harness(handlers = {}, saved = null, bind = true) {
 }
 async function pending(drafts, frozen = request()) {
   const ticket = drafts.store.stage(drafts.lease, key, payload(frozen.message));
-  await drafts.store.beginOperation(drafts.lease, { kind: 'run', id: frozen.run_id, draftKind: 'assistant', ownerId: 'main',
+  await drafts.store.beginOperation(drafts.lease, { kind: 'run', id: frozen.run_id, draftKind: 'assistant', ownerId: key.ownerId,
     localRevision: ticket.localRevision, runRequest: frozen });
   return ticket.localRevision;
 }
@@ -77,13 +80,15 @@ test('typed, suggested, appended and accepted voice input stage through the real
   assert.match(source, /\.onClick\(\(\) => this\.changePrompt\(restoreDraft/);
 });
 
-test('restoration is explicit text only and retains the original Shanghai anchor without changing session or sending', async () => {
-  const drafts = await storage(); drafts.store.stage(drafts.lease, key, payload()); await drafts.store.flush(drafts.lease);
+test('legacy main restoration is explicit text only and retains the original Shanghai anchor without changing session or sending', async () => {
+  const drafts = await storage(); drafts.store.stage(drafts.lease, legacyKey, payload()); await drafts.store.flush(drafts.lease);
   const { page, calls } = await harness({}, drafts); const session = page.sessionId;
   assert.equal(page.prompt, ''); assert.ok(page.recoverableDraft); assert.equal(calls.length, 0);
-  page.restoreStoredDraft(); assert.equal(page.prompt, '明天复习'); assert.equal(page.draftAnchorDate, '2026-10-17');
+  assert.equal(drafts.store.read(drafts.lease, key), undefined, 'legacy input is not silently migrated');
+  await page.restoreStoredDraft(); assert.equal(page.prompt, '明天复习'); assert.equal(page.draftAnchorDate, '2026-10-17');
   assert.equal(page.sessionId, session); assert.equal(calls.length, 0);
   assert.equal(drafts.store.read(drafts.lease, key).payload.anchorDate, '2026-10-17');
+  assert.equal(drafts.store.read(drafts.lease, legacyKey), undefined, 'explicit restored migration removes only the old slot');
 });
 
 test('a pending restore cannot overwrite new input or the old durable draft; explicit discard preserves current text', async () => {
@@ -145,7 +150,7 @@ test('restart restores a frozen pointer with GET only; 404 requires an explicit 
   h.page.restoreStoredDraft(); h.page.model = 'different-model';
   await h.page.retryRunStart();
   assert.deepEqual(h.calls[1].args[0], frozen); assert.equal(h.page.prompt, '新草稿');
-  assert.notEqual(h.page.sessionId, frozen.session_id);
+  assert.equal(h.page.sessionId, 'old-session', 'recovery remains in the explicitly selected owning conversation');
 });
 
 test('unknown response and request mismatch keep the pointer; they cannot unlock a fresh run', async () => {
@@ -214,7 +219,7 @@ test('a confirmed session deletion releases its pointer but keeps a newer input 
   const h = await harness({ startAgentRun: value => { frozen = value; return reply.promise; } });
   h.page.changePrompt('旧问题'); const sending = h.page.send(); await settle();
   h.page.changePrompt('新问题'); h.page.deletedSessionId = h.page.sessionId; h.page.sessionDeleted(); await settle();
-  assert.equal(h.store.operations(h.lease).length, 0); assert.equal(h.store.read(h.lease, key).payload.text, '新问题');
+  assert.equal(h.store.operations(h.lease).length, 0); assert.equal(h.store.read(h.lease, assistantDraftKey(h.page.sessionId)).payload.text, '新问题');
   reply.resolve(runSnapshot(frozen, { message: '旧回包', pending_actions: [], tool_traces: [] })); await sending; await settle();
   assert.equal(h.page.prompt, '新问题'); assert.equal(h.page.messages.some(value => value.content === '旧回包'), false);
 });

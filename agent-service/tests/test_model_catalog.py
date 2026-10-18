@@ -417,7 +417,9 @@ async def test_api_server_model_never_reads_user_key_and_duplicate_survives_key_
         assert len(runtime.calls) == 2
         assert all(call["api_key"] == "SERVER_ONLY_PRIVATE_KEY" for call in runtime.calls)
         history = app.state.store.get_history(uid, "s")
-        assert len(history) == 2 and "PRIVATE_KEY" not in repr(history)
+        # Both the legacy HTTP call and the run now use caller-owned atomic pair commits.
+        assert [item.role for item in history] == ["user", "assistant", "user", "assistant"]
+        assert "PRIVATE_KEY" not in repr(history)
         assert "PRIVATE_KEY" not in repeated.text
         stored = list(app.state.store._connection.iterdump())
         assert "SERVER_ONLY_PRIVATE_KEY" not in "\n".join(stored)

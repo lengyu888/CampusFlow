@@ -1,0 +1,64 @@
+{
+  "stage": "UX05",
+  "backend": {
+    "passed": 683,
+    "deselected": 2,
+    "command": "PYTHONPATH=src ../../audit-venv/bin/python -m pytest -m 'not integration' -q"
+  },
+  "client": {
+    "tests": 827,
+    "passed": 826,
+    "skipped": 1,
+    "failed": 0,
+    "skip": "Pure Java NativePolicy test: existing JDK unavailable; no Java compilation or installation"
+  },
+  "static": {
+    "arkts_ts_files": 68,
+    "config_files": 17
+  },
+  "cross_language_contract": {
+    "checks": 18,
+    "passed": true,
+    "source": "Actual authenticated offline ASGI/SQLite JSON through actual ArkTS context/run validators and durable DraftStore; no native/model call"
+  },
+  "browser": {
+    "checks": 14,
+    "errors": [],
+    "nativeValidation": false,
+    "screenshots": [
+      "wide.png",
+      "narrow-keyboard-large.png"
+    ]
+  },
+  "visual_review": "Root inspected wide and 360px large-text keyboard-placeholder screenshots; browser prototype only",
+  "independent_review": "Resolved unknown proposal cancellation dead-end, authority refresh display, cross-session late responses and historical proposal reactivation; targeted final review found no additional blocker",
+  "native_build": false,
+  "device_validation": false,
+  "real_model_calls": false,
+  "logs": [
+    {
+      "file": "ux05-backend-full.log",
+      "sha256": "b511062520799ac0bd962a761b0aa9699e868aa5de69562f27718b806f3af04d"
+    },
+    {
+      "file": "ux05-client-final.log",
+      "sha256": "715e28f72a3ee621016fb0750a3a23ce0c7f07f2d44c48d894a30f3d78c3e735"
+    },
+    {
+      "file": "ux05-static-final.log",
+      "sha256": "9edcfef506f7af9fa37f89e6def4b7c0c590dcb66e179462ba094262357d8792"
+    },
+    {
+      "file": "ux05-cross-contract-result.json",
+      "sha256": "8fe6c56ae757333e5fc66f891b429708557353fa3b732c9e5d3b0f70e884a3fc"
+    },
+    {
+      "file": "ux05-session-contract-fixture.json",
+      "sha256": "6b8250fe96a66f8f1ddac7c7029d7094ce1e137dc01196accdd7a979bcf885d4"
+    },
+    {
+      "file": "ux05-permission-contract-fixture.json",
+      "sha256": "fa61c36d420b3a69e1b7140e01a8bd2037254d6d52dafe0f1115048d7a07f38d"
+    }
+  ]
+}

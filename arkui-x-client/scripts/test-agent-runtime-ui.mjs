@@ -1,3 +1,4 @@
+import { conversationDependencies } from './helpers/conversation-fixture.mjs';
 import { reliability } from './helpers/course-review-fixture.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -16,7 +17,7 @@ const controllerSource = source.slice(0, source.indexOf('\n  @Builder')).replace
   .replace(/^@Component\r?\n/m, '').replace(/@(Prop|State)\s+|@Watch\('[^']+'\)\s*/g, '')
   .replace('export struct AgentPage', 'class AgentPage') + '\n}\n';
 const makePage = new Function('CampusFlowApi', 'Scroller', 'CampusFlowRequestError', 'displayToolTraces', 'mergeActions',
-  'restoreDraft', 'localRequestFailure', 'AppTheme', 'localHistory', 'AgentRunController', 'localDrafts', 'shanghaiDate', ...Object.keys(reliability),
+  'restoreDraft', 'localRequestFailure', 'AppTheme', 'localHistory', 'AgentRunController', 'localDrafts', 'shanghaiDate', ...Object.keys(reliability), ...Object.keys(conversationDependencies),
   stripTypeScriptTypes(controllerSource) + '\nreturn AgentPage;');
 const now = '2028-10-20T08:00:00+08:00';
 const oldId = '11111111-1111-4111-8111-111111111111';
@@ -41,7 +42,7 @@ async function harness(handlers = {}) {
   const drafts = await makeDraftFixture();
   const Page = makePage(Api, class {}, feedback.CampusFlowRequestError, feedback.displayToolTraces, feedback.mergeActions,
     feedback.restoreDraft, feedback.localRequestFailure, {}, { save: async (...args) => { saves.push(args); return true; } },
-    makeRunController(feedback.CampusFlowRequestError, feedback.localRequestFailure), drafts.store, shanghaiDate, ...Object.values(reliability));
+    makeRunController(feedback.CampusFlowRequestError, feedback.localRequestFailure), drafts.store, shanghaiDate, ...Object.values(reliability), ...Object.values(conversationDependencies));
   const page = new Page(); page.baseUrl = 'https://fixture.invalid'; page.token = 'secret-token'; page.voiceActive = true;
   page.historyScope = 'account-a';
   page.draftLease = drafts.lease;
@@ -125,7 +126,7 @@ test('hiding pauses reads without cancelling or restoring the submitted prompt; 
   assert.equal(calls.filter(c => c.name === 'startAgentRun').length, 1);
 });
 
-test('recovering a recent old run uses its own bubble and full history without switching the current session or replaying a POST', async () => {
+test('recovering a recent old run keeps its bubble and full history read-only without reviving old proposals or replaying a POST', async () => {
   const request = { run_id: oldId, session_id: 'older-session', model: 'deepseek-flash', message: '旧问题' };
   const snapshot = runSnapshot(request, turn('旧回答', [proposal('older-proposal')]));
   const full = history('更早的问题', '更早的回答', '旧问题', '旧回答');
@@ -135,7 +136,8 @@ test('recovering a recent old run uses its own bubble and full history without s
   await page.toggleRunRecords(); await page.recoverRun(oldId); await settle(); await page.refreshRun(); await settle();
   assert.equal(page.sessionId, originalSession); assert.equal(page.prompt, '当前草稿');
   assert.equal(page.messages.filter(m => m.id === `run-${oldId}-assistant`).length, 1);
-  assert.equal(page.proposalOrigins[0].messageId, `run-${oldId}-assistant`);
+  assert.deepEqual(page.proposalOrigins, [], 'a saved old pending snapshot is not a current executable proposal');
+  assert.deepEqual(page.pendingActions, []);
   assert.ok(page.messages.find(m => m.id === `run-${oldId}-user`).restored);
   assert.ok(saves.length >= 1); assert.ok(saves.every(save => save[1].session_id === request.session_id && save[2].length === 4));
   assert.ok(calls.every(c => c.name !== 'startAgentRun'));
@@ -173,7 +175,7 @@ test('cache receives only white-listed history fields and hidden sends keep draf
   assert.deepEqual(saves[0][2], history('问题', '完整回答')); assert.doesNotMatch(JSON.stringify(saves), /must-not-cache|raw_tools|secret-token/);
 });
 
-test('deleting a recovered old session removes only its run, proposal and pending cache read', async () => {
+test('deleting a read-only recovered old session removes its run and pending cache read without touching current content', async () => {
   const request = { run_id: oldId, session_id: 'deleted-old-session', model: 'deepseek-flash', message: '旧问题' };
   const snapshot = runSnapshot(request, turn('旧回答', [proposal('delete-old-proposal')]));
   const reading = deferred();
@@ -181,7 +183,7 @@ test('deleting a recovered old session removes only its run, proposal and pendin
   const currentSession = page.sessionId;
   page.prompt = '当前草稿'; const currentMessage = page.appendMessage('assistant', '当前会话内容');
   await page.recoverRun(oldId);
-  assert.equal(page.pendingActions.length, 1);
+  assert.deepEqual(page.pendingActions, [], 'recovery never resurrects the old proposal snapshot');
   page.deletedSessionId = request.session_id; page.sessionDeleted();
   reading.resolve(history('旧问题', '旧回答')); await settle();
   assert.equal(page.sessionId, currentSession); assert.equal(page.prompt, '当前草稿');

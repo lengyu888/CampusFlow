@@ -11,6 +11,8 @@ class ChatRequest(BaseModel):
     session_id: str = Field(min_length=1, max_length=128, examples=["session-001"])
     model: str = Field(default="deepseek-v4-pro", pattern=r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$")
     message: str = Field(min_length=1, max_length=8000)
+    session_mode: Literal["new", "continue"] | None = None
+    expected_context_revision: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
 
 
 class ModelCatalogEntry(BaseModel):
@@ -231,6 +233,8 @@ class RunSnapshot(BaseModel):
     result: ChatResponse | None = None
     error_code: str | None = None
     error_message: str | None = None
+    input_context_revision: str | None = None
+    session_mode: Literal["new", "continue"] | None = None
 
 
 class RunEvent(BaseModel):
@@ -264,6 +268,15 @@ class SessionSummary(BaseModel):
 
 class SessionRenameRequest(BaseModel):
     title: str = Field(min_length=1, max_length=80)
+
+
+class SessionContext(BaseModel):
+    user_id: str
+    session_id: str
+    summary: SessionSummary
+    messages: list[HistoryMessage]
+    context_revision: str
+    active_run: RunSnapshot | None = None
 
 
 class ConfirmActionResponse(BaseModel):

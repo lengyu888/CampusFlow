@@ -22,7 +22,7 @@ from .key_vault import ApiKeyVault
 from .learning_preferences import LearningPreferenceStore
 from .model_catalog import AgentConfigurationError as AgentConfigurationError
 from .model_catalog import ModelCatalog
-from .schemas import CampusRoute, PendingAction, ToolTrace
+from .schemas import CampusRoute, HistoryMessage, PendingAction, ToolTrace
 from .skills import SkillStore
 from .store import CampusStore
 from .tool_presentation import present_tool_trace
@@ -163,11 +163,15 @@ class AgentService:
             # ChatOpenAI renames its top-level max_tokens to max_completion_tokens.
             # Preserve the explicitly declared provider parameter at the SDK wire boundary.
             options["extra_body"] = {
-                **options.get("extra_body", {}), "max_tokens": options.pop("max_tokens")
+                **options.get("extra_body", {}),
+                "max_tokens": options.pop("max_tokens"),
             }
         model = ChatOpenAI(
-            **options, api_key=credential, base_url=route.base_url,
-            timeout=self.settings.agent_timeout_seconds, max_retries=0,
+            **options,
+            api_key=credential,
+            base_url=route.base_url,
+            timeout=self.settings.agent_timeout_seconds,
+            max_retries=0,
         )
         allowed_tools = self.allowed_tools_for_user(user_id)
         return create_agent(
@@ -235,8 +239,10 @@ class AgentService:
     def _build_runtime_client(self, *, api_key: str, model_name: str) -> AsyncOpenAI:
         route, credential = self.model_catalog.credentials(model_name, api_key)
         return AsyncOpenAI(
-            api_key=credential, base_url=route.base_url,
-            timeout=self.settings.agent_timeout_seconds, max_retries=0,
+            api_key=credential,
+            base_url=route.base_url,
+            timeout=self.settings.agent_timeout_seconds,
+            max_retries=0,
         )
 
     async def _open_runtime_stream(
@@ -389,6 +395,7 @@ class AgentService:
         message: str,
         emit: Callable[[str, dict], Awaitable[None]],
         check_cancelled: Callable[[], None],
+        frozen_history: list[HistoryMessage] | None = None,
     ) -> AgentReply:
         """Bounded, sequential streaming execution. The caller owns history + run commit.
 
@@ -406,6 +413,7 @@ class AgentService:
                 message=message,
                 emit=emit,
                 check_cancelled=check_cancelled,
+                frozen_history=frozen_history,
             )
         finally:
             CURRENT_USER_ID.reset(token)
@@ -420,6 +428,7 @@ class AgentService:
         message: str,
         emit: Callable[[str, dict], Awaitable[None]],
         check_cancelled: Callable[[], None],
+        frozen_history: list[HistoryMessage] | None = None,
     ) -> AgentReply:
         if len(message) > self.settings.agent_max_context_chars:
             raise AgentBudgetExceeded("本轮输入已达到上限，请缩小查询范围后再试。")
@@ -475,7 +484,11 @@ class AgentService:
         system = {"role": "system", "content": self._build_user_system_prompt(user_id)}
         history: list[list[dict]] = []
         previous_user = None
-        for entry in self.store.get_history(user_id, session_id):
+        for entry in (
+            frozen_history
+            if frozen_history is not None
+            else self.store.get_history(user_id, session_id)
+        ):
             if entry.role == "user":
                 previous_user = {"role": "user", "content": entry.content}
             elif entry.role == "assistant" and previous_user is not None:
@@ -629,17 +642,16 @@ class AgentService:
         api_key: str,
         model_name: str,
         message: str,
+        frozen_history: list[HistoryMessage] | None = None,
+        persist_history: bool = True,
     ) -> AgentReply:
         direct_route = self._direct_route_reply(user_id=user_id, message=message)
         if direct_route is not None:
-            self.store.append_history(user_id, session_id, "user", message, model_name)
-            self.store.append_history(
-                user_id,
-                session_id,
-                "assistant",
-                direct_route.message,
-                model_name,
-            )
+            if persist_history:
+                self.store.append_history(user_id, session_id, "user", message, model_name)
+                self.store.append_history(
+                    user_id, session_id, "assistant", direct_route.message, model_name
+                )
             return direct_route
 
         graph = self._build_graph(
@@ -647,7 +659,11 @@ class AgentService:
             model_name=model_name,
             user_id=user_id,
         )
-        history = self.store.get_history(user_id, session_id)
+        history = (
+            frozen_history
+            if frozen_history is not None
+            else self.store.get_history(user_id, session_id)
+        )
         conversation = [
             HumanMessage(content=item.content)
             if item.role == "user"
@@ -670,8 +686,9 @@ class AgentService:
             for trace in traces:
                 self.skill_store.record_tool_run(user_id, trace.tool_name)
 
-        self.store.append_history(user_id, session_id, "user", message, model_name)
-        self.store.append_history(user_id, session_id, "assistant", answer, model_name)
+        if persist_history:
+            self.store.append_history(user_id, session_id, "user", message, model_name)
+            self.store.append_history(user_id, session_id, "assistant", answer, model_name)
         return AgentReply(message=answer, tool_traces=traces, pending_actions=pending)
 
     @staticmethod

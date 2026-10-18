@@ -195,7 +195,7 @@ export class PlanningActionController {
     } catch (error) {
       if (!this.current(revision)) { return; }
       if (intent === 'confirm' && error instanceof CampusFlowRequestError &&
-        ['ACTION_STALE', 'ACTION_EXPIRED', 'ACTION_CONFLICT', 'ACTION_INVALID', 'COURSE_PERMISSION_PREVIEW_REQUIRED', 'COURSE_ACK_STALE', 'COURSE_ACK_INVALID'].includes(error.code)) {
+        ['ACTION_STALE', 'ACTION_EXPIRED', 'ACTION_CONFLICT', 'ACTION_INVALID', 'ACTION_LEGACY_UNVERIFIED', 'COURSE_PERMISSION_PREVIEW_REQUIRED', 'COURSE_ACK_STALE', 'COURSE_ACK_INVALID'].includes(error.code)) {
         this.state.phase = 'invalidated';
         this.state.message = '服务器拒绝了这份过期、冲突或已变化的候选。本次未执行；保留草稿，返回调整后重新预览。';
       } else {

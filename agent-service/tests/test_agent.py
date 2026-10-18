@@ -162,3 +162,67 @@ async def test_route_intent_uses_tool_without_calling_remote_model() -> None:
         "user",
         "assistant",
     ]
+
+
+@pytest.mark.parametrize("empty", [False, True])
+async def test_legacy_chat_uses_frozen_history_and_leaves_commit_to_api(monkeypatch, empty):
+    from campusflow_agent.schemas import HistoryMessage
+
+    store = CampusStore()
+    service = AgentService(Settings(_env_file=None, app_env="test"), store)
+    frozen = (
+        []
+        if empty
+        else [
+            HistoryMessage(role="user", content="已核对问题", created_at=datetime.now(UTC)),
+            HistoryMessage(role="assistant", content="已核对回答", created_at=datetime.now(UTC)),
+        ]
+    )
+    captured = []
+
+    async def invoke(value):
+        captured.extend(value["messages"])
+        return {"messages": [*value["messages"], AIMessage(content="新回答")]}
+
+    def forbidden(*args):
+        raise AssertionError("Unfrozen read or independent history write")
+
+    monkeypatch.setattr(store, "get_history", forbidden)
+    monkeypatch.setattr(store, "append_history", forbidden)
+    monkeypatch.setattr(service, "_build_graph", lambda **kwargs: SimpleNamespace(ainvoke=invoke))
+    reply = await service.chat(
+        user_id="u",
+        session_id="s",
+        api_key="offline-key",
+        model_name="deepseek-flash",
+        message="继续",
+        frozen_history=frozen,
+        persist_history=False,
+    )
+    assert reply.message == "新回答"
+    assert [m.content for m in captured] == [m.content for m in frozen] + ["继续"]
+
+
+async def test_legacy_direct_route_obeys_caller_owned_history_commit(monkeypatch):
+    from campusflow_agent.agent import AgentReply
+
+    store = CampusStore()
+    service = AgentService(Settings(_env_file=None, app_env="test"), store)
+    monkeypatch.setattr(
+        service, "_direct_route_reply", lambda **kwargs: AgentReply(message="路线估算")
+    )
+
+    def forbidden(*args):
+        raise AssertionError("Direct route must not independently append history")
+
+    monkeypatch.setattr(store, "append_history", forbidden)
+    reply = await service.chat(
+        user_id="u",
+        session_id="s",
+        api_key="offline-key",
+        model_name="deepseek-flash",
+        message="路线",
+        frozen_history=[],
+        persist_history=False,
+    )
+    assert reply.message == "路线估算"

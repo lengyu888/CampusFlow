@@ -28,13 +28,15 @@ from .config import Settings
 from .model_catalog import ModelCatalog
 from .schemas import (
     AgentRunRequest,
+    ChatRequest,
     ChatResponse,
-    HistoryMessage,
     RunEvent,
     RunEventsPage,
     RunSnapshot,
     RunToolProgress,
+    SessionContext,
 )
+from .session_service import FrozenSession, SessionError, SessionService
 from .store import CampusStore
 from .tool_presentation import present_tool_trace
 
@@ -76,6 +78,7 @@ class RunService:
                     run_id TEXT PRIMARY KEY, user_id TEXT NOT NULL
                 );
             """)
+        self.sessions = SessionService(store, self.connection)
 
     def _row(self, user_id: str, run_id: str):
         row = self.connection.execute(
@@ -148,7 +151,12 @@ class RunService:
 
     @staticmethod
     def _fingerprint(request: AgentRunRequest) -> str:
-        return hashlib.sha256(request.model_dump_json().encode()).hexdigest()
+        excluded = (
+            {"session_mode", "expected_context_revision"}
+            if request.session_mode is None and request.expected_context_revision is None
+            else set()
+        )
+        return hashlib.sha256(request.model_dump_json(exclude=excluded).encode()).hexdigest()
 
     def existing(self, user_id: str, request: AgentRunRequest) -> RunSnapshot | None:
         with self.store._lock, self.connection:
@@ -187,6 +195,12 @@ class RunService:
                     self.connection.commit()
                     return result
                 # Validate before saving a new run; duplicate receipts remain queryable above.
+                context = self.sessions.prepare_inner(
+                    user_id,
+                    request.session_id,
+                    request.session_mode,
+                    request.expected_context_revision,
+                )
                 _, api_key = self.model_catalog.credentials(request.model, api_key)
                 self._claim_worker()
                 busy = self.connection.execute(
@@ -212,6 +226,8 @@ class RunService:
                     status="queued",
                     created_at=now,
                     updated_at=now,
+                    input_context_revision=context.context_revision,
+                    session_mode=request.session_mode,
                 )
                 self.connection.execute(
                     "INSERT INTO agent_runs VALUES (?, ?, ?, ?, ?, ?, 0)",
@@ -226,8 +242,10 @@ class RunService:
                 )
                 self._event(snapshot, "status", {"status": "queued"})
                 self.connection.commit()
-            except BaseException:
+            except BaseException as exc:
                 self.connection.rollback()
+                if isinstance(exc, SessionError):
+                    raise RunError(exc.status_code, exc.code, exc.detail) from exc
                 raise
         task = asyncio.create_task(self._execute(user_id, snapshot.run_id, api_key))
         self.tasks[snapshot.run_id] = task
@@ -239,6 +257,20 @@ class RunService:
             self.connection.execute("BEGIN IMMEDIATE")
             self._recover_abandoned()
             return self._read(user_id, run_id)
+
+    def session_context(self, user_id: str, session_id: str) -> SessionContext:
+        with self.store._lock, self.connection:
+            self.connection.execute("BEGIN IMMEDIATE")
+            self._recover_abandoned()
+            return self.sessions.context_inner(user_id, session_id)
+
+    def prepare_session(self, user_id: str, request: ChatRequest) -> FrozenSession:
+        with self.store._lock, self.connection:
+            self.connection.execute("BEGIN IMMEDIATE")
+            self._recover_abandoned()
+            return self.sessions.prepare_inner(
+                user_id, request.session_id, request.session_mode, request.expected_context_revision
+            )
 
     def recent(self, user_id: str, limit: int = 20) -> list[RunSnapshot]:
         with self.store._lock, self.connection:
@@ -326,38 +358,8 @@ class RunService:
         self._check_cancelled(user_id, run_id)
 
     def _append_history(self, user_id: str, snapshot: RunSnapshot, response: ChatResponse) -> None:
-        now = datetime.now(UTC).isoformat()
-        if self.store._connection is None:
-            self.store._history.setdefault((user_id, snapshot.session_id), []).extend(
-                [
-                    HistoryMessage(role="user", content=snapshot.message, created_at=now),
-                    HistoryMessage(role="assistant", content=response.message, created_at=now),
-                ]
-            )
-            return
-        self.connection.execute(
-            """INSERT INTO conversation_sessions
-               (user_id,session_id,title,model_name,last_message,created_at,updated_at)
-               VALUES (?,?,?,?,?,?,?) ON CONFLICT(user_id,session_id) DO UPDATE SET
-               model_name=excluded.model_name,last_message=excluded.last_message,
-               updated_at=excluded.updated_at""",
-            (
-                user_id,
-                snapshot.session_id,
-                self.store._session_title(snapshot.message),
-                snapshot.model,
-                response.message,
-                now,
-                now,
-            ),
-        )
-        self.connection.executemany(
-            "INSERT INTO conversation_messages (user_id,session_id,role,content,created_at) "
-            "VALUES (?,?,?,?,?)",
-            [
-                (user_id, snapshot.session_id, "user", snapshot.message, now),
-                (user_id, snapshot.session_id, "assistant", response.message, now),
-            ],
+        self.sessions.append_pair_inner(
+            user_id, snapshot.session_id, snapshot.message, response.message, snapshot.model
         )
 
     def _finish(
@@ -395,6 +397,9 @@ class RunService:
                 snapshot.status, snapshot.result = status, response
                 snapshot.error_code, snapshot.error_message = code, message
                 if response is not None:
+                    self.sessions.validate_inner(
+                        user_id, snapshot.session_id, snapshot.input_context_revision, run_id
+                    )
                     snapshot.partial_answer = response.message
                     self._append_history(user_id, snapshot, response)
                 self._event(snapshot, "status", {"status": status})
@@ -409,7 +414,11 @@ class RunService:
         try:
             self._check_cancelled(user_id, run_id)
             with self.store._lock, self.connection:
+                self.connection.execute("BEGIN IMMEDIATE")
                 snapshot = self._read(user_id, run_id)
+                context = self.sessions.validate_inner(
+                    user_id, snapshot.session_id, snapshot.input_context_revision, run_id
+                )
                 snapshot.status = "running"
                 self._event(snapshot, "status", {"status": "running"})
             async with asyncio.timeout(self.settings.agent_timeout_seconds):
@@ -419,6 +428,7 @@ class RunService:
                     api_key=api_key,
                     model_name=snapshot.model,
                     message=snapshot.message,
+                    frozen_history=context.messages,
                     emit=lambda kind, data: self._emit(user_id, run_id, kind, data),
                     check_cancelled=lambda: self._check_cancelled(user_id, run_id),
                 )
@@ -458,7 +468,7 @@ class RunService:
                 code="RUN_BUDGET_EXCEEDED",
                 message="已达到本轮调用或内容预算，保留已有片段，未继续启动步骤。",
             )
-        except AgentConfigurationError as exc:
+        except (AgentConfigurationError, SessionError) as exc:
             self._finish(user_id, run_id, "failed", code=exc.code, message=exc.detail)
         except Exception as exc:
             code, message = "RUN_FAILED", "本次运行未完成，请核对服务与模型配置后再试。"
@@ -513,6 +523,12 @@ class RunService:
         for row in rows:
             await self.cancel(user_id, row["run_id"])
         with self.store._lock, self.connection:
+            self.connection.execute("BEGIN IMMEDIATE")
+            if self.connection.execute(
+                "SELECT 1 FROM conversation_tombstones WHERE user_id=? AND session_id=?",
+                (user_id, session_id),
+            ).fetchone():
+                return
             # Another worker must acknowledge cancellation before records can be removed.
             active = self.connection.execute(
                 "SELECT 1 FROM agent_runs WHERE user_id=? AND session_id=? "
@@ -521,6 +537,9 @@ class RunService:
             ).fetchone()
             if active:
                 raise RunError(409, "RUN_SESSION_BUSY", "正在停止此会话，请稍后重新删除。")
+            context = self.sessions.snapshot_inner(user_id, session_id)
+            if not rows and context.summary is None:
+                raise KeyError("session_not_found")
             self.connection.execute(
                 "INSERT OR IGNORE INTO agent_run_tombstones SELECT run_id,user_id FROM agent_runs "
                 "WHERE user_id=? AND session_id=?",
@@ -535,11 +554,7 @@ class RunService:
                 "DELETE FROM agent_runs WHERE user_id=? AND session_id=?",
                 (user_id, session_id),
             )
-        try:
-            self.store.delete_session(user_id, session_id)
-        except KeyError:
-            if not rows:
-                raise
+            self.sessions.delete_inner(user_id, session_id)
 
     async def shutdown(self) -> None:
         self.closed = True

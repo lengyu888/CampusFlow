@@ -1,3 +1,4 @@
+import { conversationDependencies } from './helpers/conversation-fixture.mjs';
 import { reliability } from './helpers/course-review-fixture.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -23,7 +24,7 @@ const pageSource = source.slice(0, firstBuilder)
   .replace('export struct AgentPage', 'class AgentPage') + '\n}\n';
 const createPage = new Function('CampusFlowApi', 'Scroller', 'CampusFlowRequestError',
   'displayToolTraces', 'mergeActions', 'restoreDraft', 'localRequestFailure', 'AppTheme', 'localHistory',
-  'PlatformVoiceDriver', 'VoiceInteraction', 'AgentRunController', 'localDrafts', 'shanghaiDate', ...Object.keys(reliability), stripTypeScriptTypes(pageSource) + '\nreturn AgentPage;');
+  'PlatformVoiceDriver', 'VoiceInteraction', 'AgentRunController', 'localDrafts', 'shanghaiDate', ...Object.keys(reliability), ...Object.keys(conversationDependencies), stripTypeScriptTypes(pageSource) + '\nreturn AgentPage;');
 
 async function fixture({ chat = null, probe = null } = {}) {
   const calls = [];
@@ -63,11 +64,11 @@ async function fixture({ chat = null, probe = null } = {}) {
   }
   const drafts = await makeDraftFixture();
   const Page = createPage(Api, class Scroller {}, helper.CampusFlowRequestError, helper.displayToolTraces,
-    helper.mergeActions, helper.restoreDraft, helper.localRequestFailure, {}, {}, Driver, Controller, makeRunController(helper.CampusFlowRequestError, helper.localRequestFailure), drafts.store, shanghaiDate, ...Object.values(reliability));
+    helper.mergeActions, helper.restoreDraft, helper.localRequestFailure, {}, {}, Driver, Controller, makeRunController(helper.CampusFlowRequestError, helper.localRequestFailure), drafts.store, shanghaiDate, ...Object.values(reliability), ...Object.values(conversationDependencies));
   const page = new Page();
   page.baseUrl = 'http://fixture.invalid';
   page.token = 'test-only';
-  page.voiceActive = true;
+  page.voiceActive = true; page.voiceExplanationAccepted = true;
   page.draftLease = drafts.lease;
   page.draftLeaseChanged();
   page.getUIContext = () => ({ getHostContext: () => context });

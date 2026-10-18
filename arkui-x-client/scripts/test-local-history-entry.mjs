@@ -303,3 +303,12 @@ test('ordinary history clear does not clear drafts and explicit draft clear bloc
   assert.match(h.page.draftNotice, /待核对/);
   assert.equal(h.drafts.operations(lease).length, 1);
 });
+
+test('history continuation carries an exact session intent while Agent owns running-work checks', async () => {
+  const {page,draftReady}=setup();await draftReady;page.token='token-a';
+  page.continueAgentSession('session-a');assert.equal(page.requestedSessionId,'session-a');assert.equal(page.sessionResumeRevision,1);assert.equal(page.activeTab,1);
+  page.historyDeleteBusy=true;page.continueAgentSession('session-b');assert.equal(page.requestedSessionId,'session-a');page.historyDeleteBusy=false;
+  page.agentChatBusy=true;page.continueAgentSession('session-b');assert.equal(page.requestedSessionId,'session-b');assert.equal(page.sessionResumeRevision,2);
+  page.resetNavigation();assert.equal(page.requestedSessionId,'');assert.equal(page.sessionResumeRevision,3);
+  page.token='';page.continueAgentSession('session-b');assert.equal(page.requestedSessionId,'');
+});

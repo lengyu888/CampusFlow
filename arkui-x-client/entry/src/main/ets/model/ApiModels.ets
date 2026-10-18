@@ -247,6 +247,8 @@ export interface ChatResponse {
 export type RunStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled' | 'timed_out' | 'budget_exceeded' | 'interrupted';
 
 export interface RunStartRequest {
+  session_mode?: string | null;
+  expected_context_revision?: string | null;
   run_id: string;
   session_id: string;
   model: string;
@@ -262,6 +264,8 @@ export interface RunToolProgress {
 }
 
 export interface RunSnapshot {
+  session_mode?: string | null;
+  input_context_revision?: string | null;
   run_id: string;
   session_id: string;
   model: string;
@@ -329,6 +333,15 @@ export interface SessionSummary {
   message_count: number;
   created_at: string;
   updated_at: string;
+}
+
+export interface SessionContext {
+  user_id: string;
+  session_id: string;
+  summary: SessionSummary;
+  messages: HistoryMessage[];
+  context_revision: string;
+  active_run: RunSnapshot | null;
 }
 
 export interface CampusDataPlace {

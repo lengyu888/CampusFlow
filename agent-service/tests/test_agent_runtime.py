@@ -679,3 +679,32 @@ async def test_real_sdk_sse_parser_and_outbound_wire_format_with_offline_transpo
 def test_runtime_configuration_has_finite_safe_bounds(field, value):
     with pytest.raises(ValidationError):
         Settings(_env_file=None, **{field: value})
+
+
+async def test_runtime_uses_frozen_session_input_not_later_store_contents(monkeypatch):
+    from datetime import UTC, datetime
+
+    from campusflow_agent.schemas import HistoryMessage
+
+    service, client = setup(monkeypatch, [[chunk("完成", finish="stop")]], tools=[])
+    frozen = [
+        HistoryMessage(role="user", content="已核对的问题", created_at=datetime.now(UTC)),
+        HistoryMessage(role="assistant", content="已核对的回答", created_at=datetime.now(UTC)),
+    ]
+
+    def forbidden_read(*args):
+        raise AssertionError("The runtime must not reread a changed conversation")
+
+    monkeypatch.setattr(service.store, "get_history", forbidden_read)
+    reply, _ = await run(service, message="继续", frozen_history=frozen)
+    assert reply.message == "完成"
+    assert [m["content"] for m in client.requests[0]["messages"][1:]] == [
+        "已核对的问题",
+        "已核对的回答",
+        "继续",
+    ]
+    # An explicit empty frozen context must also not fall back to stored history.
+    service, client = setup(monkeypatch, [[chunk("首轮", finish="stop")]], tools=[])
+    monkeypatch.setattr(service.store, "get_history", forbidden_read)
+    await run(service, message="新问题", frozen_history=[])
+    assert [m["content"] for m in client.requests[0]["messages"][1:]] == ["新问题"]

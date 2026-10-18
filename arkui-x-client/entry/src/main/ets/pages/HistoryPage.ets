@@ -18,6 +18,8 @@ export struct HistoryPage {
   @Prop remoteDeleteBusy: boolean = false;
   @Prop accountRevision: number = 0;
   onBack: () => void = () => {};
+  onContinueSession: (sessionId: string) => void = () => {};
+  @State private verifiedRemoteSessionId: string = '';
   onSessionDeleted: (sessionId: string, revision: number) => void = () => {};
   onDeleteBusyChange: (busy: boolean, revision: number) => void = () => {};
   @State private sessions: SessionSummary[] = [];
@@ -52,7 +54,7 @@ export struct HistoryPage {
 
   private async reload(): Promise<void> {
     if (!this.pageActive || this.deleting || this.remoteDeleteBusy) { return; }
-    this.lastAttempt = null;
+    this.lastAttempt = null; this.verifiedRemoteSessionId = '';
     const revision = ++this.requestRevision;
     this.errorText = '';
     this.selected = null;
@@ -83,7 +85,7 @@ export struct HistoryPage {
 
   private async openSession(session: SessionSummary): Promise<void> {
     if (!this.pageActive || this.deleting) { return; }
-    this.lastAttempt = session;
+    this.lastAttempt = session; this.verifiedRemoteSessionId = '';
     const revision = ++this.requestRevision;
     const accountRevision = this.accountRevision;
     this.errorText = '';
@@ -106,6 +108,7 @@ export struct HistoryPage {
       this.messages = messages;
       this.selected = session;
       this.sourceText = '已读取服务端对话。';
+      this.verifiedRemoteSessionId = messages.length > 0 ? session.session_id : '';
       try {
         // The API returns an empty array when a session no longer exists.
         if (messages.length === 0) {
@@ -180,12 +183,24 @@ export struct HistoryPage {
     }
   }
 
+  private canContinue(): boolean {
+    return !this.offlineOnly && this.pageActive && !this.loading && !this.deleting &&
+      !this.remoteDeleteBusy && this.pendingDeleteId.length === 0 && this.selected !== null &&
+      this.messages.length > 0 && this.verifiedRemoteSessionId === this.selected.session_id;
+  }
+
+  private continueSession(): void {
+    if (!this.canContinue() || this.selected === null) { return; }
+    // The assistant fetches authenticated context again before switching; history is never executable.
+    this.onContinueSession(this.selected.session_id);
+  }
+
   private goBack(): void {
     if (this.deleting) { return; }
     this.requestRevision++;
     this.loading = false;
     this.errorText = '';
-    this.lastAttempt = null;
+    this.lastAttempt = null; this.verifiedRemoteSessionId = '';
     this.sourceText = this.listSourceText;
     this.restoreList = true;
     if (this.selected !== null) {
@@ -249,7 +264,7 @@ export struct HistoryPage {
           .width('100%').padding({ left: 20, right: 20, bottom: 6 })
       }
       if (this.chatBusy) {
-        Text('助手正在回复，结束后可删除会话。').fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary)
+        Text('助手还有运行或待核对的操作，处理后再切换或删除会话。').fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary)
           .width('100%').padding({ left: 20, right: 20, bottom: 6 })
       }
       if (this.remoteDeleteBusy) {
@@ -265,7 +280,7 @@ export struct HistoryPage {
       } else if (this.selected === null) {
         Scroll(this.listScroller) {
           Column({ space: 18 }) {
-            Text(`${this.sessions.length} 个会话 · 只读回顾`).fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+            Text(`${this.sessions.length} 个会话 · ${this.offlineOnly ? '离线只读' : '回顾或继续讨论'}`).fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
             if (this.sessions.length === 0 && this.errorText.length === 0) {
               FeedbackPanel({ kind: 'info', title: this.offlineOnly ? '本机暂无完整会话' : '还没有会话',
                 message: this.offlineOnly ? '联网登录后可保存完整对话，再在这里离线回看。' : '向助手描述一个目标，之后可在这里回顾文字。',
@@ -328,6 +343,13 @@ export struct HistoryPage {
           Column({ space: 15 }) {
             Text((this.selected as SessionSummary).title).fontSize(20).fontWeight(FontWeight.Bold)
               .fontColor(AppTheme.ink).wordBreak(WordBreak.BREAK_WORD).width('100%')
+            if (!this.offlineOnly) {
+              Button('继续此会话').width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
+                .fontColor(AppTheme.onAccent).backgroundColor(AppTheme.accent).borderRadius(AppTheme.controlRadius)
+                .enabled(this.canContinue()).onClick(() => this.continueSession())
+              Text('先核对服务端上下文，再回到助手。历史中的旧安排只供阅读，不会恢复为待执行提案。')
+                .fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+            }
             Text('只读文字 · 不能从历史执行提案').fontSize(AppTheme.metaSize).fontColor(AppTheme.muted).width('100%')
               .textAlign(TextAlign.Center).margin({ bottom: 4, top: 4 })
             if (this.messages.length === 0 && !this.loading && this.errorText.length === 0) {

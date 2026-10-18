@@ -1,3 +1,4 @@
+import { conversationDependencies } from './helpers/conversation-fixture.mjs';
 import { reliability } from './helpers/course-review-fixture.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -19,7 +20,7 @@ const controllerSource = source.slice(0, firstBuilder)
   .replace('export struct AgentPage', 'class AgentPage') + '\n}\n';
 const createController = new Function('CampusFlowApi', 'Scroller', 'CampusFlowRequestError',
   'displayToolTraces', 'mergeActions', 'restoreDraft', 'localRequestFailure', 'AppTheme', 'localHistory',
-  'AgentRunController', 'localDrafts', 'shanghaiDate', ...Object.keys(reliability), stripTypeScriptTypes(controllerSource) + '\nreturn AgentPage;');
+  'AgentRunController', 'localDrafts', 'shanghaiDate', ...Object.keys(reliability), ...Object.keys(conversationDependencies), stripTypeScriptTypes(controllerSource) + '\nreturn AgentPage;');
 
 function pending(id = 'proposal-1', title = '复习') {
   return { proposal_id: id, action: 'create', kind: 'task', title, start_at: null, end_at: null,
@@ -63,7 +64,7 @@ async function harness(handlers = {}, localHistory = {}) {
   }
   const drafts = await makeDraftFixture();
   const Controller = createController(Api, class Scroller {}, helper.CampusFlowRequestError,
-    helper.displayToolTraces, helper.mergeActions, helper.restoreDraft, helper.localRequestFailure, {}, localHistory, makeRunController(helper.CampusFlowRequestError, helper.localRequestFailure), drafts.store, shanghaiDate, ...Object.values(reliability));
+    helper.displayToolTraces, helper.mergeActions, helper.restoreDraft, helper.localRequestFailure, {}, localHistory, makeRunController(helper.CampusFlowRequestError, helper.localRequestFailure), drafts.store, shanghaiDate, ...Object.values(reliability), ...Object.values(conversationDependencies));
   const page = new Controller();
   page.baseUrl = 'http://fixture.invalid';
   page.token = 'test-only';
@@ -248,6 +249,7 @@ test('rapid confirm taps issue exactly one POST and block simultaneous chat send
   await page.decide(action, true);
   page.prompt = '执行时写下的问题';
   await page.send();
+  await new Promise(resolve => setImmediate(resolve));
   assert.deepEqual(calls.map((item) => item.method), ['confirmAction']);
   response.resolve(confirmed(action));
   await first;

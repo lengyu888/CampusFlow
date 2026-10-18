@@ -9,7 +9,7 @@ import { test } from 'node:test';
 // Execute the production store and file adapter; the fs shim is not native/device evidence.
 const source = readFileSync(new URL('../entry/src/main/ets/utils/DraftStore.ets', import.meta.url), 'utf8');
 const module = await import(`data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(source)).toString('base64')}`);
-const { DraftStore, MAX_LOCAL_DRAFT_BYTES, MAX_DRAFT_RECORD_BYTES, draftUtf8Bytes } = module;
+const { DraftStore, MAX_LOCAL_DRAFT_BYTES, MAX_DRAFT_RECORD_BYTES, draftUtf8Bytes, assistantDraftKey } = module;
 const scopeA = JSON.stringify(['https://campus.invalid', 'account-a']);
 const scopeB = JSON.stringify(['https://campus.invalid', 'account-b']);
 const key = { kind: 'assistant', ownerId: 'session-1' };
@@ -191,8 +191,12 @@ test('typed frozen timetable submission persists exact original CAS payload with
   assert.deepEqual(restored.store.read(restored.lease, timetableKey).payload.submission, value.submission);
   assert.equal(restored.store.isBlocked(restored.lease, timetableKey), true);
   assert.deepEqual(Object.keys(restored.store.operations(restored.lease)[0]),
-    ['scope', 'kind', 'id', 'draftKind', 'ownerId', 'localRevision', 'fingerprint', 'runRequest']);
+    ['scope', 'kind', 'id', 'draftKind', 'ownerId', 'localRevision', 'fingerprint', 'runRequest',
+      'sessionId', 'proposalRequest', 'permissionRequest']);
   assert.equal(restored.store.operations(restored.lease)[0].runRequest, null);
+  assert.equal(restored.store.operations(restored.lease)[0].sessionId, null);
+  assert.equal(restored.store.operations(restored.lease)[0].proposalRequest, null);
+  assert.equal(restored.store.operations(restored.lease)[0].permissionRequest, null);
 });
 
 test('run request survives newer input and restart for explicit same-ID recovery without credentials', async () => {
@@ -643,3 +647,238 @@ test('production real-file clear queued behind paused rename cannot resurrect pr
   await assert.rejects(nodeFs.stat(join(directory, 'campusflow-local-drafts-v1.json')), { code: 'ENOENT' });
   assert.equal(shim.handles.size, 0);
 }));
+
+test('session draft keys isolate text and anchors while legacy main stays explicit and unmigrated', async () => {
+  const { store, lease, driver } = await setup();
+  const main = { kind: 'assistant', ownerId: 'main' };
+  const a = assistantDraftKey('session-a'), b = assistantDraftKey('session-b');
+  assert.deepEqual(a, { kind: 'assistant', ownerId: 'session:session-a' });
+  store.stage(lease, main, assistant('legacy'));
+  store.stage(lease, a, { ...assistant('草稿 A'), sessionId: 'session-a', anchorDate: '2026-10-17' });
+  store.stage(lease, b, { ...assistant('草稿 B'), sessionId: 'session-b', anchorDate: '2026-10-18' });
+  await store.flush(lease);
+  const reopened = await cold(driver);
+  assert.equal(reopened.store.list(reopened.lease, 'assistant').length, 3);
+  assert.equal(reopened.store.read(reopened.lease, main).payload.text, 'legacy');
+  assert.equal(reopened.store.read(reopened.lease, a).payload.anchorDate, '2026-10-17');
+  assert.equal(reopened.store.read(reopened.lease, b).payload.text, '草稿 B');
+  assert.throws(() => reopened.store.stage(reopened.lease, a, { ...assistant(), sessionId: 'session-b' }));
+  assert.equal(reopened.store.read(reopened.lease, a).payload.text, '草稿 A');
+  for (const invalid of ['', ' ', 's'.repeat(129), null, 5]) assert.throws(() => assistantDraftKey(invalid));
+});
+
+test('frozen run session conditions survive restart exactly, including legacy omission and explicit null', async () => {
+  for (const conditions of [{}, { session_mode: null }, { session_mode: null, expected_context_revision: null },
+    { session_mode: 'new' }, { session_mode: 'new', expected_context_revision: null },
+    { session_mode: 'continue', expected_context_revision: 'c'.repeat(64) }]) {
+    const { store, lease, driver } = await setup();
+    const taskKey = assistantDraftKey('session-a');
+    const ticket = store.stage(lease, taskKey, { ...assistant('待续聊'), sessionId: 'session-a' });
+    const request = { run_id: 'run-continued', session_id: 'session-a', model: 'deepseek-flash', message: '待续聊', ...conditions };
+    await store.beginOperation(lease, { kind: 'run', id: request.run_id, draftKind: taskKey.kind,
+      ownerId: taskKey.ownerId, localRevision: ticket.localRevision, sessionId: 'session-a',
+      runRequest: { ...request, token: 'must-not-persist', history: [{ content: 'private-extra' }] } });
+    const reopened = await cold(driver);
+    assert.deepEqual(reopened.store.operations(reopened.lease)[0].runRequest, request);
+    assert.doesNotMatch(driver.text, /must-not-persist|private-extra/);
+    if (!('session_mode' in conditions)) assert.equal('session_mode' in reopened.store.operations(reopened.lease)[0].runRequest, false);
+    if (!('expected_context_revision' in conditions)) assert.equal('expected_context_revision' in reopened.store.operations(reopened.lease)[0].runRequest, false);
+  }
+});
+
+test('run context and scoped owner validation reject malformed or rebound requests before durable submission', async () => {
+  const bad = [
+    { session_mode: 'continue' }, { session_mode: 'continue', expected_context_revision: null },
+    { session_mode: 'continue', expected_context_revision: 'C'.repeat(64) },
+    { session_mode: 'new', expected_context_revision: 'a'.repeat(64) },
+    { expected_context_revision: 'a'.repeat(64) }, { session_mode: 'resume' },
+  ];
+  for (const change of bad) {
+    const { store, lease } = await setup();
+    const taskKey = assistantDraftKey('session-a');
+    const ticket = store.stage(lease, taskKey, { ...assistant(), sessionId: 'session-a' });
+    await assert.rejects(store.beginOperation(lease, { kind: 'run', id: 'run-new', draftKind: 'assistant',
+      ownerId: taskKey.ownerId, localRevision: ticket.localRevision,
+      runRequest: { run_id: 'run-new', session_id: 'session-a', model: 'deepseek-flash', message: '继续', ...change } }));
+    assert.deepEqual(store.operations(lease), []);
+  }
+  for (const change of [{ sessionId: 'session-b' }, { runRequest: { run_id: 'run-new', session_id: 'session-b', model: 'deepseek-flash', message: '继续' } }]) {
+    const { store, lease } = await setup(); const taskKey = assistantDraftKey('session-a');
+    const ticket = store.stage(lease, taskKey, { ...assistant(), sessionId: 'session-a' });
+    await assert.rejects(store.beginOperation(lease, { kind: 'run', id: 'run-new', draftKind: 'assistant',
+      ownerId: taskKey.ownerId, localRevision: ticket.localRevision, sessionId: 'session-a',
+      runRequest: { run_id: 'run-new', session_id: 'session-a', model: 'deepseek-flash', message: '继续' }, ...change }));
+  }
+});
+
+function auxiliaryDraft() {
+  return { title: '', date: '', dateChoice: 'none', time: '', anchorDate: '2026-10-18', timezone: 'Asia/Shanghai' };
+}
+function proposalPointer(revision) {
+  return { kind: 'proposal', id: 'proposal-original', draftKind: 'new-task', ownerId: 'agent-proposal:proposal-original',
+    localRevision: revision, sessionId: 'session-a',
+    proposalRequest: { proposal_id: 'proposal-original', intent: 'confirm',
+      course_acknowledgements: [{ candidate_id: 'candidate-a', review_digest: 'a'.repeat(64) }] } };
+}
+function permissionPointer(revision) {
+  return { kind: 'course-permission', id: 'proposal-original', draftKind: 'new-task', ownerId: 'agent-permission:proposal-original',
+    localRevision: revision, sessionId: 'session-a',
+    permissionRequest: { proposal_id: 'proposal-original', choices: [{ candidate_id: 'candidate-a', allow_during_course: true }] } };
+}
+
+test('decision and permission pointers share source ID safely but retain distinct typed immutable requests after restart', async () => {
+  const { store, lease, driver } = await setup();
+  const pKey = { kind: 'new-task', ownerId: proposalPointer(1).ownerId };
+  const qKey = { kind: 'new-task', ownerId: permissionPointer(1).ownerId };
+  const p = proposalPointer(store.stage(lease, pKey, auxiliaryDraft()).localRevision);
+  await store.beginOperation(lease, { ...p, proposalRequest: { ...p.proposalRequest, payload: 'must-not-persist' } });
+  const q = permissionPointer(store.stage(lease, qKey, auxiliaryDraft()).localRevision);
+  await store.beginOperation(lease, { ...q, permissionRequest: { ...q.permissionRequest, token: 'must-not-persist' } });
+  q.permissionRequest.choices[0].allow_during_course = false;
+  const reopened = await cold(driver);
+  assert.equal(reopened.store.operations(reopened.lease).length, 2);
+  assert.equal(reopened.store.operations(reopened.lease)[1].permissionRequest.choices[0].allow_during_course, true);
+  assert.equal(reopened.store.operations(reopened.lease)[0].proposalRequest.intent, 'confirm');
+  assert.doesNotMatch(driver.text, /must-not-persist/);
+  await assert.rejects(reopened.store.beginOperation(reopened.lease, q), /另一份草稿/);
+  await reopened.store.resolveOperation(reopened.lease, 'proposal', p.id, true);
+  assert.equal(reopened.store.read(reopened.lease, pKey), undefined);
+  assert.ok(reopened.store.read(reopened.lease, qKey));
+  assert.equal(reopened.store.operations(reopened.lease)[0].kind, 'course-permission');
+  const copy = reopened.store.operations(reopened.lease);
+  copy[0].permissionRequest.choices[0].candidate_id = 'mutated';
+  assert.equal(reopened.store.operations(reopened.lease)[0].permissionRequest.choices[0].candidate_id, 'candidate-a');
+});
+
+test('proposal pointer validates intent, candidate ACKs and session association without storing a full proposal', async () => {
+  const original = proposalPointer(1);
+  for (const change of [
+    { sessionId: null }, { sessionId: ' ' }, { proposalRequest: { ...original.proposalRequest, proposal_id: 'other' } },
+    { proposalRequest: { ...original.proposalRequest, intent: 'auto-confirm' } },
+    { proposalRequest: { ...original.proposalRequest, intent: 'cancel' } },
+    { proposalRequest: { ...original.proposalRequest, course_acknowledgements: [{ candidate_id: 'x', review_digest: 'bad' }] } },
+    { proposalRequest: { ...original.proposalRequest, course_acknowledgements: [original.proposalRequest.course_acknowledgements[0], original.proposalRequest.course_acknowledgements[0]] } },
+    { proposalRequest: { ...original.proposalRequest, course_acknowledgements: Array.from({ length: 97 }, (_, i) => ({ candidate_id: String(i), review_digest: 'a'.repeat(64) })) } },
+  ]) {
+    const { store, lease } = await setup(); const ticket = store.stage(lease, { kind: 'new-task', ownerId: original.ownerId }, auxiliaryDraft());
+    await assert.rejects(store.beginOperation(lease, { ...proposalPointer(ticket.localRevision), ...change }));
+    assert.deepEqual(store.operations(lease), []);
+  }
+  const { store, lease, driver } = await setup();
+  const ticket = store.stage(lease, { kind: 'new-task', ownerId: original.ownerId }, auxiliaryDraft());
+  const cancel = proposalPointer(ticket.localRevision); cancel.proposalRequest = { proposal_id: cancel.id, intent: 'cancel', course_acknowledgements: [] };
+  await store.beginOperation(lease, cancel);
+  const reopened = await cold(driver);
+  assert.deepEqual(reopened.store.operations(reopened.lease)[0].proposalRequest, cancel.proposalRequest);
+});
+
+test('permission replacement pointers require actual choices, unique candidates and strict booleans', async () => {
+  const original = permissionPointer(1);
+  for (const change of [
+    { sessionId: null }, { permissionRequest: null }, { permissionRequest: { proposal_id: 'other', choices: original.permissionRequest.choices } },
+    { permissionRequest: { proposal_id: original.id, choices: [] } },
+    { permissionRequest: { proposal_id: original.id, choices: [{ candidate_id: 'x', allow_during_course: 'true' }] } },
+    { permissionRequest: { proposal_id: original.id, choices: [{ candidate_id: '', allow_during_course: true }] } },
+    { permissionRequest: { proposal_id: original.id, choices: [original.permissionRequest.choices[0], original.permissionRequest.choices[0]] } },
+    { permissionRequest: { proposal_id: original.id, choices: Array.from({ length: 97 }, (_, i) => ({ candidate_id: String(i), allow_during_course: true })) } },
+    { kind: 'proposal' }, { runRequest: { run_id: original.id, session_id: 'session-a', model: 'deepseek-flash', message: 'unrelated' } },
+  ]) {
+    const { store, lease } = await setup(); const ticket = store.stage(lease, { kind: 'new-task', ownerId: original.ownerId }, auxiliaryDraft());
+    await assert.rejects(store.beginOperation(lease, { ...permissionPointer(ticket.localRevision), ...change }));
+    assert.deepEqual(store.operations(lease), []);
+  }
+});
+
+test('permission pointer storage failure keeps exact choices blocked and recovery cleanup failure stays retryable', async () => {
+  const { store, lease, driver } = await setup(); const pointer = permissionPointer(1);
+  const auxKey = { kind: 'new-task', ownerId: pointer.ownerId };
+  pointer.localRevision = store.stage(lease, auxKey, auxiliaryDraft()).localRevision;
+  await store.flush(lease); driver.failWrite = true;
+  await assert.rejects(store.beginOperation(lease, pointer));
+  assert.equal(store.isBlocked(lease, auxKey), true);
+  driver.failWrite = false; await store.beginOperation(lease, pointer);
+  const reopened = await cold(driver);
+  assert.deepEqual(reopened.store.operations(reopened.lease)[0].permissionRequest, pointer.permissionRequest);
+  driver.failWrite = true;
+  await assert.rejects(reopened.store.resolveOperation(reopened.lease, 'course-permission', pointer.id, true));
+  assert.equal(reopened.store.isBlocked(reopened.lease, auxKey), true);
+  driver.failWrite = false;
+  await reopened.store.resolveOperation(reopened.lease, 'course-permission', pointer.id, true);
+  const completed = await cold(driver);
+  assert.deepEqual(completed.store.operations(completed.lease), []);
+  assert.equal(completed.store.read(completed.lease, auxKey), undefined);
+});
+
+async function storedProposal() {
+  const h = await setup(); const pointer = proposalPointer(1);
+  const auxKey = { kind: 'new-task', ownerId: pointer.ownerId };
+  pointer.localRevision = h.store.stage(h.lease, auxKey, auxiliaryDraft()).localRevision;
+  await h.store.beginOperation(h.lease, pointer);
+  return { ...h, pointer, auxKey };
+}
+
+test('cancel intent replaces a confirm pointer atomically and cold restart retains its exact identity', async () => {
+  const h = await storedProposal(); const old = h.store.operations(h.lease)[0];
+  const gate = deferred(); h.driver.nextWrite = gate; h.driver.started = deferred();
+  const replacing = h.store.replaceProposalIntent(h.lease, old.id, old.sessionId, old.proposalRequest);
+  await h.driver.started.promise;
+  assert.equal(h.store.isBlocked(h.lease, h.auxKey), true);
+  assert.equal(h.store.operations(h.lease)[0].proposalRequest.intent, 'confirm');
+  assert.equal(JSON.parse(h.driver.text).operations[0].proposalRequest.intent, 'confirm');
+  gate.resolve(); await replacing;
+  const reopened = await cold(h.driver); const next = reopened.store.operations(reopened.lease)[0];
+  assert.deepEqual(next, { ...old, proposalRequest: { proposal_id: old.id, intent: 'cancel', course_acknowledgements: [] } });
+  assert.equal(reopened.store.isBlocked(reopened.lease, h.auxKey), true);
+  assert.equal(reopened.store.read(reopened.lease, h.auxKey).localRevision, old.localRevision);
+  await reopened.store.replaceProposalIntent(reopened.lease, next.id, next.sessionId, next.proposalRequest);
+  assert.equal(reopened.store.operations(reopened.lease).length, 1, 'duplicate cancellation never adds a pointer');
+  assert.deepEqual(reopened.store.operations(reopened.lease)[0], next);
+});
+
+test('cancel intent disk failure leaves the confirm pointer blocked and exactly retryable', async () => {
+  const h = await storedProposal(); const old = h.store.operations(h.lease)[0]; h.driver.failWrite = true;
+  await assert.rejects(h.store.replaceProposalIntent(h.lease, old.id, old.sessionId, old.proposalRequest));
+  assert.deepEqual(h.store.operations(h.lease)[0], old); assert.equal(h.store.isBlocked(h.lease, h.auxKey), true);
+  assert.equal(JSON.parse(h.driver.text).operations[0].proposalRequest.intent, 'confirm');
+  h.driver.failWrite = false;
+  await h.store.replaceProposalIntent(h.lease, old.id, old.sessionId, old.proposalRequest);
+  const reopened = await cold(h.driver);
+  assert.equal(reopened.store.operations(reopened.lease)[0].proposalRequest.intent, 'cancel');
+});
+
+test('cancel intent rejects wrong proposal, session, stale ACKs, permission kind and invalid leases', async () => {
+  const h = await storedProposal(); const old = h.store.operations(h.lease)[0]; const writes = h.driver.writes;
+  for (const [id, session, expected] of [
+    ['different', old.sessionId, old.proposalRequest],
+    [old.id, 'another-session', old.proposalRequest],
+    [old.id, old.sessionId, { ...old.proposalRequest, course_acknowledgements: [] }],
+    [old.id, old.sessionId, { proposal_id: old.id, intent: 'cancel', course_acknowledgements: [] }],
+    [old.id, old.sessionId, { ...old.proposalRequest, intent: 'permission' }],
+  ]) await assert.rejects(h.store.replaceProposalIntent(h.lease, id, session, expected));
+  assert.equal(h.driver.writes, writes); assert.deepEqual(h.store.operations(h.lease)[0], old);
+  await h.store.resolveOperation(h.lease, 'proposal', old.id, true);
+  const permission = permissionPointer(1); const auxKey = { kind: 'new-task', ownerId: permission.ownerId };
+  permission.localRevision = h.store.stage(h.lease, auxKey, auxiliaryDraft()).localRevision;
+  await h.store.beginOperation(h.lease, permission);
+  await assert.rejects(h.store.replaceProposalIntent(h.lease, old.id, old.sessionId, old.proposalRequest));
+  assert.equal(h.store.operations(h.lease)[0].kind, 'course-permission');
+  await h.store.activate(scopeB);
+  await assert.rejects(h.store.replaceProposalIntent(h.lease, old.id, old.sessionId, old.proposalRequest));
+});
+
+test('cancel intent write cannot restore a cleared account and does not overwrite concurrent typing', async () => {
+  const h = await storedProposal(); const old = h.store.operations(h.lease)[0];
+  const gate = deferred(); h.driver.nextWrite = gate; h.driver.started = deferred();
+  const replacing = h.store.replaceProposalIntent(h.lease, old.id, old.sessionId, old.proposalRequest);
+  await h.driver.started.promise;
+  h.store.stage(h.lease, key, assistant('later input'));
+  gate.resolve(); await replacing; await h.store.flush(h.lease);
+  const reopened = await cold(h.driver);
+  assert.equal(reopened.store.read(reopened.lease, key).payload.text, 'later input');
+  const next = reopened.store.operations(reopened.lease)[0];
+  const closing = deferred(); h.driver.nextWrite = closing; h.driver.started = deferred();
+  const oldWrite = reopened.store.replaceProposalIntent(reopened.lease, next.id, next.sessionId, next.proposalRequest);
+  await h.driver.started.promise; const cleared = reopened.store.clear(); closing.resolve();
+  await assert.rejects(oldWrite); await cleared;
+  assert.equal(reopened.store.valid(reopened.lease), false); assert.equal(h.driver.text, undefined);
+});

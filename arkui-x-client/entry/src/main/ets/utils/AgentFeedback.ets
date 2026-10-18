@@ -66,6 +66,16 @@ function knownErrorMessage(code: string): string {
       return '已达到本轮调用或内容预算，已有片段保留，未继续启动步骤。';
     case 'RUN_INTERRUPTED':
       return '运行服务已中断，已有片段保留，本次未自动重新执行。';
+    case 'SESSION_NOT_FOUND':
+      return '未找到可继续的本人会话，请返回历史列表重新核对。';
+    case 'SESSION_DELETED':
+      return '此会话已删除，不能重新写回；当前输入仍保留，可用于新对话。';
+    case 'SESSION_CONTEXT_CHANGED':
+      return '会话内容已在另一处更新，请重新读取后再发送；当前输入仍保留。';
+    case 'SESSION_EXISTS':
+      return '这个会话已有内容，请核对后选择继续，或明确开始新对话。';
+    case 'SESSION_MODE_INVALID':
+      return '会话版本条件不完整，请重新核对上下文后发送。';
     case 'RUN_CANCELLED':
       return '运行已取消，未完成的内容仅供查看。';
     case 'RUN_FAILED':

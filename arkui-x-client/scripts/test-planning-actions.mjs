@@ -102,7 +102,7 @@ test('cancel response uses action envelope and does not claim tasks were never w
 });
 
 test('only known rejection codes release stale candidates; generic 409 remains unknown', async () => {
-  for (const code of ['ACTION_STALE', 'ACTION_EXPIRED', 'ACTION_CONFLICT', 'ACTION_INVALID', 'UNKNOWN_CODE']) {
+  for (const code of ['ACTION_STALE', 'ACTION_EXPIRED', 'ACTION_CONFLICT', 'ACTION_INVALID', 'ACTION_LEGACY_UNVERIFIED', 'COURSE_ACK_STALE', 'COURSE_ACK_INVALID', 'UNKNOWN_CODE']) {
     const f = fixture({ confirm: () => { throw new CampusFlowRequestError(409, code, 'do not display'); } });
     await f.controller.preview(create()); await f.controller.confirm();
     assert.equal(f.controller.snapshot().phase, code === 'UNKNOWN_CODE' ? 'uncertain' : 'invalidated');

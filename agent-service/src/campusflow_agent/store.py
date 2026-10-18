@@ -33,6 +33,7 @@ class CampusStore:
     _proposal_owners: dict[str, str] = field(default_factory=dict)
     _history: dict[tuple[str, str], list[HistoryMessage]] = field(default_factory=dict)
     _session_titles: dict[tuple[str, str], str] = field(default_factory=dict)
+    _session_tombstones: set[tuple[str, str]] = field(default_factory=set)
     _tasks: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
     _plans: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
     _milestones: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
@@ -140,8 +141,11 @@ class CampusStore:
             )
 
         from .course_policy import ensure_schema
+        from .session_service import ensure_session_schema
 
         ensure_schema(self._connection)
+        with self._connection:
+            ensure_session_schema(self._connection)
 
     def set_user_context(
         self,
@@ -513,6 +517,8 @@ class CampusStore:
             now = message.created_at.isoformat()
             title = self._session_title(content) if role == "user" else "新会话"
             with self._lock, self._connection:
+                self._connection.execute("BEGIN IMMEDIATE")
+                self._check_session_alive(user_id, session_id)
                 self._connection.execute(
                     """
                     INSERT INTO conversation_sessions (
@@ -545,7 +551,23 @@ class CampusStore:
                 )
             return
         with self._lock:
+            self._check_session_alive(user_id, session_id)
             self._history.setdefault((user_id, session_id), []).append(message)
+
+    def _check_session_alive(self, user_id: str, session_id: str) -> None:
+        from .session_service import SessionError
+
+        retired = (user_id, session_id) in self._session_tombstones
+        if self._connection is not None:
+            retired = (
+                self._connection.execute(
+                    "SELECT 1 FROM conversation_tombstones WHERE user_id=? AND session_id=?",
+                    (user_id, session_id),
+                ).fetchone()
+                is not None
+            )
+        if retired:
+            raise SessionError(410, "SESSION_DELETED", "此会话已删除，不能重新写入。")
 
     def get_history(self, user_id: str, session_id: str) -> list[HistoryMessage]:
         if self._connection is not None:
@@ -642,12 +664,35 @@ class CampusStore:
     def delete_session(self, user_id: str, session_id: str) -> None:
         if self._connection is None:
             with self._lock:
+                if (user_id, session_id) in self._session_tombstones:
+                    return
                 existed = self._history.pop((user_id, session_id), None)
                 self._session_titles.pop((user_id, session_id), None)
+                if existed is not None:
+                    self._session_tombstones.add((user_id, session_id))
             if existed is None:
                 raise KeyError("session_not_found")
             return
         with self._lock, self._connection:
+            self._connection.execute("BEGIN IMMEDIATE")
+            if self._connection.execute(
+                "SELECT 1 FROM conversation_tombstones WHERE user_id=? AND session_id=?",
+                (user_id, session_id),
+            ).fetchone():
+                return
+            if (
+                self._connection.execute(
+                    "SELECT 1 FROM sqlite_master WHERE type='table' AND name='agent_runs'"
+                ).fetchone()
+                and self._connection.execute(
+                    "SELECT 1 FROM agent_runs WHERE user_id=? AND session_id=? "
+                    "AND status IN ('queued','running')",
+                    (user_id, session_id),
+                ).fetchone()
+            ):
+                from .session_service import SessionError
+
+                raise SessionError(409, "RUN_SESSION_BUSY", "请先停止此会话的运行再删除。")
             cursor = self._connection.execute(
                 "DELETE FROM conversation_sessions WHERE user_id = ? AND session_id = ?",
                 (user_id, session_id),
@@ -656,8 +701,12 @@ class CampusStore:
                 "DELETE FROM conversation_messages WHERE user_id = ? AND session_id = ?",
                 (user_id, session_id),
             )
-        if cursor.rowcount != 1:
-            raise KeyError("session_not_found")
+            if cursor.rowcount != 1:
+                raise KeyError("session_not_found")
+            self._connection.execute(
+                "INSERT INTO conversation_tombstones(user_id,session_id) VALUES(?,?)",
+                (user_id, session_id),
+            )
 
     def create_task(
         self,

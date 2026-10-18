@@ -1,6 +1,6 @@
 // Input snapshots only: these records are never authority to execute a server action.
 export type DraftKind = 'assistant' | 'new-task' | 'onboarding' | 'timetable';
-export type DraftOperationKind = 'run' | 'proposal' | 'onboarding' | 'timetable';
+export type DraftOperationKind = 'run' | 'proposal' | 'course-permission' | 'onboarding' | 'timetable';
 
 export interface DraftCourse {
   date: string;
@@ -133,6 +133,29 @@ export interface DraftRunRequest {
   session_id: string;
   model: string;
   message: string;
+  session_mode?: string | null;
+  expected_context_revision?: string | null;
+}
+
+export interface DraftCourseAcknowledgement {
+  candidate_id: string;
+  review_digest: string;
+}
+
+export interface DraftCoursePermissionChoice {
+  candidate_id: string;
+  allow_during_course: boolean;
+}
+
+export interface DraftProposalRequest {
+  proposal_id: string;
+  intent: 'confirm' | 'cancel';
+  course_acknowledgements: DraftCourseAcknowledgement[];
+}
+
+export interface DraftPermissionRequest {
+  proposal_id: string;
+  choices: DraftCoursePermissionChoice[];
 }
 
 export interface DraftOperationInput {
@@ -143,6 +166,9 @@ export interface DraftOperationInput {
   localRevision: number;
   fingerprint?: string;
   runRequest?: DraftRunRequest | null;
+  sessionId?: string | null;
+  proposalRequest?: DraftProposalRequest | null;
+  permissionRequest?: DraftPermissionRequest | null;
 }
 
 export interface DraftOperation {
@@ -154,6 +180,9 @@ export interface DraftOperation {
   localRevision: number;
   fingerprint: string;
   runRequest: DraftRunRequest | null;
+  sessionId: string | null;
+  proposalRequest: DraftProposalRequest | null;
+  permissionRequest: DraftPermissionRequest | null;
 }
 
 export interface DraftSaveState {
@@ -254,7 +283,7 @@ function kind(value: DraftKind): DraftKind {
 }
 
 function operationKind(value: DraftOperationKind): DraftOperationKind {
-  if (value !== 'run' && value !== 'proposal' && value !== 'onboarding' && value !== 'timetable') {
+  if (value !== 'run' && value !== 'proposal' && value !== 'course-permission' && value !== 'onboarding' && value !== 'timetable') {
     throw invalid();
   }
   return value;
@@ -275,6 +304,60 @@ function revision(value: string, allowEmpty: boolean = true): string {
 function operationId(value: string): string {
   if (typeof value !== 'string' || !/^[A-Za-z0-9_-]{1,160}$/.test(value)) { throw invalid(); }
   return value;
+}
+
+export function assistantDraftKey(sessionId: string): DraftKey {
+  const id = userText(sessionId, 128);
+  if (id.trim().length === 0) { throw invalid(); }
+  return { kind: 'assistant', ownerId: `session:${id}` };
+}
+
+function frozenRunRequest(value: DraftRunRequest, id: string): DraftRunRequest {
+  if (!value || typeof value !== 'object' || Array.isArray(value) || value.run_id !== id ||
+    typeof value.model !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$/.test(value.model)) { throw invalid(); }
+  const result: DraftRunRequest = { run_id: id, session_id: userText(value.session_id, 128),
+    model: value.model, message: userText(value.message, 8000) };
+  const mode = value.session_mode;
+  const expected = value.expected_context_revision;
+  if (mode !== undefined && mode !== null && mode !== 'new' && mode !== 'continue') { throw invalid(); }
+  if (mode === 'continue') {
+    if (typeof expected !== 'string' || !/^[a-f0-9]{64}$/.test(expected)) { throw invalid(); }
+  } else if (expected !== undefined && expected !== null) { throw invalid(); }
+  // Preserve omission and explicit null separately. Legacy requests must stay four-field bodies.
+  if (mode !== undefined) { result.session_mode = mode; }
+  if (expected !== undefined) { result.expected_context_revision = expected; }
+  return result;
+}
+
+function proposalRequest(value: DraftProposalRequest, id: string): DraftProposalRequest {
+  if (!value || typeof value !== 'object' || Array.isArray(value) || value.proposal_id !== id ||
+    (value.intent !== 'confirm' && value.intent !== 'cancel') || !Array.isArray(value.course_acknowledgements) ||
+    value.course_acknowledgements.length > 96 || (value.intent === 'cancel' && value.course_acknowledgements.length > 0)) { throw invalid(); }
+  const seen: string[] = [];
+  const acknowledgements: DraftCourseAcknowledgement[] = [];
+  for (const item of value.course_acknowledgements) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) { throw invalid(); }
+    const candidate = userText(item.candidate_id, 128);
+    if (candidate.trim().length === 0 || seen.includes(candidate)) { throw invalid(); }
+    seen.push(candidate);
+    acknowledgements.push({ candidate_id: candidate, review_digest: revision(item.review_digest, false) });
+  }
+  return { proposal_id: id, intent: value.intent, course_acknowledgements: acknowledgements };
+}
+
+function permissionRequest(value: DraftPermissionRequest, id: string): DraftPermissionRequest {
+  if (!value || typeof value !== 'object' || Array.isArray(value) || value.proposal_id !== id ||
+    !Array.isArray(value.choices) || value.choices.length < 1 || value.choices.length > 96) { throw invalid(); }
+  const seen: string[] = [];
+  const choices: DraftCoursePermissionChoice[] = [];
+  for (const item of value.choices) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) { throw invalid(); }
+    const candidate = userText(item.candidate_id, 128);
+    if (candidate.trim().length === 0 || seen.includes(candidate)) { throw invalid(); }
+    seen.push(candidate);
+    choices.push({ candidate_id: candidate, allow_during_course: flag(item.allow_during_course) });
+  }
+  return { proposal_id: id, choices: choices };
 }
 
 function course(value: DraftCourse): DraftCourse {
@@ -377,6 +460,8 @@ function record(value: DraftRecord, scope: string): DraftRecord {
   const result: DraftRecord = { formatVersion: 1, scope: scope, kind: valueKind,
     ownerId: text(value.ownerId, 512, true), localRevision: integer(value.localRevision, 1, Number.MAX_SAFE_INTEGER),
     updatedAt: value.updatedAt, payload: payload(valueKind, value.payload) };
+  if (valueKind === 'assistant' && result.ownerId.startsWith('session:') &&
+    result.ownerId !== assistantDraftKey((result.payload as AssistantDraft).sessionId).ownerId) { throw invalid(); }
   if (draftUtf8Bytes(JSON.stringify(result)) > MAX_DRAFT_RECORD_BYTES) { throw invalid(); }
   return result;
 }
@@ -389,18 +474,30 @@ function operation(value: DraftOperationInput, scope: string): DraftOperation {
   }
   const result: DraftOperation = { scope: scope, kind: operationKind(value.kind), id: operationId(value.id),
     draftKind: kind(value.draftKind), ownerId: text(value.ownerId, 512, true),
-    localRevision: integer(value.localRevision, 1, Number.MAX_SAFE_INTEGER), fingerprint: fingerprint, runRequest: null };
+    localRevision: integer(value.localRevision, 1, Number.MAX_SAFE_INTEGER), fingerprint: fingerprint, runRequest: null,
+    sessionId: value.sessionId === undefined || value.sessionId === null ? null : userText(value.sessionId, 128),
+    proposalRequest: null, permissionRequest: null };
   if ((result.kind === 'run' && result.draftKind !== 'assistant') ||
-      (result.kind === 'proposal' && result.draftKind !== 'new-task') ||
+      ((result.kind === 'proposal' || result.kind === 'course-permission') && result.draftKind !== 'new-task') ||
       (result.kind === 'onboarding' && result.draftKind !== 'onboarding') ||
       (result.kind === 'timetable' && result.draftKind !== 'timetable')) { throw invalid(); }
   if (value.runRequest !== undefined && value.runRequest !== null) {
-    const request = value.runRequest;
-    if (result.kind !== 'run' || typeof request !== 'object' || request.run_id !== result.id ||
-        typeof request.model !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$/.test(request.model)) { throw invalid(); }
-    result.runRequest = { run_id: result.id, session_id: userText(request.session_id, 128),
-      model: request.model, message: userText(request.message, 8000) };
+    if (result.kind !== 'run') { throw invalid(); }
+    result.runRequest = frozenRunRequest(value.runRequest, result.id);
+    if ((result.sessionId !== null && result.sessionId !== result.runRequest.session_id) ||
+      (result.ownerId.startsWith('session:') && result.ownerId !== assistantDraftKey(result.runRequest.session_id).ownerId)) { throw invalid(); }
   }
+  if (result.sessionId !== null && (result.sessionId.trim().length === 0 ||
+    !['run', 'proposal', 'course-permission'].includes(result.kind))) { throw invalid(); }
+  if (value.proposalRequest !== undefined && value.proposalRequest !== null) {
+    if (result.kind !== 'proposal' || result.sessionId === null) { throw invalid(); }
+    result.proposalRequest = proposalRequest(value.proposalRequest, result.id);
+  }
+  if (value.permissionRequest !== undefined && value.permissionRequest !== null) {
+    if (result.kind !== 'course-permission' || result.sessionId === null) { throw invalid(); }
+    result.permissionRequest = permissionRequest(value.permissionRequest, result.id);
+  }
+  if (result.kind === 'course-permission' && result.permissionRequest === null) { throw invalid(); }
   return result;
 }
 
@@ -649,6 +746,43 @@ export class DraftStore {
     if (!this.document.operations.some((item: DraftOperation): boolean => item.kind === next.kind && item.id === next.id)) {
       throw new Error('该操作已完成核对，请勿再次提交旧请求。');
     }
+  }
+
+  async replaceProposalIntent(lease: DraftLease, id: string, sessionId: string, expected: DraftProposalRequest): Promise<void> {
+    const proposalId = text(id, 128, true);
+    const ownerSession = text(sessionId, 128, true);
+    const expectedRequest = proposalRequest(expected, proposalId);
+    return this.enqueue(async (): Promise<void> => {
+      this.requireLease(lease);
+      const current = this.document.operations.find((item: DraftOperation): boolean => item.kind === 'proposal' && item.id === proposalId);
+      if (current === undefined || current.sessionId !== ownerSession || current.proposalRequest === null ||
+        JSON.stringify(current.proposalRequest) !== JSON.stringify(expectedRequest)) {
+        throw new Error('原提案恢复标识已变化，请先重新核对。');
+      }
+      // Only an explicit, freshly checked cancel can replace the old intent. The
+      // pointer remains continuously blocked, including while the file is written.
+      const cancelled: DraftProposalRequest = { proposal_id: proposalId, intent: 'cancel', course_acknowledgements: [] };
+      const candidate = cloneDocument(this.document);
+      candidate.operations = candidate.operations.map((item: DraftOperation): DraftOperation => {
+        if (item.kind === 'proposal' && item.id === proposalId) { item.proposalRequest = cancelled; }
+        return item;
+      });
+      candidate.revision = ++this.document.revision;
+      try {
+        await this.driver.write(JSON.stringify(candidate));
+        this.requireLease(lease);
+        this.document.operations = this.document.operations.map((item: DraftOperation): DraftOperation => {
+          if (item.kind === 'proposal' && item.id === proposalId) { item.proposalRequest = cancelled; }
+          return item;
+        });
+        this.savedRevision = candidate.revision;
+        this.publish(this.document.revision === candidate.revision ? 'saved' : 'pending',
+          this.document.revision === candidate.revision ? '取消意图已保存，可核对同一提案。' : '新更改尚未保存到本机。');
+      } catch {
+        if (this.valid(lease)) { this.publish('error', '取消意图尚未保存，原操作仍待核对，请重试。'); }
+        throw new Error('取消意图尚未保存，原操作仍待核对。');
+      }
+    });
   }
 
   resolveOperation(lease: DraftLease, valueKind: DraftOperationKind, id: string, removeMatchingDraft: boolean = false): Promise<void> {

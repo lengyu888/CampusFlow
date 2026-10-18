@@ -1,6 +1,8 @@
 import http from '@ohos.net.http';
 import {
   CourseAcknowledgement,
+  CoursePermissionChoice,
+  SessionContext,
   AdminUserSummary,
   AuthResponse,
   CampusDataSnapshot,
@@ -131,7 +133,7 @@ export class CampusFlowApi {
       }
       const text = response.result as string;
       if (response.responseCode < 200 || response.responseCode >= 300) {
-        if (path === '/api/v1/onboarding' || path.startsWith('/api/v1/onboarding/') || path === '/api/v1/models' || path === '/api/v1/learning-preferences' || path.startsWith('/api/v1/knowledge/') || path === '/api/v1/chat' || path.startsWith('/api/v1/agent-runs') || path.startsWith('/api/v1/actions/') || path.startsWith('/api/v1/planning/') ||
+        if (path === '/api/v1/sessions' || path.startsWith('/api/v1/sessions/') || path === '/api/v1/onboarding' || path.startsWith('/api/v1/onboarding/') || path === '/api/v1/models' || path === '/api/v1/learning-preferences' || path.startsWith('/api/v1/knowledge/') || path === '/api/v1/chat' || path.startsWith('/api/v1/agent-runs') || path.startsWith('/api/v1/actions/') || path.startsWith('/api/v1/planning/') ||
           path === '/api/v1/tasks' || path.startsWith('/api/v1/tasks/') ||
           path === '/api/v1/me/timetable' || path.startsWith('/api/v1/me/timetable/') || path.startsWith('/api/v1/weather?')) {
           throw requestFailure(response.responseCode, text);
@@ -245,6 +247,11 @@ export class CampusFlowApi {
     return this.request<PendingAction>('/api/v1/planning/actions', http.RequestMethod.POST, JSON.stringify(payload));
   }
 
+  async coursePermissions(proposalId: string, choices: CoursePermissionChoice[]): Promise<PendingAction> {
+    return this.request<PendingAction>(`/api/v1/actions/${encodeURIComponent(proposalId)}/course-permissions`,
+      http.RequestMethod.POST, JSON.stringify({ choices: choices }));
+  }
+
   async confirmAction(proposalId: string, acknowledgements: CourseAcknowledgement[] = []): Promise<ConfirmActionResponse> {
     return this.request<ConfirmActionResponse>(`/api/v1/actions/${encodeURIComponent(proposalId)}/confirm`,
       http.RequestMethod.POST, JSON.stringify({ course_acknowledgements: acknowledgements }));
@@ -273,6 +280,15 @@ export class CampusFlowApi {
 
   async sessions(): Promise<SessionSummary[]> {
     return this.request<SessionSummary[]>('/api/v1/sessions', http.RequestMethod.GET);
+  }
+
+  async sessionContext(sessionId: string): Promise<SessionContext> {
+    return this.request<SessionContext>(`/api/v1/sessions/${encodeURIComponent(sessionId)}/context`, http.RequestMethod.GET);
+  }
+
+  async renameSession(sessionId: string, title: string): Promise<SessionSummary> {
+    return this.request<SessionSummary>(`/api/v1/sessions/${encodeURIComponent(sessionId)}`,
+      http.RequestMethod.PUT, JSON.stringify({ title: title }));
   }
 
   async history(sessionId: string): Promise<HistoryMessage[]> {

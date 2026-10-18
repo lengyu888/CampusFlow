@@ -44,6 +44,18 @@ function nullableText(value: string | null): boolean { return value === null || 
 function stamp(value: string): boolean { return text(value) && Number.isFinite(Date.parse(value)); }
 function count(value: number): boolean { return Number.isSafeInteger(value) && value >= 0; }
 function uuid(value: string): boolean { return typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value); }
+function contextRevision(value: string | null | undefined): boolean { return typeof value === 'string' && /^[a-f0-9]{64}$/.test(value); }
+function validSessionRequest(mode: string | null | undefined, revision: string | null | undefined): boolean {
+  if (mode !== undefined && mode !== null && mode !== 'new' && mode !== 'continue') { return false; }
+  return mode === 'continue' ? contextRevision(revision) : revision === undefined || revision === null;
+}
+
+function copyRunRequest(request: RunStartRequest): RunStartRequest {
+  const result: RunStartRequest = { run_id: request.run_id, session_id: request.session_id, model: request.model, message: request.message };
+  if (request.session_mode !== undefined) { result.session_mode = request.session_mode; }
+  if (request.expected_context_revision !== undefined) { result.expected_context_revision = request.expected_context_revision; }
+  return result;
+}
 
 export function isRunTerminal(status: string): boolean {
   return ['succeeded', 'failed', 'cancelled', 'timed_out', 'budget_exceeded', 'interrupted'].includes(status);
@@ -55,6 +67,9 @@ export function validRunSnapshot(value: RunSnapshot): boolean {
     !['queued', 'running', 'succeeded', 'failed', 'cancelled', 'timed_out', 'budget_exceeded', 'interrupted'].includes(value.status) ||
     !count(value.seq) || !count(value.model_calls) || !count(value.tool_calls) || typeof value.partial_answer !== 'string' ||
     !nullableText(value.error_code) || !nullableText(value.error_message) || !Array.isArray(value.tool_progress)) { return false; }
+  if (value.session_mode !== undefined && value.session_mode !== null && value.session_mode !== 'new' && value.session_mode !== 'continue') { return false; }
+  if (value.input_context_revision !== undefined && value.input_context_revision !== null && !contextRevision(value.input_context_revision)) { return false; }
+  if ((value.session_mode === 'new' || value.session_mode === 'continue') && !contextRevision(value.input_context_revision)) { return false; }
   const calls: string[] = [];
   for (const tool of value.tool_progress) {
     if (tool === null || typeof tool !== 'object' || Array.isArray(tool) || !text(tool.call_id) || calls.includes(tool.call_id) ||
@@ -168,6 +183,9 @@ export class AgentRunController {
   private failure(error: Error): string {
     if (error instanceof CampusFlowRequestError) {
       if (error.code === 'RUN_DELETED') { return '这次运行所属的会话已删除，不会重新执行或恢复已删除内容。'; }
+      if (['SESSION_DELETED', 'SESSION_NOT_FOUND', 'SESSION_CONTEXT_CHANGED', 'SESSION_EXISTS', 'SESSION_MODE_INVALID'].includes(error.code)) {
+        return localRequestFailure(error.code).message;
+      }
       if (error.code === 'RUN_NOT_FOUND') { return '未找到服务器保留的这次运行，请刷新运行记录核对；不会自动另建任务。'; }
       if (error.code === 'RUN_SESSION_BUSY') { return '这个会话还有运行中的任务，请从运行记录中恢复或等待它结束。'; }
       if (error.code === 'RUN_ID_REUSED') { return '运行标识对应另一份请求，已停止提交。请核对服务器运行记录。'; }
@@ -180,7 +198,7 @@ export class AgentRunController {
   private failedRead(error: Error): void {
     this.failures++;
     this.state.errorCode = error instanceof CampusFlowRequestError ? error.code : '';
-    const deleted = this.state.errorCode === 'RUN_DELETED';
+    const deleted = this.state.errorCode === 'RUN_DELETED' || this.state.errorCode === 'SESSION_DELETED';
     this.state.phase = deleted ? 'error' : 'unknown';
     this.state.canRetryStart = !deleted && this.state.snapshot === null && this.state.request !== null;
     this.state.message = this.failure(error) + (this.failures > 3 ? ' 自动查询已暂停，可手动重试查询。' : '');
@@ -192,9 +210,13 @@ export class AgentRunController {
     const request = this.state.request;
     if (request !== null && (value.model !== request.model || value.message !== request.message ||
       (request.session_id.length > 0 && value.session_id !== request.session_id))) { throw new Error('request mismatch'); }
+    if (request !== null && ((request.session_mode !== undefined && request.session_mode !== null && value.session_mode !== request.session_mode) ||
+      (request.session_mode === 'continue' && value.input_context_revision !== request.expected_context_revision))) { throw new Error('session context mismatch'); }
     const previous = this.state.snapshot;
     if (previous !== null && (value.session_id !== previous.session_id || value.model !== previous.model ||
-      value.message !== previous.message || value.created_at !== previous.created_at)) { throw new Error('identity mismatch'); }
+      value.message !== previous.message || value.created_at !== previous.created_at ||
+      (value.session_mode ?? null) !== (previous.session_mode ?? null) ||
+      (value.input_context_revision ?? null) !== (previous.input_context_revision ?? null))) { throw new Error('identity mismatch'); }
     if (previous !== null && value.seq < previous.seq) { throw new Error('outdated run snapshot'); }
     if (previous !== null && isRunTerminal(previous.status) && value.status !== previous.status) { throw new Error('terminal regression'); }
     const revision = this.revision;
@@ -211,7 +233,8 @@ export class AgentRunController {
     if (isRunTerminal(value.status) && value.status !== 'succeeded' && value.error_code !== null &&
       ['RUN_TIMEOUT', 'RUN_BUDGET_EXCEEDED', 'RUN_INTERRUPTED', 'RUN_CANCELLED', 'RUN_FAILED',
         'MODEL_AUTH_INVALID', 'MODEL_KEY_REQUIRED', 'MODEL_UNAVAILABLE', 'MODEL_RATE_LIMITED',
-        'MODEL_REQUEST_REJECTED', 'REQUEST_TIMEOUT'].includes(value.error_code)) {
+        'MODEL_REQUEST_REJECTED', 'REQUEST_TIMEOUT', 'SESSION_DELETED', 'SESSION_NOT_FOUND',
+        'SESSION_CONTEXT_CHANGED', 'SESSION_EXISTS', 'SESSION_MODE_INVALID'].includes(value.error_code)) {
       this.state.errorCode = value.error_code;
       this.state.message = localRequestFailure(value.error_code).message;
     }
@@ -223,10 +246,15 @@ export class AgentRunController {
     }
   }
 
-  async start(sessionId: string, model: string, message: string): Promise<void> {
+  async start(sessionId: string, model: string, message: string, sessionMode?: string | null,
+    expectedContextRevision?: string | null): Promise<void> {
     if (!this.available() || this.inFlight || this.blocksNewRun()) { return; }
     if (!text(sessionId) || Array.from(sessionId).length > 128 || !text(model) || !text(message) || Array.from(message).length > 8000) {
       this.state.message = '请检查会话、模型与输入内容：会话标识应为 1–128 字，消息应为 1–8000 字。'; this.publish(); return;
+    }
+    if (!validSessionRequest(sessionMode, expectedContextRevision)) {
+      this.state.errorCode = 'SESSION_MODE_INVALID'; this.state.message = localRequestFailure('SESSION_MODE_INVALID').message;
+      this.publish(); return;
     }
     let id = '';
     try { id = this.makeRunId().toLowerCase(); } catch { id = ''; }
@@ -235,6 +263,8 @@ export class AgentRunController {
     const recent = this.state.recent;
     this.state = blankState(); this.state.recent = recent;
     this.state.runId = id; this.state.request = { run_id: id, session_id: sessionId, model: model, message: message };
+    if (sessionMode !== undefined) { this.state.request.session_mode = sessionMode; }
+    if (expectedContextRevision !== undefined) { this.state.request.expected_context_revision = expectedContextRevision; }
     await this.submit();
   }
 
@@ -248,7 +278,7 @@ export class AgentRunController {
   private async submit(): Promise<void> {
     const request = this.state.request;
     if (request === null) { return; }
-    const frozen = JSON.parse(JSON.stringify(request)) as RunStartRequest;
+    const frozen = copyRunRequest(request);
     const revision = this.revision;
     this.inFlight = true; this.state.phase = 'creating'; this.state.canRetryStart = false;
     this.state.errorCode = '';
@@ -274,7 +304,8 @@ export class AgentRunController {
       if (error instanceof CampusFlowRequestError && error.code !== 'INVALID_RESPONSE' &&
         (['RUN_SESSION_BUSY', 'RUN_ID_REUSED', 'RUN_INVALID', 'RUN_DELETED', 'MODEL_KEY_REQUIRED', 'MODEL_NOT_FOUND', 'MODEL_CAPABILITY_UNSUPPORTED',
           'MODEL_PROVIDER_KEY_REQUIRED', 'MODEL_CONFIG_INVALID', 'LOGIN_REQUIRED',
-          'RUN_LIMIT', 'RUN_WORKER_BUSY'].includes(error.code) || [401, 403, 422].includes(error.statusCode))) {
+          'RUN_LIMIT', 'RUN_WORKER_BUSY', 'SESSION_DELETED', 'SESSION_NOT_FOUND', 'SESSION_CONTEXT_CHANGED',
+          'SESSION_EXISTS', 'SESSION_MODE_INVALID'].includes(error.code) || [401, 403, 422].includes(error.statusCode))) {
         this.state.phase = 'error'; this.state.canRetryStart = false; this.state.errorCode = error.code;
         this.state.message = error.code === 'RUN_DELETED' ? this.failure(error) : error.message; this.publish();
       } else { this.failedRead(error); }
@@ -286,13 +317,15 @@ export class AgentRunController {
   // Durable recovery restores only the frozen request identity, then performs a GET.
   // A missing record never starts a POST without an explicit retryStart action.
   async recoverRequest(request: RunStartRequest): Promise<void> {
-    if (!this.available() || ['creating', 'cancelling'].includes(this.state.phase) || !uuid(request.run_id) ||
+    if (!this.available() || ['creating', 'cancelling'].includes(this.state.phase) || request === null || typeof request !== 'object' ||
+      Array.isArray(request) || !uuid(request.run_id) ||
       !text(request.session_id) || Array.from(request.session_id).length > 128 || !text(request.model) ||
-      !text(request.message) || Array.from(request.message).length > 8000) { return; }
+      !text(request.message) || Array.from(request.message).length > 8000 ||
+      !validSessionRequest(request.session_mode, request.expected_context_revision)) { return; }
     this.stopTimer(); this.revision++; this.inFlight = false; this.failures = 0;
     const recent = this.state.recent;
     this.state = blankState(); this.state.recent = recent; this.state.runId = request.run_id;
-    this.state.request = JSON.parse(JSON.stringify(request)) as RunStartRequest;
+    this.state.request = copyRunRequest(request);
     await this.refresh();
   }
 
