@@ -12,6 +12,8 @@ export struct PlanningConflictsPanel {
   @Watch('activityChanged') @Prop active: boolean = true;
   @Prop compact: boolean = false;
   @Prop writeBlocked: boolean = false;
+  @Prop statusLockedTaskIds: string[] = [];
+  onOpenStatus: (taskId: string) => void = () => {};
   onWriteStateChanged: (blocked: boolean) => void = () => {};
   onApplied: () => void = () => {};
   onOpenDetails: () => void = () => {};
@@ -82,8 +84,15 @@ export struct PlanningConflictsPanel {
     if (this.active && !this.writeBlocked) { this.replanner().preview(); }
   }
 
+  private lockedChangeId(): string {
+    return this.state.preview?.changes.find((change: ReplanChange) => this.statusLockedTaskIds.includes(change.task_id))?.task_id ?? '';
+  }
+
   private confirmRequested(): void {
-    if (this.active && !this.writeBlocked) { this.replanner().confirm(); }
+    if (!this.active || this.writeBlocked) { return; }
+    const locked = this.lockedChangeId();
+    if (locked.length > 0) { this.onOpenStatus(locked); return; }
+    this.replanner().confirm();
   }
 
   private busy(): boolean {
@@ -321,10 +330,16 @@ export struct PlanningConflictsPanel {
         this.Pagination('unresolved', this.state.preview?.unresolved.length ?? 0)
       }
       if (this.state.phase === 'review') {
+        if (this.lockedChangeId().length > 0) {
+          Text('这批改期涉及尚待核对完成 / 恢复结果的任务，请先处理对应原操作。').fontSize(AppTheme.bodySize)
+            .fontColor(AppTheme.warning).width('100%').wordBreak(WordBreak.BREAK_WORD)
+          Button('核对相关任务结果').width('100%').constraintSize({ minHeight: 48 }).enabled(this.active)
+            .onClick(() => this.onOpenStatus(this.lockedChangeId()))
+        }
         Button(`确认调整这 ${this.state.preview?.changes.length ?? 0} 项任务`).width('100%')
           .constraintSize({ minHeight: 48 }).fontSize(15).fontColor(AppTheme.surface)
           .backgroundColor(AppTheme.accent).borderRadius(AppTheme.controlRadius)
-          .enabled(this.active && !this.writeBlocked && !this.busy() && (this.state.preview?.changes.length ?? 0) > 0)
+          .enabled(this.active && !this.writeBlocked && !this.busy() && this.lockedChangeId().length === 0 && (this.state.preview?.changes.length ?? 0) > 0)
           .onClick(() => this.confirmRequested())
       }
       if (['review', 'error', 'stale'].includes(this.state.phase)) {

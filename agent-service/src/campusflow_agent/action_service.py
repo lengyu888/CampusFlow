@@ -90,6 +90,7 @@ class ActionService:
         clock: Callable[[], datetime] | None = None,
     ) -> None:
         self.accounts, self.store = accounts, store
+        self._task_status_service = None
         self.clock = clock or (lambda: datetime.now(UTC))
         account_path = (
             accounts._connection.execute("PRAGMA database_list").fetchone()[2]
@@ -144,6 +145,7 @@ class ActionService:
                             self.store._planning_versions,
                             self.store._course_acknowledgements,
                             self.store._course_replacements,
+                            self.store._task_status_operations,
                         )
                     )
                 try:
@@ -164,6 +166,7 @@ class ActionService:
                             self.store._planning_versions,
                             self.store._course_acknowledgements,
                             self.store._course_replacements,
+                            self.store._task_status_operations,
                         ) = backup
                     raise
 
@@ -1142,7 +1145,14 @@ class ActionService:
             prior = old.get(task["task_id"])
             if prior and any(
                 task.get(key) != prior.get(key)
-                for key in (*TASK_FIELDS, "plan_id", "milestone_id", "status", "completed_at")
+                for key in (
+                    *TASK_FIELDS,
+                    "plan_id",
+                    "milestone_id",
+                    "status",
+                    "completed_at",
+                    "completion_operation_id",
+                )
             ):
                 task["task_version"] = prior.get("task_version", 1) + 1
                 changed = True
@@ -1224,55 +1234,12 @@ class ActionService:
         return self.confirm(user_id, preview.proposal_id)
 
     def set_completed(self, user_id: str, task_id: str, completed: bool) -> PlanningTask:
-        """The legacy status endpoint is idempotent and shares the planning lock."""
-        with self._transaction(write=True):
-            snapshot = self._snapshot(user_id)
-            task = dict(self._target(snapshot, "task", task_id))
-            status = "completed" if completed else "pending"
-            if task["status"] == status:
-                return self._project_task(task, snapshot)
-            if not completed:
-                overlaps, _ = course_overlaps(task, snapshot)
-                if overlaps and task.get("allow_during_course", False):
-                    raise ActionError(
-                        409,
-                        "COURSE_ACK_REQUIRED",
-                        "恢复课内任务前需重新核对课程重叠，请先调整到无冲突时段再恢复。",
-                    )
-                task = dict(task)
-                task["status"] = "pending"
-                fields = {key: task.get(key) for key in TASK_FIELDS}
-                probe = PendingAction(
-                    proposal_id="status-check",
-                    action="update",
-                    kind="task",
-                    title=task["title"],
-                    target_task_id=task_id,
-                    payload={"task": fields},
-                )
-                check_snapshot = deepcopy(snapshot)
-                self._target(check_snapshot, "task", task_id)["status"] = "pending"
-                conflicts, _ = self._check(probe, check_snapshot)
-                if conflicts:
-                    raise ActionError(
-                        409,
-                        "ACTION_CONFLICT",
-                        "恢复为未完成前需先处理时间冲突：" + "；".join(conflicts[:3]),
-                    )
-            task["status"] = status
-            task["completed_at"] = self._now().isoformat() if completed else None
-            conn = self.store._connection
-            if conn is not None:
-                conn.execute(
-                    "UPDATE planning_tasks SET status=?,completed_at=? "
-                    "WHERE user_id=? AND task_id=?",
-                    (status, task["completed_at"], user_id, task_id),
-                )
-            else:
-                self.store._tasks[user_id] = [
-                    dict(task) if item["task_id"] == task_id else item
-                    for item in self.store._tasks.get(user_id, [])
-                ]
-            self._bump_memory(user_id, snapshot)
-            after = self._snapshot(user_id)
-            return self._project_task(self._target(after, "task", task_id), after)
+        """Old complete calls share the receipt kernel; restore requires explicit review."""
+        return self.task_status_service().legacy(user_id, task_id, completed)
+
+    def task_status_service(self):
+        if self._task_status_service is None:
+            from .task_status_service import TaskStatusService
+
+            self._task_status_service = TaskStatusService(self)
+        return self._task_status_service

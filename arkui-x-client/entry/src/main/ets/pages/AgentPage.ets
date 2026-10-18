@@ -1,4 +1,4 @@
-import { HistoryMessage, SessionSummary, PendingAction, PendingMilestonePreview, PendingTaskPreview, ToolDisplaySummary, PlanningTaskDraft, PlanningPlanDraft, RunSnapshot, RunToolProgress, ModelCatalog, ModelOption, RunStartRequest } from '../model/ApiModels';
+import { HistoryMessage, SessionSummary, PendingAction, PendingMilestonePreview, PendingTaskPreview, ToolDisplaySummary, PlanningTaskDraft, PlanningPlanDraft, RunSnapshot, RunToolProgress, ModelCatalog, ModelOption, RunStartRequest, PlanningTask } from '../model/ApiModels';
 import { CampusFlowApi } from '../services/CampusFlowApi';
 import { localDrafts } from '../services/LocalDrafts';
 import { DraftLease, DraftRecord, DraftOperation, AssistantDraft, DraftRunRequest, DraftSaveState, DraftKey, assistantDraftKey } from '../utils/DraftStore';
@@ -80,6 +80,8 @@ export struct AgentPage {
   onOpenTaskDetails: (id: string) => void = () => {};
   onOpenPlanDetails: (id: string) => void = () => {};
   onPlanningChanged: () => void = () => {};
+  @Prop statusLockedTaskIds: string[] = [];
+  onOpenStatus: (taskId: string) => void = () => {};
   onOpenProfile: () => void = () => {};
   onChatBusyChange: (busy: boolean) => void = () => {};
   @State private prompt: string = '';
@@ -1597,6 +1599,26 @@ export struct AgentPage {
     return validReliableAction(action) && action.action === 'update' && action.payload.plan !== undefined ? [action.payload.plan] : [];
   }
 
+  private async statusBlocksAction(action: PendingAction): Promise<boolean> {
+    if (this.statusLockedTaskIds.length === 0 || action.action === 'create') { return false; }
+    let locked = this.statusLockedTaskIds.find((id: string) => id === action.target_task_id);
+    const planId = action.target_plan_id;
+    if (locked === undefined && action.kind === 'plan' && typeof planId === 'string' && planId.length > 0) {
+      const revision = this.conversationRevision; const base = this.baseUrl; const token = this.token;
+      try {
+        const overview = await new CampusFlowApi(base, token).planning();
+        if (!this.pageActive || !this.voiceActive || this.conversationRevision !== revision || this.baseUrl !== base || this.token !== token) { return true; }
+        locked = this.statusLockedTaskIds.find((id: string) => overview.tasks.some((task: PlanningTask) => task.task_id === id && task.plan_id === planId));
+      } catch {
+        if (!this.pageActive || !this.voiceActive || this.conversationRevision !== revision || this.baseUrl !== base || this.token !== token) { return true; }
+        this.setFeedback(action.proposal_id, '暂未核实该计划与待核对任务的关系，本次未提交；请重试核对。', false); return true;
+      }
+    }
+    if (locked === undefined) { return false; }
+    this.setFeedback(action.proposal_id, '相关任务的完成或恢复结果尚待核对，请先处理原操作。其他任务与聊天仍可使用。', false);
+    this.onOpenStatus(locked); return true;
+  }
+
   private async decide(action: PendingAction, confirm: boolean): Promise<void> {
     // Guard the handler as well as the buttons against rapid taps and stale callbacks.
     const current = this.pendingActions.find((item: PendingAction) => item.proposal_id === action.proposal_id);
@@ -1633,13 +1655,16 @@ export struct AgentPage {
     this.decisionId = action.proposal_id;
     const revision = this.conversationRevision;
     let submitted = false;
+    const statusLocks = JSON.stringify(this.statusLockedTaskIds);
     try {
+      if (confirm && await this.statusBlocksAction(current)) { return; }
       if (!confirm && savedOperation?.proposalRequest?.intent === 'confirm' && this.draftLease !== null) {
         await localDrafts.replaceProposalIntent(this.draftLease, current.proposal_id, this.sessionId, savedOperation.proposalRequest);
         if (!this.pageActive || !this.voiceActive || revision !== this.conversationRevision) { return; }
       }
       await this.prepareDecision(current, confirm);
       if (!this.pageActive || !this.voiceActive || revision !== this.conversationRevision) { return; }
+      if (confirm && statusLocks !== JSON.stringify(this.statusLockedTaskIds) && await this.statusBlocksAction(current)) { return; }
       const api = new CampusFlowApi(this.baseUrl, this.token);
       submitted = true;
       const result = confirm ? await api.confirmAction(action.proposal_id, this.acksFor(current)) : await api.cancelAction(action.proposal_id);

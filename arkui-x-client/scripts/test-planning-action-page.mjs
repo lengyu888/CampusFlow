@@ -125,10 +125,11 @@ test('successful edit clears its own unchanged draft only; later edits remain in
   }
 });
 
-test('restore conflict is a determinate error directing the user to edit the exact task', async () => {
-  const f = await fixture({ toggle: () => { throw new CampusFlowRequestError(409, 'ACTION_CONFLICT', 'raw ignored'); } });
-  await f.page.toggle(sampleTask('completed', { status: 'completed' }));
-  assert.match(f.page.errorText, /调整时间/); assert.equal(f.changed.length, 0); assert.equal(f.page.mutationBusy, false);
+test('restore uses the shared status coordinator and preserves the exact completed task without legacy PATCH', async () => {
+  const f = await fixture(); const requested = []; f.page.onTaskStatus = task => requested.push(task);
+  const completed = sampleTask('completed', { status: 'completed' }); await f.page.toggle(completed);
+  assert.equal(requested[0], completed); assert.equal(f.calls.some(call => call[0] === 'toggle'), false);
+  assert.equal(f.changed.length, 0); assert.equal(f.page.mutationBusy, false); assert.match(f.page.statusLabel(completed), /未保留/);
 });
 
 test('editing one boundary of a naive legacy interval uses Shanghai on non-Shanghai devices', async () => {
@@ -401,4 +402,32 @@ test('captureOnly arriving after intent and revision still opens once with the m
   assert.match(raw,/@Watch\('captureRequested'\) captureOnly/);
   assert.match(raw,/@Watch\('captureRequested'\) captureIntent/);
   assert.match(raw,/@Watch\('captureRequested'\) captureRevision/);
+});
+
+test('UX08 exact status locks protect task edits/deletes and containing plans, leaving unrelated tasks and creation available', async () => {
+  const f = await fixture(); const opened = []; f.page.onOpenStatus = id => opened.push(id);
+  f.page.overview.tasks[0].plan_id = 'plan-a'; f.page.statusLockedTaskIds = ['task-a'];
+  f.page.beginTaskEdit(sampleTask()); await f.page.requestDelete(sampleTask());
+  f.page.beginPlanEdit(samplePlan()); await f.page.requestPlanDelete(samplePlan());
+  assert.deepEqual(f.calls, []); assert.deepEqual(opened, ['task-a','task-a','task-a','task-a']);
+  assert.equal(f.page.editTaskId, ''); assert.equal(f.page.editPlanId, '');
+  f.page.beginTaskEdit(sampleTask('unrelated')); assert.equal(f.page.editTaskId, 'unrelated');
+  f.page.discardTaskEdit(); f.page.title = '不相关的新任务'; await f.page.addTask();
+  assert.equal(f.calls[0][0], 'preview'); assert.equal(f.calls[0][1].operation, 'create_task');
+});
+
+test('UX08 a status lock arriving after edit preview blocks confirm without losing the edit or preventing explicit cancel', async () => {
+  const f=await fixture();const opened=[];f.page.onOpenStatus=id=>opened.push(id);
+  f.page.beginTaskEdit(sampleTask());f.page.editTaskTitle='保留修改';await f.page.previewTaskEdit();
+  f.page.statusLockedTaskIds=['task-a'];await f.page.confirmPlanningAction();
+  assert.deepEqual(opened,['task-a']);assert.equal(f.calls.some(call=>call[0]==='confirm'),false);
+  assert.equal(f.drafts.store.operations(f.drafts.lease).length,0);assert.equal(f.page.editTaskTitle,'保留修改');
+  await f.page.writePlanningAction(true);assert.equal(f.calls.some(call=>call[0]==='cancel'),true);
+});
+
+test('UX08 locked completion opens the original status record, but hidden callbacks cannot navigate or write',async()=>{
+  const f=await fixture();const opened=[],started=[];f.page.statusLockedTaskIds=['task-a'];
+  f.page.onOpenStatus=id=>opened.push(id);f.page.onTaskStatus=task=>started.push(task);
+  await f.page.toggle(sampleTask());assert.deepEqual(opened,['task-a']);assert.deepEqual(started,[]);
+  f.page.active=false;await f.page.toggle(sampleTask());assert.deepEqual(opened,['task-a']);assert.deepEqual(f.calls,[]);
 });

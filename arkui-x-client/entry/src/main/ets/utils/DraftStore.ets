@@ -158,6 +158,21 @@ export interface DraftPermissionRequest {
   choices: DraftCoursePermissionChoice[];
 }
 
+export interface DraftTaskStatusRequest {
+  operation_id: string;
+  kind: 'complete' | 'restore';
+  expected_revision: number;
+  source_operation_id?: string;
+}
+
+export interface DraftTaskStatusOperation {
+  scope: string;
+  taskId: string;
+  request: DraftTaskStatusRequest;
+  intent: 'start' | 'confirm' | 'cancel';
+  acknowledgements: DraftCourseAcknowledgement[];
+}
+
 export interface DraftOperationInput {
   kind: DraftOperationKind;
   id: string;
@@ -210,6 +225,7 @@ interface DraftDocument {
   revision: number;
   records: DraftRecord[];
   operations: DraftOperation[];
+  taskStatusOperations?: DraftTaskStatusOperation[];
 }
 
 class SystemDraftScheduler implements DraftScheduler {
@@ -502,16 +518,38 @@ function operation(value: DraftOperationInput, scope: string): DraftOperation {
 }
 
 function emptyDocument(scope: string = ''): DraftDocument {
-  return { version: 1, scope: scope, revision: 0, records: [], operations: [] };
+  return { version: 1, scope: scope, revision: 0, records: [], operations: [], taskStatusOperations: [] };
+}
+
+function statusUuid(value: string): string {
+  if (typeof value !== 'string' || !/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(value)) { throw invalid(); }
+  return value;
+}
+
+function taskStatusOperation(value: DraftTaskStatusOperation, scope: string): DraftTaskStatusOperation {
+  if (!value || typeof value !== 'object' || value.scope !== scope || !value.request ||
+    typeof value.request !== 'object' || !['complete', 'restore'].includes(value.request.kind) ||
+    !['start', 'confirm', 'cancel'].includes(value.intent) || !Array.isArray(value.acknowledgements)) { throw invalid(); }
+  const request: DraftTaskStatusRequest = { operation_id: statusUuid(value.request.operation_id), kind: value.request.kind,
+    expected_revision: integer(value.request.expected_revision, 1, Number.MAX_SAFE_INTEGER - 1) };
+  if (request.kind === 'restore') { request.source_operation_id = statusUuid(value.request.source_operation_id ?? ''); }
+  else if (value.request.source_operation_id !== undefined || value.intent !== 'start') { throw invalid(); }
+  if (value.acknowledgements.length > 1 || (value.intent !== 'confirm' && value.acknowledgements.length > 0)) { throw invalid(); }
+  const acknowledgements = value.acknowledgements.map((item: DraftCourseAcknowledgement): DraftCourseAcknowledgement => {
+    if (!item || typeof item !== 'object') { throw invalid(); }
+    return { candidate_id: text(item.candidate_id, 128, true), review_digest: revision(item.review_digest, false) };
+  });
+  return { scope: scope, taskId: text(value.taskId, 128, true), request: request, intent: value.intent, acknowledgements: acknowledgements };
 }
 
 function cloneDocument(value: DraftDocument): DraftDocument {
   if (!value || typeof value !== 'object' || value.version !== 1 || !Array.isArray(value.records) ||
       !Array.isArray(value.operations) || value.records.length > MAX_LOCAL_DRAFTS ||
-      value.operations.length > MAX_DRAFT_OPERATIONS) { throw invalid(); }
+      value.operations.length > MAX_DRAFT_OPERATIONS || (value.taskStatusOperations !== undefined &&
+      (!Array.isArray(value.taskStatusOperations) || value.taskStatusOperations.length > MAX_DRAFT_OPERATIONS))) { throw invalid(); }
   const scope = text(value.scope, 4096);
   const latest = integer(value.revision, 0, Number.MAX_SAFE_INTEGER);
-  if (scope.length === 0 && (value.records.length > 0 || value.operations.length > 0)) { throw invalid(); }
+  if (scope.length === 0 && (value.records.length > 0 || value.operations.length > 0 || (value.taskStatusOperations ?? []).length > 0)) { throw invalid(); }
   const result = emptyDocument(scope);
   result.revision = latest;
   for (const item of value.records) {
@@ -526,6 +564,12 @@ function cloneDocument(value: DraftDocument): DraftDocument {
     if (next.localRevision > latest || result.operations.some((previous: DraftOperation): boolean =>
       previous.kind === next.kind && previous.id === next.id)) { throw invalid(); }
     result.operations.push(next);
+  }
+  for (const item of value.taskStatusOperations ?? []) {
+    const next = taskStatusOperation(item, scope);
+    if ((result.taskStatusOperations ?? []).some((previous: DraftTaskStatusOperation): boolean =>
+      previous.request.operation_id === next.request.operation_id || previous.taskId === next.taskId)) { throw invalid(); }
+    result.taskStatusOperations?.push(next);
   }
   if (draftUtf8Bytes(JSON.stringify(result)) > MAX_LOCAL_DRAFT_BYTES) { throw invalid(); }
   return result;
@@ -716,6 +760,90 @@ export class DraftStore {
   operations(lease: DraftLease): DraftOperation[] {
     if (!this.valid(lease)) { return []; }
     return this.document.operations.map((value: DraftOperation): DraftOperation => operation(value, lease.scope));
+  }
+
+  taskStatusOperations(lease: DraftLease): DraftTaskStatusOperation[] {
+    if (!this.valid(lease)) { return []; }
+    return (this.document.taskStatusOperations ?? []).map((value: DraftTaskStatusOperation): DraftTaskStatusOperation =>
+      taskStatusOperation(value, lease.scope));
+  }
+
+  hasPendingTaskStatus(lease: DraftLease): boolean {
+    return this.valid(lease) && (this.document.taskStatusOperations ?? []).length > 0;
+  }
+
+  async beginTaskStatusOperation(lease: DraftLease, value: DraftTaskStatusOperation): Promise<void> {
+    this.requireLease(lease);
+    const next = taskStatusOperation(value, lease.scope);
+    if (next.intent !== 'start') { throw invalid(); }
+    const existing = (this.document.taskStatusOperations ?? []).find((item: DraftTaskStatusOperation): boolean =>
+      item.request.operation_id === next.request.operation_id);
+    if (existing !== undefined) {
+      if (JSON.stringify(existing) !== JSON.stringify(next)) { throw new Error('原任务状态请求已变化，请先核对。'); }
+    } else {
+      const candidate = cloneDocument(this.document);
+      candidate.taskStatusOperations?.push(next); candidate.revision++;
+      this.document = cloneDocument(candidate);
+      this.publish('pending', '正在保存任务状态操作编号，完成后才能提交。');
+    }
+    // The in-memory lock survives a disk failure. No network write is allowed yet.
+    await this.flush(lease); this.requireLease(lease);
+    if (!(this.document.taskStatusOperations ?? []).some((item: DraftTaskStatusOperation): boolean =>
+      JSON.stringify(item) === JSON.stringify(next))) { throw new Error('该任务状态操作已变化，请重新核对。'); }
+  }
+
+  replaceTaskStatusIntent(lease: DraftLease, id: string, expected: DraftTaskStatusOperation,
+    intent: 'confirm' | 'cancel', acknowledgements: DraftCourseAcknowledgement[] = []): Promise<void> {
+    const original = taskStatusOperation(expected, lease.scope);
+    if (original.request.operation_id !== statusUuid(id) || original.request.kind !== 'restore' ||
+      (original.intent === 'cancel' && intent !== 'cancel')) { return Promise.reject(invalid()); }
+    const next = taskStatusOperation({ scope: original.scope, taskId: original.taskId, request: original.request,
+      intent: intent, acknowledgements: acknowledgements }, lease.scope);
+    return this.enqueue(async (): Promise<void> => {
+      this.requireLease(lease);
+      const current = (this.document.taskStatusOperations ?? []).find((item: DraftTaskStatusOperation): boolean =>
+        item.request.operation_id === id);
+      if (current === undefined || JSON.stringify(current) !== JSON.stringify(original)) {
+        throw new Error('原任务状态操作已变化，请先查询同一编号。');
+      }
+      const candidate = cloneDocument(this.document);
+      candidate.taskStatusOperations = (candidate.taskStatusOperations ?? []).map((item: DraftTaskStatusOperation): DraftTaskStatusOperation =>
+        item.request.operation_id === id ? next : item);
+      candidate.revision = ++this.document.revision;
+      try {
+        await this.driver.write(JSON.stringify(candidate)); this.requireLease(lease);
+        this.document.taskStatusOperations = (this.document.taskStatusOperations ?? []).map((item: DraftTaskStatusOperation): DraftTaskStatusOperation =>
+          item.request.operation_id === id ? next : item);
+        this.savedRevision = candidate.revision;
+        this.publish(this.document.revision === candidate.revision ? 'saved' : 'pending', '任务状态操作意图已保存。');
+      } catch {
+        if (this.valid(lease)) { this.publish('error', '任务状态操作意图尚未保存，原标识仍保留。'); }
+        throw new Error('任务状态操作意图尚未保存。');
+      }
+    });
+  }
+
+  resolveTaskStatusOperation(lease: DraftLease, id: string): Promise<void> {
+    const operationId = statusUuid(id);
+    return this.enqueue(async (): Promise<void> => {
+      this.requireLease(lease);
+      if (!(this.document.taskStatusOperations ?? []).some((item: DraftTaskStatusOperation): boolean =>
+        item.request.operation_id === operationId)) { return; }
+      const candidate = cloneDocument(this.document);
+      candidate.taskStatusOperations = (candidate.taskStatusOperations ?? []).filter((item: DraftTaskStatusOperation): boolean =>
+        item.request.operation_id !== operationId);
+      candidate.revision = ++this.document.revision;
+      try {
+        await this.driver.write(JSON.stringify(candidate)); this.requireLease(lease);
+        this.document.taskStatusOperations = (this.document.taskStatusOperations ?? []).filter((item: DraftTaskStatusOperation): boolean =>
+          item.request.operation_id !== operationId);
+        this.savedRevision = candidate.revision;
+        this.publish(this.document.revision === candidate.revision ? 'saved' : 'pending', '任务状态核对结果已保存。');
+      } catch {
+        if (this.valid(lease)) { this.publish('error', '任务状态核对结果尚未保存，仍保留原操作编号。'); }
+        throw new Error('任务状态核对结果尚未保存。');
+      }
+    });
   }
 
   isBlocked(lease: DraftLease, key: DraftKey, localRevision?: number): boolean {

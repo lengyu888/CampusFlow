@@ -186,13 +186,14 @@ test('failed create retains the draft through collapse and reopening for correct
   assert.equal(calls[0][1].task.start_at, '2026-10-22T18:45:00+08:00');
 });
 
-test('task completion stays idempotent and deletion requires preview then explicit confirmation', async () => {
+test('task completion delegates to shared coordinator and deletion requires preview then explicit confirmation', async () => {
   const { instance, calls } = await page();
-  const task = { task_id: 'task-1', status: 'pending' };
+  const task = { task_id: 'task-1', status: 'pending' }; const requested = [];
+  instance.onTaskStatus = value => requested.push(value);
   instance.toggleCalendar();
   instance.toggleTaskForm();
   await instance.toggle(task);
-  assert.deepEqual(calls, [['updateTask', 'task-1', true], ['planning']]);
+  assert.deepEqual(requested, [task]); assert.deepEqual(calls, []);
   calls.length = 0;
   await instance.requestDelete(task);
   assert.deepEqual(calls, [['preview', { operation: 'delete_task', task_id: 'task-1' }]], 'first click only builds a preview');

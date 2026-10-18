@@ -4,6 +4,7 @@ import { stripTypeScriptTypes } from 'node:module';
 import { test } from 'node:test';
 import { conversationDependencies, assistantDraftKey } from './helpers/conversation-fixture.mjs';
 import { reliability } from './helpers/course-review-fixture.mjs';
+import { candidate, sampleTask } from './helpers/planning-action-fixture.mjs';
 import { makeRunController, runSnapshot, shanghaiDate } from './helpers/agent-run-ui-fixture.mjs';
 const load = async name => import(`data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(readFileSync(new URL(`../entry/src/main/ets/utils/${name}.ets`,import.meta.url),'utf8').replace(/^import [^\n]+;\r?\n/gm,''))).toString('base64')}`);
 const feedback=await load('AgentFeedback'); const {DraftStore}=await load('DraftStore');
@@ -24,7 +25,7 @@ async function fixture(handlers={},disk=new Disk()){
  agentRun(...a){return this.invoke('agentRun',a)} agentRunEvents(...a){return this.invoke('agentRunEvents',a)}
  confirmAction(...a){return this.invoke('confirmAction',a)}cancelAction(...a){return this.invoke('cancelAction',a)}
  actionStatus(...a){return this.invoke('actionStatus',a)}coursePermissions(...a){return this.invoke('coursePermissions',a)}
- history(...a){return this.invoke('history',a)} models(){return Promise.resolve({models:[],default_model:''})}}
+ planning(...a){return this.invoke('planning',a)} history(...a){return this.invoke('history',a)} models(){return Promise.resolve({models:[],default_model:''})}}
  const Page=factory(Api,class{scrollTo(){}scrollEdge(){}},store,shanghaiDate,makeRunController(feedback.CampusFlowRequestError,feedback.localRequestFailure),
  {save:async()=>true},{},...Object.values(feedback),...Object.values(reliability),...Object.values(conversationDependencies));
  const page=new Page();page.baseUrl='https://service.invalid';page.token='secret';page.userId='account-a';page.historyScope=lease.scope;
@@ -215,4 +216,27 @@ test('latest proposal read failure keeps a recovered result visibly read-only',a
  const run=runSnapshot({run_id:id,session_id:'session-a',model:'deepseek-v4-pro',message:'原问题'},{message:'回答',pending_actions:[a]});
  h.page.restoredRunIds=[id];h.page.liveRecoveredRunIds=[id];h.page.runSucceeded(run);await tick();assert.equal(h.page.pendingActions.length,0);
  assert.ok(h.page.messages.some(x=>x.content.includes('最新提案状态尚未核实')));
+});
+
+
+test('UX08 Agent status locks stop only affected task confirmations before a durable proposal pointer or POST',async()=>{
+ const a=candidate({operation:'delete_task',task_id:'task-a'});const h=await fixture({cancelAction:async()=>cancelled(a)});select(h,a);
+ const opened=[];h.page.onOpenStatus=id=>opened.push(id);h.page.statusLockedTaskIds=['task-a'];await h.page.decide(a,true);
+ assert.deepEqual(opened,['task-a']);assert.equal(h.calls.length,0);assert.equal(h.store.operations(h.lease).length,0);
+ assert.match(h.page.feedbackFor(a.proposal_id).message,/尚待核对/);await h.page.decide(a,false);
+ assert.equal(h.calls[0].name,'cancelAction');
+});
+
+test('UX08 plan changes query exact locked-task membership and a credential change discards the late relation read',async()=>{
+ const a=candidate({operation:'delete_plan',plan_id:'plan-a'});const h=await fixture({planning:async()=>({tasks:[sampleTask('task-a',{plan_id:'plan-a'})]})});select(h,a);
+ const opened=[];h.page.onOpenStatus=id=>opened.push(id);h.page.statusLockedTaskIds=['task-a'];await h.page.decide(a,true);
+ assert.deepEqual(h.calls.map(call=>call.name),['planning']);assert.deepEqual(opened,['task-a']);assert.equal(h.store.operations(h.lease).length,0);
+ const wait=deferred();const g=await fixture({planning:()=>wait.promise});select(g,a);g.page.statusLockedTaskIds=['task-a'];const pending=g.page.decide(a,true);await tick();
+ g.page.token='new-token';g.page.modelConnectionChanged();wait.resolve({tasks:[sampleTask('task-a',{plan_id:'plan-a'})]});await pending;
+ assert.deepEqual(g.calls.map(call=>call.name),['planning']);assert.equal(g.store.operations(g.lease).length,0);
+});
+
+test('UX08 unrelated plan membership and new task creation are not globally locked by another task status',async()=>{
+ const a=candidate({operation:'delete_plan',plan_id:'plan-b'});const h=await fixture({planning:async()=>({tasks:[sampleTask('task-a',{plan_id:'plan-a'})]})});h.page.statusLockedTaskIds=['task-a'];
+ assert.equal(await h.page.statusBlocksAction(a),false);assert.equal(await h.page.statusBlocksAction(pending()),false);assert.deepEqual(h.calls.map(call=>call.name),['planning']);
 });

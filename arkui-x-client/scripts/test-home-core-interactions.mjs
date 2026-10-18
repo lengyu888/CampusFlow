@@ -143,77 +143,55 @@ test('one source failure preserves its own prior data and does not suppress the 
   assert.equal(page.taskPhase, 'ready'); assert.equal(page.freeTime().window, null); assert.equal(page.agenda().next, null);
 });
 
-test('duplicate task completion is locked until the server state is refreshed, with no optimistic mutation', async () => {
-  const mutation = deferred(); const updated = overview([task({ status: 'completed' })]);
-  const { page, calls } = setup({ updateTask: () => mutation.promise, planning: async () => updated });
-  const current = page.overview.tasks[0]; const first = page.toggleTask(current);
-  await page.toggleTask(current); await page.toggleTask(task({ task_id: 'task-2' }));
-  assert.equal(calls.filter((call) => call[0] === 'updateTask').length, 1);
-  assert.equal(page.overview.tasks[0].status, 'pending'); assert.equal(page.busyTaskId, current.task_id);
-  mutation.resolve(); await first;
-  assert.equal(page.overview, updated); assert.equal(page.busyTaskId, '');
-  assert.deepEqual(calls[0], ['updateTask', 'task-1', true, 'account-a']);
-  await page.toggleTask(updated.tasks[0]);
-  assert.deepEqual(calls.filter((call) => call[0] === 'updateTask')[1], ['updateTask', 'task-1', false, 'account-a']);
+test('status actions delegate exact tasks once per shared lock without optimistic mutation or old PATCH', async () => {
+  const { page, calls } = setup(); const requests = [], opened = [];
+  page.onTaskStatus = value => { requests.push(value); page.statusLockedTaskIds = page.statusLockedTaskIds.concat(value.task_id); };
+  page.onOpenStatus = id => opened.push(id); const current = page.overview.tasks[0];
+  await page.toggleTask(current); await page.toggleTask(current); await page.toggleTask(task({ task_id: 'task-2' }));
+  assert.deepEqual(requests.map(value => value.task_id), ['task-1', 'task-2']);
+  assert.deepEqual(opened, ['task-1']); assert.equal(page.overview.tasks[0].status, 'pending'); assert.deepEqual(calls, []);
 });
 
-test('a failed task request keeps the last known status, asks for verification, and does not replay the write', async () => {
-  const { page, calls, hooks } = setup({ updateTask: async () => { throw new Error('ambiguous result'); } });
-  const old = page.overview; await page.toggleTask(old.tasks[0]);
-  assert.equal(page.overview, old); assert.equal(page.busyTaskId, '');
-  assert.match(page.errorText, /核实.*重新加载/);
-  assert.doesNotMatch(page.errorText, /ambiguous result|未写入|已撤销/);
-  assert.deepEqual(calls.map((call) => call[0]), ['updateTask']);
-  hooks.planning = async () => overview([task({ status: 'completed' })]);
-  await page.loadToday();
-  assert.equal(page.overview.tasks[0].status, 'completed'); assert.equal(page.errorText, '');
-  assert.equal(calls.filter((call) => call[0] === 'updateTask').length, 1);
+test('unknown status stays query-only from the shared lock and a refreshed task flag does not replay a write', async () => {
+  const { page, calls, hooks } = setup(); const requests = [], opened = [];
+  page.onTaskStatus = value => requests.push(value); page.onOpenStatus = id => opened.push(id);
+  page.statusLockedTaskIds = ['task-1']; const old = page.overview;
+  await page.toggleTask(old.tasks[0]); assert.equal(page.overview, old); assert.deepEqual(opened, ['task-1']); assert.deepEqual(requests, []);
+  hooks.planning = async () => overview([task({ status: 'completed' })]); await page.loadToday();
+  await page.toggleTask(page.overview.tasks[0]); assert.deepEqual(opened, ['task-1', 'task-1']); assert.deepEqual(requests, []);
+  assert.equal(calls.some(call => call[0] === 'updateTask'), false);
 });
 
-test('successful mutation followed by failed read retains content with a retryable stale notice', async () => {
+test('a parent receipt refresh that fails keeps current content with a stale notice instead of overlaying old receipt fields', async () => {
   const { page, calls } = setup({ planning: async () => { throw new Error('read failed'); } });
-  const old = page.overview; await page.toggleTask(old.tasks[0]);
+  const old = page.overview; await page.loadToday();
   assert.equal(page.overview, old); assert.match(page.errorText, /不是最新.*重试/);
-  assert.equal(page.busyTaskId, '');
-  assert.deepEqual(calls.map((call) => call[0]), ['updateTask', 'timetable', 'planning']);
+  assert.deepEqual(calls.map(call => call[0]), ['timetable', 'planning']);
 });
 
-test('refresh started before a task commit cannot suppress its newer authoritative status', async () => {
-  const mutation = deferred(); const oldRead = deferred(); let reads = 0;
-  const updated = overview([task({ status: 'completed', title: '最新已完成' })]);
-  const { page } = setup({ updateTask: () => mutation.promise,
-    planning: () => ++reads === 1 ? oldRead.promise : Promise.resolve(updated) });
-  const updating = page.toggleTask(page.overview.tasks[0]);
-  const refreshing = page.loadToday(); await flush();
-  assert.equal(reads, 1);
-  mutation.resolve(); await updating;
-  assert.equal(page.overview, updated, 'the write must start its own current refresh regardless of a newer pre-commit read');
-  oldRead.resolve(overview([task({ status: 'pending', title: '提交前的旧数据' })])); await refreshing;
-  assert.equal(page.overview, updated); assert.equal(page.busyTaskId, '');
+test('receipt-triggered newer authoritative refresh supersedes a read begun before the operation committed', async () => {
+  const oldRead = deferred(); let reads = 0; const updated = overview([task({ status: 'completed', title: '最新已完成' })]);
+  const { page } = setup({ planning: () => ++reads === 1 ? oldRead.promise : Promise.resolve(updated) });
+  const old = page.loadToday(); await flush(); await page.loadToday();
+  assert.equal(page.overview, updated); oldRead.resolve(overview([task({ title: '提交前旧数据' })])); await old;
+  assert.equal(page.overview, updated);
 });
 
-test('a task completion while hidden does not fetch more data; returning refreshes it and restarts one clock', async () => {
-  const mutation = deferred(); const { page, calls, clock } = setup({ updateTask: () => mutation.promise,
-    planning: async () => overview([task({ status: 'completed' })]) });
-  const updating = page.toggleTask(page.overview.tasks[0]);
-  page.active = false; page.activityChanged(); mutation.resolve(); await updating;
-  assert.deepEqual(calls.map((call) => call[0]), ['updateTask']);
-  assert.equal(page.overview.tasks[0].status, 'pending'); assert.equal(page.busyTaskId, '');
-  page.active = true; page.activityChanged(); await flush();
+test('hidden Home receives no new status writes; returning re-reads latest task and restarts only one clock', async () => {
+  const { page, calls, clock } = setup({ planning: async () => overview([task({ status: 'completed' })]) });
+  const requests = []; page.onTaskStatus = value => requests.push(value);
+  await page.toggleTask(page.overview.tasks[0]); page.active = false; page.activityChanged();
+  await page.toggleTask(task({task_id:'hidden'})); assert.equal(requests.length, 1); assert.deepEqual(calls, []);
+  assert.equal(page.overview.tasks[0].status, 'pending'); page.active = true; page.activityChanged(); await flush();
   assert.equal(page.overview.tasks[0].status, 'completed'); assert.equal(clock.intervals.size, 1);
-  page.activityChanged(); await flush(); assert.equal(clock.intervals.size, 1);
-  page.aboutToDisappear(); assert.equal(clock.intervals.size, 0);
+  page.activityChanged(); await flush(); assert.equal(clock.intervals.size, 1); page.aboutToDisappear(); assert.equal(clock.intervals.size, 0);
 });
 
-test('old destroyed operation cannot clear a new operation lock after the page reappears', async () => {
-  const oldMutation = deferred(); const newMutation = deferred(); let writes = 0;
-  const { page } = setup({ updateTask: () => ++writes === 1 ? oldMutation.promise : newMutation.promise });
-  const old = page.toggleTask(page.overview.tasks[0]);
-  page.aboutToDisappear(); page.pageActive = true;
-  const current = page.toggleTask(task({ task_id: 'new-task' }));
-  oldMutation.resolve(); await old;
-  assert.equal(page.busyTaskId, 'new-task');
-  newMutation.resolve(); await current; assert.equal(page.busyTaskId, '');
+test('a destroyed Home cannot clear the account-level status lock or emit another completion', async () => {
+  const { page } = setup(); const requests = [];
+  page.onTaskStatus = value => requests.push(value); page.statusLockedTaskIds = ['new-task'];
+  page.aboutToDisappear(); await page.toggleTask(task({task_id:'old-task'}));
+  assert.deepEqual(requests, []); assert.deepEqual(page.statusLockedTaskIds, ['new-task']);
 });
 
 test('date, greeting and agenda share the Shanghai clock including local midnight rollover', () => {
@@ -229,13 +207,13 @@ test('date, greeting and agenda share the Shanghai clock including local midnigh
 });
 
 test('same-title tasks use exact IDs for detail and completion callbacks, while courses open the route selector', async () => {
-  const { page, calls } = setup(); const opened = [];
+  const { page, calls } = setup(); const opened = [], status = []; page.onTaskStatus = value => status.push(value);
   page.overview = overview([task({ task_id: 'one' }), task({ task_id: 'two', plan_id: 'plan-two' })]);
   page.onOpenTaskDetails = (id) => opened.push(['task', id]); page.onOpenCourseRoute = (intent) => opened.push(['route', intent]);
   const row = page.agenda().rows.find((item) => item.taskId === 'two');
   page.nextAction(row); page.toggleAgendaTask(row); await flush();
   assert.deepEqual(opened, [['task', 'two']]);
-  assert.deepEqual(calls.find((call) => call[0] === 'updateTask'), ['updateTask', 'two', true, 'account-a']);
+  assert.deepEqual(status.map(value => value.task_id), ['two']); assert.equal(calls.some(call => call[0] === 'updateTask'), false);
   const currentCourse = page.courses[0];
   page.nextAction(page.agenda().rows.find((item) => item.kind === 'course'));
   assert.equal(opened[1][0], 'route'); assert.deepEqual(opened[1][1].course, currentCourse);
@@ -263,12 +241,11 @@ test('unscheduled labels distinguish absent dates from malformed data and never 
   assert.doesNotMatch(page.taskUnscheduledLabel(task({ start_at: invalidDate })), /03-02/);
 });
 
-test('a definite conflict on restore explains how to adjust it without inventing a successful completion state', async () => {
-  const { page } = setup({ updateTask: async () => { throw new feedback.CampusFlowRequestError(409, 'ACTION_CONFLICT', 'fixture'); } });
-  const before = page.overview;
-  await page.toggleTask(task({status: 'completed'}));
-  assert.equal(page.overview, before); assert.match(page.errorText, /时间冲突/); assert.match(page.errorText, /任务详情/);
-  assert.equal(page.busyTaskId, '');
+test('completed legacy tasks keep the real completed state and explain why no recovery receipt is available', async () => {
+  const { page, calls } = setup(); const requested = []; page.onTaskStatus = value => requested.push(value);
+  const completed = task({ status: 'completed' }); const old = page.overview; await page.toggleTask(completed);
+  assert.equal(page.overview, old); assert.equal(requested[0], completed); assert.match(page.statusLabel(completed), /未保留可恢复凭据/);
+  assert.deepEqual(calls, []); assert.equal(page.statusLabel(task({status:'completed',completion_operation_id:'exact-id'})), '恢复未完成');
 });
 
 test('plain capture is an explicit draft intent with Shanghai anchor and never calls an API', () => {

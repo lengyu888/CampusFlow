@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, SecretStr, StrictBool
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, StrictBool, StrictInt, field_validator
 
 
 class ChatRequest(BaseModel):
@@ -336,6 +336,97 @@ class PlanningTask(BaseModel):
     source: Literal["agent", "manual"] = "agent"
     created_at: datetime
     completed_at: datetime | None = None
+    completion_operation_id: str | None = None
+
+
+StatusOperationId = Annotated[
+    str,
+    Field(
+        strict=True,
+        pattern=r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-"
+        r"[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+    ),
+]
+
+
+class TaskCompleteRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    operation_id: StatusOperationId
+    kind: Literal["complete"]
+    expected_revision: StrictInt = Field(gt=0)
+
+    @field_validator("operation_id")
+    @classmethod
+    def normalize_id(cls, value: str) -> str:
+        return str(UUID(value))
+
+
+class TaskRestoreRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    operation_id: StatusOperationId
+    kind: Literal["restore"]
+    expected_revision: StrictInt = Field(gt=0)
+    source_operation_id: StatusOperationId
+
+    @field_validator("operation_id", "source_operation_id")
+    @classmethod
+    def normalize_id(cls, value: str) -> str:
+        return str(UUID(value))
+
+
+TaskStatusRequest = Annotated[TaskCompleteRequest | TaskRestoreRequest, Field(discriminator="kind")]
+
+
+class TaskStatusConfirmRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    acknowledgements: list[CourseAcknowledgement] = Field(default_factory=list, max_length=500)
+
+
+class TaskStatusCancelRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class TaskStatusPreview(BaseModel):
+    task: PlanningTask
+    from_status: Literal["completed"] = "completed"
+    to_status: Literal["pending"] = "pending"
+    candidate_id: str
+    course_review: CourseReview
+    state_version: PlanningStateVersion
+    conflicts: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+
+
+class TaskStatusReceipt(BaseModel):
+    operation_id: str
+    task_id: str
+    kind: Literal["complete", "restore"]
+    source_operation_id: str | None = None
+    candidate_id: str | None = None
+    before_revision: int
+    after_revision: int
+    before_status: Literal["pending", "completed"]
+    after_status: Literal["pending", "completed"]
+    before_completed_at: datetime | None = None
+    after_completed_at: datetime | None = None
+    applied_at: datetime
+    course_acknowledgement_ids: list[str] = Field(default_factory=list)
+    course_acknowledgements: list[CandidateCourseAcknowledgement] = Field(default_factory=list)
+
+
+class TaskStatusOperation(BaseModel):
+    contract_version: Literal[1] = 1
+    user_id: str
+    operation_id: str
+    task_id: str
+    kind: Literal["complete", "restore"]
+    state: Literal["pending", "applied", "cancelled"]
+    expected_revision: int
+    source_operation_id: str | None = None
+    created_at: datetime
+    expires_at: datetime | None = None
+    preview: TaskStatusPreview | None = None
+    receipt: TaskStatusReceipt | None = None
 
 
 class PlanMilestone(BaseModel):

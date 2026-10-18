@@ -5,6 +5,7 @@ import sqlite3
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 from threading import Barrier
+from uuid import uuid4
 
 import pytest
 from test_action_service import NOW, Scene, at, error, request
@@ -12,7 +13,11 @@ from test_action_service import NOW, Scene, at, error, request
 from campusflow_agent.accounts import AccountStore
 from campusflow_agent.action_service import ActionService
 from campusflow_agent.replanning import ReplanningService
-from campusflow_agent.schemas import CourseAcknowledgement, CoursePermissionRequest
+from campusflow_agent.schemas import (
+    CourseAcknowledgement,
+    CoursePermissionRequest,
+    TaskRestoreRequest,
+)
 from campusflow_agent.store import CampusStore
 
 
@@ -337,12 +342,35 @@ def test_restore_completed_course_task_requires_review_and_can_be_corrected(scen
     confirm(scene, preview(scene))
     task = saved(scene)
     done = scene.service.set_completed(scene.user_id, task.task_id, True)
+    status_service = scene.service.task_status_service()
+    pending = status_service.create(
+        scene.user_id,
+        task.task_id,
+        TaskRestoreRequest(
+            kind="restore",
+            operation_id=str(uuid4()),
+            expected_revision=done.task_version,
+            source_operation_id=done.completion_operation_id,
+        ),
+    )
     error(
         "COURSE_ACK_REQUIRED",
-        lambda: scene.service.set_completed(scene.user_id, task.task_id, False),
+        lambda: status_service.confirm(scene.user_id, pending.operation_id),
     )
     confirm(scene, edit(scene, done, start_at=at("12:00"), end_at=at("13:00")))
-    restored = scene.service.set_completed(scene.user_id, task.task_id, False)
+    corrected = saved(scene)
+    fresh = status_service.create(
+        scene.user_id,
+        task.task_id,
+        TaskRestoreRequest(
+            kind="restore",
+            operation_id=str(uuid4()),
+            expected_revision=corrected.task_version,
+            source_operation_id=corrected.completion_operation_id,
+        ),
+    )
+    status_service.confirm(scene.user_id, fresh.operation_id)
+    restored = saved(scene)
     assert restored.status == "pending" and restored.course_overlap.state == "none"
 
 
@@ -438,7 +466,7 @@ def test_fresh_legacy_store_cannot_restore_course_task_without_ack(scene):
     scene.service.set_completed(scene.user_id, task.task_id, True)
     reopened = CampusStore(scene.database)
     error(
-        "COURSE_ACK_REQUIRED",
+        "TASK_RECOVERY_PREVIEW_REQUIRED",
         lambda: reopened.update_task_status(scene.user_id, task.task_id, False),
     )
     assert saved(scene).status == "completed"

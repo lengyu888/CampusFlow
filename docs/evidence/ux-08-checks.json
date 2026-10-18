@@ -1,0 +1,171 @@
+{
+  "stage": "UX08",
+  "backend": {
+    "passed": 818,
+    "deselected": 2,
+    "ruff": "passed",
+    "command": "PYTHONPATH=src ../../audit-venv/bin/python -m pytest -q -m 'not integration'"
+  },
+  "client": {
+    "tests": 984,
+    "pass": 983,
+    "fail": 0,
+    "skipped": 1
+  },
+  "skip_reason": "Existing Pure Java NativePolicy check requires unavailable JDK; no installation",
+  "static": {
+    "arkts_ts_files": 75,
+    "config_files": 19
+  },
+  "cross_layer": {
+    "stage": "UX08",
+    "synthetic": true,
+    "actual_sources": [
+      "ASGI/SQLite task-status fixture",
+      "TaskStatusValidation.ets",
+      "TaskStatusController.ets",
+      "DraftStore.ets"
+    ],
+    "passed": 14,
+    "results": [
+      {
+        "name": "actual ASGI complete-0",
+        "passed": true
+      },
+      {
+        "name": "actual ASGI restore-1",
+        "passed": true
+      },
+      {
+        "name": "actual ASGI cancelled",
+        "passed": true
+      },
+      {
+        "name": "actual ASGI restore-3",
+        "passed": true
+      },
+      {
+        "name": "actual ASGI restored-unchecked",
+        "passed": true
+      },
+      {
+        "name": "actual ASGI complete-5",
+        "passed": true
+      },
+      {
+        "name": "actual ASGI restore-6",
+        "passed": true
+      },
+      {
+        "name": "actual ASGI restored-course-ack",
+        "passed": true
+      },
+      {
+        "name": "actual candidate frozen through acknowledgement and apply",
+        "passed": true
+      },
+      {
+        "name": "wrong account revision and acknowledgement are rejected",
+        "passed": true
+      },
+      {
+        "name": "actual completion receipt through durable controller",
+        "passed": true
+      },
+      {
+        "name": "actual source check fresh course ACK and restoration receipt",
+        "passed": true
+      },
+      {
+        "name": "cold restart queries original ID without resending write",
+        "passed": true
+      },
+      {
+        "name": "actual cancellation receipt releases only the matching operation",
+        "passed": true
+      }
+    ],
+    "native_validation": false,
+    "real_model": false
+  },
+  "browser": {
+    "checks": 17,
+    "passed": [
+      "Eight actual ASGI/SQLite synthetic projections pass the unmodified production validator",
+      "Completion waits for a verified receipt, then refreshes once and clears its durable pointer",
+      "Closing and switching Today/Plan retain one coordinator and the original receipt without extra writes",
+      "An ambiguous completion cannot show confirm/cancel/retry before original-ID GET",
+      "Read-only original-ID recovery obtains the receipt without retransmitting the write",
+      "Definite original-ID 404 enables only an explicit replay with exactly the frozen body",
+      "Reconstructed controller/store reads its retained original ID after a simulated restart; no automatic POST",
+      "Restore first reads the original completion receipt, then presents a preview without changing the task",
+      "Confirming a valid non-overlap restore changes only status and preserves current task fields",
+      "Course-overlap restore shows full course/task dates and requires a new independent ACK",
+      "320px large type keeps complete facts and every active control at least 48px without horizontal overflow",
+      "Explicit ACK is bound to the precise candidate and digest before confirmation produces an actual fixture receipt",
+      "Explicit cancellation resolves only the restore preview and leaves the task completed",
+      "A historical receipt cannot overwrite a later title/time/location update",
+      "Legacy completion without a source receipt is explained, not forged or sent as a write",
+      "Dark preview and reduced-motion media retain readable recovery controls without horizontal overflow",
+      "Offline prototype emits no HTTP requests or browser runtime errors"
+    ],
+    "errors": [],
+    "httpRequests": [],
+    "sourceHashes": {
+      "DraftStore": "2e4afd681d568da8bbd1fbfac780558d90b6f84678a266897938edcddfe68d77",
+      "DailyAgenda": "889b2115d924ba40cf55ee8835d1f1695fc3fa8b88061f717e450736d1ae4709",
+      "AgentFeedback": "594ca55b30ba8db4e09387dcef1d4fddd9fc859a87a252a51db194ceeed8a940",
+      "TaskStatusValidation": "03c227d2714291d7942984cf325ff2b420a298e428d52c7a0e97fb27c410c170",
+      "TaskStatusController": "45533a8a249e69160bda220f237056b9321d9150bd0fd146acc1090d3b9e53bc"
+    },
+    "fixtureSHA256": "7395c203612b5c2d734763f1e24ca8a1e10357838151dca3ae0da72f435bbc75",
+    "fixtureCount": 8,
+    "syntheticData": true,
+    "actualProductionController": true,
+    "nativeValidation": false,
+    "browserApproximation": true,
+    "memoryDriverOnly": true,
+    "screenshots": [
+      "01-wide-web-prototype.png",
+      "02-390-complete-receipt.png",
+      "03-430-unknown-result.png",
+      "09-restored-historical-preview.png",
+      "04-320-large-course-ack.png",
+      "05-320-large-cancelled.png",
+      "06-390-later-current-task.png",
+      "07-390-legacy-no-receipt.png",
+      "08-430-dark-reduced-motion.png"
+    ]
+  },
+  "visual_review": "Root inspected actual wide, 320px large course review, completion receipt and unknown result; Web approximation only",
+  "independent_review": "Fixed durable intent write crossing background/foreground so GET and next explicit decision refresh the same persisted request and do not get stranded in stale CAS; exact task entry prefers unresolved status over an older receipt; terminal previews explicitly label historical/cancelled content",
+  "native_build": false,
+  "device_validation": false,
+  "real_model_calls": false,
+  "logs": [
+    {
+      "file": "ux08-backend-full.log",
+      "sha256": "918f5b90371111b6aaabc8c53fcd74e1c84383a7d2aabda37245334dee1f12a4"
+    },
+    {
+      "file": "ux08-client-full.log",
+      "sha256": "89a2f5275e280145e3c65d83c325d542cc6892df3d7122a77e6d65dabe534cad"
+    },
+    {
+      "file": "ux08-cross-contract-result.json",
+      "sha256": "8d8d0a591eaf4536da6e918afb066e6996d654e8aa6d61cb12447a5d48879882"
+    },
+    {
+      "file": "ux08-root-api.log",
+      "sha256": "f000b024c3f70dad54c746233ab4747c8462fc97838b0a56733964efa5cd12c2"
+    },
+    {
+      "file": "ux08-root-harness.log",
+      "sha256": "68544a6c13ae99a9ca72801e4fedafc695f355332202b1e640b8ba6877cbd7f0"
+    },
+    {
+      "file": "ux08-client-final.log",
+      "sha256": "e996835e495e786b8273f423f295b44ad5e0f209deb2cd161420a534ff8769b6"
+    }
+  ]
+}

@@ -312,3 +312,12 @@ test('successful subscription retains the controlled interpretation warnings nex
  const f=profileFixture(async()=>({status:{configured:true},imported_count:2,warnings:['来源未提供时区，本次按北京时间解释，请核对。']}));
  await f.page.syncSubscription();assert.equal(f.changed.length,1);assert.match(f.page.message,/北京时间/);
 });
+
+test('UX08 scanner permits read-only previews but cannot confirm a batch containing a status-locked task',async()=>{
+  const f=panelFixture();const opened=[];f.page.onOpenStatus=id=>opened.push(id);
+  f.page.aboutToAppear();await tick();f.page.previewRequested();await tick();
+  f.page.statusLockedTaskIds=['task-0'];f.page.confirmRequested();await tick();
+  assert.deepEqual(opened,['task-0']);assert.equal(f.calls.some(call=>call.startsWith('confirm:')),false);
+  f.page.statusLockedTaskIds=['unrelated-task'];f.page.confirmRequested();await tick();
+  assert.equal(f.calls.filter(call=>call.startsWith('confirm:')).length,1);
+});

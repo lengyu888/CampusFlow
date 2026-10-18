@@ -107,6 +107,10 @@ from .schemas import (
     SkillStateUpdate,
     SkillSummary,
     TaskCreateRequest,
+    TaskStatusCancelRequest,
+    TaskStatusConfirmRequest,
+    TaskStatusOperation,
+    TaskStatusRequest,
     TaskStatusUpdate,
     TimetableParseResult,
     TimetableSaveReceipt,
@@ -243,6 +247,7 @@ def create_app(
     replanning_service = replanning_service or ReplanningService(account_store, store)
     timetable_service = timetable_service or TimetableService(account_store, store)
     action_service = action_service or ActionService(account_store, store)
+    task_status_service = action_service.task_status_service()
     skill_store = skill_store or SkillStore(settings.database_path)
     api_key_vault = api_key_vault or ApiKeyVault(settings)
     hduhelp_service = hduhelp_service or HDUHelpService(settings)
@@ -328,6 +333,7 @@ def create_app(
         )
 
     app.state.action_service = action_service
+    app.state.task_status_service = task_status_service
     app.state.replanning_service = replanning_service
     app.state.timetable_service = timetable_service
 
@@ -1358,6 +1364,54 @@ def create_app(
                 500, "保存结果暂时无法核实，请先读取规划核对。", "ACTION_FAILED"
             ) from exc
 
+    @app.post("/api/v1/tasks/{task_id}/status-operations", response_model=TaskStatusOperation)
+    async def create_task_status_operation(
+        task_id: str, payload: TaskStatusRequest, user: CurrentUser
+    ) -> TaskStatusOperation:
+        try:
+            return task_status_service.create(user.user_id, task_id, payload)
+        except sqlite3.Error as exc:
+            raise CampusFlowError(
+                500, "状态操作结果暂时无法核实，请保留原操作标识并查询回执。", "TASK_STATUS_FAILED"
+            ) from exc
+
+    @app.get("/api/v1/task-status-operations/{operation_id}", response_model=TaskStatusOperation)
+    async def task_status_operation(operation_id: UUID, user: CurrentUser) -> TaskStatusOperation:
+        try:
+            return task_status_service.get(user.user_id, str(operation_id))
+        except sqlite3.Error as exc:
+            raise CampusFlowError(
+                500, "本次状态回执暂时无法读取，请稍后继续核对。", "TASK_STATUS_FAILED"
+            ) from exc
+
+    @app.post(
+        "/api/v1/task-status-operations/{operation_id}/confirm", response_model=TaskStatusOperation
+    )
+    async def confirm_task_status_operation(
+        operation_id: UUID, payload: TaskStatusConfirmRequest, user: CurrentUser
+    ) -> TaskStatusOperation:
+        try:
+            return task_status_service.confirm(
+                user.user_id, str(operation_id), payload.acknowledgements
+            )
+        except sqlite3.Error as exc:
+            raise CampusFlowError(
+                500, "恢复结果暂时无法核实，请先查询原操作回执。", "TASK_STATUS_FAILED"
+            ) from exc
+
+    @app.post(
+        "/api/v1/task-status-operations/{operation_id}/cancel", response_model=TaskStatusOperation
+    )
+    async def cancel_task_status_operation(
+        operation_id: UUID, payload: TaskStatusCancelRequest, user: CurrentUser
+    ) -> TaskStatusOperation:
+        try:
+            return task_status_service.cancel(user.user_id, str(operation_id))
+        except sqlite3.Error as exc:
+            raise CampusFlowError(
+                500, "取消结果暂时无法核实，请继续查询原操作状态。", "TASK_STATUS_FAILED"
+            ) from exc
+
     @app.patch("/api/v1/tasks/{task_id}", response_model=PlanningTask)
     async def update_task(
         task_id: str,
@@ -1370,7 +1424,7 @@ def create_app(
             raise HTTPException(status_code=404, detail="待办不存在。") from exc
         except sqlite3.Error as exc:
             raise CampusFlowError(
-                500, "状态修改结果暂时无法核实，请读取规划核对。", "ACTION_FAILED"
+                500, "状态修改结果暂时无法核实，请读取规划核对。", "TASK_STATUS_FAILED"
             ) from exc
 
     @app.delete("/api/v1/tasks/{task_id}", status_code=204)

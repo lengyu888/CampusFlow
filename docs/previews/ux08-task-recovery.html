@@ -1,0 +1,1877 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>行简 · 完成与安全恢复（Web 原型）</title><style>
+:root{color-scheme:light;--bg:#F6F4EF;--paper:#FFFEFB;--ink:#29352F;--muted:#626E65;--green:#416454;--soft:#E7EEE6;--line:#DCE2D8;--warning:#886023;--warm:#FBF2DF;--success:#3D7054;--success-soft:#EDF4EA;--danger:#A4493E;--danger-soft:#FFF0EC;--on:#FFFEFB}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft Yahei",sans-serif}button,select,input{font:inherit}button,select{min-height:48px;border-radius:12px;border:1px solid transparent;padding:10px 16px}button{background:var(--soft);color:var(--green);cursor:pointer;line-height:1.45;overflow-wrap:anywhere}button.primary{background:var(--green);color:var(--on)}button.quiet{background:transparent;border-color:var(--line);color:var(--ink)}button.warning{background:var(--warm);color:var(--warning)}button:disabled{background:var(--line);color:var(--muted);cursor:default}button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid var(--green);outline-offset:3px}button:hover:not(:disabled){filter:brightness(.97)}select{width:100%;background:var(--paper);color:var(--ink);border-color:var(--line)}h1,h2,h3,p{margin:0}h1{font-size:30px;letter-spacing:-.5px;line-height:1.3}h2{font-size:23px;line-height:1.45}h3{font-size:18px;line-height:1.5}small,.meta{font-size:13px;line-height:1.65;color:var(--muted)}.muted{color:var(--muted)}.eyebrow{font-size:12px;letter-spacing:2px;color:var(--green);margin-bottom:10px}.page{max-width:1150px;margin:auto;padding:44px 28px 64px}.intro{display:flex;justify-content:space-between;gap:24px;align-items:flex-start;margin-bottom:30px}.intro p{max-width:670px;margin-top:12px;color:var(--muted);font-size:14px}.tools{display:flex;gap:8px;flex-wrap:wrap;flex:none}.layout{display:grid;grid-template-columns:minmax(0,650px) minmax(260px,1fr);gap:28px;align-items:start}.app{background:var(--paper);border:1px solid var(--line);border-radius:24px;overflow:hidden;min-width:0}.app-head{padding:24px 24px 16px;border-bottom:1px solid var(--line)}.brand{display:flex;align-items:center;gap:10px;font-size:14px;color:var(--muted)}.mark{width:30px;height:30px;border:1px solid var(--green);border-radius:9px;display:grid;place-items:center;font-size:18px;color:var(--green)}.app-title{margin:20px 0 8px;font-size:30px;font-weight:650;letter-spacing:-1px}.app-head .meta{margin-top:4px}.tabs{display:flex;gap:4px;margin-top:20px;border-radius:13px;padding:4px;background:var(--bg)}.tabs button{flex:1;background:transparent;color:var(--muted)}.tabs button[aria-selected=true]{background:var(--paper);color:var(--green);font-weight:650}.content{padding:24px}.section-title{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:12px}.section-title small{flex:none}.task{padding:18px 0;border-top:1px solid var(--line)}.task h3{font-weight:600;overflow-wrap:anywhere}.task p{margin-top:5px}.task-line{display:flex;gap:16px;align-items:flex-start}.task-text{flex:1;min-width:0}.task-line>button{flex:none;max-width:104px}.tag{display:inline-block;padding:3px 8px;background:var(--soft);color:var(--green);font-size:12px;border-radius:6px;line-height:1.5}.tag.warn{background:var(--warm);color:var(--warning)}.tag.neutral{background:var(--bg);color:var(--muted)}.task-id{display:block;font-family:ui-monospace,monospace;font-size:11px;color:var(--muted);overflow-wrap:anywhere;margin-top:8px}.empty-line{font-size:14px;color:var(--muted);padding:16px 0;border-top:1px solid var(--line)}.notice{padding:14px 16px;border:1px solid var(--line);border-left:3px solid var(--green);border-radius:3px 12px 12px 3px;margin:16px 0;background:var(--soft);font-size:14px;overflow-wrap:anywhere}.notice.warning{background:var(--warm);color:var(--warning);border-color:var(--line);border-left-color:var(--warning)}.notice.error{background:var(--danger-soft);color:var(--danger);border-left-color:var(--danger)}.notice p+p{margin-top:8px}.footer{padding:12px 24px;border-top:1px solid var(--line);font-size:12px;color:var(--muted);background:var(--bg)}.persistent{width:100%;margin-top:20px;text-align:left;display:flex;gap:12px;align-items:center;justify-content:space-between}.persistent span{font-size:13px}.records{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0}.records button{padding:8px 12px;font-size:14px;text-align:left;flex:1;min-width:140px}.records button[aria-pressed=true]{border-color:var(--green)}.back-row{display:flex;gap:12px;align-items:center;margin-bottom:20px}.back-row button{padding:8px 12px}.receipt{background:var(--success-soft);border:1px solid var(--line);border-radius:16px;padding:20px;margin:16px 0}.receipt h3{color:var(--success);display:flex;align-items:center;gap:10px}.check{display:grid;place-items:center;width:24px;height:24px;border:1.5px solid currentColor;border-radius:50%;flex:none}.status-change{display:flex;align-items:center;gap:12px;margin:16px 0;font-size:19px}.status-change strong{color:var(--green)}.facts{margin:16px 0}.fact{display:grid;grid-template-columns:80px minmax(0,1fr);gap:12px;padding:11px 0;border-bottom:1px solid var(--line);font-size:14px}.fact dt{color:var(--muted)}.fact dd{margin:0;overflow-wrap:anywhere}.actions{display:flex;flex-direction:column;gap:10px;margin-top:20px}.preview{padding:18px;border:1px solid var(--line);border-radius:16px;margin:16px 0}.preview h3{overflow-wrap:anywhere}.course{padding:14px;border-left:3px solid var(--warning);background:var(--warm);border-radius:0 12px 12px 0;margin-top:12px;color:var(--warning)}.course p{font-size:14px;margin-top:6px}.ack{display:flex;align-items:flex-start;gap:12px;padding:14px 0;cursor:pointer;min-height:48px}.ack input{width:22px;height:22px;margin:3px 0 0;accent-color:var(--green);flex:none}.ack span{font-size:14px}.section-rule{border-top:1px solid var(--line);margin:20px 0}.side{display:flex;flex-direction:column;gap:18px}.panel{padding:22px;background:var(--paper);border:1px solid var(--line);border-radius:16px;min-width:0}.panel h2{font-size:18px}.panel p{font-size:14px;margin-top:10px;color:var(--muted)}.panel label{display:block;font-size:14px;margin:14px 0 6px;color:var(--muted)}.panel button{width:100%;margin-top:12px}.steps{padding-left:20px;margin:12px 0 0;font-size:14px;color:var(--muted)}.steps li{padding:8px 0}.steps b{display:block;color:var(--ink);font-weight:600}details>summary{min-height:48px;display:flex;align-items:center;cursor:pointer;color:var(--green);gap:10px}details>summary::after{content:'＋';margin-left:auto}details[open]>summary::after{content:'−'}.audit{font-size:12px;overflow-wrap:anywhere;color:var(--muted);border-top:1px solid var(--line);padding-top:10px;margin-top:10px}.audit code{display:block;white-space:pre-wrap;font-size:11px}.fixture-row{padding:12px 0;border-top:1px solid var(--line)}.fixture-row b{font-size:13px;display:block}.fixture-row small{display:block}.loader{display:inline-block;width:15px;height:15px;border:2px solid var(--line);border-top-color:var(--green);border-radius:50%;vertical-align:-2px;margin-right:8px;animation:spin 1s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}.large{font-size:20px}.large .meta,.large .notice,.large .panel p,.large .panel label,.large .steps,.large .course p,.large .ack span,.large .fact{font-size:16px}.large .tag,.large .footer,.large .task-id{font-size:14px}.large h3{font-size:21px}.dark{color-scheme:dark;--bg:#19221D;--paper:#222E27;--ink:#E6E9DF;--muted:#B9C3B8;--green:#AAC7AB;--soft:#344B3A;--line:#455749;--warning:#E3C58C;--warm:#403827;--success:#B4D4B5;--success-soft:#2C4132;--danger:#F0B6A7;--danger-soft:#4D322C;--on:#19221D}.dark .primary{color:var(--on)}[hidden]{display:none!important}@media(max-width:820px){.layout{grid-template-columns:minmax(0,1fr)}.intro{flex-direction:column}.side{display:grid;grid-template-columns:1fr 1fr}.side>.panel:last-child{grid-column:1/-1}.page{padding:28px 20px}.app{max-width:650px}}@media(max-width:540px){.page{padding:20px 12px 32px}.intro{margin-bottom:20px;gap:16px}h1{font-size:25px}.intro p{font-size:13px}.app{border-radius:18px}.app-head{padding:20px 16px 16px}.content{padding:20px 16px}.footer{padding:12px 16px}.side{display:flex}.panel{padding:18px}.layout{gap:20px}.task-line{gap:10px}.task-line>button{max-width:86px;padding:10px}.fact{grid-template-columns:64px minmax(0,1fr);gap:8px}.receipt,.preview{padding:16px}.large .task-line{flex-wrap:wrap}.large .task-line>button{width:100%;max-width:100%}.large .fact{grid-template-columns:1fr;gap:4px}.large .back-row{flex-wrap:wrap}.large .back-row h2{font-size:23px}.large .section-title{flex-wrap:wrap}.large .records button{min-width:100%}.large .status-change{flex-wrap:wrap;font-size:21px}.large .panel{padding:16px}}@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+</style></head><body><main class="page"><header class="intro"><div><div class="eyebrow">行简 · UX08</div><h1>完成有据，恢复有分寸</h1><p>可离线操作的 Web 原型，使用生产状态控制器与校验器、8 份真实本地 ASGI / SQLite 合成回包。接口和存储在本页模拟，不连接账号，不是 ArkUI 原生截图或设备验收。</p></div><div class="tools"><button id="large" class="quiet" aria-pressed="false">大字模式</button><button id="dark" class="quiet" aria-pressed="false">暗色预览</button></div></header><div class="layout"><section class="app" aria-label="完成与恢复 Web 原型"><header class="app-head"><div class="brand"><span class="mark">行</span>行简 <span class="tag neutral">Web / 合成</span></div><div class="app-title">一步完成，也留好回路。</div><p class="meta">2030 年 10 月 19 日 · 合成场景固定时钟</p><nav class="tabs" aria-label="页面"><button data-tab="today" aria-selected="true">今日</button><button data-tab="plan" aria-selected="false">计划</button></nav></header><div class="content" id="content" aria-live="polite"></div><div class="footer">浏览器近似 / 仅内存演示 · 关闭记录页不等于取消远端操作</div></section><aside class="side"><section class="panel"><h2>选择要核对的过程</h2><label for="scenario">合成接口场景</label><select id="scenario"><option value="complete">正常完成 · 取得原始回执</option><option value="unknown">响应丢失 · 查询原操作</option><option value="retry">未收到提交 · 同编号显式重试</option><option value="restore">恢复状态 · 保留当前内容</option><option value="course">课内恢复 · 本次重新确认</option><option value="cancel">明确取消 · 不恢复任务</option><option value="later">完成后又改标题、时间</option><option value="legacy">旧任务 · 无完成凭据</option></select><button id="reset" class="quiet">重置当前合成场景</button><button id="restart" class="quiet">模拟重启后恢复原记录</button><p>“重启”只重建生产控制器与草稿存储实例，读取同一内存驱动；不证明原生文件持久化已验收。</p></section><section class="panel"><h2>先保护结果，再继续操作</h2><ol class="steps"><li><b>先保存操作编号</b>没有可核验结果时只查原编号，不用任务列表猜写入成败。</li><li><b>恢复前，再看一次当前安排</b>只把已完成改回未完成，保留后来修改的名称、日期和地点。</li><li><b>课内许可，需要本次确认</b>过去接受过重叠，也不代替这次恢复的独立确认。</li></ol></section><section class="panel"><details><summary>本次接口轨迹与 8 份样本</summary><p>下面只记录本原型的模拟通信。POST 数量由生产控制器的实际调用累积。</p><div id="trace"></div><div id="fixtures"></div><div id="hashes" class="audit"></div></details></section></aside></div></main>
+<script>
+/* BEGIN PRODUCTION HELPERS */
+const SourceHashes={"DraftStore":"2e4afd681d568da8bbd1fbfac780558d90b6f84678a266897938edcddfe68d77","DailyAgenda":"889b2115d924ba40cf55ee8835d1f1695fc3fa8b88061f717e450736d1ae4709","AgentFeedback":"594ca55b30ba8db4e09387dcef1d4fddd9fc859a87a252a51db194ceeed8a940","TaskStatusValidation":"03c227d2714291d7942984cf325ff2b420a298e428d52c7a0e97fb27c410c170","TaskStatusController":"45533a8a249e69160bda220f237056b9321d9150bd0fd146acc1090d3b9e53bc"};
+const Store=(()=>{
+
+// Input snapshots only: these records are never authority to execute a server action.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+class SystemDraftScheduler                           {
+  now()         { return Date.now(); }
+  set(callback            , delayMs        )         { return setTimeout(callback, delayMs); }
+  clear(id        )       { clearTimeout(id); }
+}
+
+const MAX_LOCAL_DRAFT_BYTES         = 4 * 1024 * 1024;
+const MAX_DRAFT_RECORD_BYTES         = 2 * 1024 * 1024;
+const MAX_LOCAL_DRAFTS         = 20;
+const MAX_DRAFT_OPERATIONS         = 40;
+
+function boundedCaptureDuration(value        )         {
+  if (!Number.isInteger(value) || value < 1 || value > 1440) { throw new Error('invalid capture duration'); }
+  return value;
+}
+function strictCapturePermission(value         )          {
+  if (typeof value !== 'boolean') { throw new Error('invalid capture permission'); }
+  return value;
+}
+
+function draftUtf8Bytes(value        )         {
+  let bytes = 0;
+  for (let index = 0; index < value.length; index++) {
+    const unit = value.charCodeAt(index);
+    if (unit < 0x80) {
+      bytes++;
+    } else if (unit < 0x800) {
+      bytes += 2;
+    } else if (unit >= 0xD800 && unit <= 0xDBFF && index + 1 < value.length &&
+      value.charCodeAt(index + 1) >= 0xDC00 && value.charCodeAt(index + 1) <= 0xDFFF) {
+      bytes += 4;
+      index++;
+    } else {
+      bytes += 3;
+    }
+  }
+  return bytes;
+}
+
+function invalid()        { return new Error('草稿格式或容量不符合要求，原有草稿未被覆盖。'); }
+
+function text(value        , maximum        , required          = false)         {
+  if (typeof value !== 'string' || value.length > maximum || (required && value.length === 0)) {
+    throw invalid();
+  }
+  return value;
+}
+
+function userText(value        , maximum        )         {
+  if (typeof value !== 'string' || value.length === 0 || Array.from(value).length > maximum) { throw invalid(); }
+  return value;
+}
+
+function integer(value        , minimum        , maximum        )         {
+  if (!Number.isSafeInteger(value) || value < minimum || value > maximum) { throw invalid(); }
+  return value;
+}
+
+function flag(value         )          {
+  if (typeof value !== 'boolean') { throw invalid(); }
+  return value;
+}
+
+function kind(value           )            {
+  if (value !== 'assistant' && value !== 'new-task' && value !== 'onboarding' && value !== 'timetable') {
+    throw invalid();
+  }
+  return value;
+}
+
+function operationKind(value                    )                     {
+  if (value !== 'run' && value !== 'proposal' && value !== 'course-permission' && value !== 'onboarding' && value !== 'timetable') {
+    throw invalid();
+  }
+  return value;
+}
+
+function timezone(value        )         {
+  if (value !== 'Asia/Shanghai') { throw invalid(); }
+  return value;
+}
+
+function revision(value        , allowEmpty          = true)         {
+  if (typeof value !== 'string' || (!/^[a-f0-9]{64}$/.test(value) && !(allowEmpty && value === ''))) {
+    throw invalid();
+  }
+  return value;
+}
+
+function operationId(value        )         {
+  if (typeof value !== 'string' || !/^[A-Za-z0-9_-]{1,160}$/.test(value)) { throw invalid(); }
+  return value;
+}
+
+function assistantDraftKey(sessionId        )           {
+  const id = userText(sessionId, 128);
+  if (id.trim().length === 0) { throw invalid(); }
+  return { kind: 'assistant', ownerId: `session:${id}` };
+}
+
+function frozenRunRequest(value                 , id        )                  {
+  if (!value || typeof value !== 'object' || Array.isArray(value) || value.run_id !== id ||
+    typeof value.model !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$/.test(value.model)) { throw invalid(); }
+  const result                  = { run_id: id, session_id: userText(value.session_id, 128),
+    model: value.model, message: userText(value.message, 8000) };
+  const mode = value.session_mode;
+  const expected = value.expected_context_revision;
+  if (mode !== undefined && mode !== null && mode !== 'new' && mode !== 'continue') { throw invalid(); }
+  if (mode === 'continue') {
+    if (typeof expected !== 'string' || !/^[a-f0-9]{64}$/.test(expected)) { throw invalid(); }
+  } else if (expected !== undefined && expected !== null) { throw invalid(); }
+  // Preserve omission and explicit null separately. Legacy requests must stay four-field bodies.
+  if (mode !== undefined) { result.session_mode = mode; }
+  if (expected !== undefined) { result.expected_context_revision = expected; }
+  return result;
+}
+
+function proposalRequest(value                      , id        )                       {
+  if (!value || typeof value !== 'object' || Array.isArray(value) || value.proposal_id !== id ||
+    (value.intent !== 'confirm' && value.intent !== 'cancel') || !Array.isArray(value.course_acknowledgements) ||
+    value.course_acknowledgements.length > 96 || (value.intent === 'cancel' && value.course_acknowledgements.length > 0)) { throw invalid(); }
+  const seen           = [];
+  const acknowledgements                               = [];
+  for (const item of value.course_acknowledgements) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) { throw invalid(); }
+    const candidate = userText(item.candidate_id, 128);
+    if (candidate.trim().length === 0 || seen.includes(candidate)) { throw invalid(); }
+    seen.push(candidate);
+    acknowledgements.push({ candidate_id: candidate, review_digest: revision(item.review_digest, false) });
+  }
+  return { proposal_id: id, intent: value.intent, course_acknowledgements: acknowledgements };
+}
+
+function permissionRequest(value                        , id        )                         {
+  if (!value || typeof value !== 'object' || Array.isArray(value) || value.proposal_id !== id ||
+    !Array.isArray(value.choices) || value.choices.length < 1 || value.choices.length > 96) { throw invalid(); }
+  const seen           = [];
+  const choices                                = [];
+  for (const item of value.choices) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) { throw invalid(); }
+    const candidate = userText(item.candidate_id, 128);
+    if (candidate.trim().length === 0 || seen.includes(candidate)) { throw invalid(); }
+    seen.push(candidate);
+    choices.push({ candidate_id: candidate, allow_during_course: flag(item.allow_during_course) });
+  }
+  return { proposal_id: id, choices: choices };
+}
+
+function course(value             )              {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) { throw invalid(); }
+  // Wider than submit validation: partially typed and invalid editors must survive restart.
+  return { date: text(value.date, 64), title: text(value.title, 2048),
+    start_time: text(value.start_time, 64), end_time: text(value.end_time, 64),
+    location: text(value.location, 2048), teacher: text(value.teacher, 1024) };
+}
+
+function courses(values               )                {
+  if (!Array.isArray(values) || values.length > 500) { throw invalid(); }
+  return values.map((value             )              => course(value));
+}
+
+function issues(values              )               {
+  if (!Array.isArray(values) || values.length > 2000) { throw invalid(); }
+  return values.map((value            )             => {
+    if (!value || typeof value !== 'object') { throw invalid(); }
+    return { index: integer(value.index, -1, 499), relatedIndex: integer(value.relatedIndex, -1, 499),
+      field: text(value.field, 80), message: text(value.message, 2048) };
+  });
+}
+
+function strings(values          , maximum        , length        )           {
+  if (!Array.isArray(values) || values.length > maximum) { throw invalid(); }
+  return values.map((value        )         => text(value, length));
+}
+
+function campusMap(value                )                 {
+  if (!value || typeof value !== 'object' || !Array.isArray(value.places) || value.places.length > 500) {
+    throw invalid();
+  }
+  return { campus_name: text(value.campus_name, 512), warnings: strings(value.warnings, 100, 2048),
+    places: value.places.map((place                  )                   => {
+      if (!place || typeof place !== 'object') { throw invalid(); }
+      return { name: text(place.name, 512), category: text(place.category, 128),
+        zone: text(place.zone, 512), aliases: strings(place.aliases, 100, 512) };
+    }) };
+}
+
+function timetableSubmission(value                            )                             {
+  if (value === null) { return null; }
+  if (!value || typeof value !== 'object') { throw invalid(); }
+  return { operationId: operationId(value.operationId), expectedRevision: revision(value.expectedRevision, false),
+    entries: courses(value.entries), confirmClear: flag(value.confirmClear) };
+}
+
+function onboardingSubmission(value                             )                              {
+  if (value === null) { return null; }
+  if (!value || typeof value !== 'object') { throw invalid(); }
+  return { operationId: operationId(value.operationId), expectedRevision: revision(value.expectedRevision, false),
+    school: text(value.school, 512), campus: text(value.campus, 512), semester: text(value.semester, 512),
+    timetable: courses(value.timetable), campusMap: campusMap(value.campusMap) };
+}
+
+function payload(valueKind           , value              )               {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) { throw invalid(); }
+  if (valueKind === 'assistant') {
+    const item = value                  ;
+    return { text: text(item.text, 32000), sessionId: text(item.sessionId, 512, true),
+      anchorDate: text(item.anchorDate, 32), timezone: timezone(item.timezone) }                  ;
+  }
+  if (valueKind === 'new-task') {
+    const item = value                ;
+    return { title: text(item.title, 2048), date: text(item.date, 64), dateChoice: text(item.dateChoice, 64),
+      time: text(item.time, 64),
+      originalText: item.originalText === undefined ? '' : text(item.originalText, 8000),
+      durationText: item.durationText === undefined ? (typeof item.durationMinutes === 'number' ? `${item.durationMinutes}` : '') : text(item.durationText, 32),
+      durationMinutes: item.durationMinutes === undefined || item.durationMinutes === null ? null :
+        boundedCaptureDuration(item.durationMinutes),
+      allowDuringCourse: item.allowDuringCourse === undefined ? false : strictCapturePermission(item.allowDuringCourse),
+      anchorDate: text(item.anchorDate, 32), timezone: timezone(item.timezone) }                ;
+  }
+  if (valueKind === 'onboarding') {
+    const item = value                   ;
+    const entries = courses(item.entries);
+    return { school: text(item.school, 512), campus: text(item.campus, 512), step: integer(item.step, 0, 10),
+      semester: text(item.semester, 512), entries: entries, editor: course(item.editor),
+      editorOpen: flag(item.editorOpen), editorDirty: flag(item.editorDirty),
+      editingIndex: integer(item.editingIndex, -1, entries.length - 1), repeatWeeks: integer(item.repeatWeeks, 1, 24),
+      sourceWarnings: issues(item.sourceWarnings), anchorDate: text(item.anchorDate, 32), timezone: timezone(item.timezone),
+      baselineEntries: courses(item.baselineEntries), expectedRevision: revision(item.expectedRevision),
+      submission: onboardingSubmission(item.submission) }                   ;
+  }
+  const item = value                  ;
+  const entries = courses(item.draftEntries);
+  return { baselineEntries: courses(item.baselineEntries), expectedRevision: revision(item.expectedRevision),
+    draftEntries: entries, editor: course(item.editor), editorOpen: flag(item.editorOpen),
+    editorDirty: flag(item.editorDirty), editingIndex: integer(item.editingIndex, -1, entries.length - 1),
+    repeatWeeks: integer(item.repeatWeeks, 1, 24), sourceWarnings: issues(item.sourceWarnings),
+    anchorDate: text(item.anchorDate, 32), timezone: timezone(item.timezone),
+    submission: timetableSubmission(item.submission) }                  ;
+}
+
+function record(value             , scope        )              {
+  if (!value || typeof value !== 'object' || value.formatVersion !== 1 || value.scope !== scope ||
+      typeof value.updatedAt !== 'string' || !Number.isFinite(Date.parse(value.updatedAt))) { throw invalid(); }
+  const valueKind = kind(value.kind);
+  const result              = { formatVersion: 1, scope: scope, kind: valueKind,
+    ownerId: text(value.ownerId, 512, true), localRevision: integer(value.localRevision, 1, Number.MAX_SAFE_INTEGER),
+    updatedAt: value.updatedAt, payload: payload(valueKind, value.payload) };
+  if (valueKind === 'assistant' && result.ownerId.startsWith('session:') &&
+    result.ownerId !== assistantDraftKey((result.payload                  ).sessionId).ownerId) { throw invalid(); }
+  if (draftUtf8Bytes(JSON.stringify(result)) > MAX_DRAFT_RECORD_BYTES) { throw invalid(); }
+  return result;
+}
+
+function operation(value                     , scope        )                 {
+  if (!value || typeof value !== 'object') { throw invalid(); }
+  const fingerprint = value.fingerprint === undefined ? '' : value.fingerprint;
+  if (typeof fingerprint !== 'string' || (fingerprint !== '' && !/^[a-f0-9]{16,128}$/.test(fingerprint))) {
+    throw invalid();
+  }
+  const result                 = { scope: scope, kind: operationKind(value.kind), id: operationId(value.id),
+    draftKind: kind(value.draftKind), ownerId: text(value.ownerId, 512, true),
+    localRevision: integer(value.localRevision, 1, Number.MAX_SAFE_INTEGER), fingerprint: fingerprint, runRequest: null,
+    sessionId: value.sessionId === undefined || value.sessionId === null ? null : userText(value.sessionId, 128),
+    proposalRequest: null, permissionRequest: null };
+  if ((result.kind === 'run' && result.draftKind !== 'assistant') ||
+      ((result.kind === 'proposal' || result.kind === 'course-permission') && result.draftKind !== 'new-task') ||
+      (result.kind === 'onboarding' && result.draftKind !== 'onboarding') ||
+      (result.kind === 'timetable' && result.draftKind !== 'timetable')) { throw invalid(); }
+  if (value.runRequest !== undefined && value.runRequest !== null) {
+    if (result.kind !== 'run') { throw invalid(); }
+    result.runRequest = frozenRunRequest(value.runRequest, result.id);
+    if ((result.sessionId !== null && result.sessionId !== result.runRequest.session_id) ||
+      (result.ownerId.startsWith('session:') && result.ownerId !== assistantDraftKey(result.runRequest.session_id).ownerId)) { throw invalid(); }
+  }
+  if (result.sessionId !== null && (result.sessionId.trim().length === 0 ||
+    !['run', 'proposal', 'course-permission'].includes(result.kind))) { throw invalid(); }
+  if (value.proposalRequest !== undefined && value.proposalRequest !== null) {
+    if (result.kind !== 'proposal' || result.sessionId === null) { throw invalid(); }
+    result.proposalRequest = proposalRequest(value.proposalRequest, result.id);
+  }
+  if (value.permissionRequest !== undefined && value.permissionRequest !== null) {
+    if (result.kind !== 'course-permission' || result.sessionId === null) { throw invalid(); }
+    result.permissionRequest = permissionRequest(value.permissionRequest, result.id);
+  }
+  if (result.kind === 'course-permission' && result.permissionRequest === null) { throw invalid(); }
+  return result;
+}
+
+function emptyDocument(scope         = '')                {
+  return { version: 1, scope: scope, revision: 0, records: [], operations: [], taskStatusOperations: [] };
+}
+
+function statusUuid(value        )         {
+  if (typeof value !== 'string' || !/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(value)) { throw invalid(); }
+  return value;
+}
+
+function taskStatusOperation(value                          , scope        )                           {
+  if (!value || typeof value !== 'object' || value.scope !== scope || !value.request ||
+    typeof value.request !== 'object' || !['complete', 'restore'].includes(value.request.kind) ||
+    !['start', 'confirm', 'cancel'].includes(value.intent) || !Array.isArray(value.acknowledgements)) { throw invalid(); }
+  const request                         = { operation_id: statusUuid(value.request.operation_id), kind: value.request.kind,
+    expected_revision: integer(value.request.expected_revision, 1, Number.MAX_SAFE_INTEGER - 1) };
+  if (request.kind === 'restore') { request.source_operation_id = statusUuid(value.request.source_operation_id ?? ''); }
+  else if (value.request.source_operation_id !== undefined || value.intent !== 'start') { throw invalid(); }
+  if (value.acknowledgements.length > 1 || (value.intent !== 'confirm' && value.acknowledgements.length > 0)) { throw invalid(); }
+  const acknowledgements = value.acknowledgements.map((item                            )                             => {
+    if (!item || typeof item !== 'object') { throw invalid(); }
+    return { candidate_id: text(item.candidate_id, 128, true), review_digest: revision(item.review_digest, false) };
+  });
+  return { scope: scope, taskId: text(value.taskId, 128, true), request: request, intent: value.intent, acknowledgements: acknowledgements };
+}
+
+function cloneDocument(value               )                {
+  if (!value || typeof value !== 'object' || value.version !== 1 || !Array.isArray(value.records) ||
+      !Array.isArray(value.operations) || value.records.length > MAX_LOCAL_DRAFTS ||
+      value.operations.length > MAX_DRAFT_OPERATIONS || (value.taskStatusOperations !== undefined &&
+      (!Array.isArray(value.taskStatusOperations) || value.taskStatusOperations.length > MAX_DRAFT_OPERATIONS))) { throw invalid(); }
+  const scope = text(value.scope, 4096);
+  const latest = integer(value.revision, 0, Number.MAX_SAFE_INTEGER);
+  if (scope.length === 0 && (value.records.length > 0 || value.operations.length > 0 || (value.taskStatusOperations ?? []).length > 0)) { throw invalid(); }
+  const result = emptyDocument(scope);
+  result.revision = latest;
+  for (const item of value.records) {
+    const next = record(item, scope);
+    if (next.localRevision > latest || result.records.some((previous             )          =>
+      previous.kind === next.kind && previous.ownerId === next.ownerId)) { throw invalid(); }
+    result.records.push(next);
+  }
+  for (const item of value.operations) {
+    if (item.scope !== scope) { throw invalid(); }
+    const next = operation(item, scope);
+    if (next.localRevision > latest || result.operations.some((previous                )          =>
+      previous.kind === next.kind && previous.id === next.id)) { throw invalid(); }
+    result.operations.push(next);
+  }
+  for (const item of value.taskStatusOperations ?? []) {
+    const next = taskStatusOperation(item, scope);
+    if ((result.taskStatusOperations ?? []).some((previous                          )          =>
+      previous.request.operation_id === next.request.operation_id || previous.taskId === next.taskId)) { throw invalid(); }
+    result.taskStatusOperations?.push(next);
+  }
+  if (draftUtf8Bytes(JSON.stringify(result)) > MAX_LOCAL_DRAFT_BYTES) { throw invalid(); }
+  return result;
+}
+
+function matches(value             , key          )          {
+  return value.kind === key.kind && value.ownerId === key.ownerId;
+}
+
+class DraftStore {
+          driver             ;
+          scheduler                ;
+          document                = emptyDocument();
+          initialized          = false;
+          generation         = 0;
+          visible          = false;
+          timer         = -1;
+          queue                = Promise.resolve();
+          savedRevision         = -1;
+          inputRejected          = false;
+          state                 = { scope: '', generation: 0, phase: 'unavailable', message: '本机草稿尚未初始化。' };
+          listeners                                      = [];
+
+  constructor(driver             , scheduler                 = new SystemDraftScheduler()) {
+    this.driver = driver;
+    this.scheduler = scheduler;
+  }
+
+          enqueue   (action                  )             {
+    const result = this.queue.then(action);
+    this.queue = result.then(()       => {}, ()       => {});
+    return result;
+  }
+
+          publish(phase        , message        )       {
+    if (phase === 'saved' && this.inputRejected) {
+      phase = 'error'; message = '最近一次输入尚未保存，请调整草稿后重试。';
+    }
+    this.state = { scope: this.visible ? this.document.scope : '', generation: this.generation, phase: phase, message: message };
+    for (const listener of this.listeners) {
+      try { listener(this.copyState()); } catch { /* A view cannot break persistence. */ }
+    }
+  }
+
+          copyState()                 {
+    return { scope: this.state.scope, generation: this.state.generation, phase: this.state.phase, message: this.state.message };
+  }
+
+  subscribe(listener                                 )             {
+    this.listeners.push(listener);
+    try { listener(this.copyState()); } catch { /* Same isolation as later notifications. */ }
+    return ()       => { this.listeners = this.listeners.filter((item)          => item !== listener); };
+  }
+
+          cancelTimer()       {
+    if (this.timer >= 0) { this.scheduler.clear(this.timer); this.timer = -1; }
+  }
+
+  async initialize()                {
+    return this.enqueue(async ()                => {
+      if (this.initialized) { return; }
+      try {
+        const source = await this.driver.read();
+        if (source !== undefined && draftUtf8Bytes(source) > MAX_LOCAL_DRAFT_BYTES) { throw invalid(); }
+        this.document = source === undefined ? emptyDocument() : cloneDocument(JSON.parse(source)                 );
+        this.savedRevision = this.document.revision;
+        this.initialized = true;
+        this.publish('idle', '登录后可查看本机草稿。');
+      } catch {
+        this.publish('unavailable', '本机草稿读取失败，未覆盖原文件。可明确清除本机草稿后重试。');
+        throw new Error(this.state.message);
+      }
+    });
+  }
+
+  activate(scope        )                      {
+    const requestedScope = text(scope, 4096, true);
+    const generation = ++this.generation;
+    this.visible = false;
+    this.cancelTimer();
+    this.publish('loading', '正在读取本机草稿。');
+    return this.enqueue(async ()                      => {
+      if (!this.initialized) {
+        if (generation === this.generation) { this.publish('unavailable', '本机草稿尚不可用，未覆盖原文件。'); }
+        throw new Error('本机草稿尚不可用，未覆盖原文件。');
+      }
+      if (generation !== this.generation) { throw new Error('账号已变化，旧草稿操作已停止。'); }
+      const candidate = this.document.scope === requestedScope ? cloneDocument(this.document) : emptyDocument(requestedScope);
+      try {
+        // Commit account replacement before granting access to any record.
+        await this.driver.write(JSON.stringify(candidate));
+        this.document = candidate;
+        this.savedRevision = candidate.revision;
+        if (generation !== this.generation) { throw new Error('账号已变化，旧草稿操作已停止。'); }
+        this.visible = true;
+        this.inputRejected = false;
+        this.publish('idle', '本机草稿已就绪。');
+        return { scope: requestedScope, generation: generation };
+      } catch {
+        if (generation === this.generation) {
+          this.publish('unavailable', '本机草稿切换失败，当前未开放草稿内容。请重试或清除本机草稿。');
+        }
+        throw new Error('本机草稿切换失败，当前未开放草稿内容。');
+      }
+    });
+  }
+
+  valid(lease            )          {
+    return !!lease && this.initialized && this.visible && lease.generation === this.generation &&
+      lease.scope === this.document.scope;
+  }
+
+          requireLease(lease            )       {
+    if (!this.valid(lease)) { throw new Error('账号已变化或本机草稿不可用，旧草稿操作已停止。'); }
+  }
+
+  status(lease            )                 {
+    if (!this.valid(lease)) {
+      return { scope: '', generation: this.generation, phase: 'unavailable', message: '此账号的草稿访问已失效。' };
+    }
+    return this.copyState();
+  }
+
+  list(lease            , valueKind           )                {
+    if (!this.valid(lease)) { return []; }
+    return this.document.records.filter((item             )          => item.kind === valueKind)
+      .map((item             )              => record(item, lease.scope))
+      .sort((left             , right             )         => right.localRevision - left.localRevision);
+  }
+
+  read(lease            , key          )                          {
+    if (!this.valid(lease)) { return undefined; }
+    const item = this.document.records.find((value             )          => matches(value, key));
+    return item === undefined ? undefined : record(item, lease.scope);
+  }
+
+  stage(lease            , key          , value              )              {
+    this.requireLease(lease);
+    try {
+      const candidate = cloneDocument(this.document);
+      const next              = record({ formatVersion: 1, scope: lease.scope, kind: kind(key.kind),
+        ownerId: text(key.ownerId, 512, true), localRevision: this.document.revision + 1,
+        updatedAt: new Date(this.scheduler.now()).toISOString(), payload: value }, lease.scope);
+      const index = candidate.records.findIndex((item             )          => matches(item, key));
+      if (index >= 0) { candidate.records[index] = next; } else { candidate.records.push(next); }
+      candidate.revision = next.localRevision;
+      this.document = cloneDocument(candidate);
+      this.inputRejected = false;
+      this.publish('pending', '更改尚未保存到本机。');
+      this.cancelTimer();
+      const captured             = { scope: lease.scope, generation: lease.generation };
+      this.timer = this.scheduler.set(()       => {
+        this.timer = -1;
+        this.flush(captured).catch(()       => {});
+      }, 300);
+      return { localRevision: next.localRevision };
+    } catch {
+      this.cancelTimer();
+      this.inputRejected = true;
+      this.publish('error', '本次草稿超出格式或容量限制，尚未保存；原有草稿仍保留。');
+      throw invalid();
+    }
+  }
+
+  flush(lease            )                {
+    // A late callback from a logged-out page must not cancel the new account's debounce.
+    if (this.valid(lease)) { this.cancelTimer(); }
+    return this.enqueue(async ()                => {
+      this.requireLease(lease);
+      if (this.inputRejected) { throw new Error('最近一次输入尚未保存，请调整草稿后重试。'); }
+      if (this.savedRevision === this.document.revision) { return; }
+      const candidate = cloneDocument(this.document);
+      this.publish('saving', '正在保存到本机。');
+      try {
+        await this.driver.write(JSON.stringify(candidate));
+        this.requireLease(lease);
+        this.savedRevision = candidate.revision;
+        if (this.inputRejected) { throw new Error('最近一次输入尚未保存。'); }
+        this.publish(this.document.revision === candidate.revision ? 'saved' : 'pending',
+          this.document.revision === candidate.revision ? '已保存到本机。' : '新更改尚未保存到本机。');
+      } catch {
+        if (this.valid(lease)) { this.publish('error', '尚未保存到本机，请重试；当前输入仍保留。'); }
+        throw new Error('草稿尚未保存到本机。');
+      }
+    });
+  }
+
+  operations(lease            )                   {
+    if (!this.valid(lease)) { return []; }
+    return this.document.operations.map((value                )                 => operation(value, lease.scope));
+  }
+
+  taskStatusOperations(lease            )                             {
+    if (!this.valid(lease)) { return []; }
+    return (this.document.taskStatusOperations ?? []).map((value                          )                           =>
+      taskStatusOperation(value, lease.scope));
+  }
+
+  hasPendingTaskStatus(lease            )          {
+    return this.valid(lease) && (this.document.taskStatusOperations ?? []).length > 0;
+  }
+
+  async beginTaskStatusOperation(lease            , value                          )                {
+    this.requireLease(lease);
+    const next = taskStatusOperation(value, lease.scope);
+    if (next.intent !== 'start') { throw invalid(); }
+    const existing = (this.document.taskStatusOperations ?? []).find((item                          )          =>
+      item.request.operation_id === next.request.operation_id);
+    if (existing !== undefined) {
+      if (JSON.stringify(existing) !== JSON.stringify(next)) { throw new Error('原任务状态请求已变化，请先核对。'); }
+    } else {
+      const candidate = cloneDocument(this.document);
+      candidate.taskStatusOperations?.push(next); candidate.revision++;
+      this.document = cloneDocument(candidate);
+      this.publish('pending', '正在保存任务状态操作编号，完成后才能提交。');
+    }
+    // The in-memory lock survives a disk failure. No network write is allowed yet.
+    await this.flush(lease); this.requireLease(lease);
+    if (!(this.document.taskStatusOperations ?? []).some((item                          )          =>
+      JSON.stringify(item) === JSON.stringify(next))) { throw new Error('该任务状态操作已变化，请重新核对。'); }
+  }
+
+  replaceTaskStatusIntent(lease            , id        , expected                          ,
+    intent                      , acknowledgements                               = [])                {
+    const original = taskStatusOperation(expected, lease.scope);
+    if (original.request.operation_id !== statusUuid(id) || original.request.kind !== 'restore' ||
+      (original.intent === 'cancel' && intent !== 'cancel')) { return Promise.reject(invalid()); }
+    const next = taskStatusOperation({ scope: original.scope, taskId: original.taskId, request: original.request,
+      intent: intent, acknowledgements: acknowledgements }, lease.scope);
+    return this.enqueue(async ()                => {
+      this.requireLease(lease);
+      const current = (this.document.taskStatusOperations ?? []).find((item                          )          =>
+        item.request.operation_id === id);
+      if (current === undefined || JSON.stringify(current) !== JSON.stringify(original)) {
+        throw new Error('原任务状态操作已变化，请先查询同一编号。');
+      }
+      const candidate = cloneDocument(this.document);
+      candidate.taskStatusOperations = (candidate.taskStatusOperations ?? []).map((item                          )                           =>
+        item.request.operation_id === id ? next : item);
+      candidate.revision = ++this.document.revision;
+      try {
+        await this.driver.write(JSON.stringify(candidate)); this.requireLease(lease);
+        this.document.taskStatusOperations = (this.document.taskStatusOperations ?? []).map((item                          )                           =>
+          item.request.operation_id === id ? next : item);
+        this.savedRevision = candidate.revision;
+        this.publish(this.document.revision === candidate.revision ? 'saved' : 'pending', '任务状态操作意图已保存。');
+      } catch {
+        if (this.valid(lease)) { this.publish('error', '任务状态操作意图尚未保存，原标识仍保留。'); }
+        throw new Error('任务状态操作意图尚未保存。');
+      }
+    });
+  }
+
+  resolveTaskStatusOperation(lease            , id        )                {
+    const operationId = statusUuid(id);
+    return this.enqueue(async ()                => {
+      this.requireLease(lease);
+      if (!(this.document.taskStatusOperations ?? []).some((item                          )          =>
+        item.request.operation_id === operationId)) { return; }
+      const candidate = cloneDocument(this.document);
+      candidate.taskStatusOperations = (candidate.taskStatusOperations ?? []).filter((item                          )          =>
+        item.request.operation_id !== operationId);
+      candidate.revision = ++this.document.revision;
+      try {
+        await this.driver.write(JSON.stringify(candidate)); this.requireLease(lease);
+        this.document.taskStatusOperations = (this.document.taskStatusOperations ?? []).filter((item                          )          =>
+          item.request.operation_id !== operationId);
+        this.savedRevision = candidate.revision;
+        this.publish(this.document.revision === candidate.revision ? 'saved' : 'pending', '任务状态核对结果已保存。');
+      } catch {
+        if (this.valid(lease)) { this.publish('error', '任务状态核对结果尚未保存，仍保留原操作编号。'); }
+        throw new Error('任务状态核对结果尚未保存。');
+      }
+    });
+  }
+
+  isBlocked(lease            , key          , localRevision         )          {
+    if (!this.valid(lease)) { return true; }
+    return this.document.operations.some((item                )          => item.draftKind === key.kind &&
+      item.ownerId === key.ownerId && (localRevision === undefined || item.localRevision === localRevision));
+  }
+
+  async beginOperation(lease            , input                     )                {
+    this.requireLease(lease);
+    const next = operation(input, lease.scope);
+    const existing = this.document.operations.find((item                )          => item.kind === next.kind && item.id === next.id);
+    if (existing !== undefined) {
+      if (JSON.stringify(existing) !== JSON.stringify(next)) { throw new Error('待核对操作标识已关联另一份草稿。'); }
+    } else {
+      const source = this.document.records.find((item             )          => item.kind === next.draftKind &&
+        item.ownerId === next.ownerId && item.localRevision === next.localRevision);
+      if (source === undefined) { throw new Error('提交前草稿已经变化，请重新核对。'); }
+      const candidate = cloneDocument(this.document);
+      candidate.operations.push(next);
+      candidate.revision++;
+      this.document = cloneDocument(candidate);
+      this.publish('pending', '正在保存操作恢复标识，完成后才能提交。');
+    }
+    // Failure deliberately leaves an in-memory block. No caller may POST after rejection.
+    await this.flush(lease);
+    this.requireLease(lease);
+    if (!this.document.operations.some((item                )          => item.kind === next.kind && item.id === next.id)) {
+      throw new Error('该操作已完成核对，请勿再次提交旧请求。');
+    }
+  }
+
+  async replaceProposalIntent(lease            , id        , sessionId        , expected                      )                {
+    const proposalId = text(id, 128, true);
+    const ownerSession = text(sessionId, 128, true);
+    const expectedRequest = proposalRequest(expected, proposalId);
+    return this.enqueue(async ()                => {
+      this.requireLease(lease);
+      const current = this.document.operations.find((item                )          => item.kind === 'proposal' && item.id === proposalId);
+      if (current === undefined || current.sessionId !== ownerSession || current.proposalRequest === null ||
+        JSON.stringify(current.proposalRequest) !== JSON.stringify(expectedRequest)) {
+        throw new Error('原提案恢复标识已变化，请先重新核对。');
+      }
+      // Only an explicit, freshly checked cancel can replace the old intent. The
+      // pointer remains continuously blocked, including while the file is written.
+      const cancelled                       = { proposal_id: proposalId, intent: 'cancel', course_acknowledgements: [] };
+      const candidate = cloneDocument(this.document);
+      candidate.operations = candidate.operations.map((item                )                 => {
+        if (item.kind === 'proposal' && item.id === proposalId) { item.proposalRequest = cancelled; }
+        return item;
+      });
+      candidate.revision = ++this.document.revision;
+      try {
+        await this.driver.write(JSON.stringify(candidate));
+        this.requireLease(lease);
+        this.document.operations = this.document.operations.map((item                )                 => {
+          if (item.kind === 'proposal' && item.id === proposalId) { item.proposalRequest = cancelled; }
+          return item;
+        });
+        this.savedRevision = candidate.revision;
+        this.publish(this.document.revision === candidate.revision ? 'saved' : 'pending',
+          this.document.revision === candidate.revision ? '取消意图已保存，可核对同一提案。' : '新更改尚未保存到本机。');
+      } catch {
+        if (this.valid(lease)) { this.publish('error', '取消意图尚未保存，原操作仍待核对，请重试。'); }
+        throw new Error('取消意图尚未保存，原操作仍待核对。');
+      }
+    });
+  }
+
+  resolveOperation(lease            , valueKind                    , id        , removeMatchingDraft          = false)                {
+    return this.enqueue(async ()                => {
+      this.requireLease(lease);
+      const resolved = this.document.operations.find((item                )          => item.kind === valueKind && item.id === id);
+      if (resolved === undefined) { return; }
+      const candidate = cloneDocument(this.document);
+      candidate.operations = candidate.operations.filter((item                )          => !(item.kind === valueKind && item.id === id));
+      if (removeMatchingDraft) {
+        candidate.records = candidate.records.filter((item             )          => item.kind !== resolved.draftKind ||
+          item.ownerId !== resolved.ownerId || item.localRevision !== resolved.localRevision);
+      }
+      // Reserve a revision synchronously with snapshot creation; newer keystrokes get a higher one.
+      candidate.revision = ++this.document.revision;
+      try {
+        await this.driver.write(JSON.stringify(candidate));
+        this.requireLease(lease);
+        this.document.operations = this.document.operations.filter((item                )          => !(item.kind === valueKind && item.id === id));
+        // Success must remove the consumed input in this same atomic replacement: a crash
+        // between two separate writes must not reopen an already-applied input as a new draft.
+        if (removeMatchingDraft) {
+          this.document.records = this.document.records.filter((item             )          => item.kind !== resolved.draftKind ||
+            item.ownerId !== resolved.ownerId || item.localRevision !== resolved.localRevision);
+        }
+        this.savedRevision = candidate.revision;
+        this.publish(this.document.revision === candidate.revision ? 'saved' : 'pending',
+          this.document.revision === candidate.revision ? '核对结果已保存。' : '新更改尚未保存到本机。');
+      } catch {
+        if (this.valid(lease)) { this.publish('error', '核对结果尚未保存，仍保留待核对标识。请重新核对后重试。'); }
+        throw new Error('核对结果尚未保存，待核对标识仍保留。');
+      }
+    });
+  }
+
+  remove(lease            , key          , expectedLocalRevision        )                   {
+    return this.enqueue(async ()                   => {
+      this.requireLease(lease);
+      if (this.isBlocked(lease, key)) { return false; }
+      const current = this.document.records.find((item             )          => matches(item, key));
+      if (current === undefined || current.localRevision !== expectedLocalRevision) { return false; }
+      const candidate = cloneDocument(this.document);
+      candidate.records = candidate.records.filter((item             )          => !matches(item, key));
+      candidate.revision = ++this.document.revision;
+      try {
+        await this.driver.write(JSON.stringify(candidate));
+        this.requireLease(lease);
+        const nowBlocked = this.isBlocked(lease, key);
+        if (!nowBlocked) {
+          this.document.records = this.document.records.filter((item             )          =>
+            !matches(item, key) || item.localRevision !== expectedLocalRevision);
+        }
+        this.savedRevision = candidate.revision;
+        this.publish(this.document.revision === candidate.revision ? 'saved' : 'pending',
+          this.document.revision === candidate.revision ? '该版本草稿已移除。' : '新更改尚未保存到本机。');
+        return !nowBlocked;
+      } catch {
+        if (this.valid(lease)) { this.publish('error', '草稿移除失败，原有草稿仍保留。'); }
+        throw new Error('草稿移除失败，原有草稿仍保留。');
+      }
+    });
+  }
+
+  clear()                {
+    const generation = ++this.generation;
+    this.visible = false;
+    this.cancelTimer();
+    this.publish('pending', '正在清除本机草稿。');
+    return this.enqueue(async ()                => {
+      try {
+        await this.driver.remove();
+        this.document = emptyDocument();
+        this.savedRevision = 0;
+        this.inputRejected = false;
+        this.initialized = true;
+        if (generation === this.generation) { this.publish('idle', '本机草稿已清除。'); }
+      } catch {
+        // Still hidden and old leases invalid, even if the filesystem cannot be cleared.
+        if (generation === this.generation) { this.publish('error', '本机草稿清理失败，请重试；旧草稿未重新开放。'); }
+        throw new Error('本机草稿清理失败，请重试。');
+      }
+    });
+  }
+}
+
+return {DraftStore};
+})();
+const Agenda=(()=>{
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+const SHANGHAI_OFFSET_MS         = 8 * 60 * 60 * 1000;
+const DAY_MS         = 24 * 60 * 60 * 1000;
+
+// Campus timetable dates use Asia/Shanghai, independently of the device timezone.
+function shanghaiDate(nowMs        )         {
+  const shifted = new Date(nowMs + SHANGHAI_OFFSET_MS);
+  const year = `${shifted.getUTCFullYear()}`.padStart(4, '0');
+  const month = `${shifted.getUTCMonth() + 1}`.padStart(2, '0');
+  const day = `${shifted.getUTCDate()}`.padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function shanghaiTime(nowMs        )         {
+  const shifted = new Date(nowMs + SHANGHAI_OFFSET_MS);
+  return `${shifted.getUTCHours()}`.padStart(2, '0') + ':' + `${shifted.getUTCMinutes()}`.padStart(2, '0');
+}
+
+function validDate(value        )          {
+  if (!new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$').test(value)) { return false; }
+  const year = Number(value.substring(0, 4));
+  const month = Number(value.substring(5, 7));
+  const day = Number(value.substring(8, 10));
+  if (year < 1 || year > 9999 || month < 1 || month > 12 || day < 1) { return false; }
+  const leap = year % 400 === 0 || (year % 4 === 0 && year % 100 !== 0);
+  const lengths           = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  return day <= lengths[month - 1];
+}
+
+function timestamp(value               )                {
+  if (value === null || typeof value !== 'string') { return null; }
+  const match = new RegExp('^([0-9]{4}-[0-9]{2}-[0-9]{2})[Tt ]([01][0-9]|2[0-3]):([0-5][0-9])' +
+    '(:[0-5][0-9](\\.[0-9]+)?)?([Zz]|[+-]([01][0-9]|2[0-3]):[0-5][0-9])?$').exec(value);
+  if (match === null || !validDate(match[1])) { return null; }
+  // Naive legacy timestamps follow the same campus timezone as timetable rows.
+  const seconds = match[4] === undefined ? '00' : match[4].substring(1, 3);
+  const fraction = match[5] === undefined ? '000' : match[5].substring(1, 4).padEnd(3, '0');
+  const zone = match[6] === undefined ? '+08:00' : match[6].toUpperCase();
+  const normalized = `${match[1]}T${match[2]}:${match[3]}:${seconds}.${fraction}${zone}`;
+  const parsed = Date.parse(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function courseTimestamp(date        , time        )                {
+  if (!validDate(date) || !new RegExp('^([01][0-9]|2[0-3]):[0-5][0-9]$').test(time)) { return null; }
+  return timestamp(`${date}T${time}:00+08:00`);
+}
+
+function overlapsDay(start        , end               , dayStart        )          {
+  const dayEnd = dayStart + DAY_MS;
+  return end !== null && end > start ? start < dayEnd && end > dayStart : start >= dayStart && start < dayEnd;
+}
+
+function allDayDate(task              , start               )         {
+  if (task.start_at !== null && validDate(task.start_at)) { return task.start_at; }
+  if (task.source === 'manual' && task.end_at === null && start !== null && shanghaiTime(start) === '23:59') {
+    return shanghaiDate(start);
+  }
+  return '';
+}
+
+function taskRow(task              , start        , end               )            {
+  return {
+    id: `task-${task.task_id}`, kind: 'task', title: task.title,
+    date: shanghaiDate(start), startTime: shanghaiTime(start),
+    endTime: end === null ? '' : shanghaiTime(end), endDate: end === null ? '' : shanghaiDate(end),
+    location: task.location ?? '', taskId: task.task_id, planId: task.plan_id,
+    done: task.status === 'completed', startMs: start, endMs: end
+  };
+}
+
+function buildDailyAgenda(courses                  , tasks                , nowMs        )              {
+  const today = shanghaiDate(nowMs);
+  const dayStart = Date.parse(`${today}T00:00:00+08:00`);
+  const rows              = [];
+  const allDay                 = [];
+  const unscheduled                 = [];
+  courses.forEach((course                , index        ) => {
+    const start = courseTimestamp(course.date, course.start_time);
+    const end = courseTimestamp(course.date, course.end_time);
+    if (start === null || end === null || end <= start || !overlapsDay(start, end, dayStart)) { return; }
+    rows.push({
+      id: `course-${index}-${course.date}-${course.start_time}`, kind: 'course', title: course.title,
+      date: course.date, startTime: course.start_time, endTime: course.end_time, endDate: course.date,
+      location: course.location, taskId: null, planId: null, done: false, startMs: start, endMs: end
+    });
+  });
+  tasks.forEach((task              ) => {
+    if (task.status !== 'pending' && task.status !== 'completed') { return; }
+    if (task.start_at === null || (typeof task.start_at === 'string' && task.start_at.trim().length === 0)) {
+      if (task.status === 'pending') { unscheduled.push(task); }
+      return;
+    }
+    if (typeof task.start_at !== 'string') {
+      if (task.status === 'pending') { unscheduled.push(task); }
+      return;
+    }
+    const start = timestamp(task.start_at);
+    const dateOnly = allDayDate(task, start);
+    if (dateOnly.length > 0) {
+      if (dateOnly === today) { allDay.push(task); }
+      return;
+    }
+    if (start === null) {
+      // Preserve pending items with malformed legacy dates for explicit time review.
+      if (task.status === 'pending') { unscheduled.push(task); }
+      return;
+    }
+    const parsedEnd = timestamp(task.end_at);
+    const end = parsedEnd !== null && parsedEnd > start ? parsedEnd : null;
+    if (overlapsDay(start, end, dayStart)) { rows.push(taskRow(task, start, end)); }
+  });
+  rows.sort((left           , right           ) => {
+    if (left.startMs !== right.startMs) { return left.startMs - right.startMs; }
+    if (left.kind !== right.kind) { return left.kind === 'course' ? -1 : 1; }
+    return left.id < right.id ? -1 : (left.id > right.id ? 1 : 0);
+  });
+  const next = rows.find((row           ) => !row.done &&
+    (row.startMs >= nowMs || (row.endMs !== null && row.endMs > nowMs)));
+  return { today: today, rows: rows, allDay: allDay, unscheduled: unscheduled, next: next ?? null };
+}
+
+function labelNext(row           , nowMs        )         {
+  if (row.done) { return '已完成'; }
+  if (row.endMs !== null && row.endMs <= nowMs) { return '已结束'; }
+  if (row.startMs <= nowMs) {
+    return row.endMs !== null ? '正在进行' : (row.startMs === nowMs ? '现在开始' : '已到开始时间');
+  }
+  const minutes = Math.ceil((row.startMs - nowMs) / 60000);
+  if (minutes < 60) { return `${minutes} 分钟后开始`; }
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+  return remainder === 0 ? `${hours} 小时后开始` : `${hours} 小时 ${remainder} 分钟后开始`;
+}
+
+return {timestamp,courseTimestamp};
+})();
+const Feedback=(()=>{
+
+
+
+
+
+
+class CampusFlowRequestError extends Error {
+  statusCode        ;
+  code        ;
+
+  constructor(statusCode        , code        , message        ) {
+    super(message);
+    this.name = 'CampusFlowRequestError';
+    this.statusCode = statusCode;
+    this.code = code;
+  }
+}
+
+function knownErrorMessage(code        )         {
+  switch (code) {
+    case 'LOGIN_REQUIRED':
+      return '请重新登录行简后再试。';
+    case 'MODEL_AUTH_INVALID':
+      return '模型服务凭据无效，请在个人设置中检查或更新 API Key。';
+    case 'MODEL_KEY_REQUIRED':
+      return '尚未配置模型 API Key，请在个人设置中完成配置。';
+    case 'MODEL_CONFIG_INVALID':
+      return '模型目录配置未通过检查，请联系服务维护者。';
+    case 'MODEL_NOT_FOUND':
+      return '该模型已移除或未配置，请刷新模型列表后选择。';
+    case 'MODEL_CAPABILITY_UNSUPPORTED':
+      return '该模型未声明支持本应用所需的工具与增量回答，请选择其他模型。';
+    case 'MODEL_PROVIDER_KEY_REQUIRED':
+      return '该供应商的服务端凭据尚未配置，请联系服务维护者或选择其他模型。';
+    case 'PREFERENCES_CHANGED':
+      return '学习偏好已被其他操作修改，当前草稿仍保留，请读取最新值再核对。';
+    case 'OPERATION_ID_REUSED':
+      return '该操作标识已用于其他内容，请先重新核对当前学习偏好。';
+    case 'OPERATION_RETIRED':
+      return '这次操作已因偏好清除而失效，请读取最新值后重新核对。';
+    case 'MODEL_UNAVAILABLE':
+      return '模型服务暂时不可用，请稍后再试。';
+    case 'MODEL_RATE_LIMITED':
+      return '模型服务请求过于频繁或额度不足，请检查额度后稍后再试。';
+    case 'MODEL_REQUEST_REJECTED':
+      return '模型服务未接受本次请求，请检查模型配置或调整输入后再试。';
+    case 'REQUEST_TIMEOUT':
+      return '请求超时，结果尚未确认。请先核对记录，再决定是否重试。';
+    case 'ACTION_NOT_FOUND':
+      return '未找到此提案，请刷新核对。';
+    case 'TASK_NOT_FOUND':
+      return '这项任务已不存在，请读取最新安排；不会从旧回执重建任务。';
+    case 'TASK_STATUS_OPERATION_NOT_FOUND':
+      return '未查到这次状态操作，请核对账号；需要重试时仍使用原操作标识和原内容。';
+    case 'TASK_STATUS_OPERATION_REUSED':
+      return '这次操作标识已对应另一份内容，请先核对原操作记录。';
+    case 'TASK_STALE':
+      return '任务或相关安排已经变化，请读取最新内容后重新核对；旧预览不会覆盖新修改。';
+    case 'TASK_STATUS_UNCHANGED':
+      return '这项任务已经是该状态，请刷新查看；本次没有生成新的完成凭据。';
+    case 'TASK_COMPLETION_NOT_TRACKED':
+      return '这次完成未保留可核验的凭据，暂时不能使用恢复未完成。';
+    case 'TASK_COMPLETION_SUPERSEDED':
+      return '这项任务后来已再次完成，旧完成记录不能恢复当前这一次完成。';
+    case 'TASK_RECOVERY_PREVIEW_REQUIRED':
+      return '恢复未完成需要先读取任务的最新版本，查看预览并确认。';
+    case 'TASK_RECOVERY_EXPIRED':
+      return '这份恢复预览已过期，请取消原预览，再根据最新安排重新核对。';
+    case 'TASK_RECOVERY_CANCELLED':
+      return '这份恢复预览已取消，没有执行本次恢复。';
+    case 'TASK_STATUS_FAILED':
+      return '状态操作结果尚未确认，请先查询原操作记录，不要新建一笔重复提交。';
+    case 'RUN_NOT_FOUND':
+      return '未找到保留的运行记录，请核对账号和运行标识，不要重复发送。';
+    case 'RUN_DELETED':
+      return '这次运行所属会话已删除，不能重试或恢复原运行。';
+    case 'RUN_ID_REUSED':
+      return '运行标识已使用，请先核对这次运行的原始内容。';
+    case 'RUN_SESSION_BUSY':
+      return '此会话仍在运行，请先查回结果或取消。';
+    case 'RUN_WORKER_BUSY':
+      return '运行服务正在处理或恢复，请稍后查询已有记录。';
+    case 'RUN_LIMIT':
+      return '已有两次运行正在处理，请先完成或取消。';
+    case 'RUN_TIMEOUT':
+      return '已达到本轮总时长上限，已有片段保留，本次未自动重试。';
+    case 'RUN_BUDGET_EXCEEDED':
+      return '已达到本轮调用或内容预算，已有片段保留，未继续启动步骤。';
+    case 'RUN_INTERRUPTED':
+      return '运行服务已中断，已有片段保留，本次未自动重新执行。';
+    case 'SESSION_NOT_FOUND':
+      return '未找到可继续的本人会话，请返回历史列表重新核对。';
+    case 'SESSION_DELETED':
+      return '此会话已删除，不能重新写回；当前输入仍保留，可用于新对话。';
+    case 'SESSION_CONTEXT_CHANGED':
+      return '会话内容已在另一处更新，请重新读取后再发送；当前输入仍保留。';
+    case 'SESSION_EXISTS':
+      return '这个会话已有内容，请核对后选择继续，或明确开始新对话。';
+    case 'SESSION_MODE_INVALID':
+      return '会话版本条件不完整，请重新核对上下文后发送。';
+    case 'RUN_CANCELLED':
+      return '运行已取消，未完成的内容仅供查看。';
+    case 'RUN_FAILED':
+      return '本次运行未完成，请核对服务与模型配置后再试。';
+    case 'ACTION_RESOLVED':
+      return '此提案已经处理，请核对当前状态。';
+    case 'ACTION_FAILED':
+      return '提案执行失败，请核对当前状态后再操作。';
+    case 'ACTION_EXPIRED':
+      return '这份提案已过期，请根据最新日程重新预览后确认。';
+    case 'ACTION_LEGACY_UNVERIFIED':
+      return '旧版提案缺少可核验的版本记录，请重新生成预览。';
+    case 'COURSE_PERMISSION_PREVIEW_REQUIRED':
+      return '请在任务设置中选择是否可课内完成，再核对新的安排预览。';
+    case 'COURSE_ACK_REQUIRED':
+      return '请核对重叠的课程与时段，并明确选择是否仍这样安排。';
+    case 'COURSE_ACK_STALE':
+      return '课表或任务已经变化，上次课内确认已失效。请重新预览并核对。';
+    case 'COURSE_ACK_INVALID':
+      return '课内确认与当前候选不一致，请重新核对这份预览。';
+    case 'ACTION_STALE':
+      return '课程或任务已变化，本次没有执行。请根据最新数据重新预览。';
+    case 'ACTION_CONFLICT':
+      return '候选安排与课程、已有任务或候选中的其他任务重叠，请调整后重新预览。';
+    case 'ACTION_INVALID':
+      return '变更内容未通过检查，请核对名称、时间与目标记录。';
+    case 'ACTION_UNSUPPORTED':
+      return '暂不支持执行此类提案。';
+    case 'NETWORK_ERROR':
+      return '无法连接行简服务，请检查网络和服务地址。';
+    case 'INVALID_RESPONSE':
+      return '服务返回了无法识别的结果，请稍后刷新核对。';
+    case 'ONBOARDING_STALE':
+      return '校园资料或课表已更新，当前输入仍保留。请读取最新资料后重新核对。';
+    case 'ONBOARDING_OPERATION_CONFLICT':
+      return '这次保存标识已用于另一份资料，请先核对原保存回执。';
+    case 'ONBOARDING_OPERATION_NOT_FOUND':
+      return '未查到保存回执，可使用原内容和原操作标识重试。';
+    case 'ONBOARDING_INVALID':
+      return '资料格式未通过检查，请核对输入和保存版本。';
+    case 'ONBOARDING_FAILED':
+      return '保存结果尚未确认，请先核对回执，当前输入仍保留。';
+    case 'ONBOARDING_NOT_FOUND':
+      return '未找到当前账号，请重新登录后核对。';
+    case 'TIMETABLE_STALE':
+      return '课表已被其他操作更新。当前草稿仍保留，请读取最新课表后重新核对。';
+    case 'TIMETABLE_OPERATION_CONFLICT':
+      return '这次保存标识已用于另一份课表，请先核对保存回执。';
+    case 'TIMETABLE_CLEAR_CONFIRMATION_REQUIRED':
+      return '清空课表需要再次明确确认。';
+    case 'TIMETABLE_INVALID':
+      return '课表内容未通过检查，请核对日期、时间、课程名称和重复课程。';
+    case 'TIMETABLE_OPERATION_NOT_FOUND':
+      return '未找到这次保存的回执，可使用原内容和原操作标识重试。';
+    case 'TIMETABLE_SAVE_FAILED':
+      return '未能确认课表保存结果，请先核对回执，不要重复新建保存操作。';
+    default:
+      return '';
+  }
+}
+
+function httpErrorMessage(statusCode        )         {
+  switch (statusCode) {
+    case 401:
+      // Old servers may use 401 for model credentials; this alone must never trigger logout.
+      return '请求未获授权，请检查账户或服务配置。';
+    case 403:
+      return '当前操作未获授权，请检查权限。';
+    case 404:
+      return '未找到请求的内容，请刷新后再试。';
+    case 408:
+    case 504:
+      return knownErrorMessage('REQUEST_TIMEOUT');
+    case 409:
+      return '当前数据状态已变化，请先刷新核对。';
+    case 422:
+      return '请求信息不完整或格式不正确，请检查后再试。';
+    case 429:
+      return '请求过于频繁，请稍后再试。';
+    default:
+      return statusCode >= 500 ? '行简服务暂时不可用，请稍后再试。'
+        : '请求未能完成，请检查输入后再试。';
+  }
+}
+
+function requestFailure(statusCode        , responseText        )                         {
+  let code = '';
+  try {
+    const payload = JSON.parse(responseText)                           ;
+    if (payload !== null && typeof payload.code === 'string') {
+      code = payload.code;
+    }
+  } catch {
+    // Neither server response bodies nor transport diagnostics are user-facing error messages.
+  }
+  const message = knownErrorMessage(code);
+  return message.length > 0 ? new CampusFlowRequestError(statusCode, code, message)
+    : new CampusFlowRequestError(statusCode, 'HTTP_ERROR', httpErrorMessage(statusCode));
+}
+
+function localRequestFailure(code        , statusCode         = 0)                         {
+  const message = knownErrorMessage(code);
+  return new CampusFlowRequestError(statusCode, message.length > 0 ? code : 'NETWORK_ERROR',
+    message.length > 0 ? message : knownErrorMessage('NETWORK_ERROR'));
+}
+
+function displayToolTraces(traces              )                       {
+  if (!Array.isArray(traces)) {
+    return [];
+  }
+  const allowedStates = ['success', 'empty', 'error', 'unavailable', 'pending', 'unverified', 'demo'];
+  return traces.map((trace           )                     => {
+    const display = trace?.display;
+    if (display !== undefined && display !== null && typeof display.label === 'string' &&
+      display.label.trim().length > 0 && typeof display.summary === 'string' &&
+      display.summary.trim().length > 0 && allowedStates.includes(display.state)) {
+      const summary                     = { label: display.label, state: display.state, summary: display.summary };
+      // EvidencePanel validates only the public source projection; raw tool arguments/results remain unused.
+      if (Array.isArray(display.evidence)) { summary.evidence = display.evidence; }
+      return summary;
+    }
+    return { label: '工具调用', state: 'unverified', summary: '服务未提供可核验的工具摘要。' };
+  });
+}
+
+function mergeActions(current                 , incoming                 )                  {
+  const merged                  = [];
+  current.concat(incoming).forEach((action               ) => {
+    const index = merged.findIndex((item               ) => item.proposal_id === action.proposal_id);
+    if (index < 0) {
+      merged.push(action);
+    } else if (merged[index].status !== 'confirmed' && merged[index].status !== 'cancelled') {
+      merged[index] = action;
+    }
+  });
+  return merged;
+}
+
+function restoreDraft(current        , failed        )         {
+  return current.trim().length === 0 ? failed : current;
+}
+
+return {CampusFlowRequestError};
+})();
+const Validation=(()=>{
+const {timestamp,courseTimestamp}=Agenda;
+
+function text(value        )          { return typeof value === 'string' && value.trim().length > 0; }
+function nullableText(value               )          { return value === null || typeof value === 'string'; }
+function version(value        , minimum         = 0)          { return Number.isSafeInteger(value) && value >= minimum; }
+function digest(value        )          { return typeof value === 'string' && /^[a-f0-9]{64}$/.test(value); }
+function taskStatusUuid(value        )          {
+  return typeof value === 'string' && /^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(value);
+}
+function validTaskStatusRequest(value                        )          {
+  if (value === null || typeof value !== 'object' || Array.isArray(value) || !taskStatusUuid(value.operation_id) ||
+    !version(value.expected_revision, 1) || value.expected_revision >= Number.MAX_SAFE_INTEGER) { return false; }
+  if (value.kind === 'complete') { return !Object.keys(value).includes('source_operation_id'); }
+  return value.kind === 'restore' && taskStatusUuid(value.source_operation_id);
+}
+function validTask(task              , operation                     )          {
+  return task !== null && typeof task === 'object' && !Array.isArray(task) && task.task_id === operation.task_id &&
+    task.task_version === operation.expected_revision && task.status === 'completed' &&
+    task.completion_operation_id === operation.source_operation_id && text(task.title) &&
+    nullableText(task.plan_id) && nullableText(task.milestone_id) && nullableText(task.start_at) && nullableText(task.end_at) &&
+    nullableText(task.location) && typeof task.source === 'string' && typeof task.allow_during_course === 'boolean' &&
+    (task.reminder_minutes === null || version(task.reminder_minutes)) && timestamp(task.created_at) !== null &&
+    timestamp(task.completed_at) !== null;
+}
+function overlap(value               , task              )          {
+  if (value === null || typeof value !== 'object' || !digest(value.course_key) ||
+    value.course === null || typeof value.course !== 'object') { return false; }
+  const course = value.course;
+  if (!text(course.title) || typeof course.location !== 'string' || typeof course.teacher !== 'string') { return false; }
+  const start = courseTimestamp(course.date, course.start_time); const end = courseTimestamp(course.date, course.end_time);
+  const taskStart = timestamp(task.start_at); const taskEnd = timestamp(task.end_at);
+  if (start === null || end === null || end <= start || taskStart === null || taskEnd === null || taskEnd <= taskStart) { return false; }
+  const from = Math.max(start, taskStart); const until = Math.min(end, taskEnd);
+  return from < until && timestamp(value.overlap_start_at) === from && timestamp(value.overlap_end_at) === until;
+}
+function validPreview(value                   , operation                     )          {
+  if (value === null || typeof value !== 'object' || !validTask(value.task, operation) ||
+    value.from_status !== 'completed' || value.to_status !== 'pending' || !text(value.candidate_id) || value.candidate_id.length > 128 ||
+    value.state_version === null || typeof value.state_version !== 'object' ||
+    !version(value.state_version.timetable) || !version(value.state_version.planning) ||
+    !Array.isArray(value.conflicts) || !value.conflicts.every((item        ) => text(item)) ||
+    !Array.isArray(value.warnings) || !value.warnings.every((item        ) => text(item))) { return false; }
+  const review = value.course_review;
+  if (review === null || typeof review !== 'object' || review.candidate_id !== value.candidate_id ||
+    review.task_id !== operation.task_id || review.task_version !== operation.expected_revision ||
+    review.allow_during_course !== value.task.allow_during_course || review.revoke_only !== false ||
+    review.timezone !== 'Asia/Shanghai' || typeof review.school !== 'string' || typeof review.campus !== 'string' ||
+    review.timetable_version !== value.state_version.timetable || review.planning_version !== value.state_version.planning ||
+    !digest(review.review_digest) || !digest(review.candidate_digest) || typeof review.requires_acknowledgement !== 'boolean' ||
+    !Array.isArray(review.overlaps) || !review.overlaps.every((item               ) => overlap(item, value.task))) { return false; }
+  // The task's historical accepted course_overlap is not this restore's acknowledgement.
+  if (review.overlaps.length > 0) {
+    if (review.allow_during_course) { return review.state === 'needs_review' && review.requires_acknowledgement; }
+    return review.state === 'blocked' && !review.requires_acknowledgement && value.conflicts.length > 0;
+  }
+  return ['none', 'unchecked'].includes(review.state) && !review.requires_acknowledgement;
+}
+function requiredTaskStatusAcknowledgements(value                     )                          {
+  if (value.kind !== 'restore' || value.preview === null || !value.preview.course_review.requires_acknowledgement) { return []; }
+  return [{ candidate_id: value.preview.candidate_id, review_digest: value.preview.course_review.review_digest }];
+}
+function validTaskStatusAcknowledgements(value                     , acknowledgements                         )          {
+  if (!Array.isArray(acknowledgements)) { return false; }
+  const required = requiredTaskStatusAcknowledgements(value);
+  return acknowledgements.length === required.length && acknowledgements.every((item                       , index        ) =>
+    item !== null && typeof item === 'object' && item.candidate_id === required[index].candidate_id && item.review_digest === required[index].review_digest);
+}
+function validReceipt(receipt                   , operation                     )          {
+  if (receipt === null || typeof receipt !== 'object' || receipt.operation_id !== operation.operation_id ||
+    receipt.task_id !== operation.task_id || receipt.kind !== operation.kind || receipt.source_operation_id !== operation.source_operation_id ||
+    receipt.before_revision !== operation.expected_revision || receipt.after_revision !== receipt.before_revision + 1 ||
+    !version(receipt.after_revision, 2) || timestamp(receipt.applied_at) === null ||
+    !Array.isArray(receipt.course_acknowledgement_ids) || !Array.isArray(receipt.course_acknowledgements)) { return false; }
+  const expected = requiredTaskStatusAcknowledgements(operation);
+  if (receipt.course_acknowledgement_ids.length !== expected.length || receipt.course_acknowledgements.length !== expected.length ||
+    !receipt.course_acknowledgement_ids.every((id        ) => text(id)) ||
+    !receipt.course_acknowledgements.every((item                              , index        ) => item !== null &&
+      typeof item === 'object' && item.candidate_id === expected[index].candidate_id &&
+      item.acknowledgement_id === receipt.course_acknowledgement_ids[index])) { return false; }
+  if (operation.kind === 'complete') {
+    return receipt.candidate_id === null && receipt.before_status === 'pending' && receipt.after_status === 'completed' &&
+      receipt.before_completed_at === null && timestamp(receipt.after_completed_at) !== null;
+  }
+  return operation.preview !== null && receipt.candidate_id === operation.preview.candidate_id &&
+    receipt.before_status === 'completed' && receipt.after_status === 'pending' && receipt.after_completed_at === null &&
+    timestamp(receipt.before_completed_at) === timestamp(operation.preview.task.completed_at);
+}
+function sameTaskStatusCandidate(left                     , right                     )          {
+  return left.contract_version === right.contract_version && left.user_id === right.user_id && left.operation_id === right.operation_id &&
+    left.task_id === right.task_id && left.kind === right.kind && left.expected_revision === right.expected_revision &&
+    left.source_operation_id === right.source_operation_id && left.created_at === right.created_at &&
+    left.expires_at === right.expires_at && JSON.stringify(left.preview) === JSON.stringify(right.preview);
+}
+function validTaskStatusOperation(value                     , userId        , taskId        ,
+  request                        , previous                             = null)          {
+  if (!validTaskStatusRequest(request) || value === null || typeof value !== 'object' || Array.isArray(value) ||
+    value.contract_version !== 1 || value.user_id !== userId || value.task_id !== taskId || value.operation_id !== request.operation_id ||
+    value.kind !== request.kind || value.expected_revision !== request.expected_revision ||
+    value.source_operation_id !== (request.kind === 'restore' ? request.source_operation_id : null) ||
+    timestamp(value.created_at) === null || !['pending', 'applied', 'cancelled'].includes(value.state)) { return false; }
+  if (value.kind === 'complete') {
+    if (value.state !== 'applied' || value.preview !== null || value.expires_at !== null) { return false; }
+  } else {
+    const expires = timestamp(value.expires_at); const created = timestamp(value.created_at);
+    if (expires === null || created === null || expires <= created || !validPreview(value.preview                     , value)) { return false; }
+  }
+  if (value.state === 'applied' ? !validReceipt(value.receipt                     , value) : value.receipt !== null) { return false; }
+  if (previous !== null && (!sameTaskStatusCandidate(previous, value) ||
+    (previous.state !== 'pending' && previous.state !== value.state) ||
+    (previous.receipt !== null && JSON.stringify(previous.receipt) !== JSON.stringify(value.receipt)))) { return false; }
+  return true;
+}
+function taskStatusCanConfirm(value                     , now        )          {
+  const expires = timestamp(value.expires_at);
+  return value.kind === 'restore' && value.state === 'pending' && value.preview !== null &&
+    value.preview.conflicts.length === 0 && expires !== null && expires > now && value.preview.course_review.state !== 'blocked';
+}
+
+return {taskStatusUuid,validTaskStatusRequest,validTaskStatusOperation,sameTaskStatusCandidate,requiredTaskStatusAcknowledgements,validTaskStatusAcknowledgements,taskStatusCanConfirm};
+})();
+const Runtime=(()=>{
+const {taskStatusUuid,validTaskStatusRequest,validTaskStatusOperation,sameTaskStatusCandidate,requiredTaskStatusAcknowledgements,validTaskStatusAcknowledgements,taskStatusCanConfirm}=Validation; const {CampusFlowRequestError}=Feedback;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+function busy(phase        )          { return ['preparing', 'persisting', 'starting', 'checking', 'confirming', 'cancelling'].includes(phase); }
+function settled(phase        )          { return ['applied', 'cancelled', 'error'].includes(phase); }
+function copyRequest(value                        )                         {
+  return value.kind === 'complete' ? { operation_id: value.operation_id, kind: 'complete', expected_revision: value.expected_revision } :
+    { operation_id: value.operation_id, kind: 'restore', expected_revision: value.expected_revision, source_operation_id: value.source_operation_id };
+}
+function knownStartRejection(error                        )          {
+  return ['TASK_NOT_FOUND', 'TASK_STALE', 'TASK_STATUS_UNCHANGED', 'TASK_COMPLETION_NOT_TRACKED', 'TASK_COMPLETION_SUPERSEDED',
+    'TASK_STATUS_OPERATION_REUSED', 'ACTION_INVALID', 'ACTION_CONFLICT', 'LOGIN_REQUIRED'].includes(error.code) ||
+    [401, 403, 422].includes(error.statusCode);
+}
+
+// This account-level controller survives tab navigation. Only authenticated operation
+// receipts settle writes; a task list's completed flag is never substituted as proof.
+class TaskStatusController {
+          store            ;
+          onChange                                  ;
+          onApplied                                          ;
+          idFactory              ;
+          now              ;
+          api                           = null;
+          lease                    = null;
+          scope         = '';
+          userId         = '';
+          active          = false;
+          disposed          = false;
+          generation         = 0;
+          items               = [];
+          selectedId         = '';
+          message         = '';
+          notified           = [];
+
+  constructor(store            , onChange                                  ,
+    onApplied                                          , idFactory              , now               = Date.now) {
+    this.store = store; this.onChange = onChange; this.onApplied = onApplied; this.idFactory = idFactory; this.now = now;
+  }
+  snapshot()                  {
+    const items = this.items.map((item            )                 => ({ operationId: item.operationId,
+      taskId: item.taskId, kind: item.kind, request: copyRequest(item.request), phase: item.phase,
+      operation: item.operation === null ? null : JSON.parse(JSON.stringify(item.operation))                       ,
+      message: item.message, errorCode: item.errorCode, busy: busy(item.phase), canRetry: item.phase === 'retryable',
+      canConfirm: item.phase === 'review' && item.pointer.intent !== 'cancel' && item.operation !== null && taskStatusCanConfirm(item.operation, this.now()),
+      canCancel: item.phase === 'review' && item.kind === 'restore' && item.operation?.state === 'pending' }));
+    const locked = this.items.filter((item            ) => !settled(item.phase)).map((item            ) => item.taskId);
+    return { items: items, selectedId: this.selectedId, lockedTaskIds: Array.from(new Set        (locked)),
+      pendingCount: locked.length, message: this.message };
+  }
+          publish()       { if (!this.disposed) { this.onChange(this.snapshot()); } }
+          ready()          {
+    return !this.disposed && this.active && this.userId.trim().length > 0 && this.scope.length > 0 && this.api !== null && this.lease !== null &&
+      this.lease.scope === this.scope && this.store.valid(this.lease);
+  }
+          current(item            , generation        , revision        )          {
+    return this.ready() && generation === this.generation && item.revision === revision && this.items.includes(item);
+  }
+          find(id         )                         { return this.items.find((item            ) => item.operationId === (id ?? this.selectedId)); }
+          refreshPointer(item            )          {
+    if (!this.ready() || this.lease === null) { return false; }
+    const saved = this.store.taskStatusOperations(this.lease).find((value                          ) =>
+      value.request.operation_id === item.operationId);
+    if (saved === undefined || saved.scope !== this.scope || saved.taskId !== item.taskId ||
+      JSON.stringify(copyRequest(saved.request                          )) !== JSON.stringify(item.request)) { return false; }
+    // An earlier foreground generation may finish its atomic intent write after
+    // recovery's GET. The durable intent, not that generation's UI copy, owns CAS.
+    item.pointer = saved; return true;
+  }
+  configure(scope        , userId        , api                   , lease                   )       {
+    if (this.disposed) { return; }
+    const same = scope === this.scope && userId === this.userId && lease?.scope === this.lease?.scope && lease?.generation === this.lease?.generation;
+    this.api = api;
+    if (same) { return; }
+    this.generation++; this.scope = scope; this.userId = userId; this.lease = lease;
+    this.items = []; this.selectedId = ''; this.message = ''; this.notified = [];
+    this.publish(); if (this.ready()) { this.recover(); }
+  }
+  setActive(active         )       {
+    if (this.disposed || active === this.active) { return; }
+    this.active = active; this.generation++;
+    if (!active) {
+      this.items.forEach((item            ) => {
+        if (item.phase === 'preparing') {
+          item.phase = 'error'; item.message = '来源核对已中止，尚未创建恢复操作；返回后可重新核对。'; item.revision++;
+        } else if (busy(item.phase)) { item.phase = 'unknown'; item.message = '返回后先核对这次操作的服务器记录。'; item.revision++; }
+      });
+    } else if (this.ready()) { this.recover(); }
+    this.publish();
+  }
+          item(pointer                          )             {
+    const request = copyRequest(pointer.request                          );
+    return { operationId: request.operation_id, taskId: pointer.taskId, kind: request.kind, request: request,
+      phase: 'unknown', operation: null, message: '这次状态操作尚待核对。', errorCode: '', revision: 0, pointer: pointer, rejected: false,
+      busy: false, canRetry: false, canConfirm: false, canCancel: false };
+  }
+          recover()       {
+    if (!this.ready() || this.lease === null) { return; }
+    const saved = this.store.taskStatusOperations(this.lease);
+    // A local resolution can finish while the foreground was paused. Reconcile its
+    // durable removal before exposing locks; never leave a receipt permanently busy.
+    this.items.forEach((item            ) => {
+      if (!settled(item.phase) && !saved.some((value                          ) => value.request.operation_id === item.operationId)) {
+        item.phase = item.operation?.state === 'applied' ? 'applied' : item.operation?.state === 'cancelled' ? 'cancelled' : 'error';
+        item.message = item.operation === null ? '这次本机操作标识已结清，请读取最新任务后再操作。' : '这次操作的服务器回执与本机核对标识均已结清。';
+      }
+    });
+    saved.forEach((pointer                          ) => {
+      let item = this.find(pointer.request.operation_id);
+      if (item === undefined) { item = this.item(pointer); this.items.push(item); }
+      else { item.pointer = pointer; }
+      if (this.selectedId.length === 0) { this.selectedId = item.operationId; }
+      if (!busy(item.phase)) { this.check(item.operationId).catch(()       => {}); }
+    });
+    this.publish();
+  }
+  select(id        )       { if (this.find(id) !== undefined) { this.selectedId = id; this.publish(); } }
+  dismiss(id         )       {
+    const item = this.find(id); if (item === undefined || !settled(item.phase)) { return; }
+    this.items = this.items.filter((value            ) => value !== item);
+    if (this.selectedId === item.operationId) { this.selectedId = this.items[0]?.operationId ?? ''; }
+    this.publish();
+  }
+  dispose()       { this.disposed = true; this.active = false; this.generation++; this.items = []; }
+
+  async begin(task              , kind                        )                {
+    if (!this.ready() || this.lease === null || this.api === null) { return; }
+    if (this.items.some((item            ) => item.taskId === task.task_id && !settled(item.phase))) {
+      this.selectedId = this.items.find((item            ) => item.taskId === task.task_id && !settled(item.phase))?.operationId ?? '';
+      this.message = '这项任务还有待核对操作，请先处理原编号。'; this.publish(); return;
+    }
+    if (typeof task.task_id !== 'string' || task.task_id.trim().length === 0 || task.task_id.length > 128 ||
+      !Number.isSafeInteger(task.task_version) || (task.task_version ?? 0) < 1 ||
+      task.status !== (kind === 'complete' ? 'pending' : 'completed') ||
+      (kind === 'restore' && !taskStatusUuid(task.completion_operation_id ?? ''))) {
+      this.message = kind === 'restore' ? '这次完成未保留可核验凭据，或任务版本已变化；请刷新后核对。' : '任务版本不可核验，请刷新后再标记完成。';
+      this.selectedId = '';
+      this.publish(); return;
+    }
+    const request                         = kind === 'complete' ? { operation_id: this.idFactory(), kind: 'complete', expected_revision: task.task_version ?? 0 } :
+      { operation_id: this.idFactory(), kind: 'restore', expected_revision: task.task_version ?? 0, source_operation_id: task.completion_operation_id ?? '' };
+    if (!validTaskStatusRequest(request) || this.find(request.operation_id) !== undefined ||
+      this.store.taskStatusOperations(this.lease).some((value                          ) => value.request.operation_id === request.operation_id)) {
+      this.selectedId = ''; this.message = '无法生成新的有效操作编号，本次未提交。'; this.publish(); return;
+    }
+    const item = this.item({ scope: this.scope, taskId: task.task_id, request: request, intent: 'start', acknowledgements: [] });
+    item.phase = 'preparing'; this.items.push(item); this.selectedId = item.operationId; this.message = ''; this.publish();
+    if (!this.ready() || !this.items.includes(item)) { return; }
+    const generation = this.generation; const revision = ++item.revision; const api = this.api;
+    if (request.kind === 'restore') {
+      try {
+        const source = await api.taskStatusOperation(request.source_operation_id);
+        if (!this.current(item, generation, revision)) { return; }
+        const sourceRequest                         = { operation_id: request.source_operation_id, kind: 'complete', expected_revision: source.expected_revision };
+        if (!validTaskStatusOperation(source, this.userId, item.taskId, sourceRequest) || source.state !== 'applied' ||
+          source.receipt === null || source.receipt.after_revision > request.expected_revision) { throw new Error('invalid completion receipt'); }
+      } catch {
+        if (!this.current(item, generation, revision)) { return; }
+        item.phase = 'error'; item.message = '无法核验这次完成的原始回执，尚未创建恢复预览。请刷新任务与来源记录后再试。'; this.publish(); return;
+      }
+    }
+    if (!this.current(item, generation, revision)) { return; }
+    await this.start(item);
+  }
+          async start(item            )                {
+    if (!this.ready() || this.lease === null || this.api === null) { return; }
+    const generation = this.generation; const revision = ++item.revision; const lease = this.lease; const api = this.api;
+    item.phase = 'persisting'; item.message = '正在保存操作编号，完成后再提交。'; item.errorCode = ''; this.publish();
+    let sent = false;
+    try {
+      await this.store.beginTaskStatusOperation(lease, item.pointer);
+      if (!this.current(item, generation, revision)) { return; }
+      item.phase = 'starting'; item.message = item.kind === 'complete' ? '正在记录这次完成…' : '正在生成恢复预览，任务尚未恢复。'; this.publish();
+      sent = true; const result = await api.startTaskStatus(item.taskId, copyRequest(item.request));
+      if (!this.current(item, generation, revision)) { return; }
+      await this.accept(item, result, generation, revision);
+    } catch (error) {
+      if (!this.current(item, generation, revision)) { return; }
+      if (sent && error instanceof CampusFlowRequestError && knownStartRejection(error)) {
+        item.rejected = true; item.errorCode = error.code; item.message = error.message;
+        await this.settle(item, 'error', generation, revision);
+      } else {
+        const retained = this.store.taskStatusOperations(lease).some((value                          ) => value.request.operation_id === item.operationId);
+        item.phase = !sent && !retained ? 'error' : 'unknown';
+        item.message = sent ? '尚未收到可核验结果，请先查询原操作；不会自动重新提交。' :
+          retained ? '操作编号尚未可靠保存，本次没有发送。请先查询原编号后显式重试。' : '本机暂不能保存新的操作编号，本次没有提交；请先处理已有记录或检查本机存储。';
+      }
+    }
+    if (this.current(item, generation, revision)) { this.publish(); }
+  }
+          async settle(item            , phase        , generation        , revision        )                {
+    if (this.lease === null) { return; }
+    try {
+      await this.store.resolveTaskStatusOperation(this.lease, item.operationId);
+      if (!this.current(item, generation, revision)) { return; }
+      item.phase = phase;
+    } catch {
+      if (!this.current(item, generation, revision)) { return; }
+      item.phase = 'cleanup'; item.message += ' 本机核对标识尚未结清，请再次查询；不会另发写入。';
+    }
+  }
+          async accept(item            , value                     , generation        , revision        )                {
+    if (!validTaskStatusOperation(value, this.userId, item.taskId, item.request, item.operation)) { throw new Error('invalid status operation'); }
+    item.operation = JSON.parse(JSON.stringify(value))                       ; item.errorCode = '';
+    if (value.state === 'pending') {
+      item.phase = 'review'; item.message = taskStatusCanConfirm(value, this.now()) ? '请核对完整恢复预览；确认只改变完成状态，保留当前其他字段。' :
+        '预览存在冲突或已过期。可以取消本次预览，再读取最新任务重新核对。'; return;
+    }
+    item.message = value.state === 'applied' ? '服务器已核验这次操作的回执；当前任务以刷新后的列表为准。' : '本次恢复预览已取消。';
+    if (value.state === 'applied' && !this.notified.includes(item.operationId)) {
+      this.notified.push(item.operationId);
+      try { this.onApplied(JSON.parse(JSON.stringify(value))                       ); } catch { /* A refresh cannot invalidate a server receipt. */ }
+    }
+    if (this.current(item, generation, revision)) { await this.settle(item, value.state, generation, revision); }
+  }
+  async check(id         )                {
+    const item = this.find(id); if (!this.ready() || this.api === null || item === undefined || busy(item.phase) || settled(item.phase)) { return; }
+    this.refreshPointer(item);
+    const generation = this.generation; const revision = ++item.revision; const api = this.api;
+    item.phase = 'checking'; item.message = '正在查询原操作编号…'; this.publish();
+    if (!this.current(item, generation, revision)) { return; }
+    try {
+      const result = await api.taskStatusOperation(item.operationId);
+      if (!this.current(item, generation, revision)) { return; }
+      this.refreshPointer(item);
+      await this.accept(item, result, generation, revision);
+    } catch (error) {
+      if (!this.current(item, generation, revision)) { return; }
+      this.refreshPointer(item);
+      if (error instanceof CampusFlowRequestError && error.statusCode === 404 && error.code === 'TASK_STATUS_OPERATION_NOT_FOUND' &&
+        item.pointer.intent === 'start' && item.operation === null) {
+        if (item.rejected) {
+          item.message = '已核对本次请求被拒绝，未创建新的任务状态操作。';
+          await this.settle(item, 'error', generation, revision);
+        } else {
+          item.phase = 'retryable'; item.message = '服务器尚未查到原编号。可明确重试原编号和原请求，不会创建另一笔操作。'; item.errorCode = error.code;
+        }
+      } else {
+        item.phase = 'unknown'; item.message = '还不能核验原操作。请保留编号稍后查询，不根据列表状态猜测结果。';
+        item.errorCode = error instanceof CampusFlowRequestError ? error.code : '';
+      }
+    }
+    if (this.current(item, generation, revision)) { this.publish(); }
+  }
+  async retry(id         )                {
+    const item = this.find(id); if (!this.ready() || item === undefined || item.phase !== 'retryable' ||
+      !this.refreshPointer(item) || item.pointer.intent !== 'start') { return; }
+    await this.start(item);
+  }
+  async confirm(acknowledgements                          = [], id         )                {
+    const item = this.find(id); if (!this.ready() || item === undefined || item.phase !== 'review' ||
+      item.operation === null || !this.refreshPointer(item) || item.pointer.intent === 'cancel') { return; }
+    if (!taskStatusCanConfirm(item.operation, this.now())) {
+      item.message = '这份恢复预览已过期或有冲突，请取消后读取最新任务再核对。'; this.publish(); return;
+    }
+    if (!validTaskStatusAcknowledgements(item.operation, acknowledgements)) {
+      item.message = '请逐项核对这次恢复与课程的重叠，再明确确认。'; this.publish(); return;
+    }
+    await this.decide(item, 'confirm', acknowledgements);
+  }
+  async cancel(id         )                {
+    const item = this.find(id); if (!this.ready() || item === undefined || item.phase !== 'review' ||
+      item.kind !== 'restore' || item.operation?.state !== 'pending') { return; }
+    await this.decide(item, 'cancel', []);
+  }
+          async decide(item            , intent                      , acknowledgements                         )                {
+    if (this.lease === null || this.api === null) { return; }
+    if (!this.refreshPointer(item)) {
+      item.phase = 'unknown'; item.message = '本机原操作标识尚不能核对，请先查询同一编号；本次没有发送。'; this.publish(); return;
+    }
+    const generation = this.generation; const revision = ++item.revision; const lease = this.lease; const api = this.api;
+    const frozen = acknowledgements.map((value                       )                        =>
+      ({ candidate_id: value.candidate_id, review_digest: value.review_digest }));
+    item.phase = 'persisting'; item.message = '正在保存本次明确选择…'; this.publish();
+    try {
+      await this.store.replaceTaskStatusIntent(lease, item.operationId, item.pointer, intent, frozen);
+      if (!this.current(item, generation, revision)) { return; }
+      const saved = this.store.taskStatusOperations(lease).find((value                          ) => value.request.operation_id === item.operationId);
+      if (saved === undefined) { throw new Error('missing pointer'); } item.pointer = saved;
+      item.phase = intent === 'confirm' ? 'confirming' : 'cancelling'; item.message = intent === 'confirm' ? '正在确认恢复…' : '正在取消恢复预览…'; this.publish();
+      const result = intent === 'confirm' ? await api.confirmTaskStatus(item.operationId, frozen) : await api.cancelTaskStatus(item.operationId);
+      if (!this.current(item, generation, revision)) { return; }
+      if (result.state === 'pending') { throw new Error('write remained pending'); }
+      await this.accept(item, result, generation, revision);
+    } catch {
+      if (!this.current(item, generation, revision)) { return; }
+      this.refreshPointer(item);
+      item.phase = 'unknown'; item.message = '本次选择的结果尚待核对，请先查询同一操作编号；没有自动重发。';
+    }
+    if (this.current(item, generation, revision)) { this.publish(); }
+  }
+}
+
+return {TaskStatusController};
+})();
+/* END PRODUCTION HELPERS */
+/* BEGIN ASGI FIXTURE */
+const Fixture={"contract_version":1,"synthetic":true,"user_id":"b6832960753c44198228cbb328a105d4","cases":[{"label":"complete-0","request":{"operation_id":"2e3e027b-c6b8-4853-8ec0-6e0459a312cf","kind":"complete","expected_revision":1},"task_before":{"allow_during_course":false,"task_version":1,"course_overlap":{"state":"unchecked","checked_at":"2030-10-18T23:00:00Z","timetable_version":0,"task_version":1,"acknowledgement_id":null,"overlaps":[],"reason":"任务起止时间不完整，未参与课程时间核对。"},"task_id":"6a1aa16404684a539e81a6490aefad9e","plan_id":null,"milestone_id":null,"title":"同名合成事项","start_at":null,"end_at":null,"reminder_minutes":null,"location":null,"status":"pending","source":"manual","created_at":"2030-10-18T23:00:00Z","completed_at":null,"completion_operation_id":null},"response":{"contract_version":1,"user_id":"b6832960753c44198228cbb328a105d4","operation_id":"2e3e027b-c6b8-4853-8ec0-6e0459a312cf","task_id":"6a1aa16404684a539e81a6490aefad9e","kind":"complete","state":"applied","expected_revision":1,"source_operation_id":null,"created_at":"2030-10-18T23:00:00Z","expires_at":null,"preview":null,"receipt":{"operation_id":"2e3e027b-c6b8-4853-8ec0-6e0459a312cf","task_id":"6a1aa16404684a539e81a6490aefad9e","kind":"complete","source_operation_id":null,"candidate_id":null,"before_revision":1,"after_revision":2,"before_status":"pending","after_status":"completed","before_completed_at":null,"after_completed_at":"2030-10-18T23:00:00Z","applied_at":"2030-10-18T23:00:00Z","course_acknowledgement_ids":[],"course_acknowledgements":[]}}},{"label":"restore-1","request":{"operation_id":"94624964-7c90-48bf-a751-7a106ec0d380","kind":"restore","expected_revision":2,"source_operation_id":"2e3e027b-c6b8-4853-8ec0-6e0459a312cf"},"task_before":{"allow_during_course":false,"task_version":2,"course_overlap":{"state":"unchecked","checked_at":"2030-10-18T23:00:00Z","timetable_version":0,"task_version":2,"acknowledgement_id":null,"overlaps":[],"reason":"任务起止时间不完整，未参与课程时间核对。"},"task_id":"6a1aa16404684a539e81a6490aefad9e","plan_id":null,"milestone_id":null,"title":"同名合成事项","start_at":null,"end_at":null,"reminder_minutes":null,"location":null,"status":"completed","source":"manual","created_at":"2030-10-18T23:00:00Z","completed_at":"2030-10-18T23:00:00Z","completion_operation_id":"2e3e027b-c6b8-4853-8ec0-6e0459a312cf"},"response":{"contract_version":1,"user_id":"b6832960753c44198228cbb328a105d4","operation_id":"94624964-7c90-48bf-a751-7a106ec0d380","task_id":"6a1aa16404684a539e81a6490aefad9e","kind":"restore","state":"pending","expected_revision":2,"source_operation_id":"2e3e027b-c6b8-4853-8ec0-6e0459a312cf","created_at":"2030-10-18T23:00:00Z","expires_at":"2030-10-18T23:15:00Z","preview":{"task":{"allow_during_course":false,"task_version":2,"course_overlap":{"state":"unchecked","checked_at":"2030-10-18T23:00:00Z","timetable_version":0,"task_version":2,"acknowledgement_id":null,"overlaps":[],"reason":"任务起止时间不完整，未参与课程时间核对。"},"task_id":"6a1aa16404684a539e81a6490aefad9e","plan_id":null,"milestone_id":null,"title":"同名合成事项","start_at":null,"end_at":null,"reminder_minutes":null,"location":null,"status":"completed","source":"manual","created_at":"2030-10-18T23:00:00Z","completed_at":"2030-10-18T23:00:00Z","completion_operation_id":"2e3e027b-c6b8-4853-8ec0-6e0459a312cf"},"from_status":"completed","to_status":"pending","candidate_id":"status:94624964-7c90-48bf-a751-7a106ec0d380","course_review":{"candidate_id":"status:94624964-7c90-48bf-a751-7a106ec0d380","task_id":"6a1aa16404684a539e81a6490aefad9e","allow_during_course":false,"state":"unchecked","review_digest":"b927d7ba594c0a76eef3c426664a83047aceb3d13ef0227442eec0610bda0ef7","requires_acknowledgement":false,"revoke_only":false,"school":"","campus":"","timezone":"Asia/Shanghai","timetable_version":0,"planning_version":2,"task_version":2,"candidate_digest":"b23c2585f3b38d9717d16d25bb9385c039372147243cb5c37ce8243825191c60","overlaps":[]},"state_version":{"timetable":0,"planning":2},"conflicts":[],"warnings":["「同名合成事项」未提供完整起止时间，未参与时间冲突核对。","仅恢复为未完成，保留当前内容与原日期；不会自动改期或补发过去的提醒。"]},"receipt":null}},{"label":"cancelled","request":{"operation_id":"94624964-7c90-48bf-a751-7a106ec0d380","kind":"restore","expected_revision":2,"source_operation_id":"2e3e027b-c6b8-4853-8ec0-6e0459a312cf"},"task_before":{"allow_during_course":false,"task_version":2,"course_overlap":{"state":"unchecked","checked_at":"2030-10-18T23:00:00Z","timetable_version":0,"task_version":2,"acknowledgement_id":null,"overlaps":[],"reason":"任务起止时间不完整，未参与课程时间核对。"},"task_id":"6a1aa16404684a539e81a6490aefad9e","plan_id":null,"milestone_id":null,"title":"同名合成事项","start_at":null,"end_at":null,"reminder_minutes":null,"location":null,"status":"completed","source":"manual","created_at":"2030-10-18T23:00:00Z","completed_at":"2030-10-18T23:00:00Z","completion_operation_id":"2e3e027b-c6b8-4853-8ec0-6e0459a312cf"},"response":{"contract_version":1,"user_id":"b6832960753c44198228cbb328a105d4","operation_id":"94624964-7c90-48bf-a751-7a106ec0d380","task_id":"6a1aa16404684a539e81a6490aefad9e","kind":"restore","state":"cancelled","expected_revision":2,"source_operation_id":"2e3e027b-c6b8-4853-8ec0-6e0459a312cf","created_at":"2030-10-18T23:00:00Z","expires_at":"2030-10-18T23:15:00Z","preview":{"task":{"allow_during_course":false,"task_version":2,"course_overlap":{"state":"unchecked","checked_at":"2030-10-18T23:00:00Z","timetable_version":0,"task_version":2,"acknowledgement_id":null,"overlaps":[],"reason":"任务起止时间不完整，未参与课程时间核对。"},"task_id":"6a1aa16404684a539e81a6490aefad9e","plan_id":null,"milestone_id":null,"title":"同名合成事项","start_at":null,"end_at":null,"reminder_minutes":null,"location":null,"status":"completed","source":"manual","created_at":"2030-10-18T23:00:00Z","completed_at":"2030-10-18T23:00:00Z","completion_operation_id":"2e3e027b-c6b8-4853-8ec0-6e0459a312cf"},"from_status":"completed","to_status":"pending","candidate_id":"status:94624964-7c90-48bf-a751-7a106ec0d380","course_review":{"candidate_id":"status:94624964-7c90-48bf-a751-7a106ec0d380","task_id":"6a1aa16404684a539e81a6490aefad9e","allow_during_course":false,"state":"unchecked","review_digest":"b927d7ba594c0a76eef3c426664a83047aceb3d13ef0227442eec0610bda0ef7","requires_acknowledgement":false,"revoke_only":false,"school":"","campus":"","timezone":"Asia/Shanghai","timetable_version":0,"planning_version":2,"task_version":2,"candidate_digest":"b23c2585f3b38d9717d16d25bb9385c039372147243cb5c37ce8243825191c60","overlaps":[]},"state_version":{"timetable":0,"planning":2},"conflicts":[],"warnings":["「同名合成事项」未提供完整起止时间，未参与时间冲突核对。","仅恢复为未完成，保留当前内容与原日期；不会自动改期或补发过去的提醒。"]},"receipt":null}},{"label":"restore-3","request":{"operation_id":"2878c243-3b07-4718-8fff-1b85d8903ec0","kind":"restore","expected_revision":2,"source_operation_id":"2e3e027b-c6b8-4853-8ec0-6e0459a312cf"},"task_before":{"allow_during_course":false,"task_version":2,"course_overlap":{"state":"unchecked","checked_at":"2030-10-18T23:00:00Z","timetable_version":0,"task_version":2,"acknowledgement_id":null,"overlaps":[],"reason":"任务起止时间不完整，未参与课程时间核对。"},"task_id":"6a1aa16404684a539e81a6490aefad9e","plan_id":null,"milestone_id":null,"title":"同名合成事项","start_at":null,"end_at":null,"reminder_minutes":null,"location":null,"status":"completed","source":"manual","created_at":"2030-10-18T23:00:00Z","completed_at":"2030-10-18T23:00:00Z","completion_operation_id":"2e3e027b-c6b8-4853-8ec0-6e0459a312cf"},"response":{"contract_version":1,"user_id":"b6832960753c44198228cbb328a105d4","operation_id":"2878c243-3b07-4718-8fff-1b85d8903ec0","task_id":"6a1aa16404684a539e81a6490aefad9e","kind":"restore","state":"pending","expected_revision":2,"source_operation_id":"2e3e027b-c6b8-4853-8ec0-6e0459a312cf","created_at":"2030-10-18T23:00:00Z","expires_at":"2030-10-18T23:15:00Z","preview":{"task":{"allow_during_course":false,"task_version":2,"course_overlap":{"state":"unchecked","checked_at":"2030-10-18T23:00:00Z","timetable_version":0,"task_version":2,"acknowledgement_id":null,"overlaps":[],"reason":"任务起止时间不完整，未参与课程时间核对。"},"task_id":"6a1aa16404684a539e81a6490aefad9e","plan_id":null,"milestone_id":null,"title":"同名合成事项","start_at":null,"end_at":null,"reminder_minutes":null,"location":null,"status":"completed","source":"manual","created_at":"2030-10-18T23:00:00Z","completed_at":"2030-10-18T23:00:00Z","completion_operation_id":"2e3e027b-c6b8-4853-8ec0-6e0459a312cf"},"from_status":"completed","to_status":"pending","candidate_id":"status:2878c243-3b07-4718-8fff-1b85d8903ec0","course_review":{"candidate_id":"status:2878c243-3b07-4718-8fff-1b85d8903ec0","task_id":"6a1aa16404684a539e81a6490aefad9e","allow_during_course":false,"state":"unchecked","review_digest":"c070a0debe08f6f86895a7639dfaebf97167ca34217592c79fed00d548e53f49","requires_acknowledgement":false,"revoke_only":false,"school":"","campus":"","timezone":"Asia/Shanghai","timetable_version":0,"planning_version":2,"task_version":2,"candidate_digest":"b23c2585f3b38d9717d16d25bb9385c039372147243cb5c37ce8243825191c60","overlaps":[]},"state_version":{"timetable":0,"planning":2},"conflicts":[],"warnings":["「同名合成事项」未提供完整起止时间，未参与时间冲突核对。","仅恢复为未完成，保留当前内容与原日期；不会自动改期或补发过去的提醒。"]},"receipt":null}},{"label":"restored-unchecked","request":{"operation_id":"2878c243-3b07-4718-8fff-1b85d8903ec0","kind":"restore","expected_revision":2,"source_operation_id":"2e3e027b-c6b8-4853-8ec0-6e0459a312cf"},"task_before":{"allow_during_course":false,"task_version":2,"course_overlap":{"state":"unchecked","checked_at":"2030-10-18T23:00:00Z","timetable_version":0,"task_version":2,"acknowledgement_id":null,"overlaps":[],"reason":"任务起止时间不完整，未参与课程时间核对。"},"task_id":"6a1aa16404684a539e81a6490aefad9e","plan_id":null,"milestone_id":null,"title":"同名合成事项","start_at":null,"end_at":null,"reminder_minutes":null,"location":null,"status":"completed","source":"manual","created_at":"2030-10-18T23:00:00Z","completed_at":"2030-10-18T23:00:00Z","completion_operation_id":"2e3e027b-c6b8-4853-8ec0-6e0459a312cf"},"response":{"contract_version":1,"user_id":"b6832960753c44198228cbb328a105d4","operation_id":"2878c243-3b07-4718-8fff-1b85d8903ec0","task_id":"6a1aa16404684a539e81a6490aefad9e","kind":"restore","state":"applied","expected_revision":2,"source_operation_id":"2e3e027b-c6b8-4853-8ec0-6e0459a312cf","created_at":"2030-10-18T23:00:00Z","expires_at":"2030-10-18T23:15:00Z","preview":{"task":{"allow_during_course":false,"task_version":2,"course_overlap":{"state":"unchecked","checked_at":"2030-10-18T23:00:00Z","timetable_version":0,"task_version":2,"acknowledgement_id":null,"overlaps":[],"reason":"任务起止时间不完整，未参与课程时间核对。"},"task_id":"6a1aa16404684a539e81a6490aefad9e","plan_id":null,"milestone_id":null,"title":"同名合成事项","start_at":null,"end_at":null,"reminder_minutes":null,"location":null,"status":"completed","source":"manual","created_at":"2030-10-18T23:00:00Z","completed_at":"2030-10-18T23:00:00Z","completion_operation_id":"2e3e027b-c6b8-4853-8ec0-6e0459a312cf"},"from_status":"completed","to_status":"pending","candidate_id":"status:2878c243-3b07-4718-8fff-1b85d8903ec0","course_review":{"candidate_id":"status:2878c243-3b07-4718-8fff-1b85d8903ec0","task_id":"6a1aa16404684a539e81a6490aefad9e","allow_during_course":false,"state":"unchecked","review_digest":"c070a0debe08f6f86895a7639dfaebf97167ca34217592c79fed00d548e53f49","requires_acknowledgement":false,"revoke_only":false,"school":"","campus":"","timezone":"Asia/Shanghai","timetable_version":0,"planning_version":2,"task_version":2,"candidate_digest":"b23c2585f3b38d9717d16d25bb9385c039372147243cb5c37ce8243825191c60","overlaps":[]},"state_version":{"timetable":0,"planning":2},"conflicts":[],"warnings":["「同名合成事项」未提供完整起止时间，未参与时间冲突核对。","仅恢复为未完成，保留当前内容与原日期；不会自动改期或补发过去的提醒。"]},"receipt":{"operation_id":"2878c243-3b07-4718-8fff-1b85d8903ec0","task_id":"6a1aa16404684a539e81a6490aefad9e","kind":"restore","source_operation_id":"2e3e027b-c6b8-4853-8ec0-6e0459a312cf","candidate_id":"status:2878c243-3b07-4718-8fff-1b85d8903ec0","before_revision":2,"after_revision":3,"before_status":"completed","after_status":"pending","before_completed_at":"2030-10-18T23:00:00Z","after_completed_at":null,"applied_at":"2030-10-18T23:00:00Z","course_acknowledgement_ids":[],"course_acknowledgements":[]}}},{"label":"complete-5","request":{"operation_id":"02cdb856-1dde-4152-bf0b-d4c5f056f3b9","kind":"complete","expected_revision":1},"task_before":{"allow_during_course":true,"task_version":1,"course_overlap":{"state":"accepted","checked_at":"2030-10-18T23:00:00Z","timetable_version":1,"task_version":1,"acknowledgement_id":"c27b25bb4f054a7aa634b05100314248","overlaps":[{"course_key":"03620b8ddf206cbc7b73b3265103572050831913dbec88391b3421ed59f39b40","course":{"date":"2030-10-19","title":"同名合成课程","start_time":"09:00","end_time":"11:00","location":"合成教室 A","teacher":"合成教师"},"overlap_start_at":"2030-10-19T09:30:00+08:00","overlap_end_at":"2030-10-19T10:00:00+08:00"}],"reason":""},"task_id":"82b4ef11c657409cb323340c07fff87f","plan_id":null,"milestone_id":null,"title":"同名合成事项","start_at":"2030-10-19T09:30:00+08:00","end_at":"2030-10-19T10:00:00+08:00","reminder_minutes":null,"location":null,"status":"pending","source":"manual","created_at":"2030-10-18T23:00:00Z","completed_at":null,"completion_operation_id":null},"response":{"contract_version":1,"user_id":"b6832960753c44198228cbb328a105d4","operation_id":"02cdb856-1dde-4152-bf0b-d4c5f056f3b9","task_id":"82b4ef11c657409cb323340c07fff87f","kind":"complete","state":"applied","expected_revision":1,"source_operation_id":null,"created_at":"2030-10-18T23:00:00Z","expires_at":null,"preview":null,"receipt":{"operation_id":"02cdb856-1dde-4152-bf0b-d4c5f056f3b9","task_id":"82b4ef11c657409cb323340c07fff87f","kind":"complete","source_operation_id":null,"candidate_id":null,"before_revision":1,"after_revision":2,"before_status":"pending","after_status":"completed","before_completed_at":null,"after_completed_at":"2030-10-18T23:00:00Z","applied_at":"2030-10-18T23:00:00Z","course_acknowledgement_ids":[],"course_acknowledgements":[]}}},{"label":"restore-6","request":{"operation_id":"ac505272-cc3d-4137-bef9-1f420b977be7","kind":"restore","expected_revision":2,"source_operation_id":"02cdb856-1dde-4152-bf0b-d4c5f056f3b9"},"task_before":{"allow_during_course":true,"task_version":2,"course_overlap":{"state":"needs_review","checked_at":"2030-10-18T23:00:00Z","timetable_version":1,"task_version":2,"acknowledgement_id":null,"overlaps":[{"course_key":"03620b8ddf206cbc7b73b3265103572050831913dbec88391b3421ed59f39b40","course":{"date":"2030-10-19","title":"同名合成课程","start_time":"09:00","end_time":"11:00","location":"合成教室 A","teacher":"合成教师"},"overlap_start_at":"2030-10-19T09:30:00+08:00","overlap_end_at":"2030-10-19T10:00:00+08:00"}],"reason":""},"task_id":"82b4ef11c657409cb323340c07fff87f","plan_id":null,"milestone_id":null,"title":"同名合成事项","start_at":"2030-10-19T09:30:00+08:00","end_at":"2030-10-19T10:00:00+08:00","reminder_minutes":null,"location":null,"status":"completed","source":"manual","created_at":"2030-10-18T23:00:00Z","completed_at":"2030-10-18T23:00:00Z","completion_operation_id":"02cdb856-1dde-4152-bf0b-d4c5f056f3b9"},"response":{"contract_version":1,"user_id":"b6832960753c44198228cbb328a105d4","operation_id":"ac505272-cc3d-4137-bef9-1f420b977be7","task_id":"82b4ef11c657409cb323340c07fff87f","kind":"restore","state":"pending","expected_revision":2,"source_operation_id":"02cdb856-1dde-4152-bf0b-d4c5f056f3b9","created_at":"2030-10-18T23:00:00Z","expires_at":"2030-10-18T23:15:00Z","preview":{"task":{"allow_during_course":true,"task_version":2,"course_overlap":{"state":"needs_review","checked_at":"2030-10-18T23:00:00Z","timetable_version":1,"task_version":2,"acknowledgement_id":null,"overlaps":[{"course_key":"03620b8ddf206cbc7b73b3265103572050831913dbec88391b3421ed59f39b40","course":{"date":"2030-10-19","title":"同名合成课程","start_time":"09:00","end_time":"11:00","location":"合成教室 A","teacher":"合成教师"},"overlap_start_at":"2030-10-19T09:30:00+08:00","overlap_end_at":"2030-10-19T10:00:00+08:00"}],"reason":""},"task_id":"82b4ef11c657409cb323340c07fff87f","plan_id":null,"milestone_id":null,"title":"同名合成事项","start_at":"2030-10-19T09:30:00+08:00","end_at":"2030-10-19T10:00:00+08:00","reminder_minutes":null,"location":null,"status":"completed","source":"manual","created_at":"2030-10-18T23:00:00Z","completed_at":"2030-10-18T23:00:00Z","completion_operation_id":"02cdb856-1dde-4152-bf0b-d4c5f056f3b9"},"from_status":"completed","to_status":"pending","candidate_id":"status:ac505272-cc3d-4137-bef9-1f420b977be7","course_review":{"candidate_id":"status:ac505272-cc3d-4137-bef9-1f420b977be7","task_id":"82b4ef11c657409cb323340c07fff87f","allow_during_course":true,"state":"needs_review","review_digest":"bb67baee5007f643f35ad5d29e6b1c30a10e9a3f93cc19a00ebe19baf002def1","requires_acknowledgement":true,"revoke_only":false,"school":"","campus":"","timezone":"Asia/Shanghai","timetable_version":1,"planning_version":5,"task_version":2,"candidate_digest":"b28026fe3c00b1b57f277deac216bdfea5f2765bb0df02575f7d6abef1c6e757","overlaps":[{"course_key":"03620b8ddf206cbc7b73b3265103572050831913dbec88391b3421ed59f39b40","course":{"date":"2030-10-19","title":"同名合成课程","start_time":"09:00","end_time":"11:00","location":"合成教室 A","teacher":"合成教师"},"overlap_start_at":"2030-10-19T09:30:00+08:00","overlap_end_at":"2030-10-19T10:00:00+08:00"}]},"state_version":{"timetable":1,"planning":5},"conflicts":[],"warnings":["「同名合成事项」将在上课时完成。仅在逐项确认准确重叠后才能写入。","已有待办包含无日期或不完整时段，需手动核对。","仅恢复为未完成，保留当前内容与原日期；不会自动改期或补发过去的提醒。"]},"receipt":null}},{"label":"restored-course-ack","request":{"operation_id":"ac505272-cc3d-4137-bef9-1f420b977be7","kind":"restore","expected_revision":2,"source_operation_id":"02cdb856-1dde-4152-bf0b-d4c5f056f3b9"},"confirm_request":{"acknowledgements":[{"candidate_id":"status:ac505272-cc3d-4137-bef9-1f420b977be7","review_digest":"bb67baee5007f643f35ad5d29e6b1c30a10e9a3f93cc19a00ebe19baf002def1"}]},"task_before":{"allow_during_course":true,"task_version":2,"course_overlap":{"state":"needs_review","checked_at":"2030-10-18T23:00:00Z","timetable_version":1,"task_version":2,"acknowledgement_id":null,"overlaps":[{"course_key":"03620b8ddf206cbc7b73b3265103572050831913dbec88391b3421ed59f39b40","course":{"date":"2030-10-19","title":"同名合成课程","start_time":"09:00","end_time":"11:00","location":"合成教室 A","teacher":"合成教师"},"overlap_start_at":"2030-10-19T09:30:00+08:00","overlap_end_at":"2030-10-19T10:00:00+08:00"}],"reason":""},"task_id":"82b4ef11c657409cb323340c07fff87f","plan_id":null,"milestone_id":null,"title":"同名合成事项","start_at":"2030-10-19T09:30:00+08:00","end_at":"2030-10-19T10:00:00+08:00","reminder_minutes":null,"location":null,"status":"completed","source":"manual","created_at":"2030-10-18T23:00:00Z","completed_at":"2030-10-18T23:00:00Z","completion_operation_id":"02cdb856-1dde-4152-bf0b-d4c5f056f3b9"},"response":{"contract_version":1,"user_id":"b6832960753c44198228cbb328a105d4","operation_id":"ac505272-cc3d-4137-bef9-1f420b977be7","task_id":"82b4ef11c657409cb323340c07fff87f","kind":"restore","state":"applied","expected_revision":2,"source_operation_id":"02cdb856-1dde-4152-bf0b-d4c5f056f3b9","created_at":"2030-10-18T23:00:00Z","expires_at":"2030-10-18T23:15:00Z","preview":{"task":{"allow_during_course":true,"task_version":2,"course_overlap":{"state":"needs_review","checked_at":"2030-10-18T23:00:00Z","timetable_version":1,"task_version":2,"acknowledgement_id":null,"overlaps":[{"course_key":"03620b8ddf206cbc7b73b3265103572050831913dbec88391b3421ed59f39b40","course":{"date":"2030-10-19","title":"同名合成课程","start_time":"09:00","end_time":"11:00","location":"合成教室 A","teacher":"合成教师"},"overlap_start_at":"2030-10-19T09:30:00+08:00","overlap_end_at":"2030-10-19T10:00:00+08:00"}],"reason":""},"task_id":"82b4ef11c657409cb323340c07fff87f","plan_id":null,"milestone_id":null,"title":"同名合成事项","start_at":"2030-10-19T09:30:00+08:00","end_at":"2030-10-19T10:00:00+08:00","reminder_minutes":null,"location":null,"status":"completed","source":"manual","created_at":"2030-10-18T23:00:00Z","completed_at":"2030-10-18T23:00:00Z","completion_operation_id":"02cdb856-1dde-4152-bf0b-d4c5f056f3b9"},"from_status":"completed","to_status":"pending","candidate_id":"status:ac505272-cc3d-4137-bef9-1f420b977be7","course_review":{"candidate_id":"status:ac505272-cc3d-4137-bef9-1f420b977be7","task_id":"82b4ef11c657409cb323340c07fff87f","allow_during_course":true,"state":"needs_review","review_digest":"bb67baee5007f643f35ad5d29e6b1c30a10e9a3f93cc19a00ebe19baf002def1","requires_acknowledgement":true,"revoke_only":false,"school":"","campus":"","timezone":"Asia/Shanghai","timetable_version":1,"planning_version":5,"task_version":2,"candidate_digest":"b28026fe3c00b1b57f277deac216bdfea5f2765bb0df02575f7d6abef1c6e757","overlaps":[{"course_key":"03620b8ddf206cbc7b73b3265103572050831913dbec88391b3421ed59f39b40","course":{"date":"2030-10-19","title":"同名合成课程","start_time":"09:00","end_time":"11:00","location":"合成教室 A","teacher":"合成教师"},"overlap_start_at":"2030-10-19T09:30:00+08:00","overlap_end_at":"2030-10-19T10:00:00+08:00"}]},"state_version":{"timetable":1,"planning":5},"conflicts":[],"warnings":["「同名合成事项」将在上课时完成。仅在逐项确认准确重叠后才能写入。","已有待办包含无日期或不完整时段，需手动核对。","仅恢复为未完成，保留当前内容与原日期；不会自动改期或补发过去的提醒。"]},"receipt":{"operation_id":"ac505272-cc3d-4137-bef9-1f420b977be7","task_id":"82b4ef11c657409cb323340c07fff87f","kind":"restore","source_operation_id":"02cdb856-1dde-4152-bf0b-d4c5f056f3b9","candidate_id":"status:ac505272-cc3d-4137-bef9-1f420b977be7","before_revision":2,"after_revision":3,"before_status":"completed","after_status":"pending","before_completed_at":"2030-10-18T23:00:00Z","after_completed_at":null,"applied_at":"2030-10-18T23:00:00Z","course_acknowledgement_ids":["7c17aa715a2c4392b493b1c85a15ef09"],"course_acknowledgements":[{"candidate_id":"status:ac505272-cc3d-4137-bef9-1f420b977be7","acknowledgement_id":"7c17aa715a2c4392b493b1c85a15ef09"}]}}}],"errors":{"missing_ack":{"detail":"请逐项阅读准确课程与重叠时间，并明确确认本次课内安排。","code":"COURSE_ACK_REQUIRED"},"cancelled":{"detail":"这次恢复预览已取消，未执行恢复。","code":"TASK_RECOVERY_CANCELLED"},"not_found":{"detail":"当前账号中未找到这次任务状态操作。","code":"TASK_STATUS_OPERATION_NOT_FOUND"}},"latest_planning":{"plans":[],"tasks":[{"allow_during_course":false,"task_version":3,"course_overlap":{"state":"unchecked","checked_at":"2030-10-18T23:00:00Z","timetable_version":1,"task_version":3,"acknowledgement_id":null,"overlaps":[],"reason":"任务起止时间不完整，未参与课程时间核对。"},"task_id":"6a1aa16404684a539e81a6490aefad9e","plan_id":null,"milestone_id":null,"title":"同名合成事项","start_at":null,"end_at":null,"reminder_minutes":null,"location":null,"status":"pending","source":"manual","created_at":"2030-10-18T23:00:00Z","completed_at":null,"completion_operation_id":null},{"allow_during_course":true,"task_version":3,"course_overlap":{"state":"accepted","checked_at":"2030-10-18T23:00:00Z","timetable_version":1,"task_version":3,"acknowledgement_id":"7c17aa715a2c4392b493b1c85a15ef09","overlaps":[{"course_key":"03620b8ddf206cbc7b73b3265103572050831913dbec88391b3421ed59f39b40","course":{"date":"2030-10-19","title":"同名合成课程","start_time":"09:00","end_time":"11:00","location":"合成教室 A","teacher":"合成教师"},"overlap_start_at":"2030-10-19T09:30:00+08:00","overlap_end_at":"2030-10-19T10:00:00+08:00"}],"reason":""},"task_id":"82b4ef11c657409cb323340c07fff87f","plan_id":null,"milestone_id":null,"title":"同名合成事项","start_at":"2030-10-19T09:30:00+08:00","end_at":"2030-10-19T10:00:00+08:00","reminder_minutes":null,"location":null,"status":"pending","source":"manual","created_at":"2030-10-18T23:00:00Z","completed_at":null,"completion_operation_id":null}],"total_tasks":2,"completed_tasks":0,"due_today":0,"overdue_tasks":0,"progress":0}};
+/* END ASGI FIXTURE */
+const $=s=>document.querySelector(s),copy=v=>JSON.parse(JSON.stringify(v)),esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fixedNow=Date.parse('2030-10-19T07:01:00+08:00');
+const dt=s=>s?new Intl.DateTimeFormat('zh-CN',{timeZone:'Asia/Shanghai',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(s)).replaceAll('/','-'):'未设置时间';
+const caseBy=label=>Fixture.cases.find(c=>c.label===label),sleep=()=>new Promise(r=>setTimeout(r,90));
+const state={mode:'complete',tab:'today',open:false,status:{items:[],selectedId:'',lockedTaskIds:[],pendingCount:0,message:''},task:null,calls:[],ack:false,ackKey:'',gateway:null,driver:null,store:null,lease:null,controller:null,refreshes:0,restartMessage:''};
+class MemoryDriver{value;async read(){return this.value}async write(text){this.value=text}async remove(){this.value=undefined}}
+function baseCase(){return caseBy(({complete:'complete-0',unknown:'complete-0',retry:'complete-0',restore:'restore-3',course:'restore-6',cancel:'restore-1',later:'complete-0',legacy:'restore-1'})[state.mode])}
+function makeGateway(){const rows=new Map(),seen=new Set(),base=baseCase();Fixture.cases.filter(c=>c.label.startsWith('complete-')).forEach(c=>rows.set(c.response.operation_id,copy(c.response)));
+ const log=(method,id,payload)=>state.calls.push({method,id,payload:copy(payload??null)});
+ return {async startTaskStatus(taskId,request){log('POST',request.operation_id,request);await sleep();if(taskId!==base.response.task_id||JSON.stringify(request)!==JSON.stringify(base.request))throw Error('fixture mismatch');const first=!seen.has(request.operation_id);seen.add(request.operation_id);if(state.mode==='retry'&&first){rows.delete(request.operation_id);throw Error('模拟提交未到达')}rows.set(request.operation_id,copy(base.response));if(state.mode==='unknown'&&first)throw Error('模拟响应丢失');return copy(rows.get(request.operation_id))},
+ async taskStatusOperation(id){log('GET',id);await sleep();if(!rows.has(id))throw new Feedback.CampusFlowRequestError(404,'TASK_STATUS_OPERATION_NOT_FOUND','未查到原操作');return copy(rows.get(id))},
+ async confirmTaskStatus(id,acks){log('CONFIRM',id,acks);await sleep();const original=rows.get(id);if(!Validation.validTaskStatusAcknowledgements(original,acks))throw Error('ACK mismatch');const exact=Fixture.cases.find(c=>c.response.operation_id===id&&c.response.state==='applied');if(!exact)throw new Feedback.CampusFlowRequestError(409,'TASK_STALE','本例仅演示取消，请重新读取当前任务');rows.set(id,copy(exact.response));return copy(exact.response)},
+ async cancelTaskStatus(id){log('CANCEL',id);await sleep();const exact=Fixture.cases.find(c=>c.response.operation_id===id&&c.response.state==='cancelled');const result=exact?copy(exact.response):{...copy(rows.get(id)),state:'cancelled',receipt:null};rows.set(id,result);return copy(result)}}}
+async function controller(){state.store=new Store.DraftStore(state.driver,{now:()=>fixedNow,set:()=>1,clear(){}});await state.store.initialize();state.lease=await state.store.activate('https://prototype.invalid|'+Fixture.user_id);state.controller=new Runtime.TaskStatusController(state.store,s=>{state.status=s;const item=selected();const key=(item?.operationId??'')+':'+(item?.operation?.preview?.course_review.review_digest??'');if(key!==state.ackKey){state.ack=false;state.ackKey=key}render()},op=>{state.refreshes++;const r=op.receipt;if(r){state.task={...state.task,status:r.after_status,task_version:r.after_revision,completed_at:r.after_completed_at,completion_operation_id:r.kind==='complete'?r.operation_id:null};if(state.mode==='later')Object.assign(state.task,{title:'整理操作系统复习提纲：补充课堂讨论与实验结论（后来修改）',start_at:'2030-10-20T14:00:00+08:00',end_at:'2030-10-20T15:00:00+08:00',location:'图书馆二楼',task_version:r.after_revision+1})}},()=>baseCase().request.operation_id,()=>fixedNow);state.controller.configure(state.lease.scope,Fixture.user_id,state.gateway,state.lease);state.controller.setActive(true)}
+async function reset(){state.controller?.dispose();state.status={items:[],selectedId:'',lockedTaskIds:[],pendingCount:0,message:''};state.calls=[];state.task=copy(baseCase().task_before);if(state.mode==='legacy')state.task.completion_operation_id=null;state.open=false;state.ack=false;state.ackKey='';state.refreshes=0;state.restartMessage='';state.driver=new MemoryDriver();state.gateway=makeGateway();await controller();render()}
+function selected(){return state.status.items.find(i=>i.operationId===state.status.selectedId)}
+function phase(item){return item.busy?'正在核对，请稍候':({applied:'这次操作已保存',review:'恢复预览 · 尚未改变任务',unknown:'结果待核对',retryable:'原编号未查到 · 可显式重试',cleanup:'回执已核实，本机记录待结清',cancelled:'恢复预览已取消',error:'本次未完成'})[item.phase]??'请核对当前结果'}
+function taskCard(){const t=state.task,locked=state.status.lockedTaskIds.includes(t.task_id),done=t.status==='completed',settled=state.status.items.some(i=>i.taskId===t.task_id&&i.phase==='applied');return `<div class="task" id="current-task"><div class="task-line"><div class="task-text"><span class="tag ${locked?'warn':done?'neutral':''}">${locked?'结果待核对':done?'已完成':'未完成'}</span><h3 style="margin-top:8px">${esc(t.title)}</h3><p class="meta">${t.start_at?esc(dt(t.start_at)+' 至 '+dt(t.end_at)):'无日期 · 不虚构时间安排'}</p><p class="meta">${esc(t.location??'地点未填写')}</p><small class="task-id">精确任务 ${esc(t.task_id)}</small></div><button id="task-status" class="${locked?'warning':done?'quiet':'primary'}">${settled?'查看记录':locked?'核对结果':done?'恢复未完成':'标记完成'}</button></div>${done&&!t.completion_operation_id?'<p class="meta">这次完成没有可核验凭据；不会假装能够安全恢复。</p>':''}</div>`}
+function receipt(item){const r=item.operation?.receipt;if(!r)return'';return `<section class="receipt" id="receipt"><h3><span class="check">✓</span>${r.kind==='complete'?'这次标记完成已保存':'这次恢复未完成已保存'}</h3><div class="status-change"><span>${r.before_status==='completed'?'已完成':'未完成'}</span><span aria-hidden="true">→</span><strong>${r.after_status==='completed'?'已完成':'未完成'}</strong></div><p class="meta">生效于 ${esc(dt(r.applied_at))} · 北京时间</p><p class="meta" style="margin-top:12px">这是这次操作的历史回执，不是当前任务快照。后来的标题、时间与地点仍以最新任务为准；恢复也不会删除专注记录。</p><small class="task-id">回执 ${esc(r.operation_id)}</small></section>`}
+function preview(item){const p=item.operation?.preview;if(!p)return'';const review=p.course_review;const terminal=item.operation.state;return `<section class="preview" id="restore-preview"><span class="tag neutral">${terminal==='cancelled'?'已取消的恢复预览 · 未执行':terminal==='applied'?'当时核对的预览 · 非当前任务快照':'已完成 → 未完成'}</span><h3 style="margin-top:12px">${esc(p.task.title)}</h3><dl class="facts"><div class="fact"><dt>${terminal==='pending'?'当前时段':'核对时段'}</dt><dd>${esc(p.task.start_at?dt(p.task.start_at)+' 至 '+dt(p.task.end_at):'未提供完整起止时间')}</dd></div><div class="fact"><dt>${terminal==='pending'?'当前地点':'核对地点'}</dt><dd>${esc(p.task.location??'未填写')}</dd></div><div class="fact"><dt>有效至</dt><dd>${esc(dt(item.operation.expires_at))}（合成时钟）</dd></div></dl><p class="meta">${terminal==='cancelled'?'这份恢复预览已取消，未执行。以下保留当时核对的内容；任务以当前列表为准。':terminal==='applied'?'该次恢复已生效。以下保留当时核对的预览，不是当前任务快照。':'只恢复完成状态，保留这里显示的当前内容；不把任务倒退为当时的旧版本。'}</p>${p.conflicts.map(s=>`<div class="notice error">${esc(s)}</div>`).join('')}${p.warnings.map(s=>`<div class="notice warning">${esc(s)}</div>`).join('')}${review.overlaps.length?`<h3 style="margin-top:20px">这次课内安排，再核对一次</h3><p class="meta">原来的课内许可不代替本次确认。</p>${review.overlaps.map(o=>`<div class="course"><b>${esc(o.course.title)}</b><p>课程：${esc(o.course.date+' '+o.course.start_time+'–'+o.course.end_time)}</p><p>${esc(o.course.location)} · ${esc(o.course.teacher)}</p><p>任务：${esc(dt(p.task.start_at)+' 至 '+dt(p.task.end_at))}</p><p>实际重叠：${esc(dt(o.overlap_start_at)+' 至 '+dt(o.overlap_end_at))}</p></div>`).join('')}`:''}${item.canConfirm&&review.requires_acknowledgement?`<label class="ack"><input id="ack" type="checkbox" ${state.ack?'checked':''}><span>仍这样安排。已核对以上完整日期、课程与重叠时段；只确认本次恢复。</span></label>`:''}</section>`}
+function recordPage(){const item=selected();return `<div class="back-row"><button id="back" class="quiet">返回</button><h2>完成与恢复记录</h2></div><p class="meta">关闭不会取消已提交操作。待核对只限制对应任务，其他任务仍可使用。</p>${state.restartMessage?`<div class="notice">${esc(state.restartMessage)}</div>`:''}${state.status.message?`<div class="notice warning" id="global-message">${esc(state.status.message)}</div>`:''}${state.status.items.length>1?`<div class="records">${state.status.items.map(i=>`<button data-select="${esc(i.operationId)}" aria-pressed="${i.operationId===state.status.selectedId}">${esc(phase(i))}</button>`).join('')}</div>`:''}${item?`<div class="notice ${['unknown','retryable','cleanup'].includes(item.phase)?'warning':''}" id="result-state">${item.busy?'<span class="loader"></span>':''}<b>${esc(phase(item))}</b><p>${esc(item.message)}</p></div>${receipt(item)}${preview(item)}<div class="actions">${!item.busy&&['unknown','cleanup','retryable','review'].includes(item.phase)?'<button id="check-result" class="primary">核对原操作结果</button>':''}${item.canRetry?'<button id="retry" class="quiet">用原编号和原内容重试</button>':''}${item.canConfirm?`<button id="confirm" class="primary" ${item.operation.preview.course_review.requires_acknowledgement&&!state.ack?'disabled':''}>确认恢复未完成</button>`:''}${item.canCancel?'<button id="cancel" class="quiet">取消这份恢复预览</button>':''}${!state.status.lockedTaskIds.includes(item.taskId)?'<button id="open-current" class="quiet">查看当前任务</button>':''}</div><small class="task-id">原操作 ${esc(item.operationId)}</small>`:!state.status.message?'<div class="empty-line">尚无需要核对的记录。</div>':''}`}
+function render(){if(!state.task)return;document.querySelectorAll('[data-tab]').forEach(b=>b.setAttribute('aria-selected',String(b.dataset.tab===state.tab)));$('#content').innerHTML=state.open?recordPage():`<div class="section-title"><h2>${state.tab==='today'?'今天的待办':'全部待办'}</h2><small>1 项合成任务</small></div>${state.mode==='later'?'<div class="notice">本场景取得完成回执后，模拟另一端修改名称与时段。再打开旧回执不会覆盖这些修改。</div>':''}${taskCard()}<div class="empty-line">这里专门演示完成与恢复，其他课程、聊天和功能不在本页模拟。</div>${state.status.items.length?`<button class="persistent" id="open-records"><b>${state.status.pendingCount?state.status.pendingCount+' 项结果待核对':'查看本次完成 / 恢复记录'}</b><span>查看 →</span></button>`:''}`;$('#trace').innerHTML=`<p>${state.calls.filter(c=>c.method==='POST').length} 次提交 · ${state.calls.filter(c=>c.method==='GET').length} 次只读核对 · ${state.refreshes} 次可信结果刷新</p>`+state.calls.map(c=>`<div class="audit"><b>${esc(c.method)}</b><code>${esc(c.id)}</code>${c.payload?`<code>${esc(JSON.stringify(c.payload))}</code>`:''}</div>`).join('');bind()}
+function bind(){const click=(s,fn)=>{const b=$(s);if(b)b.onclick=fn};click('#task-status',async()=>{state.open=true;const locked=state.status.items.find(i=>i.taskId===state.task.task_id&&(state.status.lockedTaskIds.includes(i.taskId)||i.phase==='applied'));if(locked){state.controller.select(locked.operationId);render()}else await state.controller.begin(copy(state.task),state.task.status==='completed'?'restore':'complete')});click('#open-records',()=>{state.open=true;render()});click('#back',()=>{state.open=false;render()});click('#open-current',()=>{state.open=false;render()});click('#check-result',()=>state.controller.check());click('#retry',()=>state.controller.retry());click('#cancel',()=>state.controller.cancel());click('#confirm',()=>{const item=selected();if(!item?.canConfirm)return;state.controller.confirm(state.ack?Validation.requiredTaskStatusAcknowledgements(item.operation):[])});const ack=$('#ack');if(ack)ack.onchange=()=>{state.ack=ack.checked;render()};document.querySelectorAll('[data-select]').forEach(b=>b.onclick=()=>state.controller.select(b.dataset.select))}
+$('#scenario').onchange=async e=>{state.mode=e.target.value;await reset()};$('#reset').onclick=()=>reset();$('#restart').onclick=async()=>{state.controller.dispose();state.restartMessage='已重建内存中的控制器，只查询原操作编号，没有自动再次提交。';await controller();state.open=true;render()};document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{state.tab=b.dataset.tab;state.open=false;render()});for(const name of ['large','dark'])$('#'+name).onclick=()=>{document.body.classList.toggle(name);$('#'+name).setAttribute('aria-pressed',String(document.body.classList.contains(name)))};
+const fixtureChecks=Fixture.cases.map(c=>({label:c.label,valid:Validation.validTaskStatusOperation(c.response,Fixture.user_id,c.response.task_id,c.request)}));$('#fixtures').innerHTML='<h3 style="margin-top:20px">原样校验 8 份服务回包</h3>'+fixtureChecks.map(c=>`<div class="fixture-row"><b>${esc(c.label)}</b><small>${c.valid?'生产校验器通过':'校验失败'}</small></div>`).join('');$('#hashes').innerHTML='<b>嵌入生产文件 SHA-256</b>'+Object.entries(SourceHashes).map(([name,sha])=>`<code>${esc(name)} ${esc(sha)}</code>`).join('');window.__ux08={getState:()=>copy({mode:state.mode,tab:state.tab,open:state.open,status:state.status,task:state.task,calls:state.calls,refreshes:state.refreshes,ack:state.ack,fixtureChecks}),ready:false};reset().then(()=>window.__ux08.ready=true);
+</script></body></html>

@@ -1,3 +1,4 @@
+import { TaskStatusController, statusIds, statusTask, completeOperation, tick as statusTick } from './helpers/task-status-fixture.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { stripTypeScriptTypes } from 'node:module';
@@ -10,10 +11,10 @@ const navigation=await import(`data:text/javascript;base64,${Buffer.from(stripTy
 const names=['createNavigation','currentRoute','selectRoot','openSecondary','backNavigation','isRootRoute','hasBack'];
 const {DraftStore}=await import(`data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(read('utils/DraftStore'))).toString('base64')}`);
 const indexSource=read('pages/Index');
-const create=new Function('localHistory','historyScope','CampusFlowApi','AppStorage','AppTheme','Curve','ReminderCoordinator','PlatformReminderDriver','localDrafts',...names,
+const create=new Function('localHistory','historyScope','CampusFlowApi','AppStorage','AppTheme','Curve','ReminderCoordinator','PlatformReminderDriver','localDrafts','TaskStatusController','timetableOperationId',...names,
   methods(indexSource,'Index')+'\nreturn Index;');
 const deferred=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return{promise,resolve,reject};};
-function setup({activate=async()=>{},load=async()=>({tasks:[]}),cleanup=async()=>{},disable=async()=>{}}={}) {
+function setup({activate=async()=>{},load=async()=>({tasks:[]}),cleanup=async()=>{},disable=async()=>{},statusStart=async(_id,request)=>completeOperation(statusTask(),request,{user_id:'a'})}={}) {
  const calls=[];let manager;let published;
  class Coordinator {
   constructor(driver,notify){calls.push(['manager']);this.notify=notify;manager=this;published=notify;}
@@ -26,10 +27,10 @@ function setup({activate=async()=>{},load=async()=>({tasks:[]}),cleanup=async()=
   dispose(){calls.push(['dispose']);}
  }
  class Driver{constructor(ctx){assert.equal(ctx,'context');}}
- class Api{constructor(base,token){this.base=base;this.token=token;}async planning(){calls.push(['planning',this.base,this.token]);return load();}async logout(){calls.push(['revoke',this.token]);}}
+ class Api{constructor(base,token){this.base=base;this.token=token;}async planning(){calls.push(['planning',this.base,this.token]);return load();}async logout(){calls.push(['revoke',this.token]);}async startTaskStatus(id,request){calls.push(['status',id,request]);return statusStart(id,request);}}
  const store={activate,clear:async()=>calls.push(['clear-cache']),info:()=>({scope:'cache',displayName:'a',count:0})};
  let draftText;const drafts=new DraftStore({read:async()=>draftText,write:async value=>{draftText=value;},remove:async()=>{draftText=undefined;}});drafts.initialize();
- const Index=create(store,(base,id)=>`${base}|${id}`,Api,{setOrCreate(){}},{motion:()=>0},{EaseOut:0},Coordinator,Driver,drafts,...names.map(n=>navigation[n]));
+ const Index=create(store,(base,id)=>`${base}|${id}`,Api,{setOrCreate(){}},{motion:()=>0},{EaseOut:0},Coordinator,Driver,drafts,TaskStatusController,()=>statusIds.complete,...names.map(n=>navigation[n]));
  const page=new Index();page.baseUrl='https://example.test';page.getUIContext=()=>({getHostContext:()=> 'context',animateTo:(_o,f)=>f()});
  return{page,calls,manager:()=>manager,publish:s=>published(s)};
 }
@@ -73,22 +74,25 @@ test('entry teardown disposes its facade and drops late state updates without cl
  f.page.aboutToDisappear();f.publish({phase:'ready'});assert.equal(f.page.reminderState,before);
  assert.equal(f.calls.filter(c=>c[0]==='dispose').length,1);assert.equal(f.calls.some(c=>c[0]==='cleanup'),false);
 });
-const homeSource=read('pages/HomePage');
-const Home=new Function('Scroller','CampusFlowApi','CampusFlowRequestError',methods(homeSource,'HomePage')+'\nreturn HomePage;');
-test('Home completion success still refreshes reminders after a tab change; ambiguous writes never remove reminders optimistically',async()=>{
+test('shared status receipt refreshes reminders after tab change; unknown writes keep their pointer without optimistic removal',async()=>{
  for(const success of [true,false]){
-  const pending=deferred();class Api{async updateTask(){return pending.promise;}}
-  const Page=Home(class{},Api,class extends Error{});const page=new Page();page.baseUrl='server';page.token='token';
-  let updates=0,reads=0;page.onPlanningChanged=()=>updates++;page.loadToday=async()=>reads++;
-  const write=page.toggleTask({task_id:'task',status:'pending'});page.active=false;page.activityChanged();
-  if(success)pending.resolve({});else pending.reject(Error('unknown'));
-  await write;assert.equal(updates,success?1:0);assert.equal(reads,0);
+  const pending=deferred();const f=setup({statusStart:()=>pending.promise});await f.page.authenticated(auth('a'));
+  f.calls.length=0;
+  const write=f.page.changeTaskStatus(statusTask());await statusTick();f.page.selectTab(2);
+  const home=f.page.homeRefresh,plan=f.page.planRefresh;
+  assert.equal(f.calls.filter(c=>c[0]==='status').length,1);
+  if(success)pending.resolve(completeOperation(statusTask(),{operation_id:statusIds.complete,kind:'complete',expected_revision:1},{user_id:'a'}));else pending.reject(Error('unknown'));
+  await write;
+  assert.equal(f.page.homeRefresh,home+(success?1:0));assert.equal(f.page.planRefresh,plan+(success?1:0));
+  assert.equal(f.calls.filter(c=>c[0]==='refresh').length,success?1:0);
+  assert.equal(f.page.taskStatusState.pendingCount,success?0:1);
  }
 });
-test('Home ignores a successful old-account write after teardown and Index wires all authoritative mutation sources',async()=>{
- const pending=deferred();class Api{async updateTask(){return pending.promise;}}
- const Page=Home(class{},Api,class extends Error{});const page=new Page();page.baseUrl='server';page.token='token';let changed=0;
- page.onPlanningChanged=()=>changed++;const write=page.toggleTask({task_id:'t',status:'pending'});page.aboutToDisappear();pending.resolve({});await write;assert.equal(changed,0);
+test('shared status controller ignores an old-account write after teardown and Index wires all authoritative mutation sources',async()=>{
+ const pending=deferred();const f=setup({statusStart:()=>pending.promise});await f.page.authenticated(auth('a'));
+ const home=f.page.homeRefresh;const write=f.page.changeTaskStatus(statusTask());await statusTick();f.page.aboutToDisappear();
+ pending.resolve(completeOperation(statusTask(),{operation_id:statusIds.complete,kind:'complete',expected_revision:1},{user_id:'a'}));await write;
+ assert.equal(f.page.homeRefresh,home);
  for(const component of ['HomePage','AgentPage','PlanCenterPage']){
   const chunk=indexSource.slice(indexSource.indexOf(`${component}({`));
   assert.match(chunk.slice(0,chunk.indexOf('.visibility')),/onPlanningChanged: \(\) => this.timetableChanged\(\)/);

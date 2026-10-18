@@ -1,0 +1,998 @@
+{
+  "contract_version": 1,
+  "synthetic": true,
+  "user_id": "b6832960753c44198228cbb328a105d4",
+  "cases": [
+    {
+      "label": "complete-0",
+      "request": {
+        "operation_id": "2e3e027b-c6b8-4853-8ec0-6e0459a312cf",
+        "kind": "complete",
+        "expected_revision": 1
+      },
+      "task_before": {
+        "allow_during_course": false,
+        "task_version": 1,
+        "course_overlap": {
+          "state": "unchecked",
+          "checked_at": "2030-10-18T23:00:00Z",
+          "timetable_version": 0,
+          "task_version": 1,
+          "acknowledgement_id": null,
+          "overlaps": [],
+          "reason": "任务起止时间不完整，未参与课程时间核对。"
+        },
+        "task_id": "6a1aa16404684a539e81a6490aefad9e",
+        "plan_id": null,
+        "milestone_id": null,
+        "title": "同名合成事项",
+        "start_at": null,
+        "end_at": null,
+        "reminder_minutes": null,
+        "location": null,
+        "status": "pending",
+        "source": "manual",
+        "created_at": "2030-10-18T23:00:00Z",
+        "completed_at": null,
+        "completion_operation_id": null
+      },
+      "response": {
+        "contract_version": 1,
+        "user_id": "b6832960753c44198228cbb328a105d4",
+        "operation_id": "2e3e027b-c6b8-4853-8ec0-6e0459a312cf",
+        "task_id": "6a1aa16404684a539e81a6490aefad9e",
+        "kind": "complete",
+        "state": "applied",
+        "expected_revision": 1,
+        "source_operation_id": null,
+        "created_at": "2030-10-18T23:00:00Z",
+        "expires_at": null,
+        "preview": null,
+        "receipt": {
+          "operation_id": "2e3e027b-c6b8-4853-8ec0-6e0459a312cf",
+          "task_id": "6a1aa16404684a539e81a6490aefad9e",
+          "kind": "complete",
+          "source_operation_id": null,
+          "candidate_id": null,
+          "before_revision": 1,
+          "after_revision": 2,
+          "before_status": "pending",
+          "after_status": "completed",
+          "before_completed_at": null,
+          "after_completed_at": "2030-10-18T23:00:00Z",
+          "applied_at": "2030-10-18T23:00:00Z",
+          "course_acknowledgement_ids": [],
+          "course_acknowledgements": []
+        }
+      }
+    },
+    {
+      "label": "restore-1",
+      "request": {
+        "operation_id": "94624964-7c90-48bf-a751-7a106ec0d380",
+        "kind": "restore",
+        "expected_revision": 2,
+        "source_operation_id": "2e3e027b-c6b8-4853-8ec0-6e0459a312cf"
+      },
+      "task_before": {
+        "allow_during_course": false,
+        "task_version": 2,
+        "course_overlap": {
+          "state": "unchecked",
+          "checked_at": "2030-10-18T23:00:00Z",
+          "timetable_version": 0,
+          "task_version": 2,
+          "acknowledgement_id": null,
+          "overlaps": [],
+          "reason": "任务起止时间不完整，未参与课程时间核对。"
+        },
+        "task_id": "6a1aa16404684a539e81a6490aefad9e",
+        "plan_id": null,
+        "milestone_id": null,
+        "title": "同名合成事项",
+        "start_at": null,
+        "end_at": null,
+        "reminder_minutes": null,
+        "location": null,
+        "status": "completed",
+        "source": "manual",
+        "created_at": "2030-10-18T23:00:00Z",
+        "completed_at": "2030-10-18T23:00:00Z",
+        "completion_operation_id": "2e3e027b-c6b8-4853-8ec0-6e0459a312cf"
+      },
+      "response": {
+        "contract_version": 1,
+        "user_id": "b6832960753c44198228cbb328a105d4",
+        "operation_id": "94624964-7c90-48bf-a751-7a106ec0d380",
+        "task_id": "6a1aa16404684a539e81a6490aefad9e",
+        "kind": "restore",
+        "state": "pending",
+        "expected_revision": 2,
+        "source_operation_id": "2e3e027b-c6b8-4853-8ec0-6e0459a312cf",
+        "created_at": "2030-10-18T23:00:00Z",
+        "expires_at": "2030-10-18T23:15:00Z",
+        "preview": {
+          "task": {
+            "allow_during_course": false,
+            "task_version": 2,
+            "course_overlap": {
+              "state": "unchecked",
+              "checked_at": "2030-10-18T23:00:00Z",
+              "timetable_version": 0,
+              "task_version": 2,
+              "acknowledgement_id": null,
+              "overlaps": [],
+              "reason": "任务起止时间不完整，未参与课程时间核对。"
+            },
+            "task_id": "6a1aa16404684a539e81a6490aefad9e",
+            "plan_id": null,
+            "milestone_id": null,
+            "title": "同名合成事项",
+            "start_at": null,
+            "end_at": null,
+            "reminder_minutes": null,
+            "location": null,
+            "status": "completed",
+            "source": "manual",
+            "created_at": "2030-10-18T23:00:00Z",
+            "completed_at": "2030-10-18T23:00:00Z",
+            "completion_operation_id": "2e3e027b-c6b8-4853-8ec0-6e0459a312cf"
+          },
+          "from_status": "completed",
+          "to_status": "pending",
+          "candidate_id": "status:94624964-7c90-48bf-a751-7a106ec0d380",
+          "course_review": {
+            "candidate_id": "status:94624964-7c90-48bf-a751-7a106ec0d380",
+            "task_id": "6a1aa16404684a539e81a6490aefad9e",
+            "allow_during_course": false,
+            "state": "unchecked",
+            "review_digest": "b927d7ba594c0a76eef3c426664a83047aceb3d13ef0227442eec0610bda0ef7",
+            "requires_acknowledgement": false,
+            "revoke_only": false,
+            "school": "",
+            "campus": "",
+            "timezone": "Asia/Shanghai",
+            "timetable_version": 0,
+            "planning_version": 2,
+            "task_version": 2,
+            "candidate_digest": "b23c2585f3b38d9717d16d25bb9385c039372147243cb5c37ce8243825191c60",
+            "overlaps": []
+          },
+          "state_version": {
+            "timetable": 0,
+            "planning": 2
+          },
+          "conflicts": [],
+          "warnings": [
+            "「同名合成事项」未提供完整起止时间，未参与时间冲突核对。",
+            "仅恢复为未完成，保留当前内容与原日期；不会自动改期或补发过去的提醒。"
+          ]
+        },
+        "receipt": null
+      }
+    },
+    {
+      "label": "cancelled",
+      "request": {
+        "operation_id": "94624964-7c90-48bf-a751-7a106ec0d380",
+        "kind": "restore",
+        "expected_revision": 2,
+        "source_operation_id": "2e3e027b-c6b8-4853-8ec0-6e0459a312cf"
+      },
+      "task_before": {
+        "allow_during_course": false,
+        "task_version": 2,
+        "course_overlap": {
+          "state": "unchecked",
+          "checked_at": "2030-10-18T23:00:00Z",
+          "timetable_version": 0,
+          "task_version": 2,
+          "acknowledgement_id": null,
+          "overlaps": [],
+          "reason": "任务起止时间不完整，未参与课程时间核对。"
+        },
+        "task_id": "6a1aa16404684a539e81a6490aefad9e",
+        "plan_id": null,
+        "milestone_id": null,
+        "title": "同名合成事项",
+        "start_at": null,
+        "end_at": null,
+        "reminder_minutes": null,
+        "location": null,
+        "status": "completed",
+        "source": "manual",
+        "created_at": "2030-10-18T23:00:00Z",
+        "completed_at": "2030-10-18T23:00:00Z",
+        "completion_operation_id": "2e3e027b-c6b8-4853-8ec0-6e0459a312cf"
+      },
+      "response": {
+        "contract_version": 1,
+        "user_id": "b6832960753c44198228cbb328a105d4",
+        "operation_id": "94624964-7c90-48bf-a751-7a106ec0d380",
+        "task_id": "6a1aa16404684a539e81a6490aefad9e",
+        "kind": "restore",
+        "state": "cancelled",
+        "expected_revision": 2,
+        "source_operation_id": "2e3e027b-c6b8-4853-8ec0-6e0459a312cf",
+        "created_at": "2030-10-18T23:00:00Z",
+        "expires_at": "2030-10-18T23:15:00Z",
+        "preview": {
+          "task": {
+            "allow_during_course": false,
+            "task_version": 2,
+            "course_overlap": {
+              "state": "unchecked",
+              "checked_at": "2030-10-18T23:00:00Z",
+              "timetable_version": 0,
+              "task_version": 2,
+              "acknowledgement_id": null,
+              "overlaps": [],
+              "reason": "任务起止时间不完整，未参与课程时间核对。"
+            },
+            "task_id": "6a1aa16404684a539e81a6490aefad9e",
+            "plan_id": null,
+            "milestone_id": null,
+            "title": "同名合成事项",
+            "start_at": null,
+            "end_at": null,
+            "reminder_minutes": null,
+            "location": null,
+            "status": "completed",
+            "source": "manual",
+            "created_at": "2030-10-18T23:00:00Z",
+            "completed_at": "2030-10-18T23:00:00Z",
+            "completion_operation_id": "2e3e027b-c6b8-4853-8ec0-6e0459a312cf"
+          },
+          "from_status": "completed",
+          "to_status": "pending",
+          "candidate_id": "status:94624964-7c90-48bf-a751-7a106ec0d380",
+          "course_review": {
+            "candidate_id": "status:94624964-7c90-48bf-a751-7a106ec0d380",
+            "task_id": "6a1aa16404684a539e81a6490aefad9e",
+            "allow_during_course": false,
+            "state": "unchecked",
+            "review_digest": "b927d7ba594c0a76eef3c426664a83047aceb3d13ef0227442eec0610bda0ef7",
+            "requires_acknowledgement": false,
+            "revoke_only": false,
+            "school": "",
+            "campus": "",
+            "timezone": "Asia/Shanghai",
+            "timetable_version": 0,
+            "planning_version": 2,
+            "task_version": 2,
+            "candidate_digest": "b23c2585f3b38d9717d16d25bb9385c039372147243cb5c37ce8243825191c60",
+            "overlaps": []
+          },
+          "state_version": {
+            "timetable": 0,
+            "planning": 2
+          },
+          "conflicts": [],
+          "warnings": [
+            "「同名合成事项」未提供完整起止时间，未参与时间冲突核对。",
+            "仅恢复为未完成，保留当前内容与原日期；不会自动改期或补发过去的提醒。"
+          ]
+        },
+        "receipt": null
+      }
+    },
+    {
+      "label": "restore-3",
+      "request": {
+        "operation_id": "2878c243-3b07-4718-8fff-1b85d8903ec0",
+        "kind": "restore",
+        "expected_revision": 2,
+        "source_operation_id": "2e3e027b-c6b8-4853-8ec0-6e0459a312cf"
+      },
+      "task_before": {
+        "allow_during_course": false,
+        "task_version": 2,
+        "course_overlap": {
+          "state": "unchecked",
+          "checked_at": "2030-10-18T23:00:00Z",
+          "timetable_version": 0,
+          "task_version": 2,
+          "acknowledgement_id": null,
+          "overlaps": [],
+          "reason": "任务起止时间不完整，未参与课程时间核对。"
+        },
+        "task_id": "6a1aa16404684a539e81a6490aefad9e",
+        "plan_id": null,
+        "milestone_id": null,
+        "title": "同名合成事项",
+        "start_at": null,
+        "end_at": null,
+        "reminder_minutes": null,
+        "location": null,
+        "status": "completed",
+        "source": "manual",
+        "created_at": "2030-10-18T23:00:00Z",
+        "completed_at": "2030-10-18T23:00:00Z",
+        "completion_operation_id": "2e3e027b-c6b8-4853-8ec0-6e0459a312cf"
+      },
+      "response": {
+        "contract_version": 1,
+        "user_id": "b6832960753c44198228cbb328a105d4",
+        "operation_id": "2878c243-3b07-4718-8fff-1b85d8903ec0",
+        "task_id": "6a1aa16404684a539e81a6490aefad9e",
+        "kind": "restore",
+        "state": "pending",
+        "expected_revision": 2,
+        "source_operation_id": "2e3e027b-c6b8-4853-8ec0-6e0459a312cf",
+        "created_at": "2030-10-18T23:00:00Z",
+        "expires_at": "2030-10-18T23:15:00Z",
+        "preview": {
+          "task": {
+            "allow_during_course": false,
+            "task_version": 2,
+            "course_overlap": {
+              "state": "unchecked",
+              "checked_at": "2030-10-18T23:00:00Z",
+              "timetable_version": 0,
+              "task_version": 2,
+              "acknowledgement_id": null,
+              "overlaps": [],
+              "reason": "任务起止时间不完整，未参与课程时间核对。"
+            },
+            "task_id": "6a1aa16404684a539e81a6490aefad9e",
+            "plan_id": null,
+            "milestone_id": null,
+            "title": "同名合成事项",
+            "start_at": null,
+            "end_at": null,
+            "reminder_minutes": null,
+            "location": null,
+            "status": "completed",
+            "source": "manual",
+            "created_at": "2030-10-18T23:00:00Z",
+            "completed_at": "2030-10-18T23:00:00Z",
+            "completion_operation_id": "2e3e027b-c6b8-4853-8ec0-6e0459a312cf"
+          },
+          "from_status": "completed",
+          "to_status": "pending",
+          "candidate_id": "status:2878c243-3b07-4718-8fff-1b85d8903ec0",
+          "course_review": {
+            "candidate_id": "status:2878c243-3b07-4718-8fff-1b85d8903ec0",
+            "task_id": "6a1aa16404684a539e81a6490aefad9e",
+            "allow_during_course": false,
+            "state": "unchecked",
+            "review_digest": "c070a0debe08f6f86895a7639dfaebf97167ca34217592c79fed00d548e53f49",
+            "requires_acknowledgement": false,
+            "revoke_only": false,
+            "school": "",
+            "campus": "",
+            "timezone": "Asia/Shanghai",
+            "timetable_version": 0,
+            "planning_version": 2,
+            "task_version": 2,
+            "candidate_digest": "b23c2585f3b38d9717d16d25bb9385c039372147243cb5c37ce8243825191c60",
+            "overlaps": []
+          },
+          "state_version": {
+            "timetable": 0,
+            "planning": 2
+          },
+          "conflicts": [],
+          "warnings": [
+            "「同名合成事项」未提供完整起止时间，未参与时间冲突核对。",
+            "仅恢复为未完成，保留当前内容与原日期；不会自动改期或补发过去的提醒。"
+          ]
+        },
+        "receipt": null
+      }
+    },
+    {
+      "label": "restored-unchecked",
+      "request": {
+        "operation_id": "2878c243-3b07-4718-8fff-1b85d8903ec0",
+        "kind": "restore",
+        "expected_revision": 2,
+        "source_operation_id": "2e3e027b-c6b8-4853-8ec0-6e0459a312cf"
+      },
+      "task_before": {
+        "allow_during_course": false,
+        "task_version": 2,
+        "course_overlap": {
+          "state": "unchecked",
+          "checked_at": "2030-10-18T23:00:00Z",
+          "timetable_version": 0,
+          "task_version": 2,
+          "acknowledgement_id": null,
+          "overlaps": [],
+          "reason": "任务起止时间不完整，未参与课程时间核对。"
+        },
+        "task_id": "6a1aa16404684a539e81a6490aefad9e",
+        "plan_id": null,
+        "milestone_id": null,
+        "title": "同名合成事项",
+        "start_at": null,
+        "end_at": null,
+        "reminder_minutes": null,
+        "location": null,
+        "status": "completed",
+        "source": "manual",
+        "created_at": "2030-10-18T23:00:00Z",
+        "completed_at": "2030-10-18T23:00:00Z",
+        "completion_operation_id": "2e3e027b-c6b8-4853-8ec0-6e0459a312cf"
+      },
+      "response": {
+        "contract_version": 1,
+        "user_id": "b6832960753c44198228cbb328a105d4",
+        "operation_id": "2878c243-3b07-4718-8fff-1b85d8903ec0",
+        "task_id": "6a1aa16404684a539e81a6490aefad9e",
+        "kind": "restore",
+        "state": "applied",
+        "expected_revision": 2,
+        "source_operation_id": "2e3e027b-c6b8-4853-8ec0-6e0459a312cf",
+        "created_at": "2030-10-18T23:00:00Z",
+        "expires_at": "2030-10-18T23:15:00Z",
+        "preview": {
+          "task": {
+            "allow_during_course": false,
+            "task_version": 2,
+            "course_overlap": {
+              "state": "unchecked",
+              "checked_at": "2030-10-18T23:00:00Z",
+              "timetable_version": 0,
+              "task_version": 2,
+              "acknowledgement_id": null,
+              "overlaps": [],
+              "reason": "任务起止时间不完整，未参与课程时间核对。"
+            },
+            "task_id": "6a1aa16404684a539e81a6490aefad9e",
+            "plan_id": null,
+            "milestone_id": null,
+            "title": "同名合成事项",
+            "start_at": null,
+            "end_at": null,
+            "reminder_minutes": null,
+            "location": null,
+            "status": "completed",
+            "source": "manual",
+            "created_at": "2030-10-18T23:00:00Z",
+            "completed_at": "2030-10-18T23:00:00Z",
+            "completion_operation_id": "2e3e027b-c6b8-4853-8ec0-6e0459a312cf"
+          },
+          "from_status": "completed",
+          "to_status": "pending",
+          "candidate_id": "status:2878c243-3b07-4718-8fff-1b85d8903ec0",
+          "course_review": {
+            "candidate_id": "status:2878c243-3b07-4718-8fff-1b85d8903ec0",
+            "task_id": "6a1aa16404684a539e81a6490aefad9e",
+            "allow_during_course": false,
+            "state": "unchecked",
+            "review_digest": "c070a0debe08f6f86895a7639dfaebf97167ca34217592c79fed00d548e53f49",
+            "requires_acknowledgement": false,
+            "revoke_only": false,
+            "school": "",
+            "campus": "",
+            "timezone": "Asia/Shanghai",
+            "timetable_version": 0,
+            "planning_version": 2,
+            "task_version": 2,
+            "candidate_digest": "b23c2585f3b38d9717d16d25bb9385c039372147243cb5c37ce8243825191c60",
+            "overlaps": []
+          },
+          "state_version": {
+            "timetable": 0,
+            "planning": 2
+          },
+          "conflicts": [],
+          "warnings": [
+            "「同名合成事项」未提供完整起止时间，未参与时间冲突核对。",
+            "仅恢复为未完成，保留当前内容与原日期；不会自动改期或补发过去的提醒。"
+          ]
+        },
+        "receipt": {
+          "operation_id": "2878c243-3b07-4718-8fff-1b85d8903ec0",
+          "task_id": "6a1aa16404684a539e81a6490aefad9e",
+          "kind": "restore",
+          "source_operation_id": "2e3e027b-c6b8-4853-8ec0-6e0459a312cf",
+          "candidate_id": "status:2878c243-3b07-4718-8fff-1b85d8903ec0",
+          "before_revision": 2,
+          "after_revision": 3,
+          "before_status": "completed",
+          "after_status": "pending",
+          "before_completed_at": "2030-10-18T23:00:00Z",
+          "after_completed_at": null,
+          "applied_at": "2030-10-18T23:00:00Z",
+          "course_acknowledgement_ids": [],
+          "course_acknowledgements": []
+        }
+      }
+    },
+    {
+      "label": "complete-5",
+      "request": {
+        "operation_id": "02cdb856-1dde-4152-bf0b-d4c5f056f3b9",
+        "kind": "complete",
+        "expected_revision": 1
+      },
+      "task_before": {
+        "allow_during_course": true,
+        "task_version": 1,
+        "course_overlap": {
+          "state": "accepted",
+          "checked_at": "2030-10-18T23:00:00Z",
+          "timetable_version": 1,
+          "task_version": 1,
+          "acknowledgement_id": "c27b25bb4f054a7aa634b05100314248",
+          "overlaps": [
+            {
+              "course_key": "03620b8ddf206cbc7b73b3265103572050831913dbec88391b3421ed59f39b40",
+              "course": {
+                "date": "2030-10-19",
+                "title": "同名合成课程",
+                "start_time": "09:00",
+                "end_time": "11:00",
+                "location": "合成教室 A",
+                "teacher": "合成教师"
+              },
+              "overlap_start_at": "2030-10-19T09:30:00+08:00",
+              "overlap_end_at": "2030-10-19T10:00:00+08:00"
+            }
+          ],
+          "reason": ""
+        },
+        "task_id": "82b4ef11c657409cb323340c07fff87f",
+        "plan_id": null,
+        "milestone_id": null,
+        "title": "同名合成事项",
+        "start_at": "2030-10-19T09:30:00+08:00",
+        "end_at": "2030-10-19T10:00:00+08:00",
+        "reminder_minutes": null,
+        "location": null,
+        "status": "pending",
+        "source": "manual",
+        "created_at": "2030-10-18T23:00:00Z",
+        "completed_at": null,
+        "completion_operation_id": null
+      },
+      "response": {
+        "contract_version": 1,
+        "user_id": "b6832960753c44198228cbb328a105d4",
+        "operation_id": "02cdb856-1dde-4152-bf0b-d4c5f056f3b9",
+        "task_id": "82b4ef11c657409cb323340c07fff87f",
+        "kind": "complete",
+        "state": "applied",
+        "expected_revision": 1,
+        "source_operation_id": null,
+        "created_at": "2030-10-18T23:00:00Z",
+        "expires_at": null,
+        "preview": null,
+        "receipt": {
+          "operation_id": "02cdb856-1dde-4152-bf0b-d4c5f056f3b9",
+          "task_id": "82b4ef11c657409cb323340c07fff87f",
+          "kind": "complete",
+          "source_operation_id": null,
+          "candidate_id": null,
+          "before_revision": 1,
+          "after_revision": 2,
+          "before_status": "pending",
+          "after_status": "completed",
+          "before_completed_at": null,
+          "after_completed_at": "2030-10-18T23:00:00Z",
+          "applied_at": "2030-10-18T23:00:00Z",
+          "course_acknowledgement_ids": [],
+          "course_acknowledgements": []
+        }
+      }
+    },
+    {
+      "label": "restore-6",
+      "request": {
+        "operation_id": "ac505272-cc3d-4137-bef9-1f420b977be7",
+        "kind": "restore",
+        "expected_revision": 2,
+        "source_operation_id": "02cdb856-1dde-4152-bf0b-d4c5f056f3b9"
+      },
+      "task_before": {
+        "allow_during_course": true,
+        "task_version": 2,
+        "course_overlap": {
+          "state": "needs_review",
+          "checked_at": "2030-10-18T23:00:00Z",
+          "timetable_version": 1,
+          "task_version": 2,
+          "acknowledgement_id": null,
+          "overlaps": [
+            {
+              "course_key": "03620b8ddf206cbc7b73b3265103572050831913dbec88391b3421ed59f39b40",
+              "course": {
+                "date": "2030-10-19",
+                "title": "同名合成课程",
+                "start_time": "09:00",
+                "end_time": "11:00",
+                "location": "合成教室 A",
+                "teacher": "合成教师"
+              },
+              "overlap_start_at": "2030-10-19T09:30:00+08:00",
+              "overlap_end_at": "2030-10-19T10:00:00+08:00"
+            }
+          ],
+          "reason": ""
+        },
+        "task_id": "82b4ef11c657409cb323340c07fff87f",
+        "plan_id": null,
+        "milestone_id": null,
+        "title": "同名合成事项",
+        "start_at": "2030-10-19T09:30:00+08:00",
+        "end_at": "2030-10-19T10:00:00+08:00",
+        "reminder_minutes": null,
+        "location": null,
+        "status": "completed",
+        "source": "manual",
+        "created_at": "2030-10-18T23:00:00Z",
+        "completed_at": "2030-10-18T23:00:00Z",
+        "completion_operation_id": "02cdb856-1dde-4152-bf0b-d4c5f056f3b9"
+      },
+      "response": {
+        "contract_version": 1,
+        "user_id": "b6832960753c44198228cbb328a105d4",
+        "operation_id": "ac505272-cc3d-4137-bef9-1f420b977be7",
+        "task_id": "82b4ef11c657409cb323340c07fff87f",
+        "kind": "restore",
+        "state": "pending",
+        "expected_revision": 2,
+        "source_operation_id": "02cdb856-1dde-4152-bf0b-d4c5f056f3b9",
+        "created_at": "2030-10-18T23:00:00Z",
+        "expires_at": "2030-10-18T23:15:00Z",
+        "preview": {
+          "task": {
+            "allow_during_course": true,
+            "task_version": 2,
+            "course_overlap": {
+              "state": "needs_review",
+              "checked_at": "2030-10-18T23:00:00Z",
+              "timetable_version": 1,
+              "task_version": 2,
+              "acknowledgement_id": null,
+              "overlaps": [
+                {
+                  "course_key": "03620b8ddf206cbc7b73b3265103572050831913dbec88391b3421ed59f39b40",
+                  "course": {
+                    "date": "2030-10-19",
+                    "title": "同名合成课程",
+                    "start_time": "09:00",
+                    "end_time": "11:00",
+                    "location": "合成教室 A",
+                    "teacher": "合成教师"
+                  },
+                  "overlap_start_at": "2030-10-19T09:30:00+08:00",
+                  "overlap_end_at": "2030-10-19T10:00:00+08:00"
+                }
+              ],
+              "reason": ""
+            },
+            "task_id": "82b4ef11c657409cb323340c07fff87f",
+            "plan_id": null,
+            "milestone_id": null,
+            "title": "同名合成事项",
+            "start_at": "2030-10-19T09:30:00+08:00",
+            "end_at": "2030-10-19T10:00:00+08:00",
+            "reminder_minutes": null,
+            "location": null,
+            "status": "completed",
+            "source": "manual",
+            "created_at": "2030-10-18T23:00:00Z",
+            "completed_at": "2030-10-18T23:00:00Z",
+            "completion_operation_id": "02cdb856-1dde-4152-bf0b-d4c5f056f3b9"
+          },
+          "from_status": "completed",
+          "to_status": "pending",
+          "candidate_id": "status:ac505272-cc3d-4137-bef9-1f420b977be7",
+          "course_review": {
+            "candidate_id": "status:ac505272-cc3d-4137-bef9-1f420b977be7",
+            "task_id": "82b4ef11c657409cb323340c07fff87f",
+            "allow_during_course": true,
+            "state": "needs_review",
+            "review_digest": "bb67baee5007f643f35ad5d29e6b1c30a10e9a3f93cc19a00ebe19baf002def1",
+            "requires_acknowledgement": true,
+            "revoke_only": false,
+            "school": "",
+            "campus": "",
+            "timezone": "Asia/Shanghai",
+            "timetable_version": 1,
+            "planning_version": 5,
+            "task_version": 2,
+            "candidate_digest": "b28026fe3c00b1b57f277deac216bdfea5f2765bb0df02575f7d6abef1c6e757",
+            "overlaps": [
+              {
+                "course_key": "03620b8ddf206cbc7b73b3265103572050831913dbec88391b3421ed59f39b40",
+                "course": {
+                  "date": "2030-10-19",
+                  "title": "同名合成课程",
+                  "start_time": "09:00",
+                  "end_time": "11:00",
+                  "location": "合成教室 A",
+                  "teacher": "合成教师"
+                },
+                "overlap_start_at": "2030-10-19T09:30:00+08:00",
+                "overlap_end_at": "2030-10-19T10:00:00+08:00"
+              }
+            ]
+          },
+          "state_version": {
+            "timetable": 1,
+            "planning": 5
+          },
+          "conflicts": [],
+          "warnings": [
+            "「同名合成事项」将在上课时完成。仅在逐项确认准确重叠后才能写入。",
+            "已有待办包含无日期或不完整时段，需手动核对。",
+            "仅恢复为未完成，保留当前内容与原日期；不会自动改期或补发过去的提醒。"
+          ]
+        },
+        "receipt": null
+      }
+    },
+    {
+      "label": "restored-course-ack",
+      "request": {
+        "operation_id": "ac505272-cc3d-4137-bef9-1f420b977be7",
+        "kind": "restore",
+        "expected_revision": 2,
+        "source_operation_id": "02cdb856-1dde-4152-bf0b-d4c5f056f3b9"
+      },
+      "confirm_request": {
+        "acknowledgements": [
+          {
+            "candidate_id": "status:ac505272-cc3d-4137-bef9-1f420b977be7",
+            "review_digest": "bb67baee5007f643f35ad5d29e6b1c30a10e9a3f93cc19a00ebe19baf002def1"
+          }
+        ]
+      },
+      "task_before": {
+        "allow_during_course": true,
+        "task_version": 2,
+        "course_overlap": {
+          "state": "needs_review",
+          "checked_at": "2030-10-18T23:00:00Z",
+          "timetable_version": 1,
+          "task_version": 2,
+          "acknowledgement_id": null,
+          "overlaps": [
+            {
+              "course_key": "03620b8ddf206cbc7b73b3265103572050831913dbec88391b3421ed59f39b40",
+              "course": {
+                "date": "2030-10-19",
+                "title": "同名合成课程",
+                "start_time": "09:00",
+                "end_time": "11:00",
+                "location": "合成教室 A",
+                "teacher": "合成教师"
+              },
+              "overlap_start_at": "2030-10-19T09:30:00+08:00",
+              "overlap_end_at": "2030-10-19T10:00:00+08:00"
+            }
+          ],
+          "reason": ""
+        },
+        "task_id": "82b4ef11c657409cb323340c07fff87f",
+        "plan_id": null,
+        "milestone_id": null,
+        "title": "同名合成事项",
+        "start_at": "2030-10-19T09:30:00+08:00",
+        "end_at": "2030-10-19T10:00:00+08:00",
+        "reminder_minutes": null,
+        "location": null,
+        "status": "completed",
+        "source": "manual",
+        "created_at": "2030-10-18T23:00:00Z",
+        "completed_at": "2030-10-18T23:00:00Z",
+        "completion_operation_id": "02cdb856-1dde-4152-bf0b-d4c5f056f3b9"
+      },
+      "response": {
+        "contract_version": 1,
+        "user_id": "b6832960753c44198228cbb328a105d4",
+        "operation_id": "ac505272-cc3d-4137-bef9-1f420b977be7",
+        "task_id": "82b4ef11c657409cb323340c07fff87f",
+        "kind": "restore",
+        "state": "applied",
+        "expected_revision": 2,
+        "source_operation_id": "02cdb856-1dde-4152-bf0b-d4c5f056f3b9",
+        "created_at": "2030-10-18T23:00:00Z",
+        "expires_at": "2030-10-18T23:15:00Z",
+        "preview": {
+          "task": {
+            "allow_during_course": true,
+            "task_version": 2,
+            "course_overlap": {
+              "state": "needs_review",
+              "checked_at": "2030-10-18T23:00:00Z",
+              "timetable_version": 1,
+              "task_version": 2,
+              "acknowledgement_id": null,
+              "overlaps": [
+                {
+                  "course_key": "03620b8ddf206cbc7b73b3265103572050831913dbec88391b3421ed59f39b40",
+                  "course": {
+                    "date": "2030-10-19",
+                    "title": "同名合成课程",
+                    "start_time": "09:00",
+                    "end_time": "11:00",
+                    "location": "合成教室 A",
+                    "teacher": "合成教师"
+                  },
+                  "overlap_start_at": "2030-10-19T09:30:00+08:00",
+                  "overlap_end_at": "2030-10-19T10:00:00+08:00"
+                }
+              ],
+              "reason": ""
+            },
+            "task_id": "82b4ef11c657409cb323340c07fff87f",
+            "plan_id": null,
+            "milestone_id": null,
+            "title": "同名合成事项",
+            "start_at": "2030-10-19T09:30:00+08:00",
+            "end_at": "2030-10-19T10:00:00+08:00",
+            "reminder_minutes": null,
+            "location": null,
+            "status": "completed",
+            "source": "manual",
+            "created_at": "2030-10-18T23:00:00Z",
+            "completed_at": "2030-10-18T23:00:00Z",
+            "completion_operation_id": "02cdb856-1dde-4152-bf0b-d4c5f056f3b9"
+          },
+          "from_status": "completed",
+          "to_status": "pending",
+          "candidate_id": "status:ac505272-cc3d-4137-bef9-1f420b977be7",
+          "course_review": {
+            "candidate_id": "status:ac505272-cc3d-4137-bef9-1f420b977be7",
+            "task_id": "82b4ef11c657409cb323340c07fff87f",
+            "allow_during_course": true,
+            "state": "needs_review",
+            "review_digest": "bb67baee5007f643f35ad5d29e6b1c30a10e9a3f93cc19a00ebe19baf002def1",
+            "requires_acknowledgement": true,
+            "revoke_only": false,
+            "school": "",
+            "campus": "",
+            "timezone": "Asia/Shanghai",
+            "timetable_version": 1,
+            "planning_version": 5,
+            "task_version": 2,
+            "candidate_digest": "b28026fe3c00b1b57f277deac216bdfea5f2765bb0df02575f7d6abef1c6e757",
+            "overlaps": [
+              {
+                "course_key": "03620b8ddf206cbc7b73b3265103572050831913dbec88391b3421ed59f39b40",
+                "course": {
+                  "date": "2030-10-19",
+                  "title": "同名合成课程",
+                  "start_time": "09:00",
+                  "end_time": "11:00",
+                  "location": "合成教室 A",
+                  "teacher": "合成教师"
+                },
+                "overlap_start_at": "2030-10-19T09:30:00+08:00",
+                "overlap_end_at": "2030-10-19T10:00:00+08:00"
+              }
+            ]
+          },
+          "state_version": {
+            "timetable": 1,
+            "planning": 5
+          },
+          "conflicts": [],
+          "warnings": [
+            "「同名合成事项」将在上课时完成。仅在逐项确认准确重叠后才能写入。",
+            "已有待办包含无日期或不完整时段，需手动核对。",
+            "仅恢复为未完成，保留当前内容与原日期；不会自动改期或补发过去的提醒。"
+          ]
+        },
+        "receipt": {
+          "operation_id": "ac505272-cc3d-4137-bef9-1f420b977be7",
+          "task_id": "82b4ef11c657409cb323340c07fff87f",
+          "kind": "restore",
+          "source_operation_id": "02cdb856-1dde-4152-bf0b-d4c5f056f3b9",
+          "candidate_id": "status:ac505272-cc3d-4137-bef9-1f420b977be7",
+          "before_revision": 2,
+          "after_revision": 3,
+          "before_status": "completed",
+          "after_status": "pending",
+          "before_completed_at": "2030-10-18T23:00:00Z",
+          "after_completed_at": null,
+          "applied_at": "2030-10-18T23:00:00Z",
+          "course_acknowledgement_ids": [
+            "7c17aa715a2c4392b493b1c85a15ef09"
+          ],
+          "course_acknowledgements": [
+            {
+              "candidate_id": "status:ac505272-cc3d-4137-bef9-1f420b977be7",
+              "acknowledgement_id": "7c17aa715a2c4392b493b1c85a15ef09"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "errors": {
+    "missing_ack": {
+      "detail": "请逐项阅读准确课程与重叠时间，并明确确认本次课内安排。",
+      "code": "COURSE_ACK_REQUIRED"
+    },
+    "cancelled": {
+      "detail": "这次恢复预览已取消，未执行恢复。",
+      "code": "TASK_RECOVERY_CANCELLED"
+    },
+    "not_found": {
+      "detail": "当前账号中未找到这次任务状态操作。",
+      "code": "TASK_STATUS_OPERATION_NOT_FOUND"
+    }
+  },
+  "latest_planning": {
+    "plans": [],
+    "tasks": [
+      {
+        "allow_during_course": false,
+        "task_version": 3,
+        "course_overlap": {
+          "state": "unchecked",
+          "checked_at": "2030-10-18T23:00:00Z",
+          "timetable_version": 1,
+          "task_version": 3,
+          "acknowledgement_id": null,
+          "overlaps": [],
+          "reason": "任务起止时间不完整，未参与课程时间核对。"
+        },
+        "task_id": "6a1aa16404684a539e81a6490aefad9e",
+        "plan_id": null,
+        "milestone_id": null,
+        "title": "同名合成事项",
+        "start_at": null,
+        "end_at": null,
+        "reminder_minutes": null,
+        "location": null,
+        "status": "pending",
+        "source": "manual",
+        "created_at": "2030-10-18T23:00:00Z",
+        "completed_at": null,
+        "completion_operation_id": null
+      },
+      {
+        "allow_during_course": true,
+        "task_version": 3,
+        "course_overlap": {
+          "state": "accepted",
+          "checked_at": "2030-10-18T23:00:00Z",
+          "timetable_version": 1,
+          "task_version": 3,
+          "acknowledgement_id": "7c17aa715a2c4392b493b1c85a15ef09",
+          "overlaps": [
+            {
+              "course_key": "03620b8ddf206cbc7b73b3265103572050831913dbec88391b3421ed59f39b40",
+              "course": {
+                "date": "2030-10-19",
+                "title": "同名合成课程",
+                "start_time": "09:00",
+                "end_time": "11:00",
+                "location": "合成教室 A",
+                "teacher": "合成教师"
+              },
+              "overlap_start_at": "2030-10-19T09:30:00+08:00",
+              "overlap_end_at": "2030-10-19T10:00:00+08:00"
+            }
+          ],
+          "reason": ""
+        },
+        "task_id": "82b4ef11c657409cb323340c07fff87f",
+        "plan_id": null,
+        "milestone_id": null,
+        "title": "同名合成事项",
+        "start_at": "2030-10-19T09:30:00+08:00",
+        "end_at": "2030-10-19T10:00:00+08:00",
+        "reminder_minutes": null,
+        "location": null,
+        "status": "pending",
+        "source": "manual",
+        "created_at": "2030-10-18T23:00:00Z",
+        "completed_at": null,
+        "completion_operation_id": null
+      }
+    ],
+    "total_tasks": 2,
+    "completed_tasks": 0,
+    "due_today": 0,
+    "overdue_tasks": 0,
+    "progress": 0
+  }
+}

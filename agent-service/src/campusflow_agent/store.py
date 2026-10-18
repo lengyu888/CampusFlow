@@ -51,6 +51,9 @@ class CampusStore:
         default_factory=dict, init=False, repr=False
     )
     _action_snapshots: dict[str, str] = field(default_factory=dict, init=False, repr=False)
+    _task_status_operations: dict[tuple[str, str], dict[str, Any]] = field(
+        default_factory=dict, init=False, repr=False
+    )
 
     def __post_init__(self) -> None:
         self._campus_data = CampusDataStore(self.database_path)
@@ -781,7 +784,7 @@ class CampusStore:
                     """
                     SELECT task_id, plan_id, milestone_id, title, start_at, end_at,
                            reminder_minutes, location, status, source, created_at, completed_at,
-                           allow_during_course,task_version
+                           allow_during_course,task_version,completion_operation_id
                     FROM planning_tasks
                     WHERE user_id = ?
                     ORDER BY CASE WHEN status = 'pending' THEN 0 ELSE 1 END,

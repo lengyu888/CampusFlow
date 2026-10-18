@@ -429,6 +429,7 @@ export interface CampusRoute {
 export interface PlanningTask {
   allow_during_course?: boolean;
   task_version?: number;
+  completion_operation_id?: string | null;
   course_overlap?: CourseOverlapState;
   task_id: string;
   plan_id: string | null;
@@ -442,6 +443,65 @@ export interface PlanningTask {
   source: string;
   created_at: string;
   completed_at: string | null;
+}
+
+export interface TaskCompleteRequest {
+  operation_id: string;
+  kind: 'complete';
+  expected_revision: number;
+}
+
+export interface TaskRestoreRequest {
+  operation_id: string;
+  kind: 'restore';
+  expected_revision: number;
+  source_operation_id: string;
+}
+
+export type TaskStatusRequest = TaskCompleteRequest | TaskRestoreRequest;
+export type TaskStatusStartRequest = TaskStatusRequest;
+
+export interface TaskStatusPreview {
+  task: PlanningTask;
+  from_status: 'completed';
+  to_status: 'pending';
+  candidate_id: string;
+  course_review: CourseReview;
+  state_version: ActionStateVersion;
+  conflicts: string[];
+  warnings: string[];
+}
+
+export interface TaskStatusReceipt {
+  operation_id: string;
+  task_id: string;
+  kind: 'complete' | 'restore';
+  source_operation_id: string | null;
+  before_revision: number;
+  after_revision: number;
+  before_status: 'pending' | 'completed';
+  after_status: 'pending' | 'completed';
+  before_completed_at: string | null;
+  after_completed_at: string | null;
+  applied_at: string;
+  candidate_id: string | null;
+  course_acknowledgement_ids: string[];
+  course_acknowledgements: CourseAcknowledgementReceipt[];
+}
+
+export interface TaskStatusOperation {
+  contract_version: number;
+  user_id: string;
+  operation_id: string;
+  task_id: string;
+  kind: 'complete' | 'restore';
+  state: 'pending' | 'applied' | 'cancelled';
+  expected_revision: number;
+  source_operation_id: string | null;
+  created_at: string;
+  expires_at: string | null;
+  preview: TaskStatusPreview | null;
+  receipt: TaskStatusReceipt | null;
 }
 
 export interface PlanMilestone {

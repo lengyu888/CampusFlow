@@ -2,10 +2,13 @@ import { TaskCaptureIntent } from '../utils/TaskCaptureTypes';
 import { CourseRouteIntent } from '../utils/CourseRouteIntent';
 import { KeyboardAvoidMode } from '@ohos.arkui.UIContext';
 import common from '@ohos.app.ability.common';
-import { AuthResponse, UserProfile } from '../model/ApiModels';
+import { AuthResponse, UserProfile, PlanningTask, TaskStatusOperation, CourseAcknowledgement } from '../model/ApiModels';
 import { CampusFlowApi } from '../services/CampusFlowApi';
 import { localDrafts } from '../services/LocalDrafts';
 import { DraftLease } from '../utils/DraftStore';
+import { TaskStatusController, TaskStatusState } from '../utils/TaskStatusController';
+import { timetableOperationId } from '../utils/TimetableMaintenance';
+import { TaskStatusPanel } from '../components/TaskStatusPanel';
 import { localHistory } from '../services/LocalHistory';
 import { historyScope } from '../utils/LocalHistoryStore';
 import { AgentPage } from './AgentPage';
@@ -52,6 +55,10 @@ struct Index {
   @State private cleanupNeeded: boolean = false;
   private authRevision: number = 0;
   private authBaseUrl: string = '';
+  private taskStatuses: TaskStatusController | null = null;
+  @State private taskStatusState: TaskStatusState = { items: [], selectedId: '', lockedTaskIds: [], pendingCount: 0, message: '' };
+  @State private taskStatusOpen: boolean = false;
+  @State private pendingLogoutConfirm: boolean = false;
   @State private draftLease: DraftLease | null = null;
   @State private draftNotice: string = '';
   @State private draftCleanupNeeded: boolean = false;
@@ -103,8 +110,58 @@ struct Index {
     this.flushDrafts();
     this.pageActive = false;
     this.authRevision++;
+    this.resetTaskStatuses();
     this.reminders?.dispose();
     this.reminders = null;
+  }
+
+  private resetTaskStatuses(): void {
+    this.taskStatuses?.dispose(); this.taskStatuses = null;
+    this.taskStatusState = { items: [], selectedId: '', lockedTaskIds: [], pendingCount: 0, message: '' };
+    this.taskStatusOpen = false; this.pendingLogoutConfirm = false;
+  }
+
+  private configureTaskStatuses(): void {
+    this.resetTaskStatuses();
+    const lease = this.draftLease; const revision = this.authRevision;
+    if (!this.pageActive || this.token.length === 0 || this.user.user_id.length === 0 || lease === null || !localDrafts.valid(lease)) { return; }
+    this.taskStatuses = new TaskStatusController(localDrafts, (state: TaskStatusState) => {
+      if (this.pageActive && revision === this.authRevision && this.draftLease === lease) { this.taskStatusState = state; }
+    }, (_operation: TaskStatusOperation) => {
+      // A hidden page cannot erase a verified write. Refresh current data; never overlay an old receipt on it.
+      if (this.pageActive && revision === this.authRevision && this.draftLease === lease) { this.timetableChanged(); }
+    }, () => timetableOperationId());
+    this.taskStatuses.configure(historyScope(this.baseUrl, this.user.user_id), this.user.user_id,
+      new CampusFlowApi(this.baseUrl, this.token), lease);
+    this.taskStatuses.setActive(this.voiceForeground);
+  }
+
+  private async changeTaskStatus(task: PlanningTask): Promise<void> {
+    if (!this.pageActive || !this.voiceForeground || this.token.length === 0) { return; }
+    this.taskStatusOpen = true;
+    if (this.taskStatuses === null) { this.configureTaskStatuses(); this.taskStatusOpen = true; }
+    if (this.taskStatuses === null) {
+      this.taskStatusState = { items: [], selectedId: '', lockedTaskIds: [], pendingCount: 0,
+        message: '本机恢复记录暂不可用，本次未提交。请先在个人设置恢复草稿保存。' }; return;
+    }
+    await this.taskStatuses.begin(task, task.status === 'completed' ? 'restore' : 'complete');
+  }
+
+  private openTaskStatus(taskId: string = ''): void {
+    if (!this.pageActive || this.token.length === 0) { return; }
+    const item = this.taskStatusState.items.find((item) => item.taskId === taskId && !['applied', 'cancelled', 'error'].includes(item.phase)) ??
+      this.taskStatusState.items.find((item) => item.taskId === taskId);
+    if (item !== undefined) { this.taskStatuses?.select(item.operationId); }
+    this.taskStatusOpen = true;
+  }
+
+  private requestLogout(): void {
+    const lease = this.draftLease;
+    if (lease !== null && localDrafts.valid(lease) &&
+      (localDrafts.operations(lease).length > 0 || localDrafts.hasPendingTaskStatus(lease))) {
+      this.pendingLogoutConfirm = true; return;
+    }
+    this.logout();
   }
 
   private reminderManager(): ReminderCoordinator {
@@ -138,6 +195,7 @@ struct Index {
 
   private reminderActivityChanged(): void {
     this.reminders?.setActive(this.voiceForeground);
+    this.taskStatuses?.setActive(this.voiceForeground);
     if (!this.voiceForeground) { this.flushDrafts(); }
   }
 
@@ -153,7 +211,7 @@ struct Index {
 
   private async clearLocalDrafts(): Promise<void> {
     if (this.draftCleanupBusy) { return; }
-    if (this.draftLease !== null && localDrafts.operations(this.draftLease).length > 0) {
+    if (this.draftLease !== null && (localDrafts.operations(this.draftLease).length > 0 || localDrafts.hasPendingTaskStatus(this.draftLease))) {
       this.draftNotice = '还有提交结果待核对，请先在助手、计划或课表页核对，保留原操作编号。';
       this.draftClearConfirm = false;
       return;
@@ -161,6 +219,7 @@ struct Index {
     if (!this.draftClearConfirm) { this.draftClearConfirm = true; return; }
     this.draftClearConfirm = false;
     const revision = this.authRevision;
+    this.resetTaskStatuses();
     const scope = this.token.length > 0 && this.user.user_id.length > 0 ?
       historyScope(this.authBaseUrl || this.baseUrl, this.user.user_id) : '';
     this.draftLease = null;
@@ -171,7 +230,7 @@ struct Index {
       if (scope.length > 0 && this.token.length > 0) {
         const lease = await localDrafts.activate(scope);
         if (revision !== this.authRevision) { return; }
-        this.draftLease = lease;
+        this.draftLease = lease; this.configureTaskStatuses();
       }
       this.draftCleanupNeeded = false;
       this.draftNotice = '本机未提交草稿已清除，已保存到账号的安排不受影响。';
@@ -201,6 +260,8 @@ struct Index {
   }
 
   onBackPress(): boolean {
+    if (this.taskStatusOpen) { this.taskStatusOpen = false; return true; }
+    if (this.pendingLogoutConfirm) { this.pendingLogoutConfirm = false; return true; }
     if (this.quickCaptureOpen) { this.planBackRevision++; return true; }
     if (this.offlineHistory) {
       this.offlineHistory = false;
@@ -227,6 +288,7 @@ struct Index {
 
   private async authenticated(auth: AuthResponse): Promise<void> {
     const revision = ++this.authRevision;
+    this.resetTaskStatuses();
     this.offlineHistory = false;
     this.cacheNotice = '';
     this.authBaseUrl = this.baseUrl;
@@ -262,6 +324,7 @@ struct Index {
     this.agentChatBusy = false;
     this.historyDeleteBusy = false;
     this.reminderAccountChanged();
+    this.configureTaskStatuses();
   }
 
   private async clearLocalHistory(): Promise<void> {
@@ -279,6 +342,7 @@ struct Index {
 
   private async logout(): Promise<void> {
     const revision = ++this.authRevision;
+    this.resetTaskStatuses();
     const api = new CampusFlowApi(this.authBaseUrl || this.baseUrl, this.token);
     this.authBaseUrl = '';
     this.draftLease = null;
@@ -457,8 +521,9 @@ struct Index {
   @Builder
   private pageContent() {
     Stack({ alignContent: Alignment.TopStart }) {
-      HomePage({ baseUrl: this.baseUrl, token: this.token, user: this.user,
-        refreshKey: this.homeRefresh, active: this.activeTab === 0 && !this.quickCaptureOpen && this.voiceForeground,
+      HomePage({ statusLockedTaskIds: this.taskStatusState.lockedTaskIds,
+        onTaskStatus: (task: PlanningTask) => this.changeTaskStatus(task), onOpenStatus: (id: string) => this.openTaskStatus(id), baseUrl: this.baseUrl, token: this.token, user: this.user,
+        refreshKey: this.homeRefresh, active: this.activeTab === 0 && !this.quickCaptureOpen && !this.taskStatusOpen && this.voiceForeground,
         onOpenCapture: (intent: TaskCaptureIntent) => this.openCapture(intent),
         onOpenCourseRoute: (intent: CourseRouteIntent) => this.openCourseRoute(intent),
         onOpenAgent: () => this.applyNavigation(selectRoot(this.navigation, 1, true)),
@@ -469,9 +534,9 @@ struct Index {
         onOpenRoute: () => this.selectTab(6),
         onOpenServices: () => this.selectTab(7), onOpenProfile: () => this.selectTab(4) })
         .visibility(this.activeTab === 0 && !this.quickCaptureOpen ? Visibility.Visible : Visibility.Hidden)
-      AgentPage({ baseUrl: this.baseUrl, token: this.token, userId: this.user.user_id,
+      AgentPage({ statusLockedTaskIds: this.taskStatusState.lockedTaskIds, onOpenStatus: (id: string) => this.openTaskStatus(id), baseUrl: this.baseUrl, token: this.token, userId: this.user.user_id,
         requestedSessionId: this.requestedSessionId, resumeRevision: this.sessionResumeRevision, draftLease: this.draftLease, initialPrompt: this.agentPrompt,
-        voiceActive: this.activeTab === 1 && this.voiceForeground,
+        voiceActive: this.activeTab === 1 && !this.taskStatusOpen && this.voiceForeground,
         historyScope: this.cacheScope, deletedSessionId: this.deletedSessionId,
         deletionRevision: this.deletionRevision,
         deletionBusy: this.historyDeleteBusy,
@@ -483,8 +548,9 @@ struct Index {
         onOpenTaskDetails: (id) => this.openPlanDetails(id, ''),
         onOpenPlanDetails: (id) => this.openPlanDetails('', id), onOpenProfile: () => this.selectTab(4) })
         .visibility(this.activeTab === 1 ? Visibility.Visible : Visibility.Hidden)
-      PlanCenterPage({ baseUrl: this.baseUrl, token: this.token, draftLease: this.draftLease,
-        refreshKey: this.planRefresh, active: (this.activeTab === 2 || this.quickCaptureOpen) && this.voiceForeground,
+      PlanCenterPage({ statusLockedTaskIds: this.taskStatusState.lockedTaskIds,
+        onTaskStatus: (task: PlanningTask) => this.changeTaskStatus(task), onOpenStatus: (id: string) => this.openTaskStatus(id), baseUrl: this.baseUrl, token: this.token, draftLease: this.draftLease,
+        refreshKey: this.planRefresh, active: (this.activeTab === 2 || this.quickCaptureOpen) && !this.taskStatusOpen && this.voiceForeground,
         captureOnly: this.quickCaptureOpen, captureIntent: this.captureIntent, captureRevision: this.captureRevision,
         onCloseCapture: () => this.closeCapture(),
         focusTaskId: this.focusTaskId, focusPlanId: this.focusPlanId, focusRevision: this.focusRevision,
@@ -517,7 +583,7 @@ struct Index {
             onEnableReminders: () => this.enableReminders(), onDisableReminders: () => this.disableReminders(),
             onRefreshReminders: () => this.reminderAccountChanged(),
             active: this.activeTab === 4 && this.voiceForeground, onOpenTimetable: () => this.selectTab(9),
-            onUserChanged: (updated) => this.user = updated, onLogout: () => this.logout(),
+            onUserChanged: (updated) => this.user = updated, onLogout: () => this.requestLogout(),
             onTimetableChanged: () => this.timetableChanged(), onOpenPlan: () => this.openPlanList(),
             onOpenAgent: (prompt) => this.openAgentWithPrompt(prompt) })
         }.layoutWeight(1).width('100%')
@@ -541,10 +607,20 @@ struct Index {
         onBack: () => this.goBack(), onOpenProfile: () => this.selectTab(4),
         onOpenAgent: (prompt) => this.openAgentWithPrompt(prompt) })
         .visibility(this.activeTab === 7 ? Visibility.Visible : Visibility.Hidden)
-      TimetablePage({ baseUrl: this.baseUrl, token: this.token, draftLease: this.draftLease, active: this.activeTab === 9 && this.voiceForeground,
+      TimetablePage({ baseUrl: this.baseUrl, token: this.token, draftLease: this.draftLease, active: this.activeTab === 9 && !this.taskStatusOpen && this.voiceForeground,
         onBack: () => this.goBack(), onTimetableChanged: () => this.timetableChanged(),
         onOpenPlan: () => this.openPlanList('agenda') })
         .visibility(this.activeTab === 9 ? Visibility.Visible : Visibility.Hidden)
+      if (this.taskStatusOpen) {
+        TaskStatusPanel({ state: this.taskStatusState, active: this.voiceForeground,
+          onSelect: (id: string) => this.taskStatuses?.select(id),
+          onCheck: (id: string) => this.taskStatuses?.check(id), onRetry: (id: string) => this.taskStatuses?.retry(id),
+          onConfirm: (id: string, acks: CourseAcknowledgement[]) => this.taskStatuses?.confirm(acks, id),
+          onCancel: (id: string) => this.taskStatuses?.cancel(id), onDismiss: (id: string) => this.taskStatuses?.dismiss(id),
+          onClose: () => this.taskStatusOpen = false,
+          onOpenTask: (id: string) => { this.taskStatusOpen = false; this.openPlanDetails(id, ''); } })
+          .width('100%').height('100%').backgroundColor(AppTheme.bg)
+      }
     }.width('100%').height('100%')
   }
 
@@ -617,7 +693,22 @@ struct Index {
           this.pageContent()
         }.layoutWeight(1).width('100%').clip(true)
           .opacity(this.contentOpacity).translate({ y: this.contentOffset })
-        if (!this.quickCaptureOpen && isRootRoute(this.activeTab) && !(this.activeTab === 2 && this.planInnerActive)) {
+        if (this.pendingLogoutConfirm) {
+          Column({ space: 8 }) {
+            Text('还有结果待核对').fontSize(AppTheme.sectionTitle).fontColor(AppTheme.warning).width('100%')
+            Text('退出会清除本机恢复标识，服务端已收到的操作仍可能生效。建议先核对；退出不会取消这些操作。')
+              .fontSize(AppTheme.bodySize).fontColor(AppTheme.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
+            Button('保留登录，继续核对').constraintSize({ minHeight: 48 }).width('100%')
+              .onClick(() => { this.pendingLogoutConfirm = false; if (this.taskStatusState.pendingCount > 0) { this.openTaskStatus(); } })
+            Button('仍退出并清除本机记录').constraintSize({ minHeight: 48 }).width('100%').onClick(() => this.logout())
+          }.padding(16).backgroundColor(AppTheme.warningSoft).width('100%')
+        }
+        if (!this.taskStatusOpen && this.taskStatusState.items.length > 0) {
+          Button(this.taskStatusState.pendingCount > 0 ? `${this.taskStatusState.pendingCount} 项完成 / 恢复结果待核对` : '查看本次完成 / 恢复记录')
+            .width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize).fontColor(AppTheme.accent)
+            .backgroundColor(AppTheme.accentSoft).onClick(() => this.openTaskStatus())
+        }
+        if (!this.taskStatusOpen && !this.quickCaptureOpen && isRootRoute(this.activeTab) && !(this.activeTab === 2 && this.planInnerActive)) {
           Row({ space: 4 }) {
             this.navItem(0, 'home', '今日')
             this.navItem(1, 'assistant', '助手')

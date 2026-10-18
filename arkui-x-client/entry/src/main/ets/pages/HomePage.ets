@@ -29,6 +29,9 @@ export struct HomePage {
   onOpenServices: () => void = () => {};
   onOpenProfile: () => void = () => {};
   onPlanningChanged: () => void = () => {};
+  @Prop statusLockedTaskIds: string[] = [];
+  onTaskStatus: (task: PlanningTask) => void = () => {};
+  onOpenStatus: (taskId: string) => void = () => {};
   @State private courses: TimetableEntry[] = [];
   @State private overview: PlanningOverview = {
     plans: [], tasks: [], total_tasks: 0, completed_tasks: 0, due_today: 0, overdue_tasks: 0, progress: 0
@@ -229,35 +232,16 @@ export struct HomePage {
     return `待核对时间 · ${task.start_at}`;
   }
 
+  private statusLabel(task: PlanningTask): string {
+    if (this.statusLockedTaskIds.includes(task.task_id)) { return '状态结果待核对'; }
+    if (task.status !== 'completed') { return '标记完成'; }
+    return task.completion_operation_id ? '恢复未完成' : '这次完成未保留可恢复凭据';
+  }
+
   private async toggleTask(task: PlanningTask): Promise<void> {
-    if (this.busyTaskId.length > 0 || !this.active || !this.pageActive || this.token.length === 0) { return; }
-    this.busyTaskId = task.task_id;
-    const operation = ++this.taskOperationRevision;
-    const token = this.token;
-    const baseUrl = this.baseUrl;
-    try {
-      const api = new CampusFlowApi(this.baseUrl, this.token);
-      await api.updateTask(task.task_id, task.status !== 'completed');
-      // A tab change does not undo a confirmed write. Refresh system reminders even while hidden.
-      if (this.pageActive && operation === this.taskOperationRevision && this.token === token && this.baseUrl === baseUrl) {
-        this.onPlanningChanged();
-      }
-      if (this.pageActive && this.active && operation === this.taskOperationRevision &&
-        this.token === token && this.baseUrl === baseUrl) {
-        // The successful mutation supersedes reads that started before it committed.
-        await this.loadToday();
-      }
-    } catch (error) {
-      if (this.pageActive && this.active && operation === this.taskOperationRevision &&
-        this.token === token && this.baseUrl === baseUrl) {
-        this.taskPhase = this.taskReadAt > 0 ? 'stale' : 'error';
-        this.errorText = error instanceof CampusFlowRequestError && error.code === 'ACTION_CONFLICT' ?
-          '恢复为未完成前发现时间冲突。请打开任务详情调整时间，再恢复任务。' :
-          '未能核实待办状态，请重新加载后查看。';
-      }
-    } finally {
-      if (operation === this.taskOperationRevision) { this.busyTaskId = ''; }
-    }
+    if (!this.active || !this.pageActive || this.token.length === 0) { return; }
+    if (this.statusLockedTaskIds.includes(task.task_id)) { this.onOpenStatus(task.task_id); return; }
+    this.onTaskStatus(task);
   }
 
   private toggleAgendaTask(row: AgendaRow): void {
@@ -329,8 +313,8 @@ export struct HomePage {
         } else {
           Circle().width(20).height(20).fill(Color.Transparent).stroke(AppTheme.quiet).strokeWidth(1.5)
         }
-      }.width(48).height(48).backgroundColor(Color.Transparent).enabled(this.busyTaskId.length === 0)
-        .accessibilityText(`${task.status === 'completed' ? '恢复待办' : '完成'}：${task.title}`)
+      }.width(48).height(48).backgroundColor(Color.Transparent).enabled(this.active && this.pageActive)
+        .accessibilityText(`${this.statusLabel(task)}：${task.title}`)
         .onClick(() => this.toggleTask(task))
       Button({ type: ButtonType.Normal }) {
         Column({ space: 5 }) {
@@ -339,6 +323,10 @@ export struct HomePage {
             .width('100%').wordBreak(WordBreak.BREAK_WORD)
           Text(subtitle).fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
             .wordBreak(WordBreak.BREAK_WORD)
+          if (task.status === 'completed' || this.statusLockedTaskIds.includes(task.task_id)) {
+            Text(this.statusLabel(task)).fontSize(AppTheme.metaSize).fontColor(AppTheme.accent).width('100%')
+              .wordBreak(WordBreak.BREAK_WORD)
+          }
         }.width('100%').alignItems(HorizontalAlign.Start)
       }.layoutWeight(1).constraintSize({ minHeight: 60 }).padding({ top: 12, bottom: 12, right: 12 })
         .backgroundColor(Color.Transparent).onClick(() => this.onOpenTaskDetails(task.task_id))
@@ -415,10 +403,10 @@ export struct HomePage {
         }.layoutWeight(1).constraintSize({ minHeight: 64 }).padding({ top: 12, bottom: 12 })
           .backgroundColor(Color.Transparent).onClick(() => this.onOpenTaskDetails(row.taskId ?? ''))
         Button({ type: ButtonType.Normal }) {
-          if (row.done) { AppIcon({ name: 'check', iconSize: 21, color: AppTheme.success }) }
+          if (row.done) { Text('恢复未完成').fontSize(AppTheme.metaSize).fontColor(AppTheme.accent).wordBreak(WordBreak.BREAK_WORD) }
           else { Circle().width(20).height(20).fill(Color.Transparent).stroke(AppTheme.quiet).strokeWidth(1.5) }
-        }.width(48).height(48).backgroundColor(Color.Transparent).enabled(this.busyTaskId.length === 0)
-          .accessibilityText(`${row.done ? '恢复待办' : '完成'}：${row.title}`).onClick(() => this.toggleAgendaTask(row))
+        }.width(row.done ? 88 : 48).constraintSize({ minHeight: 48 }).backgroundColor(Color.Transparent).enabled(this.active && this.pageActive)
+          .accessibilityText(`${row.done ? '核对恢复未完成' : '标记完成'}：${row.title}`).onClick(() => this.toggleAgendaTask(row))
       } else {
         Button({ type: ButtonType.Normal }) {
         Column({ space: 5 }) {

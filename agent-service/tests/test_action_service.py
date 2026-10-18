@@ -5,6 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from threading import Barrier
+from uuid import uuid4
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -13,7 +14,7 @@ from campusflow_agent.accounts import AccountStore
 from campusflow_agent.action_service import ActionError, ActionService
 from campusflow_agent.api import create_app
 from campusflow_agent.config import Settings
-from campusflow_agent.schemas import PendingAction, PlanningActionRequest
+from campusflow_agent.schemas import PendingAction, PlanningActionRequest, TaskRestoreRequest
 from campusflow_agent.store import CampusStore
 from campusflow_agent.tools import CURRENT_USER_ID, build_tools
 
@@ -585,7 +586,18 @@ def test_completed_task_can_be_corrected_then_restored_without_bypassing_conflic
             }
         ],
     )
-    error("ACTION_CONFLICT", lambda: scene.service.set_completed(scene.user_id, task_id, False))
+    status_service = scene.service.task_status_service()
+    restore = status_service.create(
+        scene.user_id,
+        task_id,
+        TaskRestoreRequest(
+            kind="restore",
+            operation_id=str(uuid4()),
+            expected_revision=completed.task_version,
+            source_operation_id=completed.completion_operation_id,
+        ),
+    )
+    error("ACTION_CONFLICT", lambda: status_service.confirm(scene.user_id, restore.operation_id))
     moved = scene.preview(
         operation="update_task",
         task_id=task_id,
@@ -601,7 +613,18 @@ def test_completed_task_can_be_corrected_then_restored_without_bypassing_conflic
     after = scene.store.list_tasks(scene.user_id)[0]
     assert after.status == "completed" and after.completed_at == completed.completed_at
     assert after.start_at.isoformat() == at("11:00")
-    restored = scene.service.set_completed(scene.user_id, task_id, False)
+    fresh = status_service.create(
+        scene.user_id,
+        task_id,
+        TaskRestoreRequest(
+            kind="restore",
+            operation_id=str(uuid4()),
+            expected_revision=after.task_version,
+            source_operation_id=after.completion_operation_id,
+        ),
+    )
+    status_service.confirm(scene.user_id, fresh.operation_id)
+    restored = scene.store.list_tasks(scene.user_id)[0]
     assert restored.status == "pending" and restored.completed_at is None
 
 

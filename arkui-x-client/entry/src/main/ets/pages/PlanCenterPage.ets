@@ -83,6 +83,9 @@ export struct PlanCenterPage {
   onInnerNavigationChanged: (active: boolean) => void = () => {};
   onOpenAgent: (prompt: string) => void = () => {};
   onPlanningChanged: () => void = () => {};
+  @Prop statusLockedTaskIds: string[] = [];
+  onTaskStatus: (task: PlanningTask) => void = () => {};
+  onOpenStatus: (taskId: string) => void = () => {};
   onOpenTimetable: () => void = () => {};
   @State private overview: PlanningOverview = {
     plans: [], tasks: [], total_tasks: 0, completed_tasks: 0, due_today: 0, overdue_tasks: 0, progress: 0
@@ -326,6 +329,7 @@ export struct PlanCenterPage {
     if (lease === null || !localDrafts.valid(lease) || action === null || !['review', 'retryable'].includes(this.actionState.phase)) {
       this.errorText = '请先恢复本机草稿保存并核对原提案，再提交。'; return;
     }
+    if (!cancel && this.statusBlocks(action.target_task_id ?? '', action.target_plan_id ?? '')) { return; }
     if (!cancel && !validCourseAcknowledgements(action, acknowledgements)) {
       this.errorText = '请核对重叠课程并选择仍这样安排，再确认这份变更。'; return;
     }
@@ -344,6 +348,7 @@ export struct PlanCenterPage {
       }
       if (!this.pageActive || !this.active || this.draftLease !== lease || !localDrafts.valid(lease) ||
         this.actionState.action?.proposal_id !== action.proposal_id) { return; }
+      if (!cancel && this.statusBlocks(action.target_task_id ?? '', action.target_plan_id ?? '')) { return; }
       if (cancel) { await this.actionManager().cancel(); } else { await this.actionManager().confirm(acknowledgements); }
       await this.settleProposal();
     } catch {
@@ -981,7 +986,7 @@ export struct PlanCenterPage {
   }
 
   private async previewAction(request: PlanningActionRequest): Promise<void> {
-    if (this.writesBlocked()) { return; }
+    if (this.writesBlocked() || this.statusBlocks(request.task_id ?? '', request.plan_id ?? '')) { return; }
     this.errorText = '';
     this.openDetails('action');
     await this.actionManager().preview(request);
@@ -1025,6 +1030,7 @@ export struct PlanCenterPage {
   }
 
   private beginTaskEdit(task: PlanningTask): void {
+    if (this.statusBlocks(task.task_id)) { return; }
     if (this.writesBlocked()) { return; }
     if (this.editTaskId.length > 0 && this.editTaskId !== task.task_id) {
       this.errorText = '还有另一条任务的编辑草稿。请先完成或明确放弃该草稿。';
@@ -1073,6 +1079,7 @@ export struct PlanCenterPage {
   }
 
   private beginPlanEdit(plan: PlanSummary): void {
+    if (this.statusBlocks('', plan.plan_id)) { return; }
     if (this.writesBlocked()) { return; }
     if (this.editPlanId.length > 0 && this.editPlanId !== plan.plan_id) {
       this.errorText = '还有另一个计划的编辑草稿。请先完成或明确放弃该草稿。';
@@ -1106,26 +1113,25 @@ export struct PlanCenterPage {
     await this.previewAction({ operation: 'delete_plan', plan_id: plan.plan_id });
   }
 
+  private statusLabel(task: PlanningTask): string {
+    if (this.statusLockedTaskIds.includes(task.task_id)) { return '状态结果待核对'; }
+    if (task.status !== 'completed') { return '标记完成'; }
+    return task.completion_operation_id ? '恢复未完成' : '这次完成未保留可恢复凭据';
+  }
+
   private async toggle(task: PlanningTask): Promise<void> {
+    if (!this.active || !this.pageActive) { return; }
+    if (this.statusLockedTaskIds.includes(task.task_id)) { this.onOpenStatus(task.task_id); return; }
     if (this.writesBlocked()) { return; }
-    this.mutationBusy = true;
-    const revision = this.lifecycleRevision;
-    try {
-      await new CampusFlowApi(this.baseUrl, this.token).updateTask(task.task_id, task.status !== 'completed');
-      if (!this.pageActive || revision !== this.lifecycleRevision) { return; }
-      this.deletePendingId = '';
-      await this.reload();
-      this.conflictRefresh++;
-      this.onPlanningChanged();
-    } catch (error) {
-      if (this.pageActive && revision === this.lifecycleRevision) {
-        this.errorText = error instanceof CampusFlowRequestError && error.statusCode === 409 && error.code === 'ACTION_CONFLICT' ?
-          '恢复为待完成会产生时间冲突。请打开这条任务详情，调整时间并确认后再恢复。' :
-          '更新失败：请刷新核对当前任务状态后再操作。';
-      }
-    } finally {
-      this.mutationBusy = false;
-    }
+    this.onTaskStatus(task);
+  }
+
+  private statusBlocks(taskId: string = '', planId: string = ''): boolean {
+    const locked = this.statusLockedTaskIds.find((id: string) => id === taskId ||
+      planId.length > 0 && this.overview.tasks.some((task: PlanningTask) => task.task_id === id && task.plan_id === planId));
+    if (locked === undefined) { return false; }
+    this.errorText = '这项任务的完成或恢复结果尚待核对，请先处理原操作。其他任务仍可继续。';
+    this.onOpenStatus(locked); return true;
   }
 
   private async requestDelete(task: PlanningTask): Promise<void> {
@@ -1298,7 +1304,10 @@ export struct PlanCenterPage {
 
   @Builder
   private TaskCheck(task: PlanningTask) {
-    Button({ type: ButtonType.Circle }) {
+    Button({ type: ButtonType.Normal }) {
+      if (task.status === 'completed' || this.statusLockedTaskIds.includes(task.task_id)) {
+        Text(this.statusLockedTaskIds.includes(task.task_id) ? '核对结果' : '恢复未完成').fontSize(AppTheme.metaSize).fontColor(AppTheme.accent).wordBreak(WordBreak.BREAK_WORD)
+      } else {
       Stack() {
         Circle().width(25).height(25)
           .fill(task.status === 'completed' ? AppTheme.accent : AppTheme.surface)
@@ -1307,8 +1316,9 @@ export struct PlanCenterPage {
           AppIcon({ name: 'check', iconSize: 15, color: AppTheme.onAccent })
         }
       }
-    }.width(48).height(48).backgroundColor(Color.Transparent)
-      .enabled(!this.writesBlocked()).accessibilityText(task.status === 'completed' ? '标记为未完成' : '标记为完成')
+      }
+    }.width(task.status === 'completed' || this.statusLockedTaskIds.includes(task.task_id) ? 88 : 48).constraintSize({ minHeight: 48 }).backgroundColor(Color.Transparent)
+      .enabled(this.statusLockedTaskIds.includes(task.task_id) || !this.writesBlocked()).accessibilityText(this.statusLabel(task))
       .onClick(() => this.toggle(task))
   }
 
@@ -1330,7 +1340,7 @@ export struct PlanCenterPage {
         Text('时间格式异常，请核对后再安排。').fontSize(AppTheme.metaSize).fontColor(AppTheme.danger).width('100%')
       }
       if (task.status === 'completed') {
-        Text('已完成').fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+        Text(this.statusLabel(task)).fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%').wordBreak(WordBreak.BREAK_WORD)
       } else if (this.taskOverdue(task)) {
         Text('已逾期').fontSize(AppTheme.metaSize).fontColor(AppTheme.danger).width('100%')
       }
@@ -1977,6 +1987,7 @@ export struct PlanCenterPage {
           .padding({ left: AppTheme.pageInset, right: AppTheme.pageInset })
       }
       PlanningConflictsPanel({ baseUrl: this.baseUrl, token: this.token,
+        statusLockedTaskIds: this.statusLockedTaskIds, onOpenStatus: (id: string) => this.onOpenStatus(id),
         refreshKey: this.conflictRefresh, active: this.active && (this.detailKind.length === 0 || this.detailKind === 'conflicts'),
         compact: this.detailKind !== 'conflicts', onOpenDetails: () => this.openDetails('conflicts'),
         onOpenTask: (id: string) => this.openDetails('task', id),

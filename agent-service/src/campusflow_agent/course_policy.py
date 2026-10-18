@@ -93,8 +93,20 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
                 conn.execute(
                     "ALTER TABLE planning_tasks ADD COLUMN task_version INTEGER NOT NULL DEFAULT 1"
                 )
+            if "completion_operation_id" not in columns:
+                conn.execute("ALTER TABLE planning_tasks ADD COLUMN completion_operation_id TEXT")
+            # Existing installations already have this named trigger. Replacing it
+            # inside this migration transaction extends coverage without resetting versions.
+            conn.execute("DROP TRIGGER IF EXISTS course_planning_tasks_update")
         fields = {
-            "planning_tasks": (*TASK_FIELDS, "plan_id", "milestone_id", "status", "completed_at"),
+            "planning_tasks": (
+                *TASK_FIELDS,
+                "plan_id",
+                "milestone_id",
+                "status",
+                "completed_at",
+                "completion_operation_id",
+            ),
             "plans": ("title", "summary", "target_date", "status"),
             "plan_milestones": ("plan_id", "title", "due_at", "sort_order"),
         }

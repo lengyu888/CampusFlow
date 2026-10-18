@@ -48,6 +48,28 @@ function knownErrorMessage(code: string): string {
       return '请求超时，结果尚未确认。请先核对记录，再决定是否重试。';
     case 'ACTION_NOT_FOUND':
       return '未找到此提案，请刷新核对。';
+    case 'TASK_NOT_FOUND':
+      return '这项任务已不存在，请读取最新安排；不会从旧回执重建任务。';
+    case 'TASK_STATUS_OPERATION_NOT_FOUND':
+      return '未查到这次状态操作，请核对账号；需要重试时仍使用原操作标识和原内容。';
+    case 'TASK_STATUS_OPERATION_REUSED':
+      return '这次操作标识已对应另一份内容，请先核对原操作记录。';
+    case 'TASK_STALE':
+      return '任务或相关安排已经变化，请读取最新内容后重新核对；旧预览不会覆盖新修改。';
+    case 'TASK_STATUS_UNCHANGED':
+      return '这项任务已经是该状态，请刷新查看；本次没有生成新的完成凭据。';
+    case 'TASK_COMPLETION_NOT_TRACKED':
+      return '这次完成未保留可核验的凭据，暂时不能使用恢复未完成。';
+    case 'TASK_COMPLETION_SUPERSEDED':
+      return '这项任务后来已再次完成，旧完成记录不能恢复当前这一次完成。';
+    case 'TASK_RECOVERY_PREVIEW_REQUIRED':
+      return '恢复未完成需要先读取任务的最新版本，查看预览并确认。';
+    case 'TASK_RECOVERY_EXPIRED':
+      return '这份恢复预览已过期，请取消原预览，再根据最新安排重新核对。';
+    case 'TASK_RECOVERY_CANCELLED':
+      return '这份恢复预览已取消，没有执行本次恢复。';
+    case 'TASK_STATUS_FAILED':
+      return '状态操作结果尚未确认，请先查询原操作记录，不要新建一笔重复提交。';
     case 'RUN_NOT_FOUND':
       return '未找到保留的运行记录，请核对账号和运行标识，不要重复发送。';
     case 'RUN_DELETED':

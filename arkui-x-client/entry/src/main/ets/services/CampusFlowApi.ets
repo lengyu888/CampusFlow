@@ -26,6 +26,8 @@ import {
   PlanningActionRequest,
   PlanningConflictReport,
   PlanningTask,
+  TaskStatusRequest,
+  TaskStatusOperation,
   ReplanPreview,
   RunStartRequest,
   RunSnapshot,
@@ -155,7 +157,7 @@ export class CampusFlowApi {
           throw this.importFailure(response.responseCode, text);
         }
         if (path === '/api/v1/sessions' || path.startsWith('/api/v1/sessions/') || path === '/api/v1/onboarding' || path.startsWith('/api/v1/onboarding/') || path === '/api/v1/models' || path === '/api/v1/learning-preferences' || path.startsWith('/api/v1/knowledge/') || path === '/api/v1/chat' || path.startsWith('/api/v1/agent-runs') || path.startsWith('/api/v1/actions/') || path.startsWith('/api/v1/planning/') ||
-          path === '/api/v1/tasks' || path.startsWith('/api/v1/tasks/') ||
+          path === '/api/v1/tasks' || path.startsWith('/api/v1/tasks/') || path.startsWith('/api/v1/task-status-operations/') ||
           path === '/api/v1/me/timetable' || path.startsWith('/api/v1/me/timetable/') || path.startsWith('/api/v1/weather?')) {
           throw requestFailure(response.responseCode, text);
         }
@@ -354,6 +356,26 @@ export class CampusFlowApi {
   async updateTask(taskId: string, completed: boolean): Promise<PlanningTask> {
     return this.request<PlanningTask>(`/api/v1/tasks/${encodeURIComponent(taskId)}`, PATCH_METHOD,
       JSON.stringify({ completed: completed }));
+  }
+
+  async startTaskStatus(taskId: string, request: TaskStatusRequest): Promise<TaskStatusOperation> {
+    return this.request<TaskStatusOperation>(`/api/v1/tasks/${encodeURIComponent(taskId)}/status-operations`,
+      http.RequestMethod.POST, JSON.stringify(request));
+  }
+
+  async taskStatusOperation(operationId: string): Promise<TaskStatusOperation> {
+    return this.request<TaskStatusOperation>(`/api/v1/task-status-operations/${encodeURIComponent(operationId)}`,
+      http.RequestMethod.GET);
+  }
+
+  async confirmTaskStatus(operationId: string, acknowledgements: CourseAcknowledgement[]): Promise<TaskStatusOperation> {
+    return this.request<TaskStatusOperation>(`/api/v1/task-status-operations/${encodeURIComponent(operationId)}/confirm`,
+      http.RequestMethod.POST, JSON.stringify({ acknowledgements: acknowledgements }));
+  }
+
+  async cancelTaskStatus(operationId: string): Promise<TaskStatusOperation> {
+    return this.request<TaskStatusOperation>(`/api/v1/task-status-operations/${encodeURIComponent(operationId)}/cancel`,
+      http.RequestMethod.POST, '{}');
   }
 
   async deleteTask(taskId: string): Promise<void> {
