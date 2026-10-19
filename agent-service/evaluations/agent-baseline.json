@@ -1,0 +1,421 @@
+[
+  {
+    "id": "CF-01",
+    "category": "date",
+    "input": "明天有哪些课？",
+    "setup": "固定 UTC 时间 2026-10-03 18:00",
+    "expected_tools": [
+      "get_schedule"
+    ],
+    "business_effect": "仅查询",
+    "criterion": "系统日期为上海 10 月 4 日；日期提示存在，不代表模型换算已验收",
+    "check": "tests/test_agent.py::test_system_prompt_injects_shanghai_date_and_relative_time_rules"
+  },
+  {
+    "id": "CF-02",
+    "category": "schedule",
+    "input": "查询指定日期课程",
+    "setup": "同一账户数据库与内存课表不一致",
+    "expected_tools": [
+      "get_schedule"
+    ],
+    "business_effect": "只读",
+    "criterion": "使用数据库权威快照并携带来源",
+    "check": "tests/test_data_evidence_tools.py::test_schedule_uses_one_authoritative_content_and_source_snapshot"
+  },
+  {
+    "id": "CF-03",
+    "category": "schedule",
+    "input": "那天没有课吗？",
+    "setup": "已确认空课表和从未配置课表",
+    "expected_tools": [
+      "get_schedule"
+    ],
+    "business_effect": "只读",
+    "criterion": "区分空结果与缺失数据",
+    "check": "tests/test_data_evidence_tools.py::test_empty_confirmed_timetable_and_never_configured_source_are_distinct"
+  },
+  {
+    "id": "CF-04",
+    "category": "freshness",
+    "input": "订阅课表还是最新的吗？",
+    "setup": "订阅同步时间已过期",
+    "expected_tools": [
+      "get_schedule"
+    ],
+    "business_effect": "只读",
+    "criterion": "保留订阅来源与过期标记",
+    "check": "tests/test_data_evidence_tools.py::test_subscription_provenance_is_not_relabelled_manual_or_fresh"
+  },
+  {
+    "id": "CF-05",
+    "category": "freshness",
+    "input": "当前有哪些校园通知？",
+    "setup": "数据库只有演示通知",
+    "expected_tools": [
+      "search_campus_notices"
+    ],
+    "business_effect": "只读",
+    "criterion": "演示内容不作为真实通知",
+    "check": "tests/test_data_evidence_tools.py::test_demo_notices_stay_explicit_even_in_existing_database"
+  },
+  {
+    "id": "CF-06",
+    "category": "freshness",
+    "input": "我的校园卡现在余额多少？",
+    "setup": "校园缓存已过期",
+    "expected_tools": [
+      "get_hduhelp_campus_life"
+    ],
+    "business_effect": "只读",
+    "criterion": "过期私有缓存不解密提供给模型",
+    "check": "tests/test_data_evidence_tools.py::test_expired_hdu_cache_is_not_decrypted_or_given_to_model"
+  },
+  {
+    "id": "CF-07",
+    "category": "weather",
+    "input": "明天天气怎么样？",
+    "setup": "没有天气服务",
+    "expected_tools": [
+      "get_weather"
+    ],
+    "business_effect": "只读",
+    "criterion": "明确缺失而非回退演示天气",
+    "check": "tests/test_data_evidence_tools.py::test_missing_weather_service_never_falls_back_to_rain"
+  },
+  {
+    "id": "CF-08",
+    "category": "knowledge",
+    "input": "校外怎么访问图书馆数据库？",
+    "setup": "四页精选官方语料",
+    "expected_tools": [
+      "search_campus_knowledge"
+    ],
+    "business_effect": "只读",
+    "criterion": "同义查询命中正确原文和核对日期",
+    "check": "tests/test_knowledge.py::test_natural_queries_return_reviewed_source"
+  },
+  {
+    "id": "CF-09",
+    "category": "knowledge",
+    "input": "图书馆今天几点开？",
+    "setup": "静态语料不含实时开放信息",
+    "expected_tools": [
+      "search_campus_knowledge"
+    ],
+    "business_effect": "只读",
+    "criterion": "无依据查询返回 missing",
+    "check": "tests/test_knowledge.py::test_uncovered_queries_do_not_invent_answers"
+  },
+  {
+    "id": "CF-10",
+    "category": "knowledge",
+    "input": "查询其他校区图书馆资料",
+    "setup": "未支持校区",
+    "expected_tools": [
+      "search_campus_knowledge"
+    ],
+    "business_effect": "只读",
+    "criterion": "不返回杭电下沙资料冒充结果",
+    "check": "tests/test_knowledge.py::test_scope_aliases_and_unsupported_campus"
+  },
+  {
+    "id": "CF-11",
+    "category": "route",
+    "input": "从六教到菜鸟驿站怎么走？",
+    "setup": "本地路线工具可用",
+    "expected_tools": [
+      "plan_campus_route"
+    ],
+    "business_effect": "只读",
+    "criterion": "直接路线调用真实工具且不请求模型",
+    "check": "tests/test_agent_runtime.py::test_direct_route_uses_actual_tool_events_zero_model_calls_and_no_history"
+  },
+  {
+    "id": "CF-12",
+    "category": "proposal",
+    "input": "帮我创建复习待办",
+    "setup": "模型返回创建工具调用",
+    "expected_tools": [
+      "propose_task_change"
+    ],
+    "business_effect": "仅待确认提案",
+    "criterion": "工具生成提案不直接写入待办或历史",
+    "check": "tests/test_agent_runtime.py::test_real_proposal_is_pending_and_not_committed_as_task_or_history"
+  },
+  {
+    "id": "CF-13",
+    "category": "proposal",
+    "input": "确认这个待办",
+    "setup": "已有持久提案，重复确认",
+    "expected_tools": [
+      "propose_task_change"
+    ],
+    "business_effect": "确认后写入一次",
+    "criterion": "重复确认返回相同持久回执",
+    "check": "tests/test_action_service.py::test_repeat_confirmation_has_identical_durable_receipt_even_after_expiry_and_later_edits"
+  },
+  {
+    "id": "CF-14",
+    "category": "proposal",
+    "input": "两端同时确认这个待办",
+    "setup": "两个 SQLite 连接确认同一提案",
+    "expected_tools": [
+      "propose_task_change"
+    ],
+    "business_effect": "写入一次",
+    "criterion": "并发确认不能重复执行",
+    "check": "tests/test_action_service.py::test_two_connections_confirm_once"
+  },
+  {
+    "id": "CF-15",
+    "category": "proposal",
+    "input": "确认刚才的复习安排",
+    "setup": "预览后课程或任务或截止日期变化",
+    "expected_tools": [
+      "propose_task_change"
+    ],
+    "business_effect": "拒绝失效写入",
+    "criterion": "确认重新校验最新业务状态",
+    "check": "tests/test_action_service.py::test_latest_snapshot_blocks_course_task_status_or_deadline_change"
+  },
+  {
+    "id": "CF-16",
+    "category": "proposal",
+    "input": "修改已有待办时间",
+    "setup": "任务已有 ID 和完成状态等字段",
+    "expected_tools": [
+      "get_planning",
+      "propose_task_change"
+    ],
+    "business_effect": "确认后更新指定任务",
+    "criterion": "保留准确身份和未修改字段",
+    "check": "tests/test_action_service.py::test_edit_preserves_exact_ids_completed_at_source_and_other_fields"
+  },
+  {
+    "id": "CF-17",
+    "category": "proposal",
+    "input": "删除其中一个同名待办",
+    "setup": "两个同名任务不同 ID",
+    "expected_tools": [
+      "get_planning",
+      "propose_task_change"
+    ],
+    "business_effect": "仅删除指定 ID",
+    "criterion": "按精确 ID 删除，不按标题猜测",
+    "check": "tests/test_action_service.py::test_delete_exact_id_with_duplicate_titles"
+  },
+  {
+    "id": "CF-18",
+    "category": "proposal",
+    "input": "删除整个计划",
+    "setup": "计划有子任务",
+    "expected_tools": [
+      "get_planning",
+      "propose_plan_change"
+    ],
+    "business_effect": "子任务保留为独立待办",
+    "criterion": "原子删除计划并在回执说明子任务保留",
+    "check": "tests/test_action_service.py::test_plan_delete_atomic_preserves_tasks_and_receipt_describes_retention"
+  },
+  {
+    "id": "CF-19",
+    "category": "permission",
+    "input": "调用未授权工具",
+    "setup": "模型请求不在工具集合的名称",
+    "expected_tools": [],
+    "business_effect": "不执行",
+    "criterion": "未授权名称不能触发调用",
+    "check": "tests/test_agent_runtime.py::test_unavailable_tool_is_not_invoked_even_when_provider_requests_it"
+  },
+  {
+    "id": "CF-20",
+    "category": "permission",
+    "input": "查询另一账户的上下文",
+    "setup": "两个账户并发运行",
+    "expected_tools": [],
+    "business_effect": "只读",
+    "criterion": "并发工具保持用户上下文隔离",
+    "check": "tests/test_agent_runtime.py::test_concurrent_users_keep_tool_context_isolated"
+  },
+  {
+    "id": "CF-21",
+    "category": "failure",
+    "input": "工具参数错误后继续回答",
+    "setup": "供应商流返回非法工具参数",
+    "expected_tools": [],
+    "business_effect": "不执行非法操作",
+    "criterion": "运行转换为安全失败并允许后续处理",
+    "check": "tests/test_agent_runtime.py::test_invalid_tool_arguments_become_safe_failure_and_model_can_recover"
+  },
+  {
+    "id": "CF-22",
+    "category": "failure",
+    "input": "工具失败后给我原因",
+    "setup": "工具异常包含敏感诊断",
+    "expected_tools": [],
+    "business_effect": "不泄露",
+    "criterion": "原始异常不进入模型输入或界面",
+    "check": "tests/test_agent_runtime.py::test_tool_exception_diagnostics_are_not_sent_to_model_or_ui"
+  },
+  {
+    "id": "CF-23",
+    "category": "budget",
+    "input": "一直调用模型直到完成",
+    "setup": "模型持续请求工具，模型次数有限",
+    "expected_tools": [],
+    "business_effect": "预算内执行",
+    "criterion": "达到模型调用上限，不隐藏重试",
+    "check": "tests/test_agent_runtime.py::test_model_call_budget_has_no_hidden_retry"
+  },
+  {
+    "id": "CF-24",
+    "category": "cancel",
+    "input": "停止执行剩余步骤",
+    "setup": "一批包含两个顺序工具",
+    "expected_tools": [],
+    "business_effect": "停止后续步骤",
+    "criterion": "取消后不启动第二个工具",
+    "check": "tests/test_agent_runtime.py::test_sequential_cancellation_does_not_start_second_tool"
+  },
+  {
+    "id": "CF-25",
+    "category": "recovery",
+    "input": "断网后恢复刚才的结果",
+    "setup": "重复请求并重新创建运行服务",
+    "expected_tools": [],
+    "business_effect": "成功历史仅一组",
+    "criterion": "同一运行恢复准确结果与历史",
+    "check": "tests/test_run_service.py::test_disconnect_duplicate_and_restart_query_exact_result_and_history"
+  },
+  {
+    "id": "CF-26",
+    "category": "budget",
+    "input": "慢请求到时停止",
+    "setup": "注入耗时执行器",
+    "expected_tools": [],
+    "business_effect": "中止且不继续执行",
+    "criterion": "整轮 deadline 生效",
+    "check": "tests/test_run_service.py::test_whole_run_deadline_stops_wait_and_no_more_steps"
+  },
+  {
+    "id": "CF-27",
+    "category": "context",
+    "input": "继续安排明天",
+    "setup": "最近回合明确每天最多两小时",
+    "expected_tools": [],
+    "business_effect": "不写历史",
+    "criterion": "近期约束到达模型输入且原历史不变",
+    "check": "tests/test_baseline_context.py::test_recent_constraint_reaches_model_without_mutating_stored_history"
+  },
+  {
+    "id": "CF-28",
+    "category": "context",
+    "input": "长聊后继续安排明天",
+    "setup": "早期两小时约束所在回合超出预算",
+    "expected_tools": [],
+    "business_effect": "不写历史",
+    "criterion": "旧回合被裁剪后，每日120分钟上限仍通过结构化资料进入模型输入，原始历史保留",
+    "check": "tests/test_baseline_context.py::test_old_constraint_survives_trimming_without_changing_display_history"
+  },
+  {
+    "id": "CF-29",
+    "category": "context",
+    "input": "输入特别长的请求",
+    "setup": "当前回合超出 4000 字符上下文预算",
+    "expected_tools": [],
+    "business_effect": "不请求模型",
+    "criterion": "当前必需上下文装不下时明确失败",
+    "check": "tests/test_agent_runtime.py::test_live_context_cannot_fit_fails_before_model_request"
+  },
+  {
+    "id": "CF-30",
+    "category": "preference",
+    "input": "删除学习偏好后继续规划",
+    "setup": "真实运行先读取主动偏好，删除后再次运行",
+    "expected_tools": [],
+    "business_effect": "删除后不再注入偏好",
+    "criterion": "设置进入真实运行输入，删除后退出",
+    "check": "tests/test_learning_preferences.py::test_saved_preferences_reach_real_runtime_and_delete_stops_next_run"
+  },
+  {
+    "id": "CF-31",
+    "category": "context",
+    "input": "修改后撤回学习约束",
+    "setup": "旧约束和修改/撤回回合均超出近期窗口",
+    "expected_tools": [],
+    "business_effect": "不写业务数据或独立记忆",
+    "criterion": "最新90分钟、撤回或歧义状态替换旧值",
+    "check": "tests/test_context_integration.py::test_updates_and_withdrawals_survive_eviction"
+  },
+  {
+    "id": "CF-32",
+    "category": "context",
+    "input": "忘记所有学习约束",
+    "setup": "多个历史字段，随后全清，再次重放历史",
+    "expected_tools": [],
+    "business_effect": "不写业务数据或独立记忆",
+    "criterion": "四字段均有撤回状态，后续明确表达可重新设定",
+    "check": "tests/test_conversation_context.py::test_reset_retains_tombstones_and_allows_later_explicit_new_value"
+  },
+  {
+    "id": "CF-33",
+    "category": "context",
+    "input": "如果每天最多复习两小时呢？",
+    "setup": "假设、引文、代码或临时日期语句",
+    "expected_tools": [],
+    "business_effect": "不写业务数据或独立记忆",
+    "criterion": "不从这些语句建立稳定约束",
+    "check": "tests/test_conversation_context.py::test_conditional_quoted_temporary_or_question_text_is_not_stable_memory"
+  },
+  {
+    "id": "CF-34",
+    "category": "context",
+    "input": "连续查资料后继续规划",
+    "setup": "历史已裁剪，当前回合连续两次工具调用",
+    "expected_tools": [],
+    "business_effect": "不写业务数据或独立记忆",
+    "criterion": "所有实际模型请求都保留初始约束及完整工具交换",
+    "check": "tests/test_context_integration.py::test_multiple_tool_rounds_keep_original_memory_after_history_is_trimmed"
+  },
+  {
+    "id": "CF-35",
+    "category": "context",
+    "input": "在另一个会话继续规划",
+    "setup": "两个账户同会话ID，同账户不同会话ID",
+    "expected_tools": [],
+    "business_effect": "不写业务数据或独立记忆",
+    "criterion": "同一服务实例不会共享投影",
+    "check": "tests/test_context_integration.py::test_same_service_does_not_share_memory_across_owners_or_sessions"
+  },
+  {
+    "id": "CF-36",
+    "category": "context",
+    "input": "重启后继续规划",
+    "setup": "真实SQLite记录旧值及全清，服务重新加载",
+    "expected_tools": [],
+    "business_effect": "不写业务数据或独立记忆",
+    "criterion": "所有旧字段保持撤回，不从原文复活",
+    "check": "tests/test_context_integration.py::test_reloaded_sqlite_history_does_not_resurrect_withdrawn_constraint"
+  },
+  {
+    "id": "CF-37",
+    "category": "context",
+    "input": "通过兼容聊天入口继续规划",
+    "setup": "真实LangChain和离线HTTP，旧历史超限且本轮修改",
+    "expected_tools": [],
+    "business_effect": "不写业务数据或独立记忆",
+    "criterion": "兼容入口发送最新约束和预算内历史，原始历史不变",
+    "check": "tests/test_context_integration.py::test_actual_legacy_client_receives_same_memory_and_bounded_history"
+  },
+  {
+    "id": "CF-38",
+    "category": "context",
+    "input": "兼容入口查询长资料",
+    "setup": "真实LangChain工具返回大于预算的数据",
+    "expected_tools": [],
+    "business_effect": "不写业务数据或独立记忆",
+    "criterion": "下一次模型请求前明确预算失败，不发送超限资料",
+    "check": "tests/test_context_integration.py::test_legacy_tool_continuation_cannot_exceed_context_budget"
+  }
+]

@@ -28,7 +28,7 @@ from .accounts import (
     AuthenticationError as AccountAuthenticationError,
 )
 from .action_service import ActionError, ActionService
-from .agent import AgentConfigurationError, AgentService
+from .agent import AgentBudgetExceeded, AgentConfigurationError, AgentService
 from .campus_services import (
     building_name,
     classroom_items,
@@ -1233,6 +1233,12 @@ def create_app(
                 status_code=exc.status_code,
                 detail=exc.detail,
                 code=exc.code,
+            ) from exc
+        except AgentBudgetExceeded as exc:
+            raise CampusFlowError(
+                status_code=413,
+                detail="本轮上下文已达到上限，请缩小查询范围或新建会话后再试。",
+                code="CONTEXT_BUDGET_EXCEEDED",
             ) from exc
         except TimeoutError as exc:
             raise CampusFlowError(
