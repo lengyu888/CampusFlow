@@ -17,7 +17,7 @@
 
 从头像进入的个人设置页面底部提供“减少动态效果”开关，关闭页面切换与选择动画；偏好仅保存在本机。
 
-本分支增加本地文字会话保存与登录页的只读离线入口：成功对话及在线打开的历史会话会保存到应用私有目录，最多保留最近 20 个完整会话并受容量限制。只保留最近登录账号，换账号/服务范围时替换，退出时清除；不保存登录令牌或恢复可执行提案。缓存没有另加 PIN/生物识别，解锁此设备的人可回看。当前已通过逻辑及文件适配模拟测试，三端原生读写仍待验收，见[第四阶段说明](../docs/stage-4-local-history.md)。
+本分支增加本地文字会话保存与登录页的只读离线入口：成功对话及在线打开的历史会话会保存到应用私有目录，最多保留最近 20 个完整会话并受容量限制。只保留最近登录账号，换账号/服务范围时替换，退出时清除；不保存登录令牌或恢复可执行提案。缓存没有另加 PIN/生物识别，解锁此设备的人可回看。当前已通过逻辑及文件适配模拟测试，三端原生读写仍待验收，见[第四阶段说明](../docs/project-documents/stage-4-local-history.md)。
 
 ## 工程结构
 
@@ -133,4 +133,4 @@ npm run check
 
 助手回复和历史详情共用原生 Markdown 消息组件，支持标题、列表、粗体、引用、代码块和表格。宽表格与长代码在气泡内横向滚动，用户输入仍原样显示；已有历史无需迁移。
 
-解析测试：`node --test scripts/test-markdown-parser.mjs`。静态排版可通过 `entry/src/main/ets/components/MarkdownPreview.ets` 的 Previewer 检查，详细支持范围及 Web 验证方式见 [Markdown 显示说明](../docs/markdown-rendering.md)。
+解析测试：`node --test scripts/test-markdown-parser.mjs`。静态排版可通过 `entry/src/main/ets/components/MarkdownPreview.ets` 的 Previewer 检查，详细支持范围及 Web 验证方式见 [Markdown 显示说明](../docs/project-documents/markdown-rendering.md)。

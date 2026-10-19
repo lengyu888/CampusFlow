@@ -32,7 +32,7 @@
 
 ## 可查看的原型
 
-[今日 → 轻记录 → 课内确认](previews/ux-04-capture.html) 使用合成数据，提取时间嵌入本阶段实际 `QuickCaptureParser` 逻辑。没有网络请求或账号写入。它是布局/交互核对原型，不是原生运行截图。
+[今日 → 轻记录 → 课内确认](../previews/ux-04-capture.html) 使用合成数据，提取时间嵌入本阶段实际 `QuickCaptureParser` 逻辑。没有网络请求或账号写入。它是布局/交互核对原型，不是原生运行截图。
 
 浏览器检查可使用现有 Playwright 和 Chrome：
 
@@ -42,6 +42,6 @@ PLAYWRIGHT_MODULE=/path/to/playwright CHROME_EXECUTABLE=/path/to/chrome PREVIEW_
 
 ## 验证边界
 
-本阶段进行实际 ArkTS 逻辑提取执行、客户端接口/页面状态回归、真实 SQLite/ASGI 测试和浏览器原型视觉核对。最终计数和日志摘要见 `evidence/ux-04-checks.json`。
+本阶段进行实际 ArkTS 逻辑提取执行、客户端接口/页面状态回归、真实 SQLite/ASGI 测试和浏览器原型视觉核对。最终计数和日志摘要见 `../evidence/ux-04-checks.json`。
 
 没有安装原生环境，没有原生编译或设备验收，没有真实付费模型调用。键盘、原生选择器、触控、三端布局与权限效果仍需学长设备验证。两仓通过独立分支和草稿 PR 交付，主分支保留。

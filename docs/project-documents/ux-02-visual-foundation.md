@@ -13,9 +13,9 @@
 
 ## 实际材料与检查
 
-七张插图由内置绘图工具逐张生成，合计10,701,122字节。文件、提示、修订、alpha和SHA见 [插图记录](xingjian-illustrations.md) 与 [机器清单](xingjian-illustrations.json)。A1/2/3/5已接入；A4/6/7为UX09–10备图。
+七张插图由内置绘图工具逐张生成，合计10,701,122字节。文件、提示、修订、alpha和SHA见 [插图记录](xingjian-illustrations.md) 与 [机器清单](../xingjian-illustrations.json)。A1/2/3/5已接入；A4/6/7为UX09–10备图。
 
-[浏览器验收页](previews/ux-02-foundation.html)直接引用项目PNG并映射当前主题。`check-ux-02.cjs`读取真实AppTheme，核对23个CSS颜色及旧别名，计算13组有效状态色对，记录禁用色对；10项浏览器检查通过，0页面错误，0外部请求。真实截图和报告位于`previews/evidence/ux-02/`。
+[浏览器验收页](../previews/ux-02-foundation.html)直接引用项目PNG并映射当前主题。`check-ux-02.cjs`读取真实AppTheme，核对23个CSS颜色及旧别名，计算13组有效状态色对，记录禁用色对；10项浏览器检查通过，0页面错误，0外部请求。真实截图和报告位于`../previews/evidence/ux-02`。
 
 主代理与独立审查实际查看：七图在纸白/表面背景上的40/48缩图、首步引导、今日空态、校园两入口及360宽大字近似。已生成图没有文字残影，入口仍可辨认；没有整页横向溢出。图片失败的网页演示保留全部文字路径。
 

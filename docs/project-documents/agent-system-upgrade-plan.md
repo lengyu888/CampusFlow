@@ -256,12 +256,12 @@ P0 可以先在现有聊天入口引入稳定请求/动作标识和幂等键；P
 
 | 当前文件 | 首批调整方向 |
 | --- | --- |
-| [agent.py](../agent-service/src/campusflow_agent/agent.py) | 抽取模型构造、运行执行、上下文组合与轨迹处理 |
-| [config.py](../agent-service/src/campusflow_agent/config.py)、[schemas.py](../agent-service/src/campusflow_agent/schemas.py) | 模型 profile、能力、run 与事件 schema；兼容旧模型值 |
-| [tools.py](../agent-service/src/campusflow_agent/tools.py)、[skills.py](../agent-service/src/campusflow_agent/skills.py) | 注册与策略、隐藏上下文、证据、操作说明 |
-| [store.py](../agent-service/src/campusflow_agent/store.py) | 先补动作正确性与幂等；再抽取运行/证据/记忆 Repository |
-| [accounts.py](../agent-service/src/campusflow_agent/accounts.py)、[vision.py](../agent-service/src/campusflow_agent/vision.py) | provider 凭据兼容映射与视觉配置接入 |
-| [api.py](../agent-service/src/campusflow_agent/api.py) | 模型目录、run、事件、取消和记忆管理 API |
-| [CampusFlowApi.ets](../arkui-x-client/entry/src/main/ets/services/CampusFlowApi.ets)、[AgentPage.ets](../arkui-x-client/entry/src/main/ets/pages/AgentPage.ets) | 模型列表、运行状态、停止/恢复、证据展示 |
+| [agent.py](../../agent-service/src/campusflow_agent/agent.py) | 抽取模型构造、运行执行、上下文组合与轨迹处理 |
+| [config.py](../../agent-service/src/campusflow_agent/config.py)、[schemas.py](../../agent-service/src/campusflow_agent/schemas.py) | 模型 profile、能力、run 与事件 schema；兼容旧模型值 |
+| [tools.py](../../agent-service/src/campusflow_agent/tools.py)、[skills.py](../../agent-service/src/campusflow_agent/skills.py) | 注册与策略、隐藏上下文、证据、操作说明 |
+| [store.py](../../agent-service/src/campusflow_agent/store.py) | 先补动作正确性与幂等；再抽取运行/证据/记忆 Repository |
+| [accounts.py](../../agent-service/src/campusflow_agent/accounts.py)、[vision.py](../../agent-service/src/campusflow_agent/vision.py) | provider 凭据兼容映射与视觉配置接入 |
+| [api.py](../../agent-service/src/campusflow_agent/api.py) | 模型目录、run、事件、取消和记忆管理 API |
+| [CampusFlowApi.ets](../../arkui-x-client/entry/src/main/ets/services/CampusFlowApi.ets)、[AgentPage.ets](../../arkui-x-client/entry/src/main/ets/pages/AgentPage.ets) | 模型列表、运行状态、停止/恢复、证据展示 |
 
 推荐下一项先实施 P0，并把模型适配 P1 作为随后的独立任务。每次交付附实际修改、验证结果与本地修改日志，保持后续 GitHub 审查范围清晰。本方案本次仅完成设计、官方接口核对和文档检查；所有实现阶段及运行验收均未执行。

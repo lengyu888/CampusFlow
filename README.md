@@ -2,7 +2,7 @@
 
 CampusFlow 是面向高校学生的跨端 AI Agent。客户端采用 ArkUI-X/ArkTS，以一套主代码构建 HarmonyOS、Android 和 iOS 应用；服务端采用 Python、FastAPI、LangChain 和 DeepSeek。
 
-> **第九至十六阶段开发分支说明（2026-10-18）**：新增统一界面、课表维护、可靠提案、可恢复 Agent 运行、来源及时效展示、三端语音/系统提醒适配，以及模型目录、主动学习偏好、校园原文检索。详见 [阶段总表](docs/roadmap-9-16.md)、[当前架构](docs/architecture.md)、[第十六阶段验收](docs/stage-16-selected-enhancements.md)。原生编译、实机和真实模型能力仍需另行验证；第十七阶段未开展。旧文中的初版阶段/设备描述仅保留为历史记录，不是当前分支验收证据。
+> **第九至十六阶段开发分支说明（2026-10-18）**：新增统一界面、课表维护、可靠提案、可恢复 Agent 运行、来源及时效展示、三端语音/系统提醒适配，以及模型目录、主动学习偏好、校园原文检索。详见 [阶段总表](docs/project-documents/roadmap-9-16.md)、[当前架构](docs/project-documents/architecture.md)、[第十六阶段验收](docs/project-documents/stage-16-selected-enhancements.md)。原生编译、实机和真实模型能力仍需另行验证；第十七阶段未开展。旧文中的初版阶段/设备描述仅保留为历史记录，不是当前分支验收证据。
 
 
 当前仓库已打通账户与首次配置、校园数据、Agent 对话、智能规划与执行、Skills、历史会话以及 ArkUI-X Phone 客户端。主要能力包括：
@@ -46,12 +46,14 @@ CampusFlow 是面向高校学生的跨端 AI Agent。客户端采用 ArkUI-X/Ark
 │   └── tests/
 ├── arkui-x-client/                # ArkUI-X/ArkTS 跨端客户端（阶段 6）
 ├── docs/
-│   ├── architecture.md            # 初步系统架构
-│   ├── arkui-x-integration.md     # ArkUI-X 联调约定
-│   └── development-log.md         # 开发日志
+│   ├── project-documents/         # 项目文档：集中存放 Markdown 与分类索引
+│   ├── previews/                  # 浏览器原型与验证脚本
+│   └── evidence/                  # 验证记录与合成数据
 ├── 9.24晚 会议内容.md
 └── 校企合作创新实践课题汇总.xlsx
 ```
+
+Markdown 统一放在 **`docs/project-documents/`（项目文档）**，入口见[项目文档索引](docs/project-documents/README.md)。
 
 ## 快速开始
 
@@ -181,8 +183,8 @@ Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:8000/api/v1/chat" `
   -ContentType "application/json" -Body $body -WebSession $session
 ```
 
-详细测试方式见本文末尾的“测试”以及 [ArkUI-X 联调说明](docs/arkui-x-integration.md)。
-完整开发顺序和阶段验收条件见 [分阶段开发计划](docs/development-phases.md)。
+详细测试方式见本文末尾的“测试”以及 [ArkUI-X 联调说明](docs/project-documents/arkui-x-integration.md)。
+完整开发顺序和阶段验收条件见 [分阶段开发计划](docs/project-documents/development-phases.md)。
 协作者提交代码前请阅读 [协作开发流程](CONTRIBUTING.md)；`main` 分支禁止直接推送，所有变更
 必须通过 Pull Request 审查后合并。
 
@@ -216,3 +218,54 @@ npm run build:hap
 `entry-default-unsigned.hap` 会生成在 `arkui-x-client/entry/build/default/outputs/default/`。
 模拟器可用于调试；真机安装前需要在 DevEco Studio 配置签名。
 
+
+## Agent 优化分支补充说明（2026-10-19）
+
+本节在仓库原有 README 后追加本地 Agent 优化成果，保留上文的项目介绍、安装和使用说明。
+组员可先阅读本节，再按链接核对具体实现、实际验证和未完成事项。
+
+### 固定分支与代码基线
+
+- 个人 Agent 优化分支统一使用 **`codex/agent-improvements`**；后续相关提交继续累积在这一分支，不为每次修改另建远端分支，不直接推送 `main`。
+- 当前本地代码基于组员 UX07（`e475d35`），在此之上保留本地改动。模型目录、持久运行、账号范围会话、工具卡片、提案、语音和提醒等属于组员已有基线。
+- 本次核对远端 `main` 为 `41955b0`，`dev/haohao` 为 `56ccfb7`；后者已包含 UX08～UX12 和后续兼容修复，**尚未整合到本地 Agent 分支**。本节之前的说明保留仓库原有内容，文档入口已随本地目录整理调整，两边代码仍有待整合的差异。
+- 目录整理前已保存下文列出的四次本地提交，上一轮 Markdown 补充为工作区草稿，本轮保留并整理这些内容。后续仍只使用 `codex/agent-improvements`；提交、推送和 PR 按用户明确要求执行，远端同步状态以实际推送结果为准。
+
+### 在组员基线上的本地改动
+
+| 范围 | 本地增加或修复的内容 |
+| --- | --- |
+| 消息展示 | 增强原生 Markdown 解析与共用消息组件；Web 使用本地 Marked、DOMPurify 渲染并净化内容，保留原文回退及表格、代码的横向滚动。 |
+| 聊天交互与历史 | 修复回答后上翻被自动拉回底部；手动上翻暂停跟随，触底恢复。旧调用及 Web 保留提问提前保存、会话 `pending/active` 状态；新版 HTTP 入口仍按版本校验后成对提交。 |
+| 会话约束记忆 | 从同一会话的用户历史重建每日/单次学习时长上限、偏好/禁止时段，支持修改、撤回和全清；旧问答裁剪后，支持的约束仍作为有来源的资料进入模型输入。 |
+| 上下文预算 | run/chat 共用字符预算和完整问答对裁剪；兼容 LangChain 工具续轮。HTTP 聊天超限明确返回 413 和 `CONTEXT_BUDGET_EXCEEDED`。 |
+| 验证与兼容 | 新增 38 场景离线基线及运行器，修复环境筛选造成的伪通过；补齐问句、代码/引用误记忆回归，并保留 Windows 时区、测试和 ArkTS 编译兼容修复。 |
+
+约束记忆只识别明确的有限句式，不是通用或跨会话长期记忆；资料进入模型输入不等于真实模型一定遵守。
+校园知识检索扩展目前是[待实施方案](docs/project-documents/campus-knowledge-retrieval-upgrade-plan.md)，未导入新资料、建立全文索引或实现向量检索。
+
+### 最近一次已完成的验证
+
+以下结果来自 **2026-10-19 提交前审查**；本次 Markdown 整理没有重新运行功能测试。
+
+| 检查 | 实际结果 |
+| --- | --- |
+| 完整后端离线回归 | 872 passed，2 deselected；真实模型集成测试未执行。 |
+| 固定 Agent 基线 | 38 个场景关联的 94 项检查通过；模型质量为 `not_evaluated`。 |
+| 客户端 Node 离线回归 | 961 passed，1 skipped；跳过项为宿主缺少 plist 解析器。 |
+| Web Markdown | 8 passed。 |
+| 静态与依赖 | 76 个源码、24 个配置检查通过；Ruff、pip check 通过。 |
+
+HarmonyOS unsigned HAP 的成功构建记录来自 **2026-10-18**，本轮没有重新构建。
+真实模型效果、外部校园服务、模拟器/真机及 Android/iOS 构建和设备行为仍未完成本地验收。
+
+### 组员查看入口
+
+- [累计变更说明与分支现状](docs/project-documents/agent-improvements-changelog.md)：完整记录组员基线、本地增量、分阶段验证和待验收事项。
+- [会话约束记忆说明](docs/project-documents/session-context-memory.md)：支持句式、来源、撤回、删除和预算边界。
+- [Agent 固定验收基线](docs/project-documents/agent-evaluation-baseline.md)：场景、离线运行命令和未执行的真实模型评审。
+- [Markdown 显示说明](docs/project-documents/markdown-rendering.md)：原生和 Web 的支持范围。
+
+已有本地提交按目的分开：`483a781` 保留 UX07 整合与本地交互/展示改进，`6f85057` 记录协作说明，
+`524cd21` 实现会话约束记忆与离线基线，`a471095` 同步审查、验证及检索方案。
+以后整合 `dev/haohao` 时，应逐项保留本地增强与远端新功能，尤其核对聊天页、API 类型、草稿和原生桥接的并行修改；当前未执行该合并。

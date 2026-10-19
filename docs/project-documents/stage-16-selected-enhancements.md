@@ -52,4 +52,4 @@ ArkTS 逻辑提取执行、模拟生命周期和静态工程检查不代替原�
 
 先录入课表并确认导入预览；进入今日/规划查看课程和任务；设置明确学习偏好；在 Agent 选择可用模型提出学习安排，查看真实工具进度、来源及待确认提案；确认后查看规划与系统提醒状态；修改课表，展示冲突与重新规划；最后演示校园资料出处、取消/恢复运行和重启后本地历史。涉及云模型/系统语音/通知的演示须在已有设备环境上验收，不把本地原型画面当作原生截图。
 
-相关交付：[总体架构](architecture.md)、[联调接口](arkui-x-integration.md)、[三端构建与待验项](stage-15-native-capabilities.md)、[第九阶段交互原型](previews/stage-9-campusflow.html)。
+相关交付：[总体架构](architecture.md)、[联调接口](arkui-x-integration.md)、[三端构建与待验项](stage-15-native-capabilities.md)、[第九阶段交互原型](../previews/stage-9-campusflow.html)。

@@ -58,7 +58,7 @@ flowchart TD
 6. 回合结束后返回 `message`、`tool_traces`、`pending_actions`。回答文字进入聊天历史，提案另存业务表。
 7. 提案工具会保存“待确认提案”，但实际计划、待办要通过用户确认后的独立接口写入。
 
-源码入口：[api.py](../agent-service/src/campusflow_agent/api.py) 第 100、239、942 行；[agent.py](../agent-service/src/campusflow_agent/agent.py) 第 86、111、147、195、266 行；[tools.py](../agent-service/src/campusflow_agent/tools.py) 第 24、58 行。
+源码入口：[api.py](../../agent-service/src/campusflow_agent/api.py) 第 100、239、942 行；[agent.py](../../agent-service/src/campusflow_agent/agent.py) 第 86、111、147、195、266 行；[tools.py](../../agent-service/src/campusflow_agent/tools.py) 第 24、58 行。
 
 上一项 Markdown 修改位于客户端显示层：它改善第 7 个节点的回答展示，没有改变模型、检索、工具或会话记忆结构。
 
@@ -76,7 +76,7 @@ flowchart TD
 | 空闲教室、教室占用、寝室电费 | 当前用户已连接的 HDUHelp 服务 | 工具通过 HTTP 实时查询 | 受授权范围、外部服务和请求超时影响 |
 | 课表 / 地图图片 | Flash 视觉解析生成候选 JSON，Pydantic 校验，用户确认 | 确认后的结构化数据供工具查询 | 不是图片向量库，也不是 PDF 文档索引 |
 
-对应源码：[store.py](../agent-service/src/campusflow_agent/store.py) 第 149、172、224、232、235 行；[campus_data.py](../agent-service/src/campusflow_agent/campus_data.py) 第 23、362、513、576、695 行；[accounts.py](../agent-service/src/campusflow_agent/accounts.py) 第 344、672 行；[vision.py](../agent-service/src/campusflow_agent/vision.py) 第 45 行；[schedule_subscription.py](../agent-service/src/campusflow_agent/schedule_subscription.py) 第 81 行。
+对应源码：[store.py](../../agent-service/src/campusflow_agent/store.py) 第 149、172、224、232、235 行；[campus_data.py](../../agent-service/src/campusflow_agent/campus_data.py) 第 23、362、513、576、695 行；[accounts.py](../../agent-service/src/campusflow_agent/accounts.py) 第 344、672 行；[vision.py](../../agent-service/src/campusflow_agent/vision.py) 第 45 行；[schedule_subscription.py](../../agent-service/src/campusflow_agent/schedule_subscription.py) 第 81 行。
 
 ### 可以称作哪种检索增强
 
@@ -111,7 +111,7 @@ flowchart TD
 | HDUHelp 实时 | `get_unused_classrooms`、`get_classroom_usage`、`get_electricity_balance` | 教室和电费查询 |
 | 提案 | `propose_task_change`、`propose_plan` | 保存待确认的单任务或完整计划提案 |
 
-定义和筛选位于 [tools.py](../agent-service/src/campusflow_agent/tools.py) 第 58、336 行。普通聊天没有额外的通用网页搜索、文件系统、代码执行工具，也没有项目自定义的多 Agent 调度。
+定义和筛选位于 [tools.py](../../agent-service/src/campusflow_agent/tools.py) 第 58、336 行。普通聊天没有额外的通用网页搜索、文件系统、代码执行工具，也没有项目自定义的多 Agent 调度。
 
 ### Skills 是工具治理目录
 
@@ -128,7 +128,7 @@ flowchart TD
 
 所以禁用某个 Skill，不一定让相关只读查询消失：已经确认课表或同步数据的账户仍可能通过数据分支获得相应工具。这个集合在每轮建图时计算。
 
-“学习复盘助手”虽在目录中声明了复盘能力，但目前没有它对应的专用工具映射，不能据此认为已经有自动周报、跨会话检索或完整复盘工作流。目录和映射位于 [skills.py](../agent-service/src/campusflow_agent/skills.py) 第 13、140、251、351 行；数据分支位于 [agent.py](../agent-service/src/campusflow_agent/agent.py) 第 147 行。
+“学习复盘助手”虽在目录中声明了复盘能力，但目前没有它对应的专用工具映射，不能据此认为已经有自动周报、跨会话检索或完整复盘工作流。目录和映射位于 [skills.py](../../agent-service/src/campusflow_agent/skills.py) 第 13、140、251、351 行；数据分支位于 [agent.py](../../agent-service/src/campusflow_agent/agent.py) 第 147 行。
 
 ## 6. 记忆：保存了什么，没保存什么
 
@@ -144,7 +144,7 @@ flowchart TD
 
 `CampusStore` 是项目自己的业务 Store，不等于已经接入 LangGraph 的长期记忆 store。应用层提案确认也不等于 LangGraph 的 interrupt/checkpoint 工作流。LangGraph checkpointer 保存线程的图状态，长期 store 保存跨线程的应用数据；两者解决不同问题。[LangGraph Persistence](https://docs.langchain.com/oss/python/langgraph/persistence)。
 
-源码：[store.py](../agent-service/src/campusflow_agent/store.py) 第 66、81、656 行；[agent.py](../agent-service/src/campusflow_agent/agent.py) 第 130、217、229、245、322 行。
+源码：[store.py](../../agent-service/src/campusflow_agent/store.py) 第 66、81、656 行；[agent.py](../../agent-service/src/campusflow_agent/agent.py) 第 130、217、229、245、322 行。
 
 ## 7. Harness 的执行控制和权限边界
 
@@ -164,7 +164,7 @@ flowchart TD
 
 另一个需要单独验证和完善的源码边界：`propose_task_change` 接受 `create/update/delete`，但 `confirm_proposal` 的实际应用分支目前处理完整计划和 `action=create`，没有对应的单任务 update/delete 执行分支。不能把“能生成修改/删除提案”视作“能完成修改/删除任务”。本次仅静态识别，没有执行该场景或修改实现。
 
-源码：[tools.py](../agent-service/src/campusflow_agent/tools.py) 第 27（`PlanTaskInput`）、81、187、280 行；[store.py](../agent-service/src/campusflow_agent/store.py) 第 284、339、419、499 行；[api.py](../agent-service/src/campusflow_agent/api.py) 第 1076 行。
+源码：[tools.py](../../agent-service/src/campusflow_agent/tools.py) 第 27（`PlanTaskInput`）、81、187、280 行；[store.py](../../agent-service/src/campusflow_agent/store.py) 第 284、339、419、499 行；[api.py](../../agent-service/src/campusflow_agent/api.py) 第 1076 行。
 
 ### 超时、重试、取消与展示
 
@@ -181,7 +181,7 @@ flowchart TD
 | 原生显示 | `ChatResponse` 未声明 `tool_traces`，聊天页主要使用回答和提案 | 暂未提供通用工具轨迹展示 |
 | Skill 审计 | 记录安装、启停及部分启用 Skill 的工具名 | 不等于所有工具的完整运行审计 |
 
-代码入口：[config.py](../agent-service/src/campusflow_agent/config.py) 第 23、36 行；[agent.py](../agent-service/src/campusflow_agent/agent.py) 第 126、229、232、322 行；[CampusFlowApi.ets](../arkui-x-client/entry/src/main/ets/services/CampusFlowApi.ets) 第 96 行；[ApiModels.ets](../arkui-x-client/entry/src/main/ets/model/ApiModels.ets) 第 82 行；[app.js](../agent-service/src/campusflow_agent/web/app.js) 第 1378、1499 行。
+代码入口：[config.py](../../agent-service/src/campusflow_agent/config.py) 第 23、36 行；[agent.py](../../agent-service/src/campusflow_agent/agent.py) 第 126、229、232、322 行；[CampusFlowApi.ets](../../arkui-x-client/entry/src/main/ets/services/CampusFlowApi.ets) 第 96 行；[ApiModels.ets](../../arkui-x-client/entry/src/main/ets/model/ApiModels.ets) 第 82 行；[app.js](../../agent-service/src/campusflow_agent/web/app.js) 第 1378、1499 行。
 
 `.env.example` 留有 LangSmith tracing 配置占位，但仅据此不能证明本地已经启用。本次没有读取真实 `.env`。仓库已有 API、Store、工具及集成测试；这些测试的存在也不等于已具备回答质量、召回率或成本评测。本次文档整理未重跑测试。
 
@@ -229,13 +229,13 @@ CampusFlow 后端中的 MCP client
 
 | 想优化什么 | 优先阅读 |
 | --- | --- |
-| 模型、提示词、会话循环、工具权限 | [agent.py](../agent-service/src/campusflow_agent/agent.py) |
-| 工具 schema、工具结果、外部查询 | [tools.py](../agent-service/src/campusflow_agent/tools.py)、[hduhelp_access.py](../agent-service/src/campusflow_agent/hduhelp_access.py) |
-| Skills 的安装、启停和工具映射 | [skills.py](../agent-service/src/campusflow_agent/skills.py) |
-| 历史、冲突、提案、实际任务写入 | [store.py](../agent-service/src/campusflow_agent/store.py) |
-| 校园地点、通知及路线检索 | [campus_data.py](../agent-service/src/campusflow_agent/campus_data.py) |
-| 账户上下文、授权资源、缓存 | [accounts.py](../agent-service/src/campusflow_agent/accounts.py)、[api.py](../agent-service/src/campusflow_agent/api.py) |
-| 图片和课表订阅导入 | [vision.py](../agent-service/src/campusflow_agent/vision.py)、[schedule_subscription.py](../agent-service/src/campusflow_agent/schedule_subscription.py) |
-| App 等待、对话和结果显示 | [CampusFlowApi.ets](../arkui-x-client/entry/src/main/ets/services/CampusFlowApi.ets)、[AgentPage.ets](../arkui-x-client/entry/src/main/ets/pages/AgentPage.ets) |
+| 模型、提示词、会话循环、工具权限 | [agent.py](../../agent-service/src/campusflow_agent/agent.py) |
+| 工具 schema、工具结果、外部查询 | [tools.py](../../agent-service/src/campusflow_agent/tools.py)、[hduhelp_access.py](../../agent-service/src/campusflow_agent/hduhelp_access.py) |
+| Skills 的安装、启停和工具映射 | [skills.py](../../agent-service/src/campusflow_agent/skills.py) |
+| 历史、冲突、提案、实际任务写入 | [store.py](../../agent-service/src/campusflow_agent/store.py) |
+| 校园地点、通知及路线检索 | [campus_data.py](../../agent-service/src/campusflow_agent/campus_data.py) |
+| 账户上下文、授权资源、缓存 | [accounts.py](../../agent-service/src/campusflow_agent/accounts.py)、[api.py](../../agent-service/src/campusflow_agent/api.py) |
+| 图片和课表订阅导入 | [vision.py](../../agent-service/src/campusflow_agent/vision.py)、[schedule_subscription.py](../../agent-service/src/campusflow_agent/schedule_subscription.py) |
+| App 等待、对话和结果显示 | [CampusFlowApi.ets](../../arkui-x-client/entry/src/main/ets/services/CampusFlowApi.ets)、[AgentPage.ets](../../arkui-x-client/entry/src/main/ets/pages/AgentPage.ets) |
 
 本次范围：源码与官方概念文档核对。未读取真实 API Key、`.env` 或个人数据库，未调用模型和 HDUHelp 实时服务；静态发现的行为边界需要在后续对应修改任务中补充场景验证。

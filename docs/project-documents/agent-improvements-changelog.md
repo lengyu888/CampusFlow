@@ -2,11 +2,20 @@
 
 固定协作分支：`codex/agent-improvements`。后续 Agent 相关本地改进继续提交到这一分支，并在本文件追加日期、修改内容和实际验证结果，便于组员持续审查。
 
+## 当前协作状态（2026-10-19）
+
+- [仓库 README](../../README.md)保留仓库原有项目说明，并在末尾追加本地改动摘要；本文件保留按日期记录的详细过程。
+- 目录整理前已有四次本地提交：`483a781`（UX07 整合与本地改进）、`6f85057`（分支协作说明）、`524cd21`（会话约束记忆与评测基线）、`a471095`（说明、验证和检索方案）。此前 Markdown 补充为工作区草稿，本轮目录整理保留并整理这部分内容。
+- 当前本地代码仍以 UX07（`e475d35`）为组员基线。远端 `main` 为 `41955b0`；`dev/haohao` 为 `56ccfb7`，包含 UX08～UX12 和后续修复，尚未整合到本分支。不能将其新增的任务完成恢复、专注记录、日/周回看等表述为本地已具备。
+- 最近一次已记录的完整验证是 2026-10-19 的 **872 passed、2 deselected**；固定基线为 **38 场景、94 项检查**。下文 763、778、855 是对应阶段的历史结果；HAP 构建成功属于 2026-10-18，本次未重新构建或复跑功能测试。
+- 会话约束记忆已实现并本地提交；下文“仅设计”“未提交”等描述对应当时阶段。校园知识检索扩展仍为尚未实施的方案，真实模型质量仍未评测。
+- 后续 Agent 相关提交和推送只使用 `codex/agent-improvements`，不为每次修改另建远端分支；具体提交、推送、PR 仍以用户明确要求为准。此前推送曾受仓库写权限限制，是否已同步以实际推送结果为准。
+
 ## 基线与归属
 
 - 本轮以已确认的组员分支 `feat/ux-07-campus-forms`（`e475d35`）为基线；它相对原本地 `main`（`471864c`）累计包含 23 个提交、304 个文件变化。
 - 模型目录、持久运行、账号范围会话与草稿、工具卡片、提案、语音和提醒等新版功能来自组员基线。下文记录的是在此基础上保留、整合或修复的本地成果，不把组员全部功能归为本轮新增。
-- 最新获取到的 UX08、UX09 分支尚未纳入本轮发布内容。
+- 本地尚未纳入 UX08～UX12 及 `dev/haohao` 后续更新；具体远端状态见上文带日期的协作说明。
 - 详细修改报告继续保存在本地忽略目录，不上传 GitHub；本文件提供仓库内可读的累计摘要。密钥、个人数据库、本机配置和构建产物不属于提交内容。
 
 ## 2026-10-18：保留本地改进并整合 UX07
@@ -16,14 +25,14 @@
 - 原生客户端新增 Markdown 解析与消息组件；实时回复和历史详情共用展示路径，支持标题、列表、引用、代码及表格，宽表和长代码可在消息内部横向滚动。用户输入保留原文，未支持或异常内容回退为可读原文。
 - 在新版 `MessageContent` 中接入 Markdown，保留组员已有的运行状态、工具、提案和原文切换能力；历史页接入共用消息组件。
 - Web 调试页使用随仓库提供的 Marked、DOMPurify 渲染并净化助手回复；原始 HTML 显示为文本，图片显示说明文字，链接限制协议。新增解析、安全性与排版回归用例。
-- 入口：[Markdown 支持说明](markdown-rendering.md)、[原生解析器](../arkui-x-client/entry/src/main/ets/utils/MarkdownParser.ets)、[Web 渲染器](../agent-service/src/campusflow_agent/web/markdown.js)。
+- 入口：[Markdown 支持说明](markdown-rendering.md)、[原生解析器](../../arkui-x-client/entry/src/main/ets/utils/MarkdownParser.ets)、[Web 渲染器](../../agent-service/src/campusflow_agent/web/markdown.js)。
 
 ### 会话状态与聊天滚动
 
 - 保留早期会话 `pending`/`active` 状态与幂等数据库迁移：旧调用先保存用户问题，失败或取消时补充收尾消息；Web 提问后立即显示本地待完成会话，再刷新服务端目录。
 - HTTP 会话仍由新版 `SessionService` 校验上下文版本后成对写入，提交成功恢复 `active`；没有将旧持久化逻辑移入新版 `RunService`。
 - 修复回答后聊天上翻被拉回底部：只在内容高度变化且允许跟随时贴底；用户上翻暂停跟随，触底或主动发送后恢复。保留新版账号隔离、草稿和运行恢复机制，并适配实际控制器与 UI 回调测试。
-- 入口：[会话服务](../agent-service/src/campusflow_agent/session_service.py)、[聊天页面](../arkui-x-client/entry/src/main/ets/pages/AgentPage.ets)、[会话与滚动回归](../arkui-x-client/scripts/test-agent-session.mjs)。
+- 入口：[会话服务](../../agent-service/src/campusflow_agent/session_service.py)、[聊天页面](../../arkui-x-client/entry/src/main/ets/pages/AgentPage.ets)、[会话与滚动回归](../../arkui-x-client/scripts/test-agent-session.mjs)。
 
 ### Windows、ArkUI-X 与 ArkTS 兼容
 
@@ -91,6 +100,13 @@
 - 离线运行器清除子进程 `PYTEST_ADDOPTS`、覆盖配置 `addopts` 并禁用缓存；真实子进程回归确认环境和配置筛选均不能隐藏失败参数用例。
 - 实际复验：后端 872 passed、2 deselected（96.72 秒）；38 场景、94 项基线检查通过，模型质量仍为 `not_evaluated`；客户端 961 passed、1 skipped；Web 8 passed；76 个源码和 24 个配置静态检查、Ruff、pip check 通过。
 - 本次未执行真实模型、外部校园服务、原生构建或设备验收。提交范围为 Agent 代码、回归、评测清单与相关说明；无关会议分工及课题排版改动继续保留在本地，本次未推送。
+
+## 2026-10-19：统一项目文档目录
+
+- 将 `docs/` 中原有的 46 份 Markdown 统一移动到 `docs/project-documents/`（项目文档），保留设计与实施方案的内部层级，新增[分类索引](README.md)。
+- 同步更新仓库首页、客户端说明、配置模板注释和协作规则中的文档入口；修正迁移文档指向源码、原型、插图清单和验证记录的相对路径。
+- 图片、浏览器原型、验证 JSON 与脚本留在原位，业务代码和数据格式没有变化；历史文档内容保留，未将待实施方案改写为已完成能力。
+- 目录整理与上次功能验证是独立任务，未重跑真实模型、外部校园服务或设备验收；后续相关提交继续使用同一固定分支。
 
 ## 尚未验收与已知边界
 

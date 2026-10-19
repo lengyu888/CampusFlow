@@ -14,7 +14,7 @@
 
 ## 原型与实际检查
 
-打开 [独立原型](previews/ux-01-xingjian.html)。页面顶部标明“设计原型·合成数据·非原生截图”；不连接账号或服务，全部演示状态刷新即重置。
+打开 [独立原型](../previews/ux-01-xingjian.html)。页面顶部标明“设计原型·合成数据·非原生截图”；不连接账号或服务，全部演示状态刷新即重置。
 
 使用现有 Chrome 和 Playwright 运行 `docs/previews/check-ux-01.cjs`，24 项检查通过，页面错误 0、外部请求 0。检查报告和截图位于 `docs/previews/evidence/ux-01/`。在装有对应工具的环境指定 `PLAYWRIGHT_MODULE` 和 `CHROME_EXECUTABLE` 后运行：
 

@@ -9,7 +9,7 @@
 
 ## 代码与效果参照
 
-本阶段将 [第九阶段原型](previews/stage-9-campusflow.html) 的核心结构实现为 ArkUI-X 组件，没有使用网页替代原生主页面。统一颜色、字号和间距来自 [设计规范](design-system.md)。校园入口先连接现有能力、服务、路线和设置，完整课表维护及二级页面统一属于第十一阶段。
+本阶段将 [第九阶段原型](../previews/stage-9-campusflow.html) 的核心结构实现为 ArkUI-X 组件，没有使用网页替代原生主页面。统一颜色、字号和间距来自 [设计规范](design-system.md)。校园入口先连接现有能力、服务、路线和设置，完整课表维护及二级页面统一属于第十一阶段。
 
 核心文件：`pages/HomePage.ets`、`pages/AgentPage.ets`、`pages/PlanCenterPage.ets`、`pages/Index.ets`；共享逻辑：`utils/DailyAgenda.ets`、`utils/AppNavigation.ets`。跨页详情只按实体 ID 定位，无法找到时明确提示。当前 Agent 旧确认接口还没有返回实体 ID，因此使用“查看计划列表”，不会把 proposal_id 猜成 plan_id。
 
