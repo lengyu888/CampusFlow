@@ -50,7 +50,10 @@ _CONFIRMATION = re.compile(
 )
 _QUOTED = re.compile(r'“[^”]*(?:”|$)|「[^」]*(?:」|$)|『[^』]*(?:』|$)|'
                      r'"[^"\n]*(?:"|$)|‘[^’]*(?:’|$)|\'[^\'\n]*(?:\'|$)|`[^`\n]*(?:`|$)')
-_FENCED = re.compile(r"```[\s\S]*?(?:```|$)|~~~[\s\S]*?(?:~~~|$)")
+_FENCE_OPEN = re.compile(r" {0,3}(`{3,}|~{3,})(.*)")
+_FENCE_CLOSE = re.compile(r" {0,3}(`{3,}|~{3,})[ \t]*")
+_QUOTE_PREFIX = re.compile(r" {0,3}>[ \t]?")
+_LIST_PREFIX = re.compile(r" {0,3}(?:[-+*]|[0-9]{1,9}[.)])[ \t]+")
 _PREFIX = re.compile(r"^(?:请)?(?:记住)?(?:我)?(?:以后|今后|从现在起)?(?:把)?")
 _DURATION = re.compile(r"([0-9]+(?:\.[0-9]+)?|[零〇一二两三四五六七八九十百千]+|半)(分钟|小时)")
 _WITHDRAW = {
@@ -127,11 +130,61 @@ def _minutes(text: str) -> int | None:
     return int(minutes) if minutes == minutes.to_integral_value() and 1 <= minutes <= 1440 else None
 
 
+def _without_fenced_data(text: str) -> str:
+    # Match complete lines and remember the opening run. A shorter run, an inline
+    # delimiter or a line with trailing text is literal data, never a closing fence.
+    fence: tuple[str, int, int, int] | None = None
+    lines = []
+    for original in text.splitlines(keepends=True):
+        line = original.splitlines()[0]
+        ending = original[len(line):]
+        candidate = line.expandtabs(4)
+        if fence is not None:
+            character, length, quote_depth, list_indent = fence
+            inside = True
+            for _ in range(quote_depth):
+                quote = _QUOTE_PREFIX.match(candidate)
+                if quote is None:
+                    inside = False
+                    break
+                candidate = candidate[quote.end():]
+            if list_indent and candidate.strip():
+                inside = inside and candidate.startswith(" " * list_indent)
+            if inside:
+                candidate = candidate[list_indent:]
+                closing = _FENCE_CLOSE.fullmatch(candidate)
+                if (closing is not None and closing[1][0] == character
+                        and len(closing[1]) >= length):
+                    fence = None
+                lines.append(("〈资料〉" if line.strip() else "") + ending)
+                continue
+            # An unclosed fence ends at its quote/list boundary. Reconsider the
+            # outside line normally so an independent assertion remains eligible.
+            fence = None
+            candidate = line.expandtabs(4)
+
+        quote_depth = 0
+        while quote := _QUOTE_PREFIX.match(candidate):
+            quote_depth += 1
+            candidate = candidate[quote.end():]
+        listed = _LIST_PREFIX.match(candidate)
+        list_indent = listed.end() if listed is not None else 0
+        candidate = candidate[list_indent:]
+        opening = _FENCE_OPEN.fullmatch(candidate)
+        if (opening is not None
+                and not (opening[1][0] == "`" and "`" in opening[2])):
+            fence = (opening[1][0], len(opening[1]), quote_depth, list_indent)
+            lines.append("〈资料〉" + ending)
+        else:
+            lines.append(original)
+    return "".join(lines)
+
+
 def _clauses(text: str) -> list[str]:
     text = unicodedata.normalize("NFKC", text)
     # Keep a non-grammar placeholder: removing a quotation must not join the
     # remaining fragments into a new assertion that the user never made.
-    text = _QUOTED.sub("〈资料〉", _FENCED.sub("〈资料〉", text))
+    text = _QUOTED.sub("〈资料〉", _without_fenced_data(text))
     lines = []
     quoted_paragraph = False
     for line in text.splitlines():

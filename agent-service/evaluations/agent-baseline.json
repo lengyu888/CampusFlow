@@ -417,5 +417,15 @@
     "business_effect": "不写业务数据或独立记忆",
     "criterion": "下一次模型请求前明确预算失败，不发送超限资料",
     "check": "tests/test_context_integration.py::test_legacy_tool_continuation_cannot_exceed_context_budget"
+  },
+  {
+    "id": "CF-39",
+    "category": "context",
+    "input": "展示嵌套短围栏的代码示例后继续规划",
+    "setup": "旧回合已裁剪，当前四字符反引号或波浪线围栏内有三字符围栏及修改或全清句式",
+    "expected_tools": [],
+    "business_effect": "不写业务数据或独立记忆",
+    "criterion": "实际模型请求保留原120分钟约束及来源，代码示例不能覆盖或撤回，原始历史不变",
+    "check": "tests/test_context_integration.py::test_fenced_examples_cannot_override_memory_after_history_is_trimmed"
   }
 ]

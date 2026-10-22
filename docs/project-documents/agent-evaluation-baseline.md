@@ -4,7 +4,7 @@
 
 ## 范围与判定
 
-[场景清单](../../agent-service/evaluations/agent-baseline.json)当前包含 38 个稳定编号的场景，
+[场景清单](../../agent-service/evaluations/agent-baseline.json)当前包含 39 个稳定编号的场景，
 记录代表性输入、前置条件、预期工具、允许的业务效果、判定标准及对应 pytest 检查。
 覆盖日期、课程、来源时效、天气、知识、路线、提案、权限、失败、预算、取消、恢复、上下文和偏好。
 清单中的输入是在线验收题目；离线运行器执行关联的代码契约测试，不会把这些自然语言问题交给真实模型。
@@ -22,6 +22,8 @@
 提案确认由应用接口完成，不能解释为模型具备确认工具。
 初版 CF-28 刻画旧约束丢失。上下文优化后，它已改为正向检查旧约束在裁剪后仍通过结构化资料进入模型输入。
 CF-31 至 CF-38 覆盖修改/撤回、全清、无效资料、工具续轮、隔离、持久重载和兼容入口。
+CF-39 在真实运行的模型请求边界验证：旧历史裁剪后，四字符围栏内的三字符围栏示例
+不能修改或全清原有约束。CF-26 同时检查工具启动前与等待工具中的真实超时取消路径。
 这些检查验证输入边界，不能替代模型是否遵守约束的在线评测。
 
 ## 重复执行
@@ -29,7 +31,7 @@ CF-31 至 CF-38 覆盖修改/撤回、全清、无效资料、工具续轮、隔
 在 `agent-service` 目录运行：
 
 ```powershell
-.\.venv\Scripts\python.exe tests/baseline_runner.py --output data/evaluations/agent-baseline-v2.json
+.\.venv\Scripts\python.exe tests/baseline_runner.py --output data/evaluations/agent-baseline-v3.json
 .\.venv\Scripts\python.exe -m pytest tests/test_baseline_runner.py -q
 ```
 
@@ -55,6 +57,16 @@ CF-31 至 CF-38 覆盖修改/撤回、全清、无效资料、工具续轮、隔
 CF-28 采用正向保留标准；上下文专项 **79 passed**，包含独立审查发现的混合撤回、
 临时范围、条件转述和问句作用域回归。v1 报告保留在原路径，v2 输出另存。
 优化后的完整后端离线回归：**855 passed，2 deselected**；相关 Python 文件 Ruff 与差异检查通过。
+
+2026-10-21 PR #31 评审修复基线（v3）：**39 个场景、99 项离线检查通过**。
+CF-39 展开为两种围栏字符与修改/全清的 4 项实际运行检查；CF-26 保留原测试名并展开为 2 项，
+不依赖 SQLite 在固定 25ms 内进入工具阶段。场景清单 `dataset_sha256` 为
+`ec3a9f9f524da28c9e961f7826b98049e38b3c60c48e4390baae3567e02f0413`。
+本次在同一 Python 进程禁用 Settings 的 `.env` 加载，再执行清单关联的 pytest 和运行器报告构建；
+报告另存本地忽略目录，历史 v1/v2 报告保留。完整后端 **901 passed、2 deselected**（85.34 秒）。
+上下文专项 **121 passed**；超时文件 **16 passed**，两阶段额外重复 10 轮共 20 项通过，
+其中 5 轮在每次事件写入前人为加入 40ms 同步延迟。人工延迟是稳定性探针，不代表生产延迟统计。
+Ruff 与依赖检查通过；真实模型质量继续为 `not_evaluated`，未执行真实服务集成测试。
 
 ## 上下文核查
 
