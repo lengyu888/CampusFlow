@@ -1,5 +1,7 @@
 # 累计版本编译配置与 Windows 兼容修复
 
+> **历史修复记录**：下文描述 `dev/haohao` 当时的候选与待复编状态。2026-10-23 整合候选已实际通过 API24 clean HAP 编译并安装启动 Phone；具体结果、未验证的平台及新的 `main` 协作入口以 [全分支整合记录](project-documents/branch-integration-2026-10-23.md) 为准，不再以本文旧分支指令开展下一轮任务。
+
 当前代码入口为两个仓库各自的 `dev/haohao`，不再按阶段选择分支。完整范围见 [协作说明](haohao-collaboration.md)及 [48 个历史 PR 的祖先覆盖记录](evidence/collaboration-pr-coverage.json)。本分支保留历史功能与原作者提交；修复集中在当前完整版本。
 
 **最新进展：** 学长已对上一版 `4b759f8` 执行真实原生编译，配置校验通过，但 CompileArkTS 仍失败。本轮 43 处诊断的源码处理及复编交接见 [PR #30 原生诊断修复](arkts-review-repair.md)；新的原生结果仍待复编，不能将下方早期预检记录解释为已通过原生编译。

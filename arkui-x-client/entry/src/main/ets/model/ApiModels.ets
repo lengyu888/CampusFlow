@@ -358,6 +358,7 @@ export interface SessionSummary {
   message_count: number;
   created_at: string;
   updated_at: string;
+  status?: string;
 }
 
 export interface SessionContext {

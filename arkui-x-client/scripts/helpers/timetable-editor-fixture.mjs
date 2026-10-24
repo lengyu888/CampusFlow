@@ -1,5 +1,6 @@
+import './theme-fixture.mjs';
 import { readFileSync } from 'node:fs';
-import { stripTypeScriptTypes } from 'node:module';
+import { stripThemeTypeScriptTypes as stripTypeScriptTypes } from './theme-fixture.mjs';
 import { importReview, timetableRules } from './timetable-import-fixture.mjs';
 export { importReview };
 export function diagnosticPreview(entries, warnings = []) {

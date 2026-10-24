@@ -4,7 +4,7 @@ interface ErrorCodePayload {
   code?: string | null;
 }
 
-export class CampusFlowRequestError extends Error {
+export class CampusFlowRequestError extends Error implements Error {
   statusCode: number;
   code: string;
 

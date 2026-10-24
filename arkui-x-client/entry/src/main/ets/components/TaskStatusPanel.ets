@@ -3,12 +3,14 @@ import { TaskStatusItem, TaskStatusState } from '../utils/TaskStatusController';
 import { formatPlanDateTime } from '../utils/PlanPresentation';
 import { TaskScheduleDetails } from './TaskScheduleDetails';
 import { AppTheme } from '../theme/AppTheme';
+import { ThemePalette, themePalette } from '../theme/ThemePalette';
 
 export interface TaskStatusLabel { taskId: string; title: string; }
 
 // Controlled view: Index owns the only account-scoped coordinator and durable operation ledger.
 @Component
 export struct TaskStatusPanel {
+  @StorageLink('campusflowThemePalette') private palette: ThemePalette = themePalette('paper-green');
   @Prop @Watch('stateChanged') state: TaskStatusState = { items: [], selectedId: '', lockedTaskIds: [], pendingCount: 0, message: '' };
   @Prop active: boolean = true;
   @Prop labels: TaskStatusLabel[] = [];
@@ -78,49 +80,49 @@ export struct TaskStatusPanel {
     this.expandedDetails = this.expandedDetails.includes(id) ? this.expandedDetails.filter((value: string) => value !== id) : this.expandedDetails.concat([id]);
   }
   private messageColor(item: TaskStatusItem): string {
-    return item.phase === 'applied' ? AppTheme.success : item.phase === 'cancelled' || item.busy ? AppTheme.secondary : AppTheme.warning;
+    return item.phase === 'applied' ? this.palette.success : item.phase === 'cancelled' || item.busy ? this.palette.secondary : this.palette.warning;
   }
 
   @Builder
   private Receipt(receipt: TaskStatusReceipt) {
     Column({ space: 8 }) {
-      Text(receipt.kind === 'complete' ? '这次标记完成已保存' : '这次恢复未完成已保存').fontSize(AppTheme.sectionTitle).fontColor(AppTheme.success).width('100%')
-      Text(`生效时间：${formatPlanDateTime(receipt.applied_at)}`).fontSize(AppTheme.bodySize).fontColor(AppTheme.ink).width('100%')
+      Text(receipt.kind === 'complete' ? '这次标记完成已保存' : '这次恢复未完成已保存').fontSize(this.palette.sectionTitle).fontColor(this.palette.success).width('100%')
+      Text(`生效时间：${formatPlanDateTime(receipt.applied_at)}`).fontSize(this.palette.bodySize).fontColor(this.palette.ink).width('100%')
       Text(`状态：${receipt.before_status === 'completed' ? '已完成' : '未完成'} → ${receipt.after_status === 'completed' ? '已完成' : '未完成'}`)
-        .fontSize(AppTheme.bodySize).fontColor(AppTheme.ink).width('100%')
+        .fontSize(this.palette.bodySize).fontColor(this.palette.ink).width('100%')
       Text('这是该次操作的回执，当前任务可能已有后续修改；请打开任务查看最新内容。恢复不会删除专注记录，也不会还原旧标题、时间或地点。')
-        .fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
-    }.width('100%').padding(16).alignItems(HorizontalAlign.Start).backgroundColor(AppTheme.successSoft).borderRadius(AppTheme.cardRadius)
+        .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+    }.width('100%').padding(16).alignItems(HorizontalAlign.Start).backgroundColor(this.palette.successSoft).borderRadius(this.palette.cardRadius)
   }
 
   @Builder
   private Preview(item: TaskStatusItem, preview: TaskStatusPreview) {
     Column({ space: 12 }) {
-      Text(preview.task.title).fontSize(AppTheme.sectionTitle).fontColor(AppTheme.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
-      Text(this.previewContext(item)).fontSize(AppTheme.bodySize).fontColor(AppTheme.secondary).width('100%')
+      Text(preview.task.title).fontSize(this.palette.sectionTitle).fontColor(this.palette.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
+      Text(this.previewContext(item)).fontSize(this.palette.bodySize).fontColor(this.palette.secondary).width('100%')
       TaskScheduleDetails({ startAt: preview.task.start_at, endAt: preview.task.end_at, location: preview.task.location, reminderMinutes: preview.task.reminder_minutes })
-      Text(`预览有效至：${formatPlanDateTime(item.operation?.expires_at ?? null)}`).fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
+      Text(`预览有效至：${formatPlanDateTime(item.operation?.expires_at ?? null)}`).fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
       ForEach(preview.conflicts, (message: string, index: number) => {
-        Text(`不能恢复：${message}`).fontSize(AppTheme.bodySize).fontColor(AppTheme.danger).width('100%').wordBreak(WordBreak.BREAK_WORD)
+        Text(`不能恢复：${message}`).fontSize(this.palette.bodySize).fontColor(this.palette.danger).width('100%').wordBreak(WordBreak.BREAK_WORD)
       }, (_message: string, index: number) => `${item.operationId}-conflict-${index}`)
       ForEach(preview.warnings, (message: string, index: number) => {
-        Text(message).fontSize(AppTheme.bodySize).fontColor(AppTheme.warning).width('100%').wordBreak(WordBreak.BREAK_WORD)
+        Text(message).fontSize(this.palette.bodySize).fontColor(this.palette.warning).width('100%').wordBreak(WordBreak.BREAK_WORD)
       }, (_message: string, index: number) => `${item.operationId}-warning-${index}`)
       if (preview.course_review.overlaps.length > 0) {
-        Text('重新核对课内安排').fontSize(AppTheme.sectionTitle).fontColor(AppTheme.warning).width('100%')
-        Text('过去的课内确认不代替这次恢复。请核对当前课程、任务和重叠时段。').fontSize(AppTheme.bodySize).fontColor(AppTheme.secondary).width('100%')
-        Text(`${preview.course_review.school} · ${preview.course_review.campus} · 北京时间`).fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
+        Text('重新核对课内安排').fontSize(this.palette.sectionTitle).fontColor(this.palette.warning).width('100%')
+        Text('过去的课内确认不代替这次恢复。请核对当前课程、任务和重叠时段。').fontSize(this.palette.bodySize).fontColor(this.palette.secondary).width('100%')
+        Text(`${preview.course_review.school} · ${preview.course_review.campus} · 北京时间`).fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
         ForEach(this.overlaps(preview), (overlap: CourseOverlap, index: number) => {
           Column({ space: 4 }) {
-            Text(`${overlap.course.date} · ${overlap.course.title}`).fontSize(AppTheme.bodySize).fontColor(AppTheme.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
+            Text(`${overlap.course.date} · ${overlap.course.title}`).fontSize(this.palette.bodySize).fontColor(this.palette.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
             Text(`课程 ${overlap.course.start_time}–${overlap.course.end_time} · ${overlap.course.location || '地点未填'} · ${overlap.course.teacher || '教师未填'}`)
-              .fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+              .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
             Text(`实际重叠：${formatPlanDateTime(overlap.overlap_start_at)} 至 ${formatPlanDateTime(overlap.overlap_end_at)}`)
-              .fontSize(AppTheme.bodySize).fontColor(AppTheme.warning).width('100%').wordBreak(WordBreak.BREAK_WORD)
+              .fontSize(this.palette.bodySize).fontColor(this.palette.warning).width('100%').wordBreak(WordBreak.BREAK_WORD)
           }.width('100%').alignItems(HorizontalAlign.Start)
         }, (overlap: CourseOverlap, index: number) => `${item.operationId}-${this.overlapPage}-${overlap.course_key}-${index}`)
         if (preview.course_review.overlaps.length > 6) {
-          Text(`重叠课程第 ${this.overlapPage + 1} / ${Math.ceil(preview.course_review.overlaps.length / 6)} 页`).fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary)
+          Text(`重叠课程第 ${this.overlapPage + 1} / ${Math.ceil(preview.course_review.overlaps.length / 6)} 页`).fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
           Row({ space: 8 }) {
             Button('上一页').constraintSize({ minHeight: 48 }).layoutWeight(1).enabled(this.overlapPage > 0).onClick(() => this.overlapPage--)
             Button('下一页').constraintSize({ minHeight: 48 }).layoutWeight(1).enabled((this.overlapPage + 1) * 6 < preview.course_review.overlaps.length).onClick(() => this.overlapPage++)
@@ -128,55 +130,55 @@ export struct TaskStatusPanel {
         }
         if (preview.course_review.requires_acknowledgement) {
           Button(this.checked(preview) ? '已选择：仍这样安排（点此取消）' : '仍这样安排').width('100%').constraintSize({ minHeight: 48 })
-            .fontSize(AppTheme.bodySize).fontColor(this.checked(preview) ? AppTheme.onAccent : AppTheme.accent)
-            .backgroundColor(this.checked(preview) ? AppTheme.accent : AppTheme.accentSoft).enabled(this.active && item.canConfirm && !item.busy)
+            .fontSize(this.palette.bodySize).fontColor(this.checked(preview) ? this.palette.onAccent : this.palette.accent)
+            .backgroundColor(this.checked(preview) ? this.palette.accent : this.palette.accentSoft).enabled(this.active && item.canConfirm && !item.busy)
             .onClick(() => this.toggleAck(item))
         }
       }
       if (item.canConfirm) {
-        Button('确认恢复未完成').width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
-          .fontColor(AppTheme.onAccent).backgroundColor(AppTheme.accent)
+        Button('确认恢复未完成').width('100%').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
+          .fontColor(this.palette.onAccent).backgroundColor(this.palette.accent)
           .enabled(this.active && !item.busy && (!preview.course_review.requires_acknowledgement || this.checked(preview))).onClick(() => this.confirm(item))
       }
-    }.width('100%').padding(16).alignItems(HorizontalAlign.Start).backgroundColor(AppTheme.surface).borderRadius(AppTheme.cardRadius)
+    }.width('100%').padding(16).alignItems(HorizontalAlign.Start).backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
   }
 
   build() {
     Column({ space: 8 }) {
       Row({ space: 12 }) {
-        Button('返回').constraintSize({ minHeight: 48, minWidth: 64 }).fontColor(AppTheme.accent).backgroundColor(Color.Transparent).onClick(() => this.onClose())
-        Text('完成与恢复记录').fontSize(AppTheme.sectionTitle).fontColor(AppTheme.ink).layoutWeight(1).wordBreak(WordBreak.BREAK_WORD)
+        Button('返回').constraintSize({ minHeight: 48, minWidth: 64 }).fontColor(this.palette.accent).backgroundColor(Color.Transparent).onClick(() => this.onClose())
+        Text('完成与恢复记录').fontSize(this.palette.sectionTitle).fontColor(this.palette.ink).layoutWeight(1).wordBreak(WordBreak.BREAK_WORD)
       }.width('100%')
       Scroll() {
         Column({ space: 16 }) {
-          Text('关闭此页不会取消已提交的操作。待核对记录会保留；只限制对应任务，其他任务仍可使用。').fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
-          if (this.state.message.length > 0) { Text(this.state.message).fontSize(AppTheme.bodySize).fontColor(AppTheme.warning).width('100%').wordBreak(WordBreak.BREAK_WORD) }
+          Text('关闭此页不会取消已提交的操作。待核对记录会保留；只限制对应任务，其他任务仍可使用。').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+          if (this.state.message.length > 0) { Text(this.state.message).fontSize(this.palette.bodySize).fontColor(this.palette.warning).width('100%').wordBreak(WordBreak.BREAK_WORD) }
           ForEach(this.items(), (item: TaskStatusItem) => {
             Button({ type: ButtonType.Normal }) {
               Column({ space: 4 }) {
-                Text(this.label(item)).fontSize(AppTheme.bodySize).fontColor(AppTheme.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
-                Text(this.phaseLabel(item)).fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
+                Text(this.label(item)).fontSize(this.palette.bodySize).fontColor(this.palette.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
+                Text(this.phaseLabel(item)).fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
               }.width('100%').alignItems(HorizontalAlign.Start)
-            }.width('100%').constraintSize({ minHeight: 56 }).padding(12).backgroundColor(this.state.selectedId === item.operationId ? AppTheme.accentSoft : AppTheme.surface)
-              .borderRadius(AppTheme.controlRadius).accessibilityText(`${this.label(item)}，${this.phaseLabel(item)}`).onClick(() => this.onSelect(item.operationId))
+            }.width('100%').constraintSize({ minHeight: 56 }).padding(12).backgroundColor(this.state.selectedId === item.operationId ? this.palette.accentSoft : this.palette.surface)
+              .borderRadius(this.palette.controlRadius).accessibilityText(`${this.label(item)}，${this.phaseLabel(item)}`).onClick(() => this.onSelect(item.operationId))
           }, (item: TaskStatusItem) => `${item.operationId}-${item.phase}`)
           if (this.state.items.length > 6) {
             Row({ space: 8 }) {
               Button('上一页').constraintSize({ minHeight: 48 }).layoutWeight(1).enabled(this.pageIndex > 0).onClick(() => this.pageIndex--)
-              Text(`${this.pageIndex + 1}/${Math.ceil(this.state.items.length / 6)}`).fontSize(AppTheme.metaSize)
+              Text(`${this.pageIndex + 1}/${Math.ceil(this.state.items.length / 6)}`).fontSize(this.palette.metaSize)
               Button('下一页').constraintSize({ minHeight: 48 }).layoutWeight(1).enabled((this.pageIndex + 1) * 6 < this.state.items.length).onClick(() => this.pageIndex++)
             }.width('100%')
           }
           ForEach(this.selectedItems(), (item: TaskStatusItem) => {
             Column({ space: 12 }) {
-              Text(this.phaseLabel(item)).fontSize(AppTheme.sectionTitle).fontColor(item.phase === 'applied' ? AppTheme.success : AppTheme.ink).width('100%')
-              if (item.message.length > 0) { Text(item.message).fontSize(AppTheme.bodySize).fontColor(this.messageColor(item)).width('100%').wordBreak(WordBreak.BREAK_WORD) }
+              Text(this.phaseLabel(item)).fontSize(this.palette.sectionTitle).fontColor(item.phase === 'applied' ? this.palette.success : this.palette.ink).width('100%')
+              if (item.message.length > 0) { Text(item.message).fontSize(this.palette.bodySize).fontColor(this.messageColor(item)).width('100%').wordBreak(WordBreak.BREAK_WORD) }
               if (item.operation?.preview) { this.Preview(item, item.operation.preview) }
               if (item.operation?.receipt) { this.Receipt(item.operation.receipt) }
               Button(this.expandedDetails.includes(item.operationId) ? '收起核对编号' : '查看核对编号').width('100%').constraintSize({ minHeight: 48 })
-                .fontColor(AppTheme.secondary).backgroundColor(Color.Transparent).onClick(() => this.toggleDetails(item.operationId))
+                .fontColor(this.palette.secondary).backgroundColor(Color.Transparent).onClick(() => this.toggleDetails(item.operationId))
               if (this.expandedDetails.includes(item.operationId)) {
-                Text(`任务编号：${item.taskId}\n操作／回执编号：${item.operationId}`).fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+                Text(`任务编号：${item.taskId}\n操作／回执编号：${item.operationId}`).fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
               }
               if (!item.busy && ['unknown', 'cleanup', 'retryable', 'review'].includes(item.phase)) {
                 Button('核对原操作结果').width('100%').constraintSize({ minHeight: 48 }).enabled(this.active).onClick(() => this.onCheck(item.operationId))
@@ -197,6 +199,6 @@ export struct TaskStatusPanel {
           }, (item: TaskStatusItem) => `${item.operationId}-${item.phase}-${item.operation?.state ?? ''}`)
         }.width('100%').alignItems(HorizontalAlign.Start)
       }.width('100%').layoutWeight(1)
-    }.width('100%').height('100%').padding({ left: 20, right: 20, bottom: 16 }).backgroundColor(AppTheme.bg)
+    }.width('100%').height('100%').padding({ left: 20, right: 20, bottom: 16 }).backgroundColor(this.palette.bg)
   }
 }

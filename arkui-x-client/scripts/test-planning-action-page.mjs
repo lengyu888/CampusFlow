@@ -1,8 +1,9 @@
+import './helpers/theme-fixture.mjs';
 import { planningPageDependencies, dependencyPrefix, timetableSnapshot, preferenceSnapshot } from './helpers/planning-overview-fixture.mjs';
 import { draftFixture } from './helpers/local-draft-fixture.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { stripTypeScriptTypes } from 'node:module';
+import { stripThemeTypeScriptTypes as stripTypeScriptTypes } from './helpers/theme-fixture.mjs';
 import { test } from 'node:test';
 import { PlanningActionController, editedPlanningTime, validPlanningDate, planningTimestamp, CampusFlowRequestError, candidate, applied,
   sampleTask, samplePlan, presentation, deferred, clone, quickCapture, courseReview } from './helpers/planning-action-fixture.mjs';

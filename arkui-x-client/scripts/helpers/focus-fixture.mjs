@@ -1,5 +1,6 @@
+import './theme-fixture.mjs';
 import { readFileSync } from 'node:fs';
-import { stripTypeScriptTypes } from 'node:module';
+import { stripThemeTypeScriptTypes as stripTypeScriptTypes } from './theme-fixture.mjs';
 const read=n=>readFileSync(new URL(`../../entry/src/main/ets/utils/${n}.ets`,import.meta.url),'utf8');
 const clean=s=>s.replace(/^import \{[\s\S]*?\} from '[^']+';\r?\n/gm,'').replace(/^import [^\n]+;\r?\n/gm,'');
 const load=(n,deps,names)=>new Function(...Object.keys(deps),stripTypeScriptTypes(clean(read(n)).replace(/^export /gm,''))+`\nreturn {${names.join(',')}}`)(...Object.values(deps));
@@ -9,7 +10,7 @@ export const {CampusFlowRequestError}=feedback;
 export const digests=load('FocusDigest',agenda,['focusSha256','focusRequestDigest']);
 export const validation=load('FocusValidation',{...agenda,...digests},['focusUuid','focusInteger','focusKeys','focusIso','focusTarget','validFocusInterval','validFocusGap','validFocusPieces','validFocusRequest','validFocusOperation','validFocusRecord','validFocusDetail','validFocusActive','validFocusList']);
 export const timers=load('FocusTimer',{},['FocusTimer','validFocusSample','copyFocusAnchor','FOCUS_SAMPLE_MS','FOCUS_CHECKPOINT_MS','FOCUS_MAX_SAMPLE_MS','FOCUS_WALL_TOLERANCE_MS']);
-export const stores=load('FocusStore',{...validation,...timers},['FocusStore','focusBytes','cloneFocusDocument','validFocusAnchor','MAX_FOCUS_BYTES']);
+export const stores=load('FocusStore',{...validation,...timers},['FocusStore','FocusScopeError','focusBytes','cloneFocusDocument','validFocusAnchor','MAX_FOCUS_BYTES']);
 export const {FocusStore}=stores;
 export const {FocusController,emptyFocusState}=load('FocusController',{...validation,...timers,...stores,...feedback},['FocusController','emptyFocusState']);
 export const uuid=n=>`10000000-0000-4000-8000-${String(n).padStart(12,'0')}`;

@@ -1,0 +1,49 @@
+/* One component tree, two complete semantic palettes. Loaded last, no layout/DOM reset. */
+:root, :root[data-theme="paper-green"] {
+  --cf-bg: #f6f4ef; --cf-surface: #fffefb; --cf-surface-soft: #f1f2eb;
+  --cf-surface-strong: #e7eee6; --cf-ink: #29352f; --cf-muted: #626e65;
+  --cf-faint: #626e65; --cf-line: #dce2d8; --cf-accent: #416454;
+  --cf-accent-strong: #355445; --cf-accent-soft: #e7eee6;
+  --cf-success: #3d7054; --cf-warning: #886023; --cf-danger: #a4493e;
+  --cf-radius-control: 12px; --cf-radius-card: 16px; --cf-radius-shell: 24px;
+  --cf-focus-ring: #788578; --cf-chrome: rgb(255 254 251 / 94%);
+  --cf-shadow-sm: 0 1px 2px rgb(41 53 47 / 3%), 0 6px 18px rgb(41 53 47 / 4%);
+  --cf-shadow-lg: 0 24px 60px rgb(41 53 47 / 10%);
+  --deep: #29352f; --ink: var(--cf-ink); --paper: var(--cf-surface);
+  --surface: var(--cf-surface); --line: var(--cf-line); --acid: var(--cf-accent);
+  --blue: var(--cf-accent); --blue-soft: var(--cf-accent-soft); --blue-deep: var(--cf-accent-strong);
+  --green: var(--cf-success); --orange: var(--cf-warning); --muted: var(--cf-muted);
+}
+:root[data-theme="ios-blue"] {
+  --cf-bg: #f2f2f7; --cf-surface: #fff; --cf-surface-soft: #f2f2f7;
+  --cf-surface-strong: #e5e5ea; --cf-ink: #1c1c1e; --cf-muted: #63636e;
+  --cf-faint: #63636e; --cf-line: #e5e5ea; --cf-accent: #007aff;
+  --cf-accent-strong: #005fcc; --cf-accent-soft: #eaf3ff;
+  --cf-success: #248a3d; --cf-warning: #c05600; --cf-danger: #d70015;
+  --cf-radius-control: 16px; --cf-radius-card: 24px; --cf-radius-shell: 32px;
+  --cf-focus-ring: #007aff; --cf-chrome: rgb(255 255 255 / 90%);
+  --cf-shadow-sm: 0 1px 2px rgb(28 28 30 / 3%), 0 6px 18px rgb(28 28 30 / 5%);
+  --cf-shadow-lg: 0 28px 70px rgb(28 28 30 / 12%);
+  --deep: #1c1c1e;
+}
+:focus-visible { outline-color: var(--cf-focus-ring); }
+.topbar, .app-topbar, .app-nav, .settings-topbar { background: var(--cf-chrome); }
+.brand-mark { box-shadow: none; }
+.message.user .bubble { background: var(--cf-accent); color: #fff; }
+.theme-settings { margin: 0 0 24px; padding: 20px; background: var(--cf-surface); border: 1px solid var(--cf-line); border-radius: var(--cf-radius-card); }
+.theme-settings h2 { margin: 0 0 6px; font-size: 18px; }
+.theme-settings > p { margin-bottom: 16px; color: var(--cf-muted); font-size: 13px; line-height: 1.6; }
+.theme-choices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.theme-choice { display: grid; gap: 6px; min-width: 0; padding: 12px; border: 1px solid var(--cf-line); border-radius: var(--cf-radius-control); background: var(--cf-surface); text-align: left; }
+.theme-choice[aria-pressed="true"] { border: 2px solid var(--cf-accent); padding: 11px; }
+.theme-choice strong { font-size: 15px; }
+.theme-choice small { color: var(--cf-muted); font-size: 12px; }
+.theme-sample { display: grid; gap: 7px; padding: 12px; margin-bottom: 4px; border-radius: 10px; background: var(--sample-bg); }
+.theme-sample i { display: block; height: 7px; border-radius: 4px; background: var(--sample-accent); }
+.theme-sample i:last-child { width: 68%; opacity: .3; }
+.theme-sample-blue { --sample-bg: #f2f2f7; --sample-accent: #007aff; }
+.theme-sample-green { --sample-bg: #f6f4ef; --sample-accent: #416454; }
+#themeStatus { margin: 12px 0 0; font-size: 12px; color: var(--cf-muted); }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; scroll-behavior: auto !important; }
+}

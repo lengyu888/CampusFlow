@@ -1,9 +1,10 @@
+import './helpers/theme-fixture.mjs';
 import { planningPageDependencies, dependencyPrefix, timetableSnapshot, preferenceSnapshot } from './helpers/planning-overview-fixture.mjs';
 import { draftFixture } from './helpers/local-draft-fixture.mjs';
 import { PlanningActionController, candidate, applied, validPlanningDate, quickCapture, courseReview } from './helpers/planning-action-fixture.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { stripTypeScriptTypes } from 'node:module';
+import { stripThemeTypeScriptTypes as stripTypeScriptTypes } from './helpers/theme-fixture.mjs';
 import { test } from 'node:test';
 
 const agendaSource = readFileSync(new URL('../entry/src/main/ets/utils/DailyAgenda.ets', import.meta.url), 'utf8').replace(/^import [^\n]+;\r?\n/gm, '');

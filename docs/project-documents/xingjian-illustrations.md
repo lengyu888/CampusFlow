@@ -6,21 +6,21 @@
 
 **UX02历史状态：** 当时仅A1、A2、A3、A5接入页面；A4、A6为UX09专注准备，A7为UX10回看准备，预备素材不代表当时已有这些功能。下面的生成提示、修订和浏览器观察保留原始记录。
 
-**UX12当前状态：** 以UX11已发布代码 `fce0e1d2f46329d1d3552924be890ca0653866d3` 核对，7张均已有生产页面引用。逐图实际PNG解码、尺寸、模式、alpha、字节与SHA-256均符合原登记，详见[本次核验记录](evidence/ux-12-artwork-checks.json)。本次没有重新生成、下载或压缩素材；源码引用不代表原生设备加载已验收。
+**UX12当前状态：** 以UX11已发布代码 `fce0e1d2f46329d1d3552924be890ca0653866d3` 核对，7张均已有生产页面引用。逐图实际PNG解码、尺寸、模式、alpha、字节与SHA-256均符合原登记，详见[本次核验记录](../evidence/ux-12-artwork-checks.json)。本次没有重新生成、下载或压缩素材；源码引用不代表原生设备加载已验收。
 
 |ID|文件|尺寸/格式|UX12当前使用位置|
 |---|---|---|---|
-|A1|xj_onboarding.png|1448×1086 / RGB|[首次录课引导](../arkui-x-client/entry/src/main/ets/pages/OnboardingPage.ets#L901)，188×140|
-|A2|xj_empty_day.png|1536×1024 / RGBA|[今日](../arkui-x-client/entry/src/main/ets/pages/HomePage.ets#L591)两类来源成功且日程/全天/待安排均为空，128×96|
-|A3|xj_course_entry.png|1254×1254 / RGBA|[校园课表入口](../arkui-x-client/entry/src/main/ets/pages/CampusPage.ets#L191)，44×44|
-|A4|xj_focus_entry.png|1254×1254 / RGBA|[专注开始视图](../arkui-x-client/entry/src/main/ets/pages/FocusPage.ets#L187)，72×72；已在UX09接入|
-|A5|xj_campus_entry.png|1254×1254 / RGBA|[校园导航入口](../arkui-x-client/entry/src/main/ets/pages/CampusPage.ets#L192)，44×44|
-|A6|xj_focus_end.png|1536×1024 / RGBA|[本机专注已结束视图](../arkui-x-client/entry/src/main/ets/pages/FocusPage.ets#L221)，100×67；同步状态单列，已在UX09接入|
-|A7|xj_review_empty.png|1536×1024 / RGBA|[回看](../arkui-x-client/entry/src/main/ets/pages/ReviewPage.ets#L438)快照无本期完成/专注记录，120×80；已在UX10接入|
+|A1|xj_onboarding.png|1448×1086 / RGB|[首次录课引导](../../arkui-x-client/entry/src/main/ets/pages/OnboardingPage.ets#L901)，188×140|
+|A2|xj_empty_day.png|1536×1024 / RGBA|[今日](../../arkui-x-client/entry/src/main/ets/pages/HomePage.ets#L591)两类来源成功且日程/全天/待安排均为空，128×96|
+|A3|xj_course_entry.png|1254×1254 / RGBA|[校园课表入口](../../arkui-x-client/entry/src/main/ets/pages/CampusPage.ets#L191)，44×44|
+|A4|xj_focus_entry.png|1254×1254 / RGBA|[专注开始视图](../../arkui-x-client/entry/src/main/ets/pages/FocusPage.ets#L187)，72×72；已在UX09接入|
+|A5|xj_campus_entry.png|1254×1254 / RGBA|[校园导航入口](../../arkui-x-client/entry/src/main/ets/pages/CampusPage.ets#L192)，44×44|
+|A6|xj_focus_end.png|1536×1024 / RGBA|[本机专注已结束视图](../../arkui-x-client/entry/src/main/ets/pages/FocusPage.ets#L221)，100×67；同步状态单列，已在UX09接入|
+|A7|xj_review_empty.png|1536×1024 / RGBA|[回看](../../arkui-x-client/entry/src/main/ets/pages/ReviewPage.ets#L438)快照无本期完成/专注记录，120×80；已在UX10接入|
 
 ## 生成提示与修订
 
-每张基础提示词、生成文件标识、字节与SHA-256完整记录于 `xingjian-illustrations.json`。实际调用增加用途标识 `Use case: illustration-story`；对于引用图片，明确只引用笔触与色板、不延续原场景；透明项目明确背景真正透明、边缘干净，不添加桌面、阴影光晕或多余物体。基础提示全文如下。
+每张基础提示词、生成文件标识、字节与SHA-256完整记录于 `../xingjian-illustrations.json`。实际调用增加用途标识 `Use case: illustration-story`；对于引用图片，明确只引用笔触与色板、不延续原场景；透明项目明确背景真正透明、边缘干净，不添加桌面、阴影光晕或多余物体。基础提示全文如下。
 
 ### A1｜首次使用：一张校园书桌（4:3，非透明）
 
@@ -64,4 +64,4 @@
 
 这组插图不是实际校园照片、地图数据或学习成果。页面文字全部由真实控件渲染。
 
-UX12重新核验的是仓内文件与原生成登记一致、以及当前源码中的引用位置，没有重放七次原始生成过程，也没有作第三方版权审定。[原始登记](xingjian-illustrations.json)保留生成工具、日期、文件标识和完整提示词；当前[AppIllustration](../arkui-x-client/entry/src/main/ets/components/AppIllustration.ets#L17)仍只接本地Resource，Contain缩放，加载失败回退向量图标，装饰图不读屏。可点击含义仍由独立文字和触区承担。
+UX12重新核验的是仓内文件与原生成登记一致、以及当前源码中的引用位置，没有重放七次原始生成过程，也没有作第三方版权审定。[原始登记](../xingjian-illustrations.json)保留生成工具、日期、文件标识和完整提示词；当前[AppIllustration](../../arkui-x-client/entry/src/main/ets/components/AppIllustration.ets#L17)仍只接本地Resource，Contain缩放，加载失败回退向量图标，装饰图不读屏。可点击含义仍由独立文字和触区承担。

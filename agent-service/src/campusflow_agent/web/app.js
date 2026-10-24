@@ -204,7 +204,11 @@ async function responseError(response) {
 
 async function api(path, options = {}) {
   const response = await fetch(path, options);
-  if (!response.ok) throw new Error(await responseError(response));
+  if (!response.ok) {
+    const error = new Error(await responseError(response));
+    error.status = response.status;
+    throw error;
+  }
   if (response.status === 204) return null;
   return response.json();
 }
@@ -250,6 +254,11 @@ function switchAuth(mode) {
 async function submitAuth(form, endpoint) {
   const button = form.querySelector("button[type='submit']");
   const body = Object.fromEntries(new FormData(form));
+  if (endpoint === "/api/v1/auth/register") {
+    const key = typeof body.api_key === "string" ? body.api_key.trim() : "";
+    if (key) body.api_key = key;
+    else delete body.api_key;
+  }
   setButtonBusy(button, true, "正在建立连接…");
   try {
     const payload = await api(endpoint, {
@@ -756,19 +765,176 @@ function renderPlanGoals(plans) {
   });
 }
 
+function taskStatusKey(owner, taskId) {
+  return `campusflow.task-status:${encodeURIComponent(owner)}:${encodeURIComponent(taskId)}`;
+}
+
+function taskStatusOwner(intent) {
+  return state.user?.user_id === intent.owner;
+}
+
+function taskStatusRecord(owner, task, completed) {
+  const key = taskStatusKey(owner, task.task_id);
+  const existing = localStorage.getItem(key);
+  if (existing) {
+    const intent = JSON.parse(existing);
+    if (intent.owner !== owner || intent.task_id !== task.task_id || !intent.request?.operation_id) {
+      throw new Error("本地状态操作记录无法核对，请勿重复操作。");
+    }
+    return { intent, existing: true };
+  }
+  if (!Number.isSafeInteger(task.task_version) || task.task_version < 1) {
+    throw new Error("未取得最新任务版本，请刷新规划后再操作。");
+  }
+  if (!completed && !task.completion_operation_id) {
+    throw new Error("此任务未保留可核验的完成回执，无法安全恢复。");
+  }
+  if (!globalThis.crypto?.randomUUID) throw new Error("当前浏览器不支持安全操作标识，请升级浏览器。");
+  const request = { operation_id: crypto.randomUUID(), kind: completed ? "complete" : "restore",
+    expected_revision: task.task_version };
+  if (!completed) request.source_operation_id = task.completion_operation_id;
+  const intent = { owner, task_id: task.task_id, request };
+  // Persist only identifiers, before HTTP. A lost response must never create a new intent.
+  localStorage.setItem(key, JSON.stringify(intent));
+  return { intent, existing: false };
+}
+
+async function taskStatusResult(intent, operation) {
+  if (!taskStatusOwner(intent)) return;
+  if (operation.operation_id !== intent.request.operation_id || operation.task_id !== intent.task_id ||
+      operation.user_id !== intent.owner || operation.kind !== intent.request.kind ||
+      operation.expected_revision !== intent.request.expected_revision ||
+      (operation.source_operation_id ?? null) !== (intent.request.source_operation_id ?? null)) {
+    throw new Error("状态回执与原操作不一致，未显示成功，请保留操作标识核对。");
+  }
+  if (operation.state === "applied") {
+    const expected = intent.request.kind === "complete" ? "completed" : "pending";
+    if (operation.receipt?.operation_id !== operation.operation_id ||
+        operation.receipt?.task_id !== intent.task_id || operation.receipt?.after_status !== expected) {
+      throw new Error("操作回执缺少完成凭据，尚未核实结果。");
+    }
+    localStorage.removeItem(taskStatusKey(intent.owner, intent.task_id));
+    document.querySelector("#taskStatusDialog")?.remove();
+    await loadPlans();
+    if (taskStatusOwner(intent)) showToast(expected === "completed" ? "待办已完成" : "待办已恢复");
+    return;
+  }
+  if (operation.state === "cancelled") {
+    localStorage.removeItem(taskStatusKey(intent.owner, intent.task_id));
+    document.querySelector("#taskStatusDialog")?.remove();
+    showToast("恢复预览已取消，任务保持原状态。");
+    return;
+  }
+  if (operation.state !== "pending" || intent.request.kind !== "restore" || !operation.preview ||
+      operation.preview.task?.task_id !== intent.task_id) {
+    throw new Error("无法读取本次恢复预览，请查询原操作回执。");
+  }
+  renderTaskStatusDialog(intent, operation);
+}
+
+function renderTaskStatusDialog(intent, operation = null, failure = "") {
+  if (!taskStatusOwner(intent)) return;
+  document.querySelector("#taskStatusDialog")?.remove();
+  const dialog = document.createElement("dialog");
+  dialog.id = "taskStatusDialog";
+  dialog.className = "action-card";
+  dialog.setAttribute("aria-labelledby", "taskStatusTitle");
+  Object.assign(dialog.style, { width: "min(30rem, calc(100vw - 2rem))", maxHeight: "80dvh",
+    overflowY: "auto", padding: "1.5rem", borderRadius: "1.25rem", boxSizing: "border-box",
+    background: "var(--cf-surface, white)", color: "var(--cf-ink, #29352f)" });
+  const title = document.createElement("h2"); title.id = "taskStatusTitle";
+  title.textContent = operation ? "核对恢复待办" : "操作结果未核实";
+  const identity = document.createElement("p");
+  identity.textContent = `操作标识：${intent.request.operation_id}`;
+  Object.assign(identity.style, { overflowWrap: "anywhere", color: "var(--cf-muted, #626e65)", fontSize: "12px" });
+  dialog.append(title, identity);
+  const addLine = text => { const line = document.createElement("p"); line.textContent = text;
+    Object.assign(line.style, { color: "var(--cf-ink, #29352f)", fontSize: "14px", lineHeight: "1.6" }); dialog.append(line); };
+  const controls = document.createElement("div"); controls.className = "action-buttons";
+  const button = (label, action) => {
+    const element = document.createElement("button"); element.type = "button"; element.textContent = label;
+    Object.assign(element.style, { minHeight: "44px", fontSize: "14px", color: "white",
+      background: "var(--cf-accent, #416454)" });
+    element.addEventListener("click", async () => {
+      if (!taskStatusOwner(intent)) { dialog.remove(); return; }
+      controls.querySelectorAll("button").forEach(item => { item.disabled = true; });
+      try { await taskStatusResult(intent, await action()); }
+      catch (error) { renderTaskStatusDialog(intent, null, error.message); }
+    });
+    controls.append(element); return element;
+  };
+  if (operation) {
+    const preview = operation.preview, review = preview.course_review;
+    addLine(preview.task.title);
+    addLine(`${taskTimeLabel(preview.task)}${preview.task.location ? ` · ${preview.task.location}` : ""}`);
+    addLine("已完成 → 未完成。仅改变完成状态，不会重建任务、自动改期或补发过去的提醒。");
+    for (const warning of preview.warnings ?? []) addLine(warning);
+    for (const conflict of preview.conflicts ?? []) addLine(`阻止恢复：${conflict}`);
+    for (const overlap of review?.overlaps ?? []) {
+      addLine(`课程重叠：${overlap.course?.title ?? "课程"} · ${overlap.overlap_start_at} 至 ${overlap.overlap_end_at}`);
+    }
+    let acknowledgement = null;
+    const blocked = !review || !["none", "accepted", "needs_review", "unchecked"].includes(review.state) ||
+      (preview.conflicts ?? []).length > 0;
+    if (blocked) addLine("当前存在冲突或未完成的课程核对，请先处理，不能直接恢复。");
+    const confirm = button("确认恢复为未完成", () => api(
+      `/api/v1/task-status-operations/${encodeURIComponent(intent.request.operation_id)}/confirm`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ acknowledgements: acknowledgement?.checked ? [{
+          candidate_id: review.candidate_id, review_digest: review.review_digest,
+        }] : [] }),
+      }));
+    confirm.dataset.taskStatusConfirm = "";
+    if (review?.requires_acknowledgement) {
+      const label = document.createElement("label"); acknowledgement = document.createElement("input");
+      acknowledgement.type = "checkbox"; acknowledgement.dataset.taskStatusAck = "";
+      label.append(acknowledgement, document.createTextNode("我已核对以上课程重叠，同意按当前原时间恢复。"));
+      dialog.append(label);
+      acknowledgement.addEventListener("change", () => { confirm.disabled = blocked || !acknowledgement.checked; });
+    }
+    confirm.disabled = blocked || Boolean(review?.requires_acknowledgement);
+    button("取消恢复", () => api(`/api/v1/task-status-operations/${encodeURIComponent(intent.request.operation_id)}/cancel`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: "{}",
+    }));
+  } else {
+    addLine(failure || "网络响应未能核实。请查询原回执，不要重复创建操作。");
+    addLine("只会查询同一个操作标识；未取得有效回执不会显示操作成功。");
+  }
+  button("查询原操作回执", () => api(`/api/v1/task-status-operations/${encodeURIComponent(intent.request.operation_id)}`));
+  const close = document.createElement("button"); close.type = "button"; close.textContent = "暂时关闭";
+  Object.assign(close.style, { minHeight: "44px", fontSize: "14px", color: "var(--cf-ink, #29352f)",
+    background: "var(--cf-surface-soft, #f1f2eb)" });
+  close.addEventListener("click", () => dialog.remove()); controls.append(close);
+  dialog.append(controls); document.body.append(dialog); dialog.showModal();
+}
+
 async function setTaskCompleted(task, completed, button) {
   button.disabled = true;
+  let intent;
   try {
-    await api(`/api/v1/tasks/${encodeURIComponent(task.task_id)}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ completed }),
-    });
-    await loadPlans();
-    showToast(completed ? "待办已完成" : "待办已恢复");
+    const owner = state.user?.user_id;
+    if (!owner) throw new Error("请先登录后再操作。");
+    const record = taskStatusRecord(owner, task, completed); intent = record.intent;
+    let operation;
+    try {
+      operation = record.existing
+        ? await api(`/api/v1/task-status-operations/${encodeURIComponent(intent.request.operation_id)}`)
+        : await api(`/api/v1/tasks/${encodeURIComponent(task.task_id)}/status-operations`, {
+          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(intent.request),
+        });
+    } catch (error) {
+      // A definitive rejected creation has no committed operation. Transport failures remain unresolved.
+      if (!record.existing && error.status >= 400 && error.status < 500 && ![408, 429].includes(error.status)) {
+        localStorage.removeItem(taskStatusKey(owner, task.task_id)); intent = null;
+      }
+      throw error;
+    }
+    await taskStatusResult(intent, operation);
   } catch (error) {
+    if (intent) renderTaskStatusDialog(intent, null, error.message);
+    else showToast(error.message, "error");
+  } finally {
     button.disabled = false;
-    showToast(error.message, "error");
   }
 }
 
@@ -1110,6 +1276,8 @@ function appendMessage(role, content, options = {}) {
     typing.className = "typing";
     for (let index = 0; index < 3; index += 1) typing.append(document.createElement("span"));
     bubble.append(typing);
+  } else if (role === "assistant" && window.CampusFlowMarkdown) {
+    window.CampusFlowMarkdown.render(bubble, content);
   } else {
     bubble.textContent = content;
   }
@@ -1296,12 +1464,18 @@ function renderPendingAction(action) {
   title.textContent = action.title;
   const description = document.createElement("p");
   description.textContent = actionDescription(action);
+  description.style.color = "var(--cf-muted, #626e65)";
   const button = document.createElement("button");
   button.type = "button";
   button.textContent = "确认执行此操作";
+  Object.assign(button.style, { minHeight: "44px", fontSize: "14px", color: "white",
+    background: "var(--cf-accent, #416454)" });
   button.addEventListener("click", () => confirmAction(action.proposal_id, card, button, label));
   card.append(label, title, description, button);
-  elements.traceList.prepend(card);
+  // An actionable proposal belongs in the readable conversation, not an offscreen trace column.
+  const message = appendMessage("assistant", "请核对以下提案，确认后才会写入：");
+  message.querySelector(".bubble").append(card);
+  elements.messages.scrollTop = elements.messages.scrollHeight;
 }
 
 async function confirmAction(proposalId, card, button, label) {
@@ -1321,12 +1495,45 @@ async function confirmAction(proposalId, card, button, label) {
   }
 }
 
+function upsertSession(session) {
+  const index = state.sessions.findIndex((item) => item.session_id === session.session_id);
+  if (index >= 0) {
+    state.sessions[index] = { ...state.sessions[index], ...session };
+  } else {
+    state.sessions = [session, ...state.sessions];
+  }
+  elements.todayHistoryCount.textContent = state.sessions.length;
+  if (!elements.historyDrawer.hidden) renderHistorySessions(state.sessions);
+}
+
+async function refreshSessions() {
+  try {
+    state.sessions = await api("/api/v1/sessions");
+    elements.todayHistoryCount.textContent = state.sessions.length;
+    if (!elements.historyDrawer.hidden) renderHistorySessions(state.sessions);
+  } catch {
+    // 保留本地占位会话，避免进行中的对话从历史目录里消失。
+  }
+}
+
 async function sendMessage(message) {
   if (!message || state.sending) return;
   state.sending = true;
   elements.sendButton.disabled = true;
   elements.messageInput.disabled = true;
   appendMessage("user", message);
+  // 提问后立即写入本地会话目录：模型思考期间打开历史也能看到本次对话。
+  const pendingAt = new Date().toISOString();
+  upsertSession({
+    session_id: state.sessionId,
+    title: message.slice(0, 18),
+    model_name: selectedModel(),
+    last_message: message,
+    message_count: 1,
+    created_at: pendingAt,
+    updated_at: pendingAt,
+    status: "pending",
+  });
   const loading = appendMessage("assistant", "", { loading: true });
   try {
     const payload = await api("/api/v1/chat", {
@@ -1345,18 +1552,14 @@ async function sendMessage(message) {
       if (trace.tool_name === "plan_campus_route") renderCampusRoute(trace.result);
     });
     payload.pending_actions.forEach(renderPendingAction);
-    try {
-      state.sessions = await api("/api/v1/sessions");
-      elements.todayHistoryCount.textContent = state.sessions.length;
-    } catch {
-      // The completed answer remains usable if refreshing session metadata fails.
-    }
     setServiceState(true, "Agent 服务在线");
   } catch (error) {
     loading.remove();
     appendMessage("assistant", `本次任务未完成：${error.message}`);
     showToast(error.message, "error");
   } finally {
+    // 以服务端状态覆盖占位会话；此处该会话应已被标记为完成。
+    await refreshSessions();
     state.sending = false;
     elements.sendButton.disabled = false;
     elements.messageInput.disabled = false;
@@ -1426,7 +1629,8 @@ function renderHistorySessions(sessions) {
     const preview = document.createElement("p");
     preview.textContent = session.last_message;
     const meta = document.createElement("small");
-    meta.textContent = `${session.message_count} 条消息 · ${session.model_name === "deepseek-flash" ? "FLASH" : "V4 PRO"}`;
+    const pendingLabel = session.status === "pending" ? " · 思考中…" : "";
+    meta.textContent = `${session.message_count} 条消息 · ${session.model_name === "deepseek-flash" ? "FLASH" : "V4 PRO"}${pendingLabel}`;
     open.append(heading, preview, meta);
     open.addEventListener("click", () => openSession(session.session_id));
     const rename = document.createElement("button");
@@ -1546,6 +1750,7 @@ function switchSettingsTab(tab) {
 }
 
 function openSettings() {
+  window.CampusFlowTheme?.refreshControls();
   fillSettingsProfile();
   switchSettingsTab("profile");
   showOnly("settings");

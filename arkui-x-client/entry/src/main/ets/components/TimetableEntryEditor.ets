@@ -1,10 +1,12 @@
 import { TimetableEntry } from '../model/ApiModels';
 import { TimetableFieldErrors, validateTimetableEntry } from '../utils/OnboardingTimetable';
 import { AppTheme } from '../theme/AppTheme';
+import { ThemePalette, themePalette } from '../theme/ThemePalette';
 
 // A controlled form: the parent owns drafts, validation and every remote write.
 @Component
 export struct TimetableEntryEditor {
+  @StorageLink('campusflowThemePalette') private palette: ThemePalette = themePalette('paper-green');
   @Prop entry: TimetableEntry = { date: '', title: '', start_time: '', end_time: '', location: '', teacher: '' };
   @Watch('errorsChanged') @Prop errors: TimetableFieldErrors = { date: '', title: '', start_time: '', end_time: '', location: '', teacher: '' };
   @Prop repeatWeeks: number = 1;
@@ -93,7 +95,10 @@ export struct TimetableEntryEditor {
   private openTimePicker(field: string): void {
     if (!this.mounted || !this.active || this.busy || (field !== 'start_time' && field !== 'end_time')) { return; }
     const value = field === 'start_time' ? this.entry.start_time : this.entry.end_time;
-    const selected = new Date(0); selected.setHours(0, 0, 0, 0);
+    // The native time dialog also reads selected's date for its title.
+    const dateValue = this.dateValid(this.entry.date) ? this.entry.date : this.anchorDate;
+    const selected = this.dateValid(dateValue) ? this.pickerDate(dateValue) : new Date();
+    selected.setHours(0, 0, 0, 0);
     if (/^([01]\d|2[0-3]):[0-5]\d$/.test(value)) {
       const parts = value.split(':'); selected.setHours(Number(parts[0]), Number(parts[1]), 0, 0);
     }
@@ -116,61 +121,84 @@ export struct TimetableEntryEditor {
     if (!this.active || this.busy) { return; }
     this.generation++; this.notice = ''; this.onFieldChange(field, value);
   }
+  // Read props inside UI update expressions instead of passing Builder value snapshots.
+  private fieldValue(field: string): string {
+    if (field === 'date') { return this.entry.date; }
+    if (field === 'title') { return this.entry.title; }
+    if (field === 'start_time') { return this.entry.start_time; }
+    if (field === 'end_time') { return this.entry.end_time; }
+    if (field === 'location') { return this.entry.location; }
+    if (field === 'teacher') { return this.entry.teacher; }
+    return '';
+  }
+  private fieldError(field: string): string {
+    if (field === 'date') { return this.errors.date; }
+    if (field === 'title') { return this.errors.title; }
+    if (field === 'start_time') { return this.errors.start_time; }
+    if (field === 'end_time') { return this.errors.end_time; }
+    if (field === 'location') { return this.errors.location; }
+    if (field === 'teacher') { return this.errors.teacher; }
+    return '';
+  }
 
   @Builder
-  private Field(label: string, field: string, placeholder: string, value: string, error: string) {
+  private Field(label: string, field: string, placeholder: string) {
     Column({ space: 6 }) {
-      Text(label).fontSize(AppTheme.bodySize).fontWeight(FontWeight.Medium).fontColor(AppTheme.ink).width('100%')
+      Text(field === 'date' && !this.editing ? '第一次上课日期 *' : label)
+        .fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium).fontColor(this.palette.ink).width('100%')
       Row({ space: 8 }) {
-        TextInput({ text: value, placeholder: placeholder }).id(`${this.idPrefix}-${field}`).layoutWeight(1)
-          .constraintSize({ minHeight: 50 }).fontSize(AppTheme.bodySize).fontColor(AppTheme.ink)
-          .backgroundColor(AppTheme.field).borderRadius(AppTheme.controlRadius).padding({ left: 12, right: 12 })
-          .enabled(this.active && !this.busy).accessibilityText(`${label}${error.length > 0 ? `，${error}` : ''}`)
+        TextInput({ text: this.fieldValue(field), placeholder: placeholder }).id(`${this.idPrefix}-${field}`).layoutWeight(1)
+          .constraintSize({ minHeight: 50 }).fontSize(this.palette.bodySize).fontColor(this.palette.ink)
+          .backgroundColor(this.palette.field).borderRadius(this.palette.controlRadius).padding({ left: 12, right: 12 })
+          .enabled(this.active && !this.busy)
+          .accessibilityText(`${field === 'date' && !this.editing ? '第一次上课日期 *' : label}${this.fieldError(field).length > 0 ? `，${this.fieldError(field)}` : ''}`)
           .onChange((next: string) => this.changed(field, next)).onAreaChange(() => this.locateError())
         if (field === 'date' || field === 'start_time' || field === 'end_time') {
-          Button('选择').constraintSize({ minHeight: 50, minWidth: 64 }).fontSize(AppTheme.bodySize)
-            .fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft).enabled(this.active && !this.busy)
+          Button('选择').constraintSize({ minHeight: 50, minWidth: 64 }).fontSize(this.palette.bodySize)
+            .fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft).enabled(this.active && !this.busy)
             .accessibilityText(field === 'date' ? '选择日期' : field === 'start_time' ? '选择开始时间' : '选择结束时间')
             .onClick(() => { if (field === 'date') { this.openDatePicker(); } else { this.openTimePicker(field); } })
         }
       }.width('100%')
-      if (error.length > 0) { Text(error).fontSize(AppTheme.metaSize).fontColor(AppTheme.danger).width('100%') }
+      if (this.fieldError(field).length > 0) {
+        Text(this.fieldError(field)).fontSize(this.palette.metaSize).fontColor(this.palette.danger).width('100%')
+      }
     }.width('100%').alignItems(HorizontalAlign.Start)
   }
 
   build() {
     Column({ space: 16 }) {
       Text(this.editing ? '修改这一次课程' : '添加一门课程')
-        .fontSize(AppTheme.sectionTitle).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink).width('100%')
+        .fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Bold).fontColor(this.palette.ink).width('100%')
       if (this.canReuse && !this.editing) {
-        Button('沿用上一门信息').constraintSize({ minHeight: 48 }).width('100%').fontSize(AppTheme.bodySize)
-          .fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft).enabled(this.active && !this.busy)
+        Button('沿用上一门信息').constraintSize({ minHeight: 48 }).width('100%').fontSize(this.palette.bodySize)
+          .fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft).enabled(this.active && !this.busy)
           .onClick(() => this.onReuse())
-        Text('只复制到新表单，不会更改或再次加入上一门课程。').fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+        Text('只复制到新表单，不会更改或再次加入上一门课程。').fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
       }
       if (this.firstError().length > 0) {
-        Button('定位第一处错误').constraintSize({ minHeight: 48 }).width('100%').fontColor(AppTheme.danger)
-          .backgroundColor(AppTheme.dangerSoft).onClick(() => { this.focusRequested(); this.locateError(); })
+        Button('定位第一处错误').constraintSize({ minHeight: 48 }).width('100%').fontColor(this.palette.danger)
+          .backgroundColor(this.palette.dangerSoft).onClick(() => { this.focusRequested(); this.locateError(); })
       }
-      this.Field('课程名称 *', 'title', '例如：操作系统', this.entry.title, this.errors.title)
-      this.Field(this.editing ? '上课日期 *' : '第一次上课日期 *', 'date', 'YYYY-MM-DD', this.entry.date, this.errors.date)
-      this.Field('开始时间 *', 'start_time', '08:05', this.entry.start_time, this.errors.start_time)
-      this.Field('结束时间 *', 'end_time', '09:40', this.entry.end_time, this.errors.end_time)
+      this.Field('课程名称 *', 'title', '例如：操作系统')
+      this.Field('上课日期 *', 'date', 'YYYY-MM-DD')
+      this.Field('开始时间 *', 'start_time', '08:05')
+      this.Field('结束时间 *', 'end_time', '09:40')
       Text('使用北京时间、24 小时制；当天结束时间应晚于开始时间，也可直接手动输入。')
-        .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+        .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
       Button(this.optionalExpanded ? '收起补充信息' : '地点、教师与重复周次（选填）')
-        .constraintSize({ minHeight: 48 }).width('100%').fontSize(AppTheme.bodySize).fontColor(AppTheme.accent)
-        .backgroundColor(AppTheme.accentSoft).onClick(() => this.optionalExpanded = !this.optionalExpanded)
+        .constraintSize({ minHeight: 48 }).width('100%').fontSize(this.palette.bodySize).fontColor(this.palette.accent)
+        .backgroundColor(this.palette.accentSoft).onClick(() => this.optionalExpanded = !this.optionalExpanded)
       if (this.optionalExpanded || this.errors.location.length > 0 || this.errors.teacher.length > 0) {
-        this.Field('上课地点（选填）', 'location', '例如：第7教研楼北406', this.entry.location, this.errors.location)
-        this.Field('任课教师（选填）', 'teacher', '老师姓名', this.entry.teacher, this.errors.teacher)
+        this.Field('上课地点（选填）', 'location', '例如：第7教研楼北406')
+        this.Field('任课教师（选填）', 'teacher', '老师姓名')
         if (!this.editing && this.showRepeat) {
-          Text('每周同一天，连续添加').fontSize(AppTheme.bodySize).fontColor(AppTheme.ink).width('100%')
+          Text('每周同一天，连续添加').fontSize(this.palette.bodySize).fontColor(this.palette.ink).width('100%')
           Flex({ wrap: FlexWrap.Wrap }) {
             ForEach([1, 4, 8, 16], (weeks: number) => {
               Button(weeks === 1 ? '仅一次' : `${weeks} 周`).constraintSize({ minHeight: 48 }).margin({ right: 8, bottom: 8 })
-                .fontSize(AppTheme.bodySize).fontColor(this.repeatWeeks === weeks ? AppTheme.onAccent : AppTheme.ink)
-                .backgroundColor(this.repeatWeeks === weeks ? AppTheme.accent : AppTheme.field).enabled(this.active && !this.busy)
+                .fontSize(this.palette.bodySize).fontColor(this.repeatWeeks === weeks ? this.palette.onAccent : this.palette.ink)
+                .backgroundColor(this.repeatWeeks === weeks ? this.palette.accent : this.palette.field).enabled(this.active && !this.busy)
                 .accessibilityText(`${weeks} 次，${this.repeatWeeks === weeks ? '已选择' : '未选择'}`)
                 .onClick(() => this.onWeeksChange(weeks))
             }, (weeks: number) => weeks.toString())
@@ -179,18 +207,18 @@ export struct TimetableEntryEditor {
       }
       Text(this.editing || !this.showRepeat ? '只修改选中的这一次；不会推测或展开原始系列课程。' :
         this.repeatWeeks === 1 ? '默认仅添加一次，不自动生成整学期。' : `将生成 ${this.repeatWeeks} 个具体日期；单双周和节假日请逐条核对。`)
-        .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
-      if (this.notice.length > 0) { Text(this.notice).fontSize(AppTheme.metaSize).fontColor(AppTheme.warning).width('100%') }
+        .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
+      if (this.notice.length > 0) { Text(this.notice).fontSize(this.palette.metaSize).fontColor(this.palette.warning).width('100%') }
       if (!this.editing && this.showRepeat) {
-        Button('加入并继续').width('100%').constraintSize({ minHeight: 50 }).fontSize(AppTheme.bodySize)
-          .fontColor(AppTheme.onAccent).backgroundColor(AppTheme.accent).enabled(this.active && !this.busy).onClick(() => this.onSave(true))
+        Button('加入并继续').width('100%').constraintSize({ minHeight: 50 }).fontSize(this.palette.bodySize)
+          .fontColor(this.palette.onAccent).backgroundColor(this.palette.accent).enabled(this.active && !this.busy).onClick(() => this.onSave(true))
       }
       Button(this.saveLabel.length > 0 ? this.saveLabel : this.editing ? '保存这次修改' : '加入并收起')
-        .width('100%').constraintSize({ minHeight: 50 }).fontSize(AppTheme.bodySize).fontColor(AppTheme.accent)
-        .backgroundColor(AppTheme.accentSoft).enabled(this.active && !this.busy).onClick(() => this.onSave(false))
-      Button('取消本次编辑').width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
-        .fontColor(AppTheme.quiet).backgroundColor(Color.Transparent).enabled(this.active && !this.busy).onClick(() => this.onCancel())
-    }.width('100%').alignItems(HorizontalAlign.Start).padding(AppTheme.cardInset)
-      .backgroundColor(AppTheme.surface).borderRadius(AppTheme.cardRadius).onAreaChange(() => this.locateError())
+        .width('100%').constraintSize({ minHeight: 50 }).fontSize(this.palette.bodySize).fontColor(this.palette.accent)
+        .backgroundColor(this.palette.accentSoft).enabled(this.active && !this.busy).onClick(() => this.onSave(false))
+      Button('取消本次编辑').width('100%').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
+        .fontColor(this.palette.quiet).backgroundColor(Color.Transparent).enabled(this.active && !this.busy).onClick(() => this.onCancel())
+    }.width('100%').alignItems(HorizontalAlign.Start).padding(this.palette.cardInset)
+      .backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius).onAreaChange(() => this.locateError())
   }
 }

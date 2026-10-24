@@ -1,6 +1,7 @@
+import './helpers/theme-fixture.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { stripTypeScriptTypes } from 'node:module';
+import { stripThemeTypeScriptTypes as stripTypeScriptTypes } from './helpers/theme-fixture.mjs';
 import { test } from 'node:test';
 
 // Execute the real page methods with controlled HTTP and clocks. This does not render ArkUI.

@@ -1,8 +1,9 @@
+import './helpers/theme-fixture.mjs';
 import { planningPageDependencies, dependencyPrefix, timetableSnapshot, preferenceSnapshot } from './helpers/planning-overview-fixture.mjs';
 import { PlanningActionController, candidate, validPlanningDate, quickCapture, courseReview } from './helpers/planning-action-fixture.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { stripTypeScriptTypes } from 'node:module';
+import { stripThemeTypeScriptTypes as stripTypeScriptTypes } from './helpers/theme-fixture.mjs';
 import { test } from 'node:test';
 
 const read = path => readFileSync(new URL(`../entry/src/main/ets/${path}`, import.meta.url), 'utf8');

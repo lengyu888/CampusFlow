@@ -2,11 +2,13 @@ import { FocusRecord, FocusInterval, FocusGap } from '../model/FocusModels';
 import { FocusState, FocusLocalView, FocusPendingView, emptyFocusState } from '../utils/FocusController';
 import { formatPlanDateTime } from '../utils/PlanPresentation';
 import { AppTheme } from '../theme/AppTheme';
+import { ThemePalette, themePalette } from '../theme/ThemePalette';
 import { AppIllustration } from '../components/AppIllustration';
 
 // Only a view. Index owns the account-level clock, durable queue and server gateway.
 @Component
 export struct FocusPage {
+  @StorageLink('campusflowThemePalette') private palette: ThemePalette = themePalette('paper-green');
   @Watch('stateChanged') @Prop state: FocusState = emptyFocusState();
   @Prop active: boolean = true;
   @Prop taskId: string = '';
@@ -21,6 +23,7 @@ export struct FocusPage {
   onSync: () => void = () => {};
   onCheck: (id: string) => void = () => {};
   onRetry: (id: string) => void = () => {};
+  onRetryStorage: () => void = () => {};
   onSelect: (id: string) => void = () => {};
   onRefresh: () => void = () => {};
   onLoadMore: () => void = () => {};
@@ -117,9 +120,10 @@ export struct FocusPage {
       this.notice !== '最新任务已经完成，不重复提交，也不会把它恢复为未完成。';
   }
   private startAllowed(): boolean {
-    return this.active && this.taskId.trim().length > 0 && this.state.phase !== 'loading' &&
+    return this.active && this.taskId.trim().length > 0 && this.state.phase === 'ready' &&
       !this.state.localRecords.some((item: FocusLocalView) => item.localState !== 'ended') && this.state.activeRecord === null;
   }
+  private showClockNotice(): boolean { return this.state.phase === 'ready' && !this.state.clockAvailable; }
   private startRequested(): void {
     if (!this.startAllowed()) { return; }
     const text = this.targetText.trim();
@@ -186,188 +190,197 @@ export struct FocusPage {
       Row({ space: 12 }) {
         AppIllustration({ source: $r('app.media.xj_focus_entry'), imageWidth: 72, imageHeight: 72, fallbackIcon: 'book' })
         Column({ space: 4 }) {
-          Text('给这一件事，一段专心的时间').fontSize(AppTheme.sectionTitle).fontColor(AppTheme.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
-          Text(this.taskTitle || '从首页或计划的具体任务进入，才能开始记录。').fontSize(AppTheme.bodySize).fontColor(AppTheme.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+          Text('给这一件事，一段专心的时间').fontSize(this.palette.sectionTitle).fontColor(this.palette.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
+          Text(this.taskTitle || '从首页或计划的具体任务进入，才能开始记录。').fontSize(this.palette.bodySize).fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
         }.layoutWeight(1).alignItems(HorizontalAlign.Start)
       }.width('100%')
-      Text('目标分钟（可不填）').fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
-      TextInput({ text: this.targetText, placeholder: '不设目标，正向计时' }).height(52).fontSize(AppTheme.bodySize).backgroundColor(AppTheme.field)
+      Text('目标分钟（可不填）').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
+      TextInput({ text: this.targetText, placeholder: '不设目标，正向计时' }).height(52).fontSize(this.palette.bodySize).backgroundColor(this.palette.field)
         .onChange((value: string) => { this.targetText = value; this.inputMessage = ''; })
-      if (this.inputMessage.length > 0) { Text(this.inputMessage).fontSize(AppTheme.bodySize).fontColor(AppTheme.danger).width('100%').wordBreak(WordBreak.BREAK_WORD) }
+      if (this.inputMessage.length > 0) { Text(this.inputMessage).fontSize(this.palette.bodySize).fontColor(this.palette.danger).width('100%').wordBreak(WordBreak.BREAK_WORD) }
       Button(this.offline ? '已选：仅在本机记录（点此改为联网）' : '联网记录（点此改为仅本机）').width('100%').constraintSize({ minHeight: 48 })
-        .fontSize(AppTheme.bodySize).backgroundColor(AppTheme.accentSoft).fontColor(AppTheme.accent).enabled(this.active).onClick(() => this.offline = !this.offline)
+        .fontSize(this.palette.bodySize).backgroundColor(this.palette.accentSoft).fontColor(this.palette.accent).enabled(this.active).onClick(() => this.offline = !this.offline)
       Text(this.offline ? '仅本机模式：不会立即发出开始请求，不能保证其他设备没有进行中的记录。之后需主动同步，冲突不会自动覆盖。' :
         '联网模式：确认开始成功后计时，网络等待不计入。应用内切页继续，退到后台会暂停。')
-        .fontSize(AppTheme.metaSize).fontColor(this.offline ? AppTheme.warning : AppTheme.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
-      if (!this.state.clockAvailable) { Text('可靠计时能力尚未确认。点击开始会重新核对；无法取得可靠时钟时不会计时。').fontSize(AppTheme.bodySize).fontColor(AppTheme.warning).width('100%').wordBreak(WordBreak.BREAK_WORD) }
-      Button('开始这项任务的专注记录').width('100%').constraintSize({ minHeight: 48 }).fontColor(AppTheme.onAccent).backgroundColor(AppTheme.accent)
-        .fontSize(AppTheme.bodySize).enabled(this.startAllowed()).onClick(() => this.startRequested())
-    }.width('100%').padding(16).alignItems(HorizontalAlign.Start).backgroundColor(AppTheme.surface).borderRadius(AppTheme.cardRadius)
+        .fontSize(this.palette.metaSize).fontColor(this.offline ? this.palette.warning : this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+      if (this.showClockNotice()) { Text('可靠计时能力尚未确认。点击开始会重新核对；无法取得可靠时钟时不会计时。').fontSize(this.palette.bodySize).fontColor(this.palette.warning).width('100%').wordBreak(WordBreak.BREAK_WORD) }
+      Button('开始这项任务的专注记录').width('100%').constraintSize({ minHeight: 48 }).fontColor(this.palette.onAccent).backgroundColor(this.palette.accent)
+        .fontSize(this.palette.bodySize).enabled(this.startAllowed()).onClick(() => this.startRequested())
+    }.width('100%').padding(16).alignItems(HorizontalAlign.Start).backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
   }
 
   @Builder
-  private Current(local: FocusLocalView) {
-    Column({ space: 12 }) {
-      Text(this.localTitle(local)).fontSize(AppTheme.sectionTitle).fontColor(AppTheme.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
-      Text(this.localLabel(local)).fontSize(AppTheme.bodySize).fontColor(local.saveState === 'error' ? AppTheme.danger : AppTheme.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
-      Text(this.duration(local.elapsedMs)).fontSize('42fp').fontWeight(FontWeight.Medium).fontColor(AppTheme.ink).width('100%')
-      Text(`本机已核实时长${local.targetMs === null ? ' · 不设目标' : ` · 目标 ${Math.floor(local.targetMs / 60000)} 分钟`}`).fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
-      if (this.targetReached(local)) { Text('已到设定时长，计时继续；何时结束由你决定。').fontSize(AppTheme.bodySize).fontColor(AppTheme.accent).width('100%').wordBreak(WordBreak.BREAK_WORD) }
-      Text(this.synchronizedLabel(local)).fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
-      if (local.unknownGapCount > 0) { Text(`还有 ${local.unknownGapCount} 段无法核实时长，不作补算。`).fontSize(AppTheme.bodySize).fontColor(AppTheme.warning).width('100%') }
-      if (local.canPause) { Button('暂停').width('100%').constraintSize({ minHeight: 48 }).enabled(this.active).onClick(() => this.onPause()) }
-      if (local.canResume) { Button('继续这条记录').width('100%').constraintSize({ minHeight: 48 }).enabled(this.active).onClick(() => this.onResume()) }
-      if (local.canEnd) { Button('结束本次记录').width('100%').constraintSize({ minHeight: 48 }).enabled(this.active).onClick(() => this.askEnd()) }
-      if (local.localState === 'ended') { AppIllustration({ source: $r('app.media.xj_focus_end'), imageWidth: 100, imageHeight: 67, fallbackIcon: 'check' }) }
-    }.width('100%').padding(16).alignItems(HorizontalAlign.Start).backgroundColor(AppTheme.surface).borderRadius(AppTheme.cardRadius)
+  private Current() {
+    if (this.state.local !== null) {
+      Column({ space: 12 }) {
+        Text(this.localTitle(this.state.local)).fontSize(this.palette.sectionTitle).fontColor(this.palette.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
+        Text(this.localLabel(this.state.local)).fontSize(this.palette.bodySize).fontColor(this.state.local.saveState === 'error' ? this.palette.danger : this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+        Text(this.duration(this.state.local.elapsedMs)).fontSize('42fp').fontWeight(FontWeight.Medium).fontColor(this.palette.ink).width('100%')
+        Text(`本机已核实时长${this.state.local.targetMs === null ? ' · 不设目标' : ` · 目标 ${Math.floor(this.state.local.targetMs / 60000)} 分钟`}`).fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
+        if (this.targetReached(this.state.local)) { Text('已到设定时长，计时继续；何时结束由你决定。').fontSize(this.palette.bodySize).fontColor(this.palette.accent).width('100%').wordBreak(WordBreak.BREAK_WORD) }
+        Text(this.synchronizedLabel(this.state.local)).fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+        if (this.state.local.unknownGapCount > 0) { Text(`还有 ${this.state.local.unknownGapCount} 段无法核实时长，不作补算。`).fontSize(this.palette.bodySize).fontColor(this.palette.warning).width('100%') }
+        if (this.state.local.canPause) { Button('暂停').width('100%').constraintSize({ minHeight: 48 }).enabled(this.active).onClick(() => this.onPause()) }
+        if (this.state.local.canResume) { Button('继续这条记录').width('100%').constraintSize({ minHeight: 48 }).enabled(this.active).onClick(() => this.onResume()) }
+        if (this.state.local.canEnd) { Button('结束本次记录').width('100%').constraintSize({ minHeight: 48 }).enabled(this.active).onClick(() => this.askEnd()) }
+        if (this.state.local.localState === 'ended') { AppIllustration({ source: $r('app.media.xj_focus_end'), imageWidth: 100, imageHeight: 67, fallbackIcon: 'check' }) }
+      }.width('100%').padding(16).alignItems(HorizontalAlign.Start).backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
+    }
   }
 
   @Builder
   private Pending(op: FocusPendingView) {
     Column({ space: 8 }) {
       Text(op.kind === 'start' ? '开始记录' : op.kind === 'resume' ? '继续记录' : op.kind === 'pause' ? '暂停记录' : op.kind === 'end' ? '结束记录' : '删除记录')
-        .fontSize(AppTheme.bodySize).fontColor(AppTheme.ink).width('100%')
-      Text(op.message).fontSize(AppTheme.bodySize).fontColor(AppTheme.warning).width('100%').wordBreak(WordBreak.BREAK_WORD)
+        .fontSize(this.palette.bodySize).fontColor(this.palette.ink).width('100%')
+      Text(op.message).fontSize(this.palette.bodySize).fontColor(this.palette.warning).width('100%').wordBreak(WordBreak.BREAK_WORD)
       if (op.canCheck) { Button('查询这次操作结果').width('100%').constraintSize({ minHeight: 48 }).enabled(this.active).onClick(() => this.onCheck(op.operationId)) }
       if (op.canRetry) { Button('重试这次操作').width('100%').constraintSize({ minHeight: 48 }).enabled(this.active).onClick(() => this.onRetry(op.operationId)) }
       Button(this.expandedOperations.includes(op.operationId) ? '收起核对详情' : '核对详情').width('100%').constraintSize({ minHeight: 48 })
-        .fontColor(AppTheme.secondary).backgroundColor(Color.Transparent).onClick(() => this.toggleOperationDetails(op.operationId))
+        .fontColor(this.palette.secondary).backgroundColor(Color.Transparent).onClick(() => this.toggleOperationDetails(op.operationId))
       if (this.expandedOperations.includes(op.operationId)) {
         Text(`原操作编号 ${op.operationId}\n查询不会重发；只有明确未查到时，重试才会使用相同编号和相同内容，避免重复记录。`)
-          .fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+          .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
       }
-    }.width('100%').padding(16).alignItems(HorizontalAlign.Start).backgroundColor(AppTheme.warningSoft).borderRadius(AppTheme.cardRadius)
+    }.width('100%').padding(16).alignItems(HorizontalAlign.Start).backgroundColor(this.palette.warningSoft).borderRadius(this.palette.cardRadius)
   }
 
   @Builder
-  private Detail(record: FocusRecord) {
-    Column({ space: 12 }) {
-      if (this.state.local?.recordId !== record.record_id) {
-        Text(this.recordTitle(record)).fontSize(AppTheme.sectionTitle).fontColor(AppTheme.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
-        Text(this.duration(record.confirmed_elapsed_ms)).fontSize('32fp').fontWeight(FontWeight.Medium).fontColor(AppTheme.ink).width('100%')
-        Text(`${this.recordLabel(record)} · 已确认片段，不代表有效学习时长`).fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
-      }
-      if (this.state.intervalError.length > 0 || this.state.unknownGaps.length > 0) {
-        Text(this.state.intervalError || `还有 ${this.state.unknownGaps.length} 段待核对，不补算时长。`).fontSize(AppTheme.bodySize).fontColor(AppTheme.warning).width('100%').wordBreak(WordBreak.BREAK_WORD)
-      }
-      Button(this.detailExpanded ? '收起已同步区间与核对依据' : '查看已同步区间与核对依据').width('100%').constraintSize({ minHeight: 48 }).fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft)
-        .onClick(() => this.toggleRecordDetails(record.record_id))
-      if (this.detailExpanded) {
-      Text(`开始于 ${formatPlanDateTime(record.started_at)}${record.ended_at === null ? '' : `\n结束标注 ${formatPlanDateTime(record.ended_at)}`}`).fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
-      Text('时间标注用于核对；总时长来自已确认区间，不是开始与结束日期之差，也不代表有效学习时长。').fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
-      if (this.state.intervalLoading) { Text('正在读取完整区间…').fontSize(AppTheme.bodySize).fontColor(AppTheme.secondary) }
-      if (this.state.intervalError.length > 0) { Text(this.state.intervalError).fontSize(AppTheme.bodySize).fontColor(AppTheme.warning).width('100%').wordBreak(WordBreak.BREAK_WORD) }
-      ForEach(this.visibleIntervals(), (interval: FocusInterval) => {
-        Text(`${formatPlanDateTime(interval.started_at)} 至 ${formatPlanDateTime(interval.ended_at)}\n本段 ${this.duration(interval.elapsed_ms)}`)
-          .fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
-      }, (interval: FocusInterval) => interval.interval_id)
-      if (this.state.intervals.length > 20) {
-        Text(`已核实区间 ${this.intervalPage + 1}/${Math.ceil(this.state.intervals.length / 20)} 页`).fontSize(AppTheme.metaSize)
-        Row({ space: 8 }) {
-          Button('上一页').layoutWeight(1).constraintSize({ minHeight: 48 }).enabled(this.intervalPage > 0).onClick(() => this.intervalPage--)
-          Button('下一页').layoutWeight(1).constraintSize({ minHeight: 48 }).enabled((this.intervalPage + 1) * 20 < this.state.intervals.length).onClick(() => this.intervalPage++)
-        }.width('100%')
-      }
-      ForEach(this.visibleGaps(), (gap: FocusGap) => {
-        Text(`${this.gapReason(gap)}\n${formatPlanDateTime(gap.observed_start_at)} 至 ${formatPlanDateTime(gap.observed_end_at)} · 不计时长`)
-          .fontSize(AppTheme.metaSize).fontColor(AppTheme.warning).width('100%').wordBreak(WordBreak.BREAK_WORD)
-      }, (gap: FocusGap) => gap.gap_id)
-      if (this.state.unknownGaps.length > 20) {
-        Text(`无法核实的区间 ${this.gapPage + 1}/${Math.ceil(this.state.unknownGaps.length / 20)} 页`).fontSize(AppTheme.metaSize)
-        Row({ space: 8 }) {
-          Button('上一页').layoutWeight(1).constraintSize({ minHeight: 48 }).enabled(this.gapPage > 0).onClick(() => this.gapPage--)
-          Button('下一页').layoutWeight(1).constraintSize({ minHeight: 48 }).enabled((this.gapPage + 1) * 20 < this.state.unknownGaps.length).onClick(() => this.gapPage++)
-        }.width('100%')
-      }
-      }
-      if (!record.task_missing) { Button('查看当前任务').width('100%').constraintSize({ minHeight: 48 }).onClick(() => this.onOpenTask(record.task_id)) }
-      if (record.state !== 'ended' && this.state.local === null && this.state.activeRecord?.record_id === record.record_id) {
-        Button('结束账号中的这条记录').width('100%').constraintSize({ minHeight: 48 }).enabled(this.active).onClick(() => this.askRemoteEnd(record))
-      }
-      if (record.state === 'paused' && this.state.local === null) {
-        Button('继续这条已暂停记录').width('100%').constraintSize({ minHeight: 48 }).enabled(this.active && this.state.pendingOperations.length === 0)
-          .onClick(() => this.resumeRemoteRecord(record))
-      }
-      if (record.state !== 'running') { Button('删除这条已同步记录').width('100%').constraintSize({ minHeight: 48 }).fontColor(AppTheme.danger).backgroundColor(AppTheme.dangerSoft)
-        .enabled(this.active && !this.state.pendingOperations.some((op: FocusPendingView) => op.recordId === record.record_id)).onClick(() => this.askDelete(record)) }
-    }.width('100%').padding(16).alignItems(HorizontalAlign.Start).backgroundColor(AppTheme.surface).borderRadius(AppTheme.cardRadius)
+  private Detail() {
+    if (this.state.record !== null) {
+      Column({ space: 12 }) {
+        if (this.state.local?.recordId !== this.state.record.record_id) {
+          Text(this.recordTitle(this.state.record)).fontSize(this.palette.sectionTitle).fontColor(this.palette.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
+          Text(this.duration(this.state.record.confirmed_elapsed_ms)).fontSize('32fp').fontWeight(FontWeight.Medium).fontColor(this.palette.ink).width('100%')
+          Text(`${this.recordLabel(this.state.record)} · 已确认片段，不代表有效学习时长`).fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+        }
+        if (this.state.intervalError.length > 0 || this.state.unknownGaps.length > 0) {
+          Text(this.state.intervalError || `还有 ${this.state.unknownGaps.length} 段待核对，不补算时长。`).fontSize(this.palette.bodySize).fontColor(this.palette.warning).width('100%').wordBreak(WordBreak.BREAK_WORD)
+        }
+        Button(this.detailExpanded ? '收起已同步区间与核对依据' : '查看已同步区间与核对依据').width('100%').constraintSize({ minHeight: 48 }).fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft)
+          .onClick(() => { if (this.state.record !== null) { this.toggleRecordDetails(this.state.record.record_id); } })
+        if (this.detailExpanded) {
+        Text(`开始于 ${formatPlanDateTime(this.state.record.started_at)}${this.state.record.ended_at === null ? '' : `\n结束标注 ${formatPlanDateTime(this.state.record.ended_at)}`}`).fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+        Text('时间标注用于核对；总时长来自已确认区间，不是开始与结束日期之差，也不代表有效学习时长。').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+        if (this.state.intervalLoading) { Text('正在读取完整区间…').fontSize(this.palette.bodySize).fontColor(this.palette.secondary) }
+        if (this.state.intervalError.length > 0) { Text(this.state.intervalError).fontSize(this.palette.bodySize).fontColor(this.palette.warning).width('100%').wordBreak(WordBreak.BREAK_WORD) }
+        ForEach(this.visibleIntervals(), (interval: FocusInterval) => {
+          Text(`${formatPlanDateTime(interval.started_at)} 至 ${formatPlanDateTime(interval.ended_at)}\n本段 ${this.duration(interval.elapsed_ms)}`)
+            .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+        }, (interval: FocusInterval) => interval.interval_id)
+        if (this.state.intervals.length > 20) {
+          Text(`已核实区间 ${this.intervalPage + 1}/${Math.ceil(this.state.intervals.length / 20)} 页`).fontSize(this.palette.metaSize)
+          Row({ space: 8 }) {
+            Button('上一页').layoutWeight(1).constraintSize({ minHeight: 48 }).enabled(this.intervalPage > 0).onClick(() => this.intervalPage--)
+            Button('下一页').layoutWeight(1).constraintSize({ minHeight: 48 }).enabled((this.intervalPage + 1) * 20 < this.state.intervals.length).onClick(() => this.intervalPage++)
+          }.width('100%')
+        }
+        ForEach(this.visibleGaps(), (gap: FocusGap) => {
+          Text(`${this.gapReason(gap)}\n${formatPlanDateTime(gap.observed_start_at)} 至 ${formatPlanDateTime(gap.observed_end_at)} · 不计时长`)
+            .fontSize(this.palette.metaSize).fontColor(this.palette.warning).width('100%').wordBreak(WordBreak.BREAK_WORD)
+        }, (gap: FocusGap) => gap.gap_id)
+        if (this.state.unknownGaps.length > 20) {
+          Text(`无法核实的区间 ${this.gapPage + 1}/${Math.ceil(this.state.unknownGaps.length / 20)} 页`).fontSize(this.palette.metaSize)
+          Row({ space: 8 }) {
+            Button('上一页').layoutWeight(1).constraintSize({ minHeight: 48 }).enabled(this.gapPage > 0).onClick(() => this.gapPage--)
+            Button('下一页').layoutWeight(1).constraintSize({ minHeight: 48 }).enabled((this.gapPage + 1) * 20 < this.state.unknownGaps.length).onClick(() => this.gapPage++)
+          }.width('100%')
+        }
+        }
+        if (!this.state.record.task_missing) { Button('查看当前任务').width('100%').constraintSize({ minHeight: 48 }).onClick(() => { if (this.state.record !== null) { this.onOpenTask(this.state.record.task_id); } }) }
+        if (this.state.record.state !== 'ended' && this.state.local === null && this.state.activeRecord?.record_id === this.state.record.record_id) {
+          Button('结束账号中的这条记录').width('100%').constraintSize({ minHeight: 48 }).enabled(this.active).onClick(() => { if (this.state.record !== null) { this.askRemoteEnd(this.state.record); } })
+        }
+        if (this.state.record.state === 'paused' && this.state.local === null) {
+          Button('继续这条已暂停记录').width('100%').constraintSize({ minHeight: 48 }).enabled(this.active && this.state.pendingOperations.length === 0)
+            .onClick(() => { if (this.state.record !== null) { this.resumeRemoteRecord(this.state.record); } })
+        }
+        if (this.state.record.state !== 'running') { Button('删除这条已同步记录').width('100%').constraintSize({ minHeight: 48 }).fontColor(this.palette.danger).backgroundColor(this.palette.dangerSoft)
+          .enabled(this.active && !this.state.pendingOperations.some((op: FocusPendingView) => op.recordId === this.state.record?.record_id))
+          .onClick(() => { if (this.state.record !== null) { this.askDelete(this.state.record); } }) }
+      }.width('100%').padding(16).alignItems(HorizontalAlign.Start).backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
+    }
   }
 
   build() {
     Column({ space: 8 }) {
       Row({ space: 8 }) {
-        Button('返回').constraintSize({ minHeight: 48, minWidth: 64 }).fontColor(AppTheme.accent).backgroundColor(Color.Transparent).onClick(() => this.onBack())
-        Text('专注记录').fontSize(AppTheme.sectionTitle).fontColor(AppTheme.ink).layoutWeight(1)
+        Button('返回').constraintSize({ minHeight: 48, minWidth: 64 }).fontColor(this.palette.accent).backgroundColor(Color.Transparent).onClick(() => this.onBack())
+        Text('专注记录').fontSize(this.palette.sectionTitle).fontColor(this.palette.ink).layoutWeight(1)
       }.width('100%')
       Scroll() {
         Column({ space: 16 }) {
-          Text('专心做一件事，完成与否由你决定。').fontSize(AppTheme.bodySize).fontColor(AppTheme.secondary).width('100%')
-          if (this.state.phase === 'loading') { Text('正在读取本机专注记录…').fontSize(AppTheme.bodySize).fontColor(AppTheme.secondary).width('100%') }
-          if (this.notice.length > 0) { Text(this.notice).fontSize(AppTheme.bodySize).fontColor(this.noticeIsWarning() ? AppTheme.warning : AppTheme.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD) }
-          if (this.state.message.length > 0) { Text(this.state.message).fontSize(AppTheme.bodySize).fontColor(this.messageIsWarning() ? AppTheme.warning : AppTheme.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD) }
-          if (this.state.local !== null) { this.Current(this.state.local) }
-          if (this.state.record !== null) { this.Detail(this.state.record) }
+          Text('专心做一件事，完成与否由你决定。').fontSize(this.palette.bodySize).fontColor(this.palette.secondary).width('100%')
+          if (this.state.phase === 'loading') { Text('正在读取本机专注记录…').fontSize(this.palette.bodySize).fontColor(this.palette.secondary).width('100%') }
+          if (this.notice.length > 0) { Text(this.notice).fontSize(this.palette.bodySize).fontColor(this.noticeIsWarning() ? this.palette.warning : this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD) }
+          if (this.state.message.length > 0) { Text(this.state.message).fontSize(this.palette.bodySize).fontColor(this.messageIsWarning() ? this.palette.warning : this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD) }
+          if (this.state.phase === 'error') {
+            Button('重试读取本机记录').width('100%').constraintSize({ minHeight: 48 }).enabled(this.active)
+              .fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft).onClick(() => this.onRetryStorage())
+          }
+          if (this.state.local !== null) { this.Current() }
+          if (this.state.record !== null) { this.Detail() }
           if (this.showStartCard()) { this.StartCard() }
           else if (this.state.local === null || this.state.local.localState === 'ended') {
-            Button('另开一条专注记录').width('100%').constraintSize({ minHeight: 48 }).fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft).onClick(() => this.startExpanded = true)
+            Button('另开一条专注记录').width('100%').constraintSize({ minHeight: 48 }).fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft).onClick(() => this.startExpanded = true)
           }
           if (this.state.activeRecord !== null && this.state.activeRecord.record_id !== this.state.local?.recordId && this.state.activeRecord.record_id !== this.state.record?.record_id) {
             Column({ space: 10 }) {
-              Text('账号还有一条尚未结束的记录').fontSize(AppTheme.sectionTitle).fontColor(AppTheme.ink).width('100%')
-              Text(this.recordTitle(this.state.activeRecord)).fontSize(AppTheme.bodySize).fontColor(AppTheme.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+              Text('账号还有一条尚未结束的记录').fontSize(this.palette.sectionTitle).fontColor(this.palette.ink).width('100%')
+              Text(this.recordTitle(this.state.activeRecord)).fontSize(this.palette.bodySize).fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
               Button('查看这条记录').width('100%').constraintSize({ minHeight: 48 }).onClick(() => this.onSelect(this.state.activeRecord?.record_id ?? ''))
               Button('结束账号中的这条记录').width('100%').constraintSize({ minHeight: 48 }).enabled(this.active).onClick(() => { if (this.state.activeRecord !== null) { this.askRemoteEnd(this.state.activeRecord); } })
-            }.width('100%').padding(16).backgroundColor(AppTheme.warningSoft).borderRadius(AppTheme.cardRadius)
+            }.width('100%').padding(16).backgroundColor(this.palette.warningSoft).borderRadius(this.palette.cardRadius)
           }
           if (this.state.pendingOperations.length > 0) {
-            Text('待同步与待确认').fontSize(AppTheme.sectionTitle).fontColor(AppTheme.ink).width('100%')
+            Text('待同步与待确认').fontSize(this.palette.sectionTitle).fontColor(this.palette.ink).width('100%')
             ForEach(this.state.pendingOperations, (op: FocusPendingView) => { this.Pending(op) }, (op: FocusPendingView) => `${op.operationId}-${op.phase}`)
             Button('同步本机记录').width('100%').constraintSize({ minHeight: 48 }).enabled(this.active).onClick(() => this.onSync())
           }
           if (this.completionTaskId().length > 0) {
-            Text('计时结束与任务完成是两件事。下方会先读取最新任务，再单独记录完成状态。').fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+            Text('计时结束与任务完成是两件事。下方会先读取最新任务，再单独记录完成状态。').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
             Button(this.completingTask ? '正在核对最新任务…' : '另外标记这项任务已完成').width('100%').constraintSize({ minHeight: 48 }).enabled(this.active && !this.completingTask).onClick(() => this.completeRequested())
           }
           if (this.confirmation.length > 0) {
             Column({ space: 10 }) {
-              Text(this.confirmationText()).fontSize(AppTheme.bodySize).fontColor(AppTheme.warning).width('100%').wordBreak(WordBreak.BREAK_WORD)
+              Text(this.confirmationText()).fontSize(this.palette.bodySize).fontColor(this.palette.warning).width('100%').wordBreak(WordBreak.BREAK_WORD)
               Button('保留，暂不执行').width('100%').constraintSize({ minHeight: 48 }).onClick(() => this.confirmation = '')
               Button('确认执行此项操作').width('100%').constraintSize({ minHeight: 48 }).enabled(this.active).onClick(() => this.confirmAction())
-            }.width('100%').padding(16).backgroundColor(AppTheme.warningSoft).borderRadius(AppTheme.cardRadius)
+            }.width('100%').padding(16).backgroundColor(this.palette.warningSoft).borderRadius(this.palette.cardRadius)
           }
           if (this.otherLocalRecords().length > 0) {
-            Text('其他本机记录').fontSize(AppTheme.sectionTitle).fontColor(AppTheme.ink).width('100%')
+            Text('其他本机记录').fontSize(this.palette.sectionTitle).fontColor(this.palette.ink).width('100%')
             ForEach(this.otherLocalRecords(), (local: FocusLocalView) => {
               Button({ type: ButtonType.Normal }) {
                 Column({ space: 4 }) {
-                  Text(this.localTitle(local)).fontSize(AppTheme.bodySize).fontColor(AppTheme.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
-                  Text(`${this.duration(local.elapsedMs)} · ${this.localLabel(local)}`).fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+                  Text(this.localTitle(local)).fontSize(this.palette.bodySize).fontColor(this.palette.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
+                  Text(`${this.duration(local.elapsedMs)} · ${this.localLabel(local)}`).fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
                 }.width('100%').alignItems(HorizontalAlign.Start)
-              }.width('100%').constraintSize({ minHeight: 64 }).padding(12).backgroundColor(AppTheme.surface).onClick(() => this.onSelect(local.recordId))
+              }.width('100%').constraintSize({ minHeight: 64 }).padding(12).backgroundColor(this.palette.surface).onClick(() => this.onSelect(local.recordId))
             }, (local: FocusLocalView) => `${local.recordId}-${local.localState}-${local.saveState}`)
           }
           Row({ space: 8 }) {
-            Text(this.state.record === null ? '已同步记录' : '其他已同步记录').fontSize(AppTheme.sectionTitle).fontColor(AppTheme.ink).layoutWeight(1)
+            Text(this.state.record === null ? '已同步记录' : '其他已同步记录').fontSize(this.palette.sectionTitle).fontColor(this.palette.ink).layoutWeight(1)
             Button('刷新记录').constraintSize({ minHeight: 48 }).enabled(this.active && !this.state.historyLoading).onClick(() => this.onRefresh())
           }.width('100%')
-          if (this.state.historyLoading) { Text('正在读取记录…').fontSize(AppTheme.bodySize).fontColor(AppTheme.secondary) }
-          if (this.state.historyError.length > 0) { Text(this.state.historyError).fontSize(AppTheme.bodySize).fontColor(AppTheme.warning).width('100%').wordBreak(WordBreak.BREAK_WORD) }
-          if (!this.state.historyLoading && this.state.historyError.length === 0 && this.state.history.length === 0) { Text('还没有已读取的同步记录。').fontSize(AppTheme.bodySize).fontColor(AppTheme.secondary).width('100%') }
-          if (this.state.record !== null) { Text('当前所选记录已在上方展示；这里列出其他已读取记录。').fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%') }
+          if (this.state.historyLoading) { Text('正在读取记录…').fontSize(this.palette.bodySize).fontColor(this.palette.secondary) }
+          if (this.state.historyError.length > 0) { Text(this.state.historyError).fontSize(this.palette.bodySize).fontColor(this.palette.warning).width('100%').wordBreak(WordBreak.BREAK_WORD) }
+          if (!this.state.historyLoading && this.state.historyError.length === 0 && this.state.history.length === 0) { Text('还没有已读取的同步记录。').fontSize(this.palette.bodySize).fontColor(this.palette.secondary).width('100%') }
+          if (this.state.record !== null) { Text('当前所选记录已在上方展示；这里列出其他已读取记录。').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%') }
           ForEach(this.otherHistoryRecords(), (record: FocusRecord) => {
             Button({ type: ButtonType.Normal }) {
               Column({ space: 4 }) {
-                Text(this.recordTitle(record)).fontSize(AppTheme.bodySize).fontColor(AppTheme.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
-                Text(`${formatPlanDateTime(record.started_at)} · ${this.duration(record.confirmed_elapsed_ms)} · ${this.recordLabel(record)}`).fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+                Text(this.recordTitle(record)).fontSize(this.palette.bodySize).fontColor(this.palette.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
+                Text(`${formatPlanDateTime(record.started_at)} · ${this.duration(record.confirmed_elapsed_ms)} · ${this.recordLabel(record)}`).fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
               }.width('100%').alignItems(HorizontalAlign.Start)
-            }.width('100%').constraintSize({ minHeight: 64 }).padding(12).backgroundColor(AppTheme.surface).onClick(() => this.onSelect(record.record_id))
+            }.width('100%').constraintSize({ minHeight: 64 }).padding(12).backgroundColor(this.palette.surface).onClick(() => this.onSelect(record.record_id))
           }, (record: FocusRecord) => `${record.record_id}-${record.revision}`)
           if (this.state.historyHasMore) { Button('加载更多记录').width('100%').constraintSize({ minHeight: 48 }).enabled(this.active && !this.state.historyLoading).onClick(() => this.onLoadMore()) }
 
-          Button('清除本机专注记录与待同步内容').width('100%').constraintSize({ minHeight: 48 }).fontColor(AppTheme.danger).backgroundColor(AppTheme.dangerSoft)
+          Button('清除本机专注记录与待同步内容').width('100%').constraintSize({ minHeight: 48 }).fontColor(this.palette.danger).backgroundColor(this.palette.dangerSoft)
             .enabled(this.active).onClick(() => this.confirmation = 'clear')
         }.width('100%').alignItems(HorizontalAlign.Start)
       }.width('100%').layoutWeight(1)
-    }.width('100%').height('100%').padding({ left: 20, right: 20, bottom: 16 }).backgroundColor(AppTheme.bg)
+    }.width('100%').height('100%').padding({ left: 20, right: 20, bottom: 16 }).backgroundColor(this.palette.bg)
   }
 }

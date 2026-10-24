@@ -1,6 +1,7 @@
+import './helpers/theme-fixture.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { stripTypeScriptTypes } from 'node:module';
+import { stripThemeTypeScriptTypes as stripTypeScriptTypes } from './helpers/theme-fixture.mjs';
 import { test } from 'node:test';
 import { planningPageDependencies, dependencyPrefix, agenda, timetableSnapshot, preferenceSnapshot } from './helpers/planning-overview-fixture.mjs';
 import { draftFixture } from './helpers/local-draft-fixture.mjs';

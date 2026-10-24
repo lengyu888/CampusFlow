@@ -94,6 +94,24 @@ def test_context_plain_history_exact_owner_and_digest_not_title(scene):
     assert_error("SESSION_NOT_FOUND", lambda: runs.sessions.context("u", "absent"))
 
 
+@pytest.mark.parametrize("memory", [False, True])
+def test_checked_pair_clears_legacy_pending_session_status(tmp_path, memory):
+    store = CampusStore(None if memory else str(tmp_path / "pending.db"))
+    connection = store._connection or sqlite3.connect(":memory:")
+    connection.row_factory = sqlite3.Row
+    sessions = SessionService(store, connection)
+    store.append_history("u", "s", "user", "旧请求尚未完成", "deepseek-flash")
+    assert store.list_sessions("u")[0].status == "pending"
+    assert sessions.context("u", "s").summary.status == "pending"
+
+    frozen = sessions.prepare("u", "s", "continue", sessions.context("u", "s").context_revision)
+    sessions.append_checked(frozen, "继续安排", "已完成离线回复", "deepseek-flash")
+
+    assert store.list_sessions("u")[0].status == "active"
+    assert sessions.context("u", "s").summary.status == "active"
+    assert [item.role for item in store.get_history("u", "s")] == ["user", "user", "assistant"]
+
+
 @pytest.mark.parametrize(
     "mode,revision,code",
     [

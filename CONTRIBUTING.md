@@ -1,11 +1,13 @@
 # CampusFlow 协作开发流程
 
 感谢参与 CampusFlow 开发。仓库的 `main` 分支已启用保护，协作者不能直接向
-`main` 推送代码。所有更改必须在独立分支完成，通过 Pull Request（PR）审查后合并。
+`main` 推送代码。协作者更改必须在独立分支完成，通过 Pull Request（PR）审查后合并。
+仓库拥有者的直接推送权限见第 8 节，不授予普通协作者。
 
-自 2026-10-18 起，采用每人一个持续协作分支与一个当前 PR。haohao 的完整版本在
-`dev/haohao`，累计功能、修复和验证记录见 [协作分支说明](docs/haohao-collaboration.md)。
-原阶段分支保留历史，后续更新集中到个人协作分支，不向其他成员分支提交。
+采用每人一个当前协作分支与一个当前 PR，不为同一未完成任务反复创建分支。
+本轮由拥有者执行全分支整合；完成验证并进入 main 后，维护者删除已整合阶段和个人分支，
+下一轮工作从最新 main 创建分支。历史功能与分支来源见
+[整合清单](docs/project-documents/branch-integration-2026-10-23.md)。不向其他成员分支提交。
 
 ## 1. 首次准备
 
@@ -30,12 +32,12 @@ git pull --ff-only origin main
 git switch -c dev/your-name
 ```
 
-已有个人分支时直接跟踪远程版本。haohao 的分支已包含全部累计功能，不要重新从 main 创建同名分支：
+已有未完成的个人分支时直接跟踪远程版本；若它已在本轮整合后删除，则按上一步从最新 main 创建下一轮分支：
 
 ```text
 git fetch origin
-git switch dev/haohao
-git pull --ff-only origin dev/haohao
+git switch dev/your-name
+git pull --ff-only origin dev/your-name
 ```
 
 ## 3. 开发与提交
@@ -175,18 +177,20 @@ gh pr create --base main --head dev/your-name `
 收到修改意见后，在原工作分支继续修改并正常 `git push`，PR 会自动更新；不要为同一任务
 重复创建 PR。审查通过后，由仓库维护者在 GitHub 合并。
 
-## 9. 合并后继续使用个人分支
+## 9. 合并后的分支整理
 
-PR 合并后保留个人分支，先同步 main，再开始下一轮工作。已合并的 PR 不能继续追加审查，
-下一轮仍用同一分支开一个新 PR，不按功能或阶段另建分支：
+本轮由维护者在 main 推送成功并确认提交可达后，删除已经完整整合的分支。
+不要在被删除的旧分支上继续推送，使旧分支重新出现在远程。下一轮先更新 main，再创建
+自己的下一轮分支和 PR；未合入的工作不能随已完成分支一起删除：
 
 ```powershell
-git fetch origin
-git switch dev/your-name
-git merge origin/main
+git fetch origin --prune
+git switch main
+git pull --ff-only origin main
+git switch -c dev/your-name-next
 ```
 
-如果远程分支被自动删除，应先核对 main 和本地历史，再恢复自己的同名分支；不删除其他成员的分支。
+本地旧分支有未推送或未合并提交时，先保存并与维护者核对，不强制删除；不删除其他成员的分支。
 
 ## 完整命令示例
 

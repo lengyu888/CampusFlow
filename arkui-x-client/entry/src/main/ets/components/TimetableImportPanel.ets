@@ -3,9 +3,11 @@ import { TimetableFieldErrors, TimetableIssue, validateTimetableEntry } from '..
 import { ImportRowChoice, ImportReviewRow, ImportOverlap, ImportClassification, classifyImportRows } from '../utils/TimetableImportReview';
 import { TimetableEntryEditor } from './TimetableEntryEditor';
 import { AppTheme } from '../theme/AppTheme';
+import { ThemePalette, themePalette } from '../theme/ThemePalette';
 
 @Component
 export struct TimetableImportPanel {
+  @StorageLink('campusflowThemePalette') private palette: ThemePalette = themePalette('paper-green');
   @Watch('reclassify') @Prop rows: ScheduleImportRow[] = [];
   @Watch('reclassify') @Prop currentDraft: TimetableEntry[] = [];
   @Watch('reclassify') @Prop choices: ImportRowChoice[] = [];
@@ -112,77 +114,77 @@ export struct TimetableImportPanel {
   private ReviewRow(row: ImportReviewRow) {
     Column({ space: 8 }) {
       Text(`源第 ${row.sourceIndex + 1} 行 · ${this.label(row.category)}${row.excluded ? ' · 已明确排除' : row.selected ? ' · 将加入' : ' · 待核对'}`)
-        .fontSize(AppTheme.metaSize).fontColor(row.excluded ? AppTheme.quiet : row.selected ? AppTheme.accent : AppTheme.warning).width('100%')
-      Text(row.input.title.length > 0 ? row.input.title : '尚无课程名称').fontSize(AppTheme.bodySize)
-        .fontWeight(FontWeight.Medium).fontColor(AppTheme.ink).width('100%')
+        .fontSize(this.palette.metaSize).fontColor(row.excluded ? this.palette.quiet : row.selected ? this.palette.accent : this.palette.warning).width('100%')
+      Text(row.input.title.length > 0 ? row.input.title : '尚无课程名称').fontSize(this.palette.bodySize)
+        .fontWeight(FontWeight.Medium).fontColor(this.palette.ink).width('100%')
       Text(`${row.input.date || '未提供日期'}  ${row.input.start_time || '未提供开始'}–${row.input.end_time || '未提供结束'}`)
-        .fontSize(AppTheme.bodySize).fontColor(AppTheme.ink).width('100%')
+        .fontSize(this.palette.bodySize).fontColor(this.palette.ink).width('100%')
       Text(`地点：${row.input.location || '未填写'} · 教师：${row.input.teacher || '未填写'}`)
-        .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+        .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
       Button(this.sourceDetails.includes(row.sourceIndex) ? '收起源时间字段' : '查看源时间字段')
-        .constraintSize({ minHeight: 48 }).width('100%').fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet)
+        .constraintSize({ minHeight: 48 }).width('100%').fontSize(this.palette.metaSize).fontColor(this.palette.quiet)
         .backgroundColor(Color.Transparent).onClick(() => {
           this.sourceDetails = this.sourceDetails.includes(row.sourceIndex) ? this.sourceDetails.filter((index: number) => index !== row.sourceIndex) : this.sourceDetails.concat([row.sourceIndex]);
         })
       if (this.sourceDetails.includes(row.sourceIndex)) {
         Text(`原开始：${row.original.source_time.start_value ?? '未提供'}；时区：${row.original.source_time.start_tzid ?? '未声明'}；类型：${row.original.source_time.start_value_type ?? '未声明'}`)
-          .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+          .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
         Text(`原结束：${row.original.source_time.end_value ?? '未提供'}；时区：${row.original.source_time.end_tzid ?? '未声明'}；类型：${row.original.source_time.end_value_type ?? '未声明'}`)
-          .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
-        Text('上方可加入的课程日期与时间统一按北京时间显示。').fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+          .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
+        Text('上方可加入的课程日期与时间统一按北京时间显示。').fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
       }
       ForEach(row.sourceIssues, (issue: ScheduleImportIssue) => {
-        Text(`来源提示：${issue.message}`).fontSize(AppTheme.metaSize).fontColor(AppTheme.warning).width('100%')
+        Text(`来源提示：${issue.message}`).fontSize(this.palette.metaSize).fontColor(this.palette.warning).width('100%')
       }, (_issue: ScheduleImportIssue, index: number) => `source-${row.sourceIndex}-${index}`)
       ForEach(row.issues, (issue: TimetableIssue) => {
-        Text(issue.message).fontSize(AppTheme.metaSize).fontColor(AppTheme.warning).width('100%')
+        Text(issue.message).fontSize(this.palette.metaSize).fontColor(this.palette.warning).width('100%')
       }, (_issue: TimetableIssue, index: number) => `issue-${row.sourceIndex}-${index}`)
       ForEach(row.overlaps, (other: ImportOverlap) => {
         Text(`与${other.kind === 'draft' ? '当前草稿' : '本批源'}第 ${other.index + 1} 行重叠：${other.entry.title}，${other.entry.date} ${other.entry.start_time}–${other.entry.end_time}；地点：${other.entry.location || '未填写'}；教师：${other.entry.teacher || '未填写'}`)
-          .fontSize(AppTheme.metaSize).fontColor(AppTheme.warning).width('100%')
+          .fontSize(this.palette.metaSize).fontColor(this.palette.warning).width('100%')
       }, (other: ImportOverlap) => `${other.kind}-${other.index}`)
       if (row.needsSourceReview) {
         Text('原记录不能按原样导入。修正后仅作为上方这一次课程，不代表已展开原系列或完整跨日事件。')
-          .fontSize(AppTheme.metaSize).fontColor(AppTheme.warning).width('100%')
-        Button('已核对，按这一次课程重建').constraintSize({ minHeight: 48 }).width('100%').fontSize(AppTheme.bodySize)
-          .fontColor(AppTheme.warning).backgroundColor(AppTheme.warningSoft).enabled(!this.busy && this.active && this.editingSource < 0)
+          .fontSize(this.palette.metaSize).fontColor(this.palette.warning).width('100%')
+        Button('已核对，按这一次课程重建').constraintSize({ minHeight: 48 }).width('100%').fontSize(this.palette.bodySize)
+          .fontColor(this.palette.warning).backgroundColor(this.palette.warningSoft).enabled(!this.busy && this.active && this.editingSource < 0)
           .onClick(() => this.reviewSource(row.sourceIndex))
       }
       if (row.category === 'duplicate') {
-        Text('六个字段完全相同，默认不重复加入；不同教师不会合并。').fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+        Text('六个字段完全相同，默认不重复加入；不同教师不会合并。').fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
       }
       if (!row.excluded && row.category === 'overlap' && !row.selected) {
-        Button('保留以上重叠，加入这条').constraintSize({ minHeight: 48 }).width('100%').fontSize(AppTheme.bodySize)
-          .fontColor(AppTheme.warning).backgroundColor(AppTheme.warningSoft).enabled(!this.busy && this.active && this.editingSource < 0)
+        Button('保留以上重叠，加入这条').constraintSize({ minHeight: 48 }).width('100%').fontSize(this.palette.bodySize)
+          .fontColor(this.palette.warning).backgroundColor(this.palette.warningSoft).enabled(!this.busy && this.active && this.editingSource < 0)
           .onClick(() => this.decide(row.sourceIndex, true))
       }
-      Button('修改这一行').constraintSize({ minHeight: 48 }).width('100%').fontSize(AppTheme.bodySize)
-        .fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft).enabled(!this.busy && this.active && this.editingSource < 0)
+      Button('修改这一行').constraintSize({ minHeight: 48 }).width('100%').fontSize(this.palette.bodySize)
+        .fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft).enabled(!this.busy && this.active && this.editingSource < 0)
         .onClick(() => this.editRow(row.sourceIndex))
-      Button(row.excluded ? '重新纳入核对' : '明确排除此行').constraintSize({ minHeight: 48 }).width('100%').fontSize(AppTheme.bodySize)
-        .fontColor(AppTheme.quiet).backgroundColor(AppTheme.field).enabled(!this.busy && this.active && this.editingSource < 0)
+      Button(row.excluded ? '重新纳入核对' : '明确排除此行').constraintSize({ minHeight: 48 }).width('100%').fontSize(this.palette.bodySize)
+        .fontColor(this.palette.quiet).backgroundColor(this.palette.field).enabled(!this.busy && this.active && this.editingSource < 0)
         .onClick(() => this.decide(row.sourceIndex, row.excluded))
-    }.width('100%').alignItems(HorizontalAlign.Start).padding(12).border({ width: 1, color: AppTheme.line }).borderRadius(AppTheme.controlRadius)
+    }.width('100%').alignItems(HorizontalAlign.Start).padding(12).border({ width: 1, color: this.palette.line }).borderRadius(this.palette.controlRadius)
   }
   build() {
     Column({ space: 12 }) {
-      Text(`核对 ${this.rows.length} 条源记录`).fontSize(AppTheme.sectionTitle).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink).width('100%')
+      Text(`核对 ${this.rows.length} 条源记录`).fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Bold).fontColor(this.palette.ink).width('100%')
       Text(`可加入 ${this.classification().addCount} · 重复 ${this.classification().duplicateCount} · 重叠 ${this.classification().overlapCount} · 需修正 ${this.classification().invalidCount} · 已排除 ${this.classification().excludedCount}`)
-        .fontSize(AppTheme.bodySize).fontColor(AppTheme.ink).width('100%')
+        .fontSize(this.palette.bodySize).fontColor(this.palette.ink).width('100%')
       Text('逐行核对后才加入本地草稿，不按名称覆盖旧课。未加入的预览与选择只在本页内存中；退出应用后需重新读取。')
-        .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+        .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
       ForEach(this.warnings, (warning: TimetableIssue) => {
-        Text(warning.message).fontSize(AppTheme.metaSize).fontColor(AppTheme.warning).width('100%')
+        Text(warning.message).fontSize(this.palette.metaSize).fontColor(this.palette.warning).width('100%')
       }, (_warning: TimetableIssue, index: number) => `warning-${index}`)
       Flex({ wrap: FlexWrap.Wrap }) {
         ForEach(['all', 'new', 'duplicate', 'overlap', 'invalid'], (category: string) => {
           Button(this.label(category)).constraintSize({ minHeight: 48 }).margin({ right: 8, bottom: 8 })
-            .fontSize(AppTheme.bodySize).fontColor(this.category === category ? AppTheme.onAccent : AppTheme.ink)
-            .backgroundColor(this.category === category ? AppTheme.accent : AppTheme.field).onClick(() => this.selectCategory(category))
+            .fontSize(this.palette.bodySize).fontColor(this.category === category ? this.palette.onAccent : this.palette.ink)
+            .backgroundColor(this.category === category ? this.palette.accent : this.palette.field).onClick(() => this.selectCategory(category))
         }, (category: string) => category)
       }.width('100%')
       if (this.editingSource >= 0) {
-        Text(`正在修改源第 ${this.editingSource + 1} 行，尚未应用`).fontSize(AppTheme.bodySize).fontColor(AppTheme.ink).width('100%')
+        Text(`正在修改源第 ${this.editingSource + 1} 行，尚未应用`).fontSize(this.palette.bodySize).fontColor(this.palette.ink).width('100%')
         TimetableEntryEditor({ entry: this.editor, errors: this.errors, editing: true, showRepeat: false,
           busy: this.busy, active: this.active, anchorDate: this.anchorDate,
           contextKey: `${this.contextKey}-${this.editingSource}`, idPrefix: `import-${this.contextKey}-${this.editingSource}`,
@@ -192,27 +194,27 @@ export struct TimetableImportPanel {
       }
       ForEach(this.pageRows(), (row: ImportReviewRow) => { this.ReviewRow(row) },
         (row: ImportReviewRow) => `${this.contextKey}-${row.sourceIndex}-${this.projectionRevision}`)
-      if (this.filteredRows().length === 0) { Text('此分类暂无记录。').fontSize(AppTheme.bodySize).fontColor(AppTheme.quiet).width('100%') }
+      if (this.filteredRows().length === 0) { Text('此分类暂无记录。').fontSize(this.palette.bodySize).fontColor(this.palette.quiet).width('100%') }
       if (this.filteredRows().length > 6) {
         Row({ space: 8 }) {
           Button('上一页').constraintSize({ minHeight: 48 }).layoutWeight(1).enabled(this.pageIndex > 0 && this.editingSource < 0)
             .onClick(() => this.pageIndex--)
-          Text(`${this.pageIndex + 1}/${Math.max(1, Math.ceil(this.filteredRows().length / 6))}`).fontColor(AppTheme.quiet)
+          Text(`${this.pageIndex + 1}/${Math.max(1, Math.ceil(this.filteredRows().length / 6))}`).fontColor(this.palette.quiet)
           Button('下一页').constraintSize({ minHeight: 48 }).layoutWeight(1)
             .enabled((this.pageIndex + 1) * 6 < this.filteredRows().length && this.editingSource < 0).onClick(() => this.pageIndex++)
         }.width('100%')
       }
-      if (this.message.length > 0) { Text(this.message).fontColor(AppTheme.warning).width('100%') }
-      if (!this.classification().valid) { Text(this.classification().message).fontColor(AppTheme.danger).width('100%') }
+      if (this.message.length > 0) { Text(this.message).fontColor(this.palette.warning).width('100%') }
+      if (!this.classification().valid) { Text(this.classification().message).fontColor(this.palette.danger).width('100%') }
       if (this.classification().unresolvedCount > 0) {
-        Text(`还有 ${this.classification().unresolvedCount} 条需修正、确认重叠或明确排除。`).fontColor(AppTheme.warning).width('100%')
+        Text(`还有 ${this.classification().unresolvedCount} 条需修正、确认重叠或明确排除。`).fontColor(this.palette.warning).width('100%')
       }
       Button(`将所选 ${this.classification().addCount} 条加入草稿`).constraintSize({ minHeight: 50 }).width('100%')
-        .fontSize(AppTheme.bodySize).fontColor(AppTheme.onAccent).backgroundColor(AppTheme.accent)
+        .fontSize(this.palette.bodySize).fontColor(this.palette.onAccent).backgroundColor(this.palette.accent)
         .enabled(!this.busy && this.active && this.editingSource < 0 && this.classification().unresolvedCount === 0 && this.classification().addCount > 0)
         .onClick(() => this.accept())
-      Button('放弃本次预览').constraintSize({ minHeight: 48 }).width('100%').fontSize(AppTheme.bodySize)
-        .fontColor(AppTheme.quiet).backgroundColor(Color.Transparent).enabled(!this.busy && this.active).onClick(() => this.onCancel())
+      Button('放弃本次预览').constraintSize({ minHeight: 48 }).width('100%').fontSize(this.palette.bodySize)
+        .fontColor(this.palette.quiet).backgroundColor(Color.Transparent).enabled(!this.busy && this.active).onClick(() => this.onCancel())
     }.width('100%').alignItems(HorizontalAlign.Start)
   }
 }

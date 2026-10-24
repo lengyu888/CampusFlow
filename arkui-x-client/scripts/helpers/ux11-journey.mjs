@@ -1,10 +1,11 @@
+import { createThemeFixture } from './theme-fixture.mjs';
 import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import { readFileSync, existsSync } from 'node:fs';
 import * as fs from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
-import { stripTypeScriptTypes } from 'node:module';
+import { stripThemeTypeScriptTypes as stripTypeScriptTypes } from './theme-fixture.mjs';
 import { createHash } from 'node:crypto';
 
 export const repository = fileURLToPath(new URL('../../../', import.meta.url));
@@ -55,7 +56,9 @@ export class JourneyBridge {
 export function loadJourneyModules(now){
   const nativeDate=Date;
   class BusinessDate extends nativeDate{constructor(...args){super(...(args.length?args:[now()]));}static now(){return now();}}
-  const shared={Date:BusinessDate};const hashes={};
+  const themes=createThemeFixture();
+  const shared={Date:BusinessDate,themePalette:themes.themePalette,
+    initializeAppTheme:themes.initializeAppTheme,selectAppTheme:themes.selectAppTheme};const hashes={};
   function load(relative,dependencies={}){
     const source=readFileSync(path.join(ets,relative+'.ets'),'utf8');hashes[relative]=createHash('sha256').update(source).digest('hex');
     const exports=[...source.matchAll(/^export\s+(?:async\s+)?(?:function|class|const)\s+(\w+)/gm)].map(match=>match[1]);

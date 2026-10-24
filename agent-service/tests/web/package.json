@@ -1,0 +1,17 @@
+{
+  "name": "campusflow-web-rendering-tests",
+  "private": true,
+  "version": "1.0.0",
+  "description": "DOM-based regression tests for assistant Markdown rendering",
+  "type": "module",
+  "scripts": {
+    "test": "node --test markdown.test.mjs theme.test.mjs task-status.test.mjs"
+  },
+  "engines": {
+    "node": "^22.22.2 || ^24.15.0 || >=26.0.0"
+  },
+  "packageManager": "pnpm@11.19.0",
+  "devDependencies": {
+    "jsdom": "30.1.2"
+  }
+}

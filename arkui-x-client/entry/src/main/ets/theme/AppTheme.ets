@@ -1,4 +1,5 @@
-// 行简纸页主题。Layout numbers are vp; text sizes follow native fp scaling.
+// Paper defaults and motion policy. UI components subscribe to ThemePalette instead of static colors.
+// Layout numbers are vp; text sizes follow native fp scaling.
 export class AppTheme {
   static readonly canvas: string = '#F6F4EF';
   static readonly surface: string = '#FFFEFB';

@@ -30,6 +30,7 @@ import { RoutePage } from './RoutePage';
 import { SkillsPage } from './SkillsPage';
 import { AppIcon } from '../components/AppIcon';
 import { AppTheme } from '../theme/AppTheme';
+import { ThemePalette, themePalette } from '../theme/ThemePalette';
 import { TimetablePage } from './TimetablePage';
 import { CampusPage } from './CampusPage';
 import { FeedbackPanel } from '../components/FeedbackPanel';
@@ -42,6 +43,7 @@ interface RootCourseIntent { root: number; intent: CourseRouteIntent; }
 @Entry
 @Component
 struct Index {
+  @StorageLink('campusflowThemePalette') private palette: ThemePalette = themePalette('paper-green');
   @Watch('reminderAccountChanged') @StorageLink('apiBaseUrl') private baseUrl: string = 'http://127.0.0.1:8000';
   @Watch('reminderActivityChanged') @StorageLink('voiceForeground') private voiceForeground: boolean = true;
   @State private reminderState: ReminderState = { phase: 'disabled', message: '本机系统提醒尚未启用。', scheduled: 0, skipped: 0, limited: false, enabled: false };
@@ -218,6 +220,19 @@ struct Index {
 
   private hasLocalFocus(): boolean {
     return this.focusCleanupNeeded || this.focusState.phase === 'error' || this.focusState.localRecords.length > 0 || this.focusState.pendingOperations.length > 0;
+  }
+
+  private async retryFocusStorage(): Promise<void> {
+    const manager = this.focusManager; const revision = this.authRevision;
+    const base = this.serviceBaseUrl(); const token = this.token; const userId = this.user.user_id;
+    if (!this.pageActive || !this.voiceForeground || !this.focusPageOpen || manager === null || token.length === 0 || userId.length === 0 || this.focusState.phase === 'loading') { return; }
+    await manager.configure(historyScope(base, userId), userId, new CampusFlowApi(base, token));
+    if (!this.pageActive || this.authRevision !== revision || this.focusManager !== manager || this.token !== token || this.serviceBaseUrl() !== base) { return; }
+    manager.setForeground(this.voiceForeground);
+    if (manager.snapshot().phase === 'ready') {
+      this.focusCleanupNeeded = false; this.focusNotice = '';
+      AppStorage.setOrCreate<string>('localFocusError', '');
+    }
   }
 
   private cancelFocusTaskRead(): void {
@@ -857,6 +872,7 @@ struct Index {
           onStart: (id: string, target: number | null, mode: 'online' | 'offline') => this.focusManager?.start(id, target, mode),
           onPause: () => this.focusManager?.pause(), onResume: () => this.focusManager?.resume(), onEnd: () => this.focusManager?.end(),
           onSync: () => this.focusManager?.sync(), onCheck: (id: string) => this.focusManager?.check(id), onRetry: (id: string) => this.focusManager?.retry(id),
+          onRetryStorage: () => this.retryFocusStorage(),
           onSelect: (id: string) => this.selectFocusRecord(id),
           onRefresh: () => this.focusManager?.refreshHistory(), onLoadMore: () => this.focusManager?.loadMoreHistory(),
           onRemoteEnd: (id: string, revision: number) => this.focusManager?.remoteEnd(id, revision),
@@ -872,7 +888,7 @@ struct Index {
           onCancel: (id: string) => this.taskStatuses?.cancel(id), onDismiss: (id: string) => this.taskStatuses?.dismiss(id),
           onClose: () => this.closeTaskStatus(),
           onOpenTask: (id: string) => { this.closeTaskStatus(); this.openPlanDetails(id, ''); } })
-          .width('100%').height('100%').backgroundColor(AppTheme.bg)
+          .width('100%').height('100%').backgroundColor(this.palette.bg)
       }
     }.width('100%').height('100%')
   }
@@ -881,13 +897,13 @@ struct Index {
   private SecondaryHeader(title: string) {
     Row({ space: 8 }) {
       Button({ type: ButtonType.Normal }) {
-        AppIcon({ name: 'back', iconSize: 22, color: AppTheme.accent })
-      }.width(48).height(48).backgroundColor(Color.Transparent).borderRadius(AppTheme.controlRadius)
+        AppIcon({ name: 'back', iconSize: 22, color: this.palette.accent })
+      }.width(48).height(48).backgroundColor(Color.Transparent).borderRadius(this.palette.controlRadius)
         .accessibilityText('返回上一页').onClick(() => this.goBack())
-      Text(title).fontSize(AppTheme.sectionTitle).fontWeight(FontWeight.Medium).fontColor(AppTheme.ink)
+      Text(title).fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Medium).fontColor(this.palette.ink)
         .layoutWeight(1).wordBreak(WordBreak.BREAK_WORD)
-    }.width('100%').padding({ left: 8, right: 20, top: 4, bottom: 4 }).backgroundColor(AppTheme.surface)
-      .border({ width: { bottom: 1 }, color: AppTheme.line })
+    }.width('100%').padding({ left: 8, right: 20, top: 4, bottom: 4 }).backgroundColor(this.palette.surface)
+      .border({ width: { bottom: 1 }, color: this.palette.line })
   }
 
   @Builder
@@ -895,12 +911,12 @@ struct Index {
     Button({ type: ButtonType.Normal }) {
       Column({ space: 4 }) {
         AppIcon({ name: icon, iconSize: 23,
-          color: this.selectedTab() === tab ? AppTheme.accent : AppTheme.secondary })
-        Text(label).fontSize(AppTheme.metaSize).fontWeight(this.selectedTab() === tab ? FontWeight.Medium : FontWeight.Regular)
-          .fontColor(this.selectedTab() === tab ? AppTheme.accent : AppTheme.secondary)
+          color: this.selectedTab() === tab ? this.palette.accent : this.palette.secondary })
+        Text(label).fontSize(this.palette.metaSize).fontWeight(this.selectedTab() === tab ? FontWeight.Medium : FontWeight.Regular)
+          .fontColor(this.selectedTab() === tab ? this.palette.accent : this.palette.secondary)
       }.constraintSize({ minHeight: 48 }).justifyContent(FlexAlign.Center)
     }.layoutWeight(1).constraintSize({ minHeight: 56 }).padding({ top: 4, bottom: 4 })
-      .backgroundColor(this.selectedTab() === tab ? AppTheme.accentSoft : Color.Transparent).borderRadius(AppTheme.controlRadius)
+      .backgroundColor(this.selectedTab() === tab ? this.palette.accentSoft : Color.Transparent).borderRadius(this.palette.controlRadius)
       .accessibilityText(`${label}${this.selectedTab() === tab ? '，已选中' : ''}`)
       .onClick(() => this.selectTab(tab))
   }
@@ -954,23 +970,23 @@ struct Index {
           .opacity(this.contentOpacity).translate({ y: this.contentOffset })
         if (this.pendingLogoutConfirm) {
           Column({ space: 8 }) {
-            Text(this.pendingServiceUrl.length > 0 ? '更换服务前，请核对本机内容' : '退出前，请核对本机内容').fontSize(AppTheme.sectionTitle).fontColor(AppTheme.warning).width('100%')
+            Text(this.pendingServiceUrl.length > 0 ? '更换服务前，请核对本机内容' : '退出前，请核对本机内容').fontSize(this.palette.sectionTitle).fontColor(this.palette.warning).width('100%')
             Text('退出会清除本机未同步专注区间、草稿（含回看感受）和恢复标识，清除后不能从本机找回。服务器已确认记录仍保留；已收到的操作仍可能生效，退出不等于取消。')
-              .fontSize(AppTheme.bodySize).fontColor(AppTheme.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
+              .fontSize(this.palette.bodySize).fontColor(this.palette.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
             Button('保留登录，继续核对').constraintSize({ minHeight: 48 }).width('100%')
               .onClick(() => { this.pendingLogoutConfirm = false; this.pendingServiceUrl = ''; if (this.hasLocalFocus()) { this.openFocus(); } else if (this.taskStatusState.pendingCount > 0) { this.openTaskStatus(); } })
             Button('仍退出并清除本机记录').constraintSize({ minHeight: 48 }).width('100%').onClick(() => this.confirmAccountExit())
-          }.padding(16).backgroundColor(AppTheme.warningSoft).width('100%')
+          }.padding(16).backgroundColor(this.palette.warningSoft).width('100%')
         }
         if (!this.focusPageOpen && !this.reviewPageOpen && !this.taskStatusOpen && (this.focusState.localRecords.length > 0 || this.focusState.pendingOperations.length > 0 || this.focusState.activeRecord !== null || this.focusCleanupNeeded)) {
           Button(this.focusState.local?.localState === 'running' ? '专注正在记录 · 打开查看' : '专注记录与待同步内容 · 打开核对')
-            .width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize).fontColor(AppTheme.accent)
-            .backgroundColor(AppTheme.accentSoft).onClick(() => this.openFocus())
+            .width('100%').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize).fontColor(this.palette.accent)
+            .backgroundColor(this.palette.accentSoft).onClick(() => this.openFocus())
         }
         if (!this.reviewPageOpen && !this.taskStatusOpen && (this.taskStatusState.items.length > 0 || this.taskStatusState.message.length > 0)) {
           Button(this.taskStatusBarLabel())
-            .width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize).fontColor(AppTheme.accent)
-            .backgroundColor(AppTheme.accentSoft).onClick(() => this.openTaskStatus())
+            .width('100%').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize).fontColor(this.palette.accent)
+            .backgroundColor(this.palette.accentSoft).onClick(() => this.openTaskStatus())
         }
         if (!this.focusPageOpen && !this.reviewPageOpen && !this.taskStatusOpen && !this.quickCaptureOpen && isRootRoute(this.activeTab) && !(this.activeTab === 2 && this.planInnerActive)) {
           Row({ space: 4 }) {
@@ -979,10 +995,10 @@ struct Index {
             this.navItem(2, 'calendar', '计划')
             this.navItem(8, 'classroom', '校园')
           }.width('100%').constraintSize({ minHeight: 64 })
-            .padding({ left: 10, right: 10, bottom: 4 }).backgroundColor(AppTheme.surface)
-            .border({ width: { top: 1 }, color: AppTheme.line })
+            .padding({ left: 10, right: 10, bottom: 4 }).backgroundColor(this.palette.surface)
+            .border({ width: { top: 1 }, color: this.palette.line })
         }
-      }.width('100%').height('100%').backgroundColor(AppTheme.bg)
+      }.width('100%').height('100%').backgroundColor(this.palette.bg)
     }
   }
 }

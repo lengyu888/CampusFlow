@@ -1,5 +1,6 @@
+import './theme-fixture.mjs';
 import { readFileSync } from 'node:fs';
-import { stripTypeScriptTypes } from 'node:module';
+import { stripThemeTypeScriptTypes as stripTypeScriptTypes } from './theme-fixture.mjs';
 
 const source = readFileSync(new URL('../../entry/src/main/ets/utils/AgentRun.ets', import.meta.url), 'utf8')
   .replace(/^import [^\n]+;\r?\n/gm, '').replace(/^export /gm, '');

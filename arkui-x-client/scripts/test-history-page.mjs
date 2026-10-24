@@ -1,8 +1,9 @@
+import './helpers/theme-fixture.mjs';
 import { focusEntryFixture } from './helpers/focus-entry-fixture.mjs';
 import { TaskStatusController, statusIds, statusTask, completeOperation, tick as statusTick } from './helpers/task-status-fixture.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { stripTypeScriptTypes } from 'node:module';
+import { stripThemeTypeScriptTypes as stripTypeScriptTypes } from './helpers/theme-fixture.mjs';
 import { test } from 'node:test';
 
 const helperSource = readFileSync(new URL('../entry/src/main/ets/utils/AgentFeedback.ets', import.meta.url), 'utf8')

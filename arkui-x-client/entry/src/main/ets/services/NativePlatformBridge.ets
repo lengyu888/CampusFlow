@@ -26,7 +26,7 @@ class BridgeClock implements NativeBridgeClock {
   setTimeout(callback: () => void, delay: number): number { return setTimeout(callback, delay); }
   clearTimeout(id: number): void { clearTimeout(id); }
 }
-export class NativeBridgeError extends Error {
+export class NativeBridgeError extends Error implements Error {
   code: string;
   constructor(code: string) {
     super('设备服务暂未完成，请核对状态后重试。');

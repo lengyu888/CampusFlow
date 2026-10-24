@@ -2,6 +2,7 @@ import { CampusDataPlace, CampusDataSnapshot, CampusRoute, DataEvidence } from '
 import { RouteMap } from '../components/RouteMap';
 import { CampusFlowApi } from '../services/CampusFlowApi';
 import { AppTheme } from '../theme/AppTheme';
+import { ThemePalette, themePalette } from '../theme/ThemePalette';
 import { AppIcon } from '../components/AppIcon';
 import { FeedbackPanel } from '../components/FeedbackPanel';
 import { EvidencePanel } from '../components/EvidencePanel';
@@ -25,6 +26,7 @@ class CampusSelectOption implements SelectOption {
 
 @Component
 export struct RoutePage {
+  @StorageLink('campusflowThemePalette') private palette: ThemePalette = themePalette('paper-green');
   @Watch('accountChanged') @Prop baseUrl: string;
   @Watch('accountChanged') @Prop token: string;
   @Watch('accountChanged') @Prop routeScope: string = '';
@@ -270,42 +272,42 @@ export struct RoutePage {
   private CourseContext() {
     if (this.visibleCourse !== null) {
       Column({ space: 8 }) {
-        Text('来自课程安排').fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
-        Text(this.visibleCourse.course.title).fontSize(AppTheme.sectionTitle).fontWeight(FontWeight.Medium)
-          .fontColor(AppTheme.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
+        Text('来自课程安排').fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
+        Text(this.visibleCourse.course.title).fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Medium)
+          .fontColor(this.palette.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
         Text(`${this.visibleCourse.course.date} · ${this.visibleCourse.course.start_time}–${this.visibleCourse.course.end_time}`)
-          .fontSize(AppTheme.bodySize).fontColor(AppTheme.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
-        Text(`${this.visibleCourse.school} · ${this.visibleCourse.campus}`).fontSize(AppTheme.metaSize)
-          .fontColor(AppTheme.quiet).width('100%').wordBreak(WordBreak.BREAK_WORD)
-        Text(`课程原地点：${this.visibleCourse.course.location || '未填写'}`).fontSize(AppTheme.bodySize)
-          .fontColor(AppTheme.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
+          .fontSize(this.palette.bodySize).fontColor(this.palette.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
+        Text(`${this.visibleCourse.school} · ${this.visibleCourse.campus}`).fontSize(this.palette.metaSize)
+          .fontColor(this.palette.quiet).width('100%').wordBreak(WordBreak.BREAK_WORD)
+        Text(`课程原地点：${this.visibleCourse.course.location || '未填写'}`).fontSize(this.palette.bodySize)
+          .fontColor(this.palette.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
         if (this.visibleCourse.course.teacher.length > 0) {
-          Text(`教师：${this.visibleCourse.course.teacher}`).fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+          Text(`教师：${this.visibleCourse.course.teacher}`).fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
             .wordBreak(WordBreak.BREAK_WORD)
         }
-        Text(this.matchMessage()).fontSize(AppTheme.bodySize).fontColor(AppTheme.quiet).width('100%').wordBreak(WordBreak.BREAK_WORD)
+        Text(this.matchMessage()).fontSize(this.palette.bodySize).fontColor(this.palette.quiet).width('100%').wordBreak(WordBreak.BREAK_WORD)
         if (this.courseMatch?.status === 'ambiguous' || this.courseMatch?.status === 'missing') {
           ForEach(this.candidatePlaces(), (place: CampusDataPlace) => {
-            Button(`${place.name} · ${place.zone}`).fontSize(AppTheme.bodySize).fontColor(AppTheme.accent)
-              .width('100%').constraintSize({ minHeight: 48 }).padding(12).backgroundColor(AppTheme.accentSoft)
-              .borderRadius(AppTheme.controlRadius).enabled(!this.loading).onClick(() => this.selectCandidate(place.place_id))
+            Button(`${place.name} · ${place.zone}`).fontSize(this.palette.bodySize).fontColor(this.palette.accent)
+              .width('100%').constraintSize({ minHeight: 48 }).padding(12).backgroundColor(this.palette.accentSoft)
+              .borderRadius(this.palette.controlRadius).enabled(!this.loading).onClick(() => this.selectCandidate(place.place_id))
           }, (place: CampusDataPlace) => place.place_id)
         }
         EvidencePanel({ evidence: this.visibleCourse.evidence, active: this.active })
         Text('来源描述整份已保存课表；地图仅指向楼宇，不定位到教室或当前位置。')
-          .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%').wordBreak(WordBreak.BREAK_WORD)
-      }.width('100%').alignItems(HorizontalAlign.Start).padding(AppTheme.cardInset)
-        .backgroundColor(AppTheme.surface).borderRadius(AppTheme.cardRadius)
+          .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%').wordBreak(WordBreak.BREAK_WORD)
+      }.width('100%').alignItems(HorizontalAlign.Start).padding(this.palette.cardInset)
+        .backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
     }
   }
 
   @Builder
   private PlaceEvidence(place: CampusDataPlace) {
     Column({ space: 8 }) {
-      Text(`${place.name} · ${openingStatus(place)}`).fontSize(AppTheme.bodySize).fontColor(AppTheme.ink)
+      Text(`${place.name} · ${openingStatus(place)}`).fontSize(this.palette.bodySize).fontColor(this.palette.ink)
         .width('100%').wordBreak(WordBreak.BREAK_WORD)
       Text(`参考开放时间：${place.open_hours.length > 0 ? place.open_hours : '未提供'}。临时闭馆与现场通行情况请另行核对。`)
-        .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%').wordBreak(WordBreak.BREAK_WORD)
+        .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%').wordBreak(WordBreak.BREAK_WORD)
       EvidencePanel({ evidence: place.evidence ?? [], active: this.active })
     }.width('100%').alignItems(HorizontalAlign.Start)
   }
@@ -314,12 +316,12 @@ export struct RoutePage {
     Column() {
       Row({ space: 12 }) {
         Button() {
-          AppIcon({ name: 'back', iconSize: 22, color: AppTheme.accent })
-        }.width(48).height(48).backgroundColor(AppTheme.surface).borderRadius(22)
+          AppIcon({ name: 'back', iconSize: 22, color: this.palette.accent })
+        }.width(48).height(48).backgroundColor(this.palette.surface).borderRadius(22)
           .accessibilityText('返回上一页').onClick(() => this.onBack())
         Column({ space: 3 }) {
-          Text('校园导航').fontSize(AppTheme.pageTitle).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
-          Text('查看校园路线示意与步行估算').fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary)
+          Text('校园导航').fontSize(this.palette.pageTitle).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
+          Text('查看校园路线示意与步行估算').fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
         }.alignItems(HorizontalAlign.Start).layoutWeight(1)
       }.width('100%').padding({ left: 18, right: 18, top: 12, bottom: 12 })
 
@@ -328,9 +330,9 @@ export struct RoutePage {
           this.CourseContext()
           Column({ space: 12 }) {
             Row() {
-              Text('选择路线').fontSize(AppTheme.sectionTitle).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
+              Text('选择路线').fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
               Blank()
-              Text(`${this.places.length} 个地点`).fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary)
+              Text(`${this.places.length} 个地点`).fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
             }.width('100%')
 
             if (this.loading) {
@@ -343,30 +345,30 @@ export struct RoutePage {
                 actionLabel: '重新读取', onAction: () => this.loadPlaces() })
             } else {
               Column({ space: 6 }) {
-                Text('起点 · 请自行选择，不使用当前位置').fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
+                Text('起点 · 请自行选择，不使用当前位置').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
                 Select(this.options()).selected(this.originIndex)
                   .value(this.places[this.originIndex]?.name ?? '请选择起点')
-                  .fontColor(AppTheme.ink).backgroundColor(AppTheme.field)
-                  .optionBgColor(AppTheme.surface).optionFontColor(AppTheme.ink)
-                  .selectedOptionBgColor(AppTheme.accentSoft).selectedOptionFontColor(AppTheme.accent)
+                  .fontColor(this.palette.ink).backgroundColor(this.palette.field)
+                  .optionBgColor(this.palette.surface).optionFontColor(this.palette.ink)
+                  .selectedOptionBgColor(this.palette.accentSoft).selectedOptionFontColor(this.palette.accent)
                   .borderRadius(13).width('100%').constraintSize({ minHeight: 48 })
                   .onSelect((index: number) => {
                     this.choosePlace(index, true);
                   })
               }.width('100%').alignItems(HorizontalAlign.Start)
 
-              Button('交换起终点').constraintSize({ minHeight: 48 }).fontSize(AppTheme.metaSize).fontColor(AppTheme.accent)
-                .backgroundColor(AppTheme.accentSoft).borderRadius(12).enabled(this.originIndex >= 0 && this.destinationIndex >= 0).onClick(() => {
+              Button('交换起终点').constraintSize({ minHeight: 48 }).fontSize(this.palette.metaSize).fontColor(this.palette.accent)
+                .backgroundColor(this.palette.accentSoft).borderRadius(12).enabled(this.originIndex >= 0 && this.destinationIndex >= 0).onClick(() => {
                   this.getUIContext().animateTo({ duration: AppTheme.motion(200), curve: Curve.EaseOut }, () => this.swap());
                 })
 
               Column({ space: 6 }) {
-                Text('终点').fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
+                Text('终点').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
                 Select(this.options()).selected(this.destinationIndex)
                   .value(this.places[this.destinationIndex]?.name ?? '请选择终点')
-                  .fontColor(AppTheme.ink).backgroundColor(AppTheme.field)
-                  .optionBgColor(AppTheme.surface).optionFontColor(AppTheme.ink)
-                  .selectedOptionBgColor(AppTheme.accentSoft).selectedOptionFontColor(AppTheme.accent)
+                  .fontColor(this.palette.ink).backgroundColor(this.palette.field)
+                  .optionBgColor(this.palette.surface).optionFontColor(this.palette.ink)
+                  .selectedOptionBgColor(this.palette.accentSoft).selectedOptionFontColor(this.palette.accent)
                   .borderRadius(13).width('100%').constraintSize({ minHeight: 48 })
                   .onSelect((index: number) => {
                     this.choosePlace(index, false);
@@ -374,8 +376,8 @@ export struct RoutePage {
               }.width('100%').alignItems(HorizontalAlign.Start)
 
               Button(this.routeLoading ? '正在生成示意路线…' : '生成路线图').width('100%').constraintSize({ minHeight: 48 })
-                .fontSize(AppTheme.metaSize).fontWeight(FontWeight.Bold).fontColor(AppTheme.onAccent)
-                .backgroundColor(AppTheme.accent).borderRadius(15).enabled(!this.routeLoading)
+                .fontSize(this.palette.metaSize).fontWeight(FontWeight.Bold).fontColor(this.palette.onAccent)
+                .backgroundColor(this.palette.accent).borderRadius(15).enabled(!this.routeLoading)
                 .onClick(() => this.createRoute())
             }
 
@@ -387,27 +389,27 @@ export struct RoutePage {
               FeedbackPanel({ kind: 'error', title: '路线尚未生成', message: this.errorText,
                 actionLabel: '重试生成路线', busy: this.routeLoading, onAction: () => this.createRoute() })
             }
-          }.width('100%').padding(18).backgroundColor(AppTheme.surface).borderRadius(18)
+          }.width('100%').padding(18).backgroundColor(this.palette.surface).borderRadius(18)
 
           if (this.route !== null) {
             RouteMap({ route: this.route as CampusRoute })
             Text('路线几何为示意，距离与步行分钟为估算；不含实时定位、道路封闭或通行状态。')
-              .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%').wordBreak(WordBreak.BREAK_WORD)
+              .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%').wordBreak(WordBreak.BREAK_WORD)
             EvidencePanel({ evidence: this.route.evidence ?? [], active: this.active })
             this.PlaceEvidence(this.route.origin)
             this.PlaceEvidence(this.route.destination)
           } else if (!this.loading && !this.routeLoading && this.errorText.length === 0 && this.placesError.length === 0 && this.places.length >= 2) {
             Column({ space: 7 }) {
-              AppIcon({ name: 'route', iconSize: 32, color: AppTheme.accent })
-              Text('选择两个地点').fontSize(17).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
+              AppIcon({ name: 'route', iconSize: 32, color: this.palette.accent })
+              Text('选择两个地点').fontSize(17).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
               Text('路线按已有校园地图生成，步行时间为估算；请以现场道路与通行情况为准。')
-                .fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).textAlign(TextAlign.Center)
-            }.width('100%').padding(24).backgroundColor(AppTheme.accentSoft).borderRadius(18)
+                .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).textAlign(TextAlign.Center)
+            }.width('100%').padding(24).backgroundColor(this.palette.accentSoft).borderRadius(18)
           }
         }.width('100%').alignItems(HorizontalAlign.Start).justifyContent(FlexAlign.Start)
           .padding({ left: 18, right: 18, top: 4, bottom: 32 })
       }.layoutWeight(1).width('100%').align(Alignment.TopStart)
     }.width('100%').height('100%').alignItems(HorizontalAlign.Start)
-      .justifyContent(FlexAlign.Start).backgroundColor(AppTheme.bg)
+      .justifyContent(FlexAlign.Start).backgroundColor(this.palette.bg)
   }
 }

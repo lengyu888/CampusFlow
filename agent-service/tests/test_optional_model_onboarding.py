@@ -116,6 +116,48 @@ async def test_no_key_register_login_and_profile_are_real(scene, key_fields):
         reopened._connection.close()
 
 
+async def test_public_campus_preview_preserves_fresh_cas_baseline_until_onboarding_commit(scene):
+    auth = await scene.register()
+    assert auth["user"]["school"] is None and not auth["user"]["onboarding_complete"]
+    before = (await scene.client.get("/api/v1/onboarding")).json()
+    blocked = await scene.client.get("/api/v1/campus-data")
+    assert blocked.status_code == 404 and blocked.json()["code"] == "DATA_SCOPE_UNSUPPORTED"
+
+    preview = await scene.client.get("/api/v1/onboarding/campus-data", params={
+        "school": ONBOARDING["school"], "campus": ONBOARDING["campus"],
+    })
+    assert preview.status_code == 200, preview.text
+    package = preview.json()
+    assert package["places"] and package["corrections"] == []
+    assert (await scene.client.get("/api/v1/onboarding")).json() == before
+    unsupported = await scene.client.get("/api/v1/onboarding/campus-data", params={
+        "school": ONBOARDING["school"], "campus": "不支持的校区",
+    })
+    assert unsupported.status_code == 404
+    assert (await scene.client.get("/api/v1/onboarding")).json() == before
+
+    payload = await scene.request()
+    payload["campus_map"] = {
+        "campus_name": ONBOARDING["campus"], "warnings": [],
+        "places": [{key: place[key] for key in ("name", "category", "zone", "aliases")}
+                   for place in package["places"]],
+    }
+    assert payload["expected_revision"] == before["revision"]
+    saved = await scene.client.put("/api/v1/onboarding", json=payload)
+    assert saved.status_code == 200, saved.text
+    response = saved.json()
+    assert response["user"]["onboarding_complete"] and not response["user"]["api_key_configured"]
+    assert response["receipt"]["previous_revision"] == before["revision"]
+    assert response["receipt"]["campus_place_count"] == len(package["places"])
+    assert response["receipt"]["revision"] != before["revision"]
+    receipt = await scene.client.get(
+        f"/api/v1/onboarding/operations/{payload['operation_id']}"
+    )
+    assert receipt.status_code == 200 and receipt.json() == response["receipt"]
+    assert (await scene.client.get("/api/v1/campus-data")).status_code == 200
+    assert scene.receipts() == 1 and scene.model.calls == 0
+
+
 @pytest.mark.parametrize("values", [
     {"api_key": ""}, {"api_key": "   "}, {"api_key": 123}, {"api_key": []},
     {"email": "invalid-email"}, {"password": "short"}, {"display_name": "   "},

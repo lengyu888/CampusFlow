@@ -1,5 +1,6 @@
+import './theme-fixture.mjs';
 import { readFileSync } from 'node:fs';
-import { stripTypeScriptTypes } from 'node:module';
+import { stripThemeTypeScriptTypes as stripTypeScriptTypes } from './theme-fixture.mjs';
 export { DraftStore, DraftMemoryDriver, draftFixture } from './local-draft-fixture.mjs';
 const read = name => readFileSync(new URL(`../../entry/src/main/ets/utils/${name}.ets`, import.meta.url), 'utf8');
 const clean = s => s.replace(/^import \{[\s\S]*?\} from '[^']+';\r?\n/gm, '').replace(/^import [^\n]+;\r?\n/gm, '');

@@ -16,6 +16,14 @@ from openai import AsyncOpenAI
 
 from .accounts import AccountStore
 from .config import Settings
+from .context_middleware import ContextBudgetMiddleware
+from .conversation_context import AgentBudgetExceeded as AgentBudgetExceeded
+from .conversation_context import (
+    bounded_context,
+    dialogue_pairs,
+    memory_prompt,
+    project_constraints,
+)
 from .evidence import campus_supported, data_evidence
 from .hduhelp_access import HDUHelpAccess
 from .key_vault import ApiKeyVault
@@ -78,10 +86,6 @@ ROUTE_REQUEST_PATTERN = re.compile(
     r"(?P<destination>[^，。,.!?！？]{1,40}?)"
     r"(?=(?:怎么走|如何走|拿|取|去|导航|路线|，|。|,|\.|！|!|？|\?|$))"
 )
-
-
-class AgentBudgetExceeded(RuntimeError):
-    """A safe, user-readable runtime limit; never embeds provider/tool diagnostics."""
 
 
 @dataclass
@@ -151,7 +155,10 @@ class AgentService:
             return base
         return base + ("\n\n" + context if context else "")
 
-    def _build_graph(self, *, api_key: str, model_name: str, user_id: str) -> Any:
+    def _build_graph(
+        self, *, api_key: str, model_name: str, user_id: str,
+        system_prompt: str | None = None, runtime_tools: list | None = None,
+    ) -> Any:
         route, credential = self.model_catalog.credentials(model_name, api_key)
         options = self.model_catalog.completion_options(model_name)
         # LangChain's generic message converter drops DeepSeek reasoning_content.
@@ -173,18 +180,17 @@ class AgentService:
             timeout=self.settings.agent_timeout_seconds,
             max_retries=0,
         )
-        allowed_tools = self.allowed_tools_for_user(user_id)
+        if runtime_tools is None:
+            runtime_tools = build_tools(
+                self.store, self.allowed_tools_for_user(user_id), self.account_store,
+                self.credential_vault, self.hduhelp_access, self.weather_service,
+            )
         return create_agent(
             model=model,
-            tools=build_tools(
-                self.store,
-                allowed_tools,
-                self.account_store,
-                self.credential_vault,
-                self.hduhelp_access,
-                self.weather_service,
-            ),
-            system_prompt=self._build_user_system_prompt(user_id),
+            tools=runtime_tools,
+            system_prompt=(self._build_user_system_prompt(user_id)
+                           if system_prompt is None else system_prompt),
+            middleware=[ContextBudgetMiddleware(self.settings.agent_max_context_chars)],
         )
 
     def allowed_tools_for_user(self, user_id: str) -> set[str] | None:
@@ -261,21 +267,7 @@ class AgentService:
     def _runtime_context(
         self, system: dict, history: list[list[dict]], turn: list[dict], tools: list[dict]
     ) -> list[dict]:
-        """Trim only old complete dialogue pairs; never split a live tool exchange."""
-        size = len(self._runtime_json({"messages": [system, *turn], "tools": tools}))
-        if size > self.settings.agent_max_context_chars:
-            raise AgentBudgetExceeded("本轮上下文已达到上限，请缩小查询范围后再试。")
-        first = len(history)
-        for index in range(len(history) - 1, -1, -1):
-            # Inserting a pair adds each message plus its separating comma. Calculating
-            # a bounded suffix avoids repeatedly serializing a large accumulated history.
-            extra = sum(len(self._runtime_json(item)) + 1 for item in history[index])
-            if size + extra > self.settings.agent_max_context_chars:
-                break
-            size += extra
-            first = index
-        del history[:first]
-        return [system, *(item for pair in history for item in pair), *turn]
+        return bounded_context(system, history, turn, tools, self.settings.agent_max_context_chars)
 
     async def _runtime_tool(
         self,
@@ -481,19 +473,15 @@ class AgentService:
             return AgentReply(message=answer, tool_traces=[route_trace])
 
         schemas = [convert_to_openai_tool(tool) for tool in runtime_tools]
-        system = {"role": "system", "content": self._build_user_system_prompt(user_id)}
-        history: list[list[dict]] = []
-        previous_user = None
-        for entry in (
+        original_history = (
             frozen_history
             if frozen_history is not None
             else self.store.get_history(user_id, session_id)
-        ):
-            if entry.role == "user":
-                previous_user = {"role": "user", "content": entry.content}
-            elif entry.role == "assistant" and previous_user is not None:
-                history.append([previous_user, {"role": "assistant", "content": entry.content}])
-                previous_user = None
+        )
+        # Project once from the complete frozen snapshot, before any pair is trimmed.
+        system = {"role": "system", "content": self._build_user_system_prompt(user_id)
+                  + memory_prompt(project_constraints(original_history, message))}
+        history = dialogue_pairs(original_history)
         turn: list[dict] = [{"role": "user", "content": message}]
         traces: list[ToolTrace] = []
         pending: list[PendingAction] = []
@@ -654,28 +642,50 @@ class AgentService:
                 )
             return direct_route
 
-        graph = self._build_graph(
-            api_key=api_key,
-            model_name=model_name,
-            user_id=user_id,
-        )
         history = (
             frozen_history
             if frozen_history is not None
             else self.store.get_history(user_id, session_id)
         )
+        runtime_tools = build_tools(
+            self.store, self.allowed_tools_for_user(user_id), self.account_store,
+            self.credential_vault, self.hduhelp_access, self.weather_service,
+        )
+        system = {"role": "system", "content": self._build_user_system_prompt(user_id)
+                  + memory_prompt(project_constraints(history, message))}
+        selected = self._runtime_context(
+            system, dialogue_pairs(history), [{"role": "user", "content": message}],
+            [convert_to_openai_tool(tool) for tool in runtime_tools],
+        )[1:]
+        graph = self._build_graph(
+            api_key=api_key, model_name=model_name, user_id=user_id,
+            system_prompt=system["content"], runtime_tools=runtime_tools,
+        )
+        if persist_history:
+            # 旧调用由服务负责持久化；HTTP 调用由会话服务按版本成对提交。
+            self.store.append_history(user_id, session_id, "user", message, model_name)
         conversation = [
-            HumanMessage(content=item.content)
-            if item.role == "user"
-            else AIMessage(content=item.content)
-            for item in history
+            HumanMessage(content=item["content"])
+            if item["role"] == "user"
+            else AIMessage(content=item["content"])
+            for item in selected
         ]
-        conversation.append(HumanMessage(content=message))
         token = CURRENT_USER_ID.set(user_id)
         try:
             result = await graph.ainvoke(
                 {"messages": conversation},
             )
+        except BaseException:
+            if persist_history:
+                # 收尾自己创建的 pending 会话，并保留原异常给调用方处理。
+                self.store.append_history(
+                    user_id,
+                    session_id,
+                    "assistant",
+                    "本次任务未完成，请稍后重试或重新发送。",
+                    model_name,
+                )
+            raise
         finally:
             CURRENT_USER_ID.reset(token)
 
@@ -687,7 +697,6 @@ class AgentService:
                 self.skill_store.record_tool_run(user_id, trace.tool_name)
 
         if persist_history:
-            self.store.append_history(user_id, session_id, "user", message, model_name)
             self.store.append_history(user_id, session_id, "assistant", answer, model_name)
         return AgentReply(message=answer, tool_traces=traces, pending_actions=pending)
 

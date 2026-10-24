@@ -1,9 +1,11 @@
 import { DataEvidence } from '../model/ApiModels';
 import { normalizeEvidence, evidenceStatus, evidenceStatusLabel, evidenceKindLabel, evidenceSummary, evidenceTime } from '../utils/EvidencePresentation';
 import { AppTheme } from '../theme/AppTheme';
+import { ThemePalette, themePalette } from '../theme/ThemePalette';
 
 @Component
 export struct EvidencePanel {
+  @StorageLink('campusflowThemePalette') private palette: ThemePalette = themePalette('paper-green');
   @Watch('sourcesChanged') @Prop evidence: DataEvidence[] = [];
   @Watch('activeChanged') @Prop active: boolean = true;
   @State private expanded: boolean = false;
@@ -31,33 +33,33 @@ export struct EvidencePanel {
     Column({ space: 8 }) {
       Button({ type: ButtonType.Normal }) {
         Text(`${evidenceSummary(this.evidence, this.now)} · ${this.expanded ? '收起' : '核对来源'}`)
-          .fontSize(AppTheme.metaSize).fontColor(AppTheme.accent).width('100%')
+          .fontSize(this.palette.metaSize).fontColor(this.palette.accent).width('100%')
           .textAlign(TextAlign.Start).wordBreak(WordBreak.BREAK_WORD)
       }.width('100%').constraintSize({ minHeight: 48 }).padding({ left: 10, right: 10 })
-        .backgroundColor(AppTheme.accentSoft).borderRadius(12).onClick(() => this.toggle())
+        .backgroundColor(this.palette.accentSoft).borderRadius(12).onClick(() => this.toggle())
       if (this.expanded) {
         ForEach(this.sources(), (item: DataEvidence) => {
           Column({ space: 6 }) {
             Text(`${item.label} · ${evidenceStatusLabel(evidenceStatus(item, this.now))}`)
-              .fontSize(AppTheme.bodySize).fontWeight(FontWeight.Medium).fontColor(AppTheme.ink)
+              .fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium).fontColor(this.palette.ink)
               .width('100%').wordBreak(WordBreak.BREAK_WORD)
-            Text(`${evidenceKindLabel(item.kind)} · ${item.source_id}`).fontSize(AppTheme.metaSize)
-              .fontColor(AppTheme.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
-            Text(`来源记录时间：${evidenceTime(item.updated_at)}`).fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
+            Text(`${evidenceKindLabel(item.kind)} · ${item.source_id}`).fontSize(this.palette.metaSize)
+              .fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+            Text(`来源记录时间：${evidenceTime(item.updated_at)}`).fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
             Text(item.expires_at === null ? '未提供自动到期时间，不代表实时有效。' : `缓存使用期限：${evidenceTime(item.expires_at)}`)
-              .fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+              .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
             if (item.note.length > 0) {
-              Text(item.note).fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+              Text(item.note).fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
             }
             if (item.url !== null) {
-              Text(item.url as string).fontSize(AppTheme.metaSize).fontColor(AppTheme.accent).width('100%')
+              Text(item.url as string).fontSize(this.palette.metaSize).fontColor(this.palette.accent).width('100%')
                 .wordBreak(WordBreak.BREAK_WORD).copyOption(CopyOptions.LocalDevice)
             }
           }.width('100%').alignItems(HorizontalAlign.Start).padding(12)
-            .backgroundColor(AppTheme.field).borderRadius(12)
+            .backgroundColor(this.palette.field).borderRadius(12)
         }, (item: DataEvidence, index: number) => `${item.source_id}-${index}-${this.sourceRevision}`)
         Text('时间按上海时区展示；记录有效或缓存未到期，不等于现实情况一定未变。公开链接可长按复制。')
-          .fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+          .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
       }
     }.width('100%').alignItems(HorizontalAlign.Start)
   }

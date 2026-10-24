@@ -1,11 +1,13 @@
 import { AppTheme } from '../theme/AppTheme';
+import { ThemePalette, themePalette } from '../theme/ThemePalette';
 
 // One 24-unit vector grid keeps icon weight consistent across native platforms.
 @Component
 export struct AppIcon {
+  @Watch('redraw') @StorageLink('campusflowThemePalette') private palette: ThemePalette = themePalette('paper-green');
   @Watch('redraw') @Prop name: string = 'assistant';
   @Watch('redraw') @Prop iconSize: number = 24;
-  @Watch('redraw') @Prop color: string = AppTheme.accent;
+  @Watch('redraw') @Prop color: string = '';
   private settings: RenderingContextSettings = new RenderingContextSettings(true);
   private context: CanvasRenderingContext2D = new CanvasRenderingContext2D(this.settings);
   private ready: boolean = false;
@@ -162,7 +164,7 @@ export struct AppIcon {
     this.context.clearRect(0, 0, this.iconSize, this.iconSize);
     this.context.save();
     this.context.scale(this.iconSize / 24, this.iconSize / 24);
-    this.context.strokeStyle = this.color;
+    this.context.strokeStyle = this.color.length > 0 ? this.color : this.palette.accent;
     this.context.lineWidth = 1.8;
     this.context.lineCap = 'round';
     this.context.lineJoin = 'round';

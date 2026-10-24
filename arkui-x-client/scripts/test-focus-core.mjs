@@ -33,6 +33,21 @@ test('store rejects corrupt/unknown document and scope switch without overwritin
  for(const raw of ['{broken',JSON.stringify({schemaVersion:2})]){const driver=new FocusMemoryDriver();driver.text=raw;const store=new FocusStore(driver);await assert.rejects(store.initialize());assert.equal(driver.text,raw);}
  const f=await focusFixture();const original=f.driver.text;await assert.rejects(f.store.activate('other',uuid(44)));assert.equal(f.driver.text,original);
 });
+test('controller reports owner mismatch without leaking identity and a retry never overwrites the retained file',async()=>{
+ const driver=new FocusMemoryDriver(),old=await focusFixture({driver,scope:'private-old-owner'}),original=driver.text;old.controller.dispose();
+ const current=await focusFixture({driver,scope:'current-owner',firstId:100});
+ assert.equal(current.state().phase,'error');assert.equal(current.state().errorCode,'FOCUS_SCOPE_MISMATCH');assert.match(current.state().message,/另一账号或服务地址/);
+ assert.doesNotMatch(current.state().message,/private-old-owner|current-owner/);await current.controller.configure('current-owner','account-a',current.api);
+ await current.controller.start('task-a',null,'offline');assert.equal(driver.text,original);assert.equal(current.state().local,null);assert.equal(posts(current).length,0);
+});
+test('explicit configure retry rereads a transiently unavailable file without clearing data',async()=>{
+ const driver=new FocusMemoryDriver();let unavailable=true;driver.read=async()=>{if(unavailable)throw Error('private-path');return driver.text;};
+ const store=new FocusStore(driver);await assert.rejects(store.initialize());
+ const {FocusController}=await import('./helpers/focus-fixture.mjs');const controller=new FocusController(store,new FakeFocusClock(),()=>{},()=>uuid(1));
+ await controller.configure('current-owner','account-a',new FocusApi());assert.equal(controller.snapshot().phase,'error');assert.equal(driver.writes,0);
+ unavailable=false;await controller.configure('current-owner','account-a',new FocusApi());assert.equal(controller.snapshot().phase,'ready');assert.equal(driver.writes,1);
+ controller.dispose();
+});
 test('online starts timer only after receipt and durable anchor, with no latency included',async()=>{
  const f=await focusFixture(),wait=deferred();f.api.submitHook=async(id,request)=>{assert.equal(f.doc().operations[0].dispatchState,'unknown');return wait.promise;};
  const work=f.controller.start('task-a',null,'online');await tick();assert.equal(f.state().local.localState,'starting');f.clock.advance(15000);assert.equal(f.state().local.elapsedMs,0);

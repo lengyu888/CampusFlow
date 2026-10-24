@@ -13,6 +13,7 @@ import {
 } from '../model/ApiModels';
 import { CampusFlowApi } from '../services/CampusFlowApi';
 import { AppTheme } from '../theme/AppTheme';
+import { ThemePalette, themePalette } from '../theme/ThemePalette';
 import { AppIcon } from '../components/AppIcon';
 import { FeedbackPanel } from '../components/FeedbackPanel';
 import { EvidencePanel } from '../components/EvidencePanel';
@@ -28,6 +29,7 @@ class CampusServiceOption implements SelectOption {
 
 @Component
 export struct CampusServicesPage {
+  @StorageLink('campusflowThemePalette') private palette: ThemePalette = themePalette('paper-green');
   @Prop baseUrl: string;
   @Prop token: string;
   @Watch('activeChanged') @Prop active: boolean = true;
@@ -271,15 +273,15 @@ export struct CampusServicesPage {
   @Builder
   private serviceTab(index: number, label: string) {
     Button() {
-      Text(label).fontSize(AppTheme.metaSize)
+      Text(label).fontSize(this.palette.metaSize)
         .fontWeight(this.activeService === index ? FontWeight.Bold : FontWeight.Medium)
-        .fontColor(this.activeService === index ? AppTheme.ink : AppTheme.secondary)
+        .fontColor(this.activeService === index ? this.palette.ink : this.palette.secondary)
         .maxLines(1)
     }
       .layoutWeight(1)
       .constraintSize({ minHeight: 48 })
       .padding({ left: 4, right: 4 })
-      .backgroundColor(this.activeService === index ? AppTheme.surface : Color.Transparent)
+      .backgroundColor(this.activeService === index ? this.palette.surface : Color.Transparent)
       .borderRadius(10)
       .onClick(() => {
         this.getUIContext().animateTo({ duration: AppTheme.motion(180), curve: Curve.EaseOut }, () => {
@@ -292,19 +294,19 @@ export struct CampusServicesPage {
   private classroomCard(room: ClassroomItem) {
     Row({ space: 12 }) {
       Column({ space: 2 }) {
-        Text(room.location_name).fontSize(AppTheme.bodySize).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
-        Text(room.building_name).fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary)
+        Text(room.location_name).fontSize(this.palette.bodySize).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
+        Text(room.building_name).fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
       }.alignItems(HorizontalAlign.Start).layoutWeight(1)
       Column({ space: 4 }) {
-        Text(room.self_study ? '自习标记' : '空闲记录').fontSize(AppTheme.metaSize).fontWeight(FontWeight.Bold)
-          .fontColor(room.self_study ? AppTheme.success : AppTheme.accent)
-        Text(room.capacity > 0 ? `${room.capacity} 座` : '容量未知').fontSize(AppTheme.metaSize).fontColor(AppTheme.muted)
+        Text(room.self_study ? '自习标记' : '空闲记录').fontSize(this.palette.metaSize).fontWeight(FontWeight.Bold)
+          .fontColor(room.self_study ? this.palette.success : this.palette.accent)
+        Text(room.capacity > 0 ? `${room.capacity} 座` : '容量未知').fontSize(this.palette.metaSize).fontColor(this.palette.muted)
       }.alignItems(HorizontalAlign.End)
-      AppIcon({ name: 'chevron', iconSize: 18, color: AppTheme.muted })
+      AppIcon({ name: 'chevron', iconSize: 18, color: this.palette.muted })
     }
     .width('100%')
     .padding(16)
-    .backgroundColor(AppTheme.surface)
+    .backgroundColor(this.palette.surface)
     .borderRadius(18)
     .onClick(() => this.loadUsage(room))
   }
@@ -315,20 +317,20 @@ export struct CampusServicesPage {
       Column({ space: 12 }) {
         Row() {
           Column({ space: 3 }) {
-            Text('查询教室空闲记录').fontSize(AppTheme.sectionTitle).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
-            Text('按节次查询；出发前核对来源与现场情况').fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary)
+            Text('查询教室空闲记录').fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
+            Text('按节次查询；出发前核对来源与现场情况').fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
           }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-          Button('刷新').constraintSize({ minHeight: 48 }).fontSize(AppTheme.metaSize).fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft)
+          Button('刷新').constraintSize({ minHeight: 48 }).fontSize(this.palette.metaSize).fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft)
             .borderRadius(12).onClick(() => this.loadClassrooms())
         }.width('100%')
 
         Select(this.buildingLabels.map((label: string) => new CampusServiceOption(label)))
           .selected(this.selectedBuilding)
           .value(this.buildingLabels[this.selectedBuilding])
-          .fontColor(AppTheme.ink)
-          .backgroundColor(AppTheme.field)
-          .optionBgColor(AppTheme.surface).optionFontColor(AppTheme.ink)
-          .selectedOptionBgColor(AppTheme.accentSoft).selectedOptionFontColor(AppTheme.accent)
+          .fontColor(this.palette.ink)
+          .backgroundColor(this.palette.field)
+          .optionBgColor(this.palette.surface).optionFontColor(this.palette.ink)
+          .selectedOptionBgColor(this.palette.accentSoft).selectedOptionFontColor(this.palette.accent)
           .borderRadius(14)
           .width('100%')
           .onSelect((index: number) => {
@@ -337,9 +339,9 @@ export struct CampusServicesPage {
 
         Row({ space: 6 }) {
           ForEach(this.periodLabels, (label: string, index: number) => {
-            Button(label).layoutWeight(1).constraintSize({ minHeight: 48 }).fontSize(AppTheme.metaSize)
-              .fontColor(this.selectedPeriod === index ? AppTheme.surface : AppTheme.secondary)
-              .backgroundColor(this.selectedPeriod === index ? AppTheme.accent : AppTheme.field)
+            Button(label).layoutWeight(1).constraintSize({ minHeight: 48 }).fontSize(this.palette.metaSize)
+              .fontColor(this.selectedPeriod === index ? this.palette.surface : this.palette.secondary)
+              .backgroundColor(this.selectedPeriod === index ? this.palette.accent : this.palette.field)
               .borderRadius(11)
               .onClick(() => {
                 this.getUIContext().animateTo({ duration: AppTheme.motion(160), curve: Curve.EaseOut }, () => {
@@ -348,16 +350,16 @@ export struct CampusServicesPage {
               })
           }, (label: string) => label)
         }.width('100%')
-      }.width('100%').padding(18).backgroundColor(AppTheme.surface).borderRadius(20)
+      }.width('100%').padding(18).backgroundColor(this.palette.surface).borderRadius(20)
 
       if (this.usageTitle.length > 0) {
         Column({ space: 10 }) {
           Row() {
             Column({ space: 3 }) {
-              Text(this.usageTitle).fontSize(AppTheme.bodySize).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
-              Text('本学期占用安排').fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary)
+              Text(this.usageTitle).fontSize(this.palette.bodySize).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
+              Text('本学期占用安排').fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
             }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-            Button('关闭').constraintSize({ minHeight: 48 }).fontSize(AppTheme.metaSize).fontColor(AppTheme.accent)
+            Button('关闭').constraintSize({ minHeight: 48 }).fontSize(this.palette.metaSize).fontColor(this.palette.accent)
               .backgroundColor(Color.Transparent).onClick(() => this.closeUsage())
           }.width('100%')
           if (this.usageLoading) {
@@ -366,13 +368,13 @@ export struct CampusServicesPage {
             FeedbackPanel({ kind: 'error', title: '占用安排暂不可用', message: this.usageError,
               actionLabel: '重试', onAction: () => this.retryUsage() })
           } else if (this.usageItems.length === 0) {
-            Text('本次未返回占用记录，不代表教室一定空闲。').fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
+            Text('本次未返回占用记录，不代表教室一定空闲。').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
           } else {
             ForEach(this.usageItems.slice(0, this.usageLimit), (item: ClassroomUsageItem) => {
               Row() {
                 Text(`第${item.week}周 · ${this.weekdayName(item.weekday)} · 第${item.section}节`)
-                  .fontSize(AppTheme.metaSize).fontColor(AppTheme.ink).layoutWeight(1)
-                Text(item.course_name).fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).maxLines(1)
+                  .fontSize(this.palette.metaSize).fontColor(this.palette.ink).layoutWeight(1)
+                Text(item.course_name).fontSize(this.palette.metaSize).fontColor(this.palette.secondary).maxLines(1)
               }.width('100%')
             }, (item: ClassroomUsageItem) => `${item.week}-${item.weekday}-${item.section}-${item.course_name}`)
             if (this.usageLimit < this.usageItems.length) {
@@ -383,13 +385,13 @@ export struct CampusServicesPage {
           if (!this.usageLoading && this.usageError.length === 0) {
             EvidencePanel({ evidence: this.usageEvidence, active: this.active })
           }
-        }.width('100%').padding(18).backgroundColor(AppTheme.surface).borderRadius(18)
+        }.width('100%').padding(18).backgroundColor(this.palette.surface).borderRadius(18)
       }
 
       Row() {
-        Text(this.classroomLabel).fontSize(AppTheme.bodySize).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
+        Text(this.classroomLabel).fontSize(this.palette.bodySize).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
         Blank()
-        Text(this.classroomLoading || this.classroomError.length > 0 ? '待查询' : `${this.classroomTotal} 条记录`).fontSize(AppTheme.metaSize).fontColor(AppTheme.accent)
+        Text(this.classroomLoading || this.classroomError.length > 0 ? '待查询' : `${this.classroomTotal} 条记录`).fontSize(this.palette.metaSize).fontColor(this.palette.accent)
       }.width('100%')
 
       if (!this.classroomLoading && this.classroomError.length === 0) {
@@ -422,56 +424,56 @@ export struct CampusServicesPage {
         FeedbackPanel({ kind: 'error', title: '电费数据暂不可用', message: this.electricityError, actionLabel: '重试', onAction: () => this.loadElectricity() })
       } else if (!this.electricityData.bound) {
         Column({ space: 8 }) {
-          Text('本次未取得已绑定电表记录').fontSize(AppTheme.sectionTitle).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
-          Text('请先核对来源状态。若尚未绑定，可在 HDUHelp 中完成绑定后刷新。').fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary)
-          Button('重新检查').constraintSize({ minHeight: 48 }).fontColor(AppTheme.onAccent).backgroundColor(AppTheme.accent).borderRadius(13)
+          Text('本次未取得已绑定电表记录').fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
+          Text('请先核对来源状态。若尚未绑定，可在 HDUHelp 中完成绑定后刷新。').fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
+          Button('重新检查').constraintSize({ minHeight: 48 }).fontColor(this.palette.onAccent).backgroundColor(this.palette.accent).borderRadius(13)
             .onClick(() => this.loadElectricity())
-        }.width('100%').alignItems(HorizontalAlign.Start).padding(20).backgroundColor(AppTheme.surface).borderRadius(18)
+        }.width('100%').alignItems(HorizontalAlign.Start).padding(20).backgroundColor(this.palette.surface).borderRadius(18)
       } else {
         Column({ space: 18 }) {
           Row() {
             Column({ space: 4 }) {
-              Text('最近记录的电费余额').fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary)
+              Text('最近记录的电费余额').fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
               Row({ space: 5 }) {
-                Text('¥').fontSize(21).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
-                Text(this.balanceText()).fontSize(40).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
+                Text('¥').fontSize(21).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
+                Text(this.balanceText()).fontSize(40).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
               }
-              Text(this.electricityData.room_name).fontSize(AppTheme.bodySize).fontColor(AppTheme.secondary)
+              Text(this.electricityData.room_name).fontSize(this.palette.bodySize).fontColor(this.palette.secondary)
             }.alignItems(HorizontalAlign.Start).layoutWeight(1)
             Column({ space: 5 }) {
-              Text('日均消耗').fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary)
+              Text('日均消耗').fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
               Text(`¥${this.electricityData.daily_average.length > 0 ? this.electricityData.daily_average : '--'}`)
-                .fontSize(AppTheme.sectionTitle).fontWeight(FontWeight.Bold).fontColor(AppTheme.success)
-              Text(this.electricityData.meter_hint).fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary)
+                .fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Bold).fontColor(this.palette.success)
+              Text(this.electricityData.meter_hint).fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
             }.alignItems(HorizontalAlign.End)
           }.width('100%')
           Row() {
-            Text(`更新于 ${this.updatedText()}`).fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).layoutWeight(1)
-            Button('刷新余额').constraintSize({ minHeight: 48 }).fontSize(AppTheme.metaSize).fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft)
+            Text(`更新于 ${this.updatedText()}`).fontSize(this.palette.metaSize).fontColor(this.palette.secondary).layoutWeight(1)
+            Button('刷新余额').constraintSize({ minHeight: 48 }).fontSize(this.palette.metaSize).fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft)
               .borderRadius(11).onClick(() => this.loadElectricity())
           }.width('100%')
-        }.width('100%').padding(20).backgroundColor(AppTheme.surface).borderRadius(20)
+        }.width('100%').padding(20).backgroundColor(this.palette.surface).borderRadius(20)
 
         Column({ space: 12 }) {
           Row() {
-            Text('近 14 天余额').fontSize(17).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
+            Text('近 14 天余额').fontSize(17).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
             Blank()
-            Text('HDUHelp 数据').fontSize(AppTheme.metaSize).fontColor(AppTheme.accent)
+            Text('HDUHelp 数据').fontSize(this.palette.metaSize).fontColor(this.palette.accent)
           }.width('100%')
           if (this.electricityData.history.length === 0) {
-            Text('暂无历史记录').fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
+            Text('暂无历史记录').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
           } else {
             ForEach(this.electricityData.history, (item: ElectricityHistoryItem) => {
               Row() {
-                Text(item.date.slice(5)).fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width(52)
-                Text(`余额 ¥${item.balance}`).fontSize(AppTheme.bodySize).fontWeight(FontWeight.Medium)
-                  .fontColor(AppTheme.ink).layoutWeight(1)
-                Text(item.change === '-' ? '首日' : `${item.change} 元`).fontSize(AppTheme.metaSize)
-                  .fontColor(item.change.startsWith('-') ? AppTheme.warning : AppTheme.success)
+                Text(item.date.slice(5)).fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width(52)
+                Text(`余额 ¥${item.balance}`).fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium)
+                  .fontColor(this.palette.ink).layoutWeight(1)
+                Text(item.change === '-' ? '首日' : `${item.change} 元`).fontSize(this.palette.metaSize)
+                  .fontColor(item.change.startsWith('-') ? this.palette.warning : this.palette.success)
               }.width('100%').padding({ top: 8, bottom: 8 })
             }, (item: ElectricityHistoryItem) => item.date)
           }
-        }.width('100%').padding(18).backgroundColor(AppTheme.surface).borderRadius(18)
+        }.width('100%').padding(18).backgroundColor(this.palette.surface).borderRadius(18)
       }
       if (!this.electricityLoading && this.electricityError.length === 0) {
         EvidencePanel({ evidence: this.electricityData.evidence ?? [], active: this.active })
@@ -483,20 +485,20 @@ export struct CampusServicesPage {
   private campusDataItem(item: HDUHelpDisplayItem) {
     if (item.label.length > 12 || item.value.length > 22) {
       Column({ space: 5 }) {
-        Text(item.label).fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
-        Text(item.value).fontSize(item.emphasis ? 18 : AppTheme.bodySize)
+        Text(item.label).fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
+        Text(item.value).fontSize(item.emphasis ? 18 : this.palette.bodySize)
           .fontWeight(item.emphasis ? FontWeight.Bold : FontWeight.Medium)
-          .fontColor(item.emphasis ? AppTheme.accent : AppTheme.ink)
+          .fontColor(item.emphasis ? this.palette.accent : this.palette.ink)
           .width('100%').wordBreak(WordBreak.BREAK_WORD)
       }.width('100%').alignItems(HorizontalAlign.Start)
-        .padding(11).backgroundColor(AppTheme.field).borderRadius(13)
+        .padding(11).backgroundColor(this.palette.field).borderRadius(13)
     } else {
       Row() {
-        Text(item.label).fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary)
+        Text(item.label).fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
         Blank()
-        Text(item.value).fontSize(item.emphasis ? 18 : AppTheme.bodySize)
+        Text(item.value).fontSize(item.emphasis ? 18 : this.palette.bodySize)
           .fontWeight(item.emphasis ? FontWeight.Bold : FontWeight.Medium)
-          .fontColor(item.emphasis ? AppTheme.accent : AppTheme.ink)
+          .fontColor(item.emphasis ? this.palette.accent : this.palette.ink)
           .constraintSize({ maxWidth: '68%' }).wordBreak(WordBreak.BREAK_WORD)
       }.width('100%')
     }
@@ -534,39 +536,39 @@ export struct CampusServicesPage {
     Column({ space: 11 }) {
       Row() {
         Column({ space: 3 }) {
-          Text(section.title).fontSize(17).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
-          Text(section.summary).fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).wordBreak(WordBreak.BREAK_WORD)
+          Text(section.title).fontSize(17).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
+          Text(section.summary).fontSize(this.palette.metaSize).fontColor(this.palette.secondary).wordBreak(WordBreak.BREAK_WORD)
         }.alignItems(HorizontalAlign.Start).layoutWeight(1)
         Row() {
-          AppIcon({ name: 'info', iconSize: 16, color: AppTheme.quiet })
+          AppIcon({ name: 'info', iconSize: 16, color: this.palette.quiet })
         }.width(28).height(28).justifyContent(FlexAlign.Center)
-          .backgroundColor(AppTheme.field).borderRadius(10)
+          .backgroundColor(this.palette.field).borderRadius(10)
       }.width('100%')
       ForEach(section.items, (item: HDUHelpDisplayItem) => {
         this.campusDataItem(item)
       }, (item: HDUHelpDisplayItem) => `${section.resource}-${item.label}`)
       EvidencePanel({ evidence: section.evidence ?? [], active: this.active })
-    }.width('100%').padding(17).backgroundColor(AppTheme.surface).borderRadius(18)
+    }.width('100%').padding(17).backgroundColor(this.palette.surface).borderRadius(18)
   }
 
   @Builder
   private agentPromptBlock(prompts: HDUHelpSuggestedPrompt[], subtitle: string) {
     if (prompts.length > 0) {
       Column({ space: 10 }) {
-        Text('继续问助手').fontSize(AppTheme.sectionTitle).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink).width('100%')
-        Text(subtitle).fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
+        Text('继续问助手').fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Bold).fontColor(this.palette.ink).width('100%')
+        Text(subtitle).fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
         ForEach(prompts, (suggestion: HDUHelpSuggestedPrompt) => {
           Button() {
             Row({ space: 10 }) {
-              Text(suggestion.title).fontSize(AppTheme.bodySize).fontColor(AppTheme.accent)
+              Text(suggestion.title).fontSize(this.palette.bodySize).fontColor(this.palette.accent)
                 .layoutWeight(1).wordBreak(WordBreak.BREAK_WORD)
-              AppIcon({ name: 'chevron', iconSize: 16, color: AppTheme.accent })
+              AppIcon({ name: 'chevron', iconSize: 16, color: this.palette.accent })
             }.width('100%')
           }.width('100%').constraintSize({ minHeight: 48 }).padding({ left: 14, right: 14 })
-            .backgroundColor(AppTheme.accentSoft).borderRadius(12)
+            .backgroundColor(this.palette.accentSoft).borderRadius(12)
             .onClick(() => this.onOpenAgent(suggestion.prompt))
         }, (suggestion: HDUHelpSuggestedPrompt) => suggestion.prompt_id)
-      }.width('100%').padding(18).backgroundColor(AppTheme.surface).borderRadius(18)
+      }.width('100%').padding(18).backgroundColor(this.palette.surface).borderRadius(18)
     }
   }
 
@@ -575,12 +577,12 @@ export struct CampusServicesPage {
     Column({ space: 14 }) {
       Row() {
         Column({ space: 4 }) {
-          Text('我的图书馆').fontSize(19).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
-          Text('到馆、借阅与座位使用记录').fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary)
+          Text('我的图书馆').fontSize(19).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
+          Text('到馆、借阅与座位使用记录').fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
         }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-        Button('刷新').constraintSize({ minHeight: 48 }).fontSize(AppTheme.metaSize).fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft)
+        Button('刷新').constraintSize({ minHeight: 48 }).fontSize(this.palette.metaSize).fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft)
           .borderRadius(12).onClick(() => this.loadCampusInfo())
-      }.width('100%').padding(18).backgroundColor(AppTheme.surface).borderRadius(20)
+      }.width('100%').padding(18).backgroundColor(this.palette.surface).borderRadius(20)
 
       if (this.campusInfoLoading) {
         FeedbackPanel({ kind: 'loading', title: '正在读取图书馆数据', message: '正在读取已连接的校园数据。' })
@@ -588,16 +590,16 @@ export struct CampusServicesPage {
         FeedbackPanel({ kind: 'error', title: '校园数据暂不可用', message: this.campusInfoError, actionLabel: '重试', onAction: () => this.loadCampusInfo() })
       } else if (!this.campusConfigured) {
         Column({ space: 8 }) {
-          Text('尚未连接 HDUHelp').fontSize(AppTheme.sectionTitle).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
+          Text('尚未连接 HDUHelp').fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
           Text('请在个人设置中配置个人令牌，连接后可查看图书馆记录。')
-            .fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary)
+            .fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
           Button('打开数据与连接').constraintSize({ minHeight: 48 }).onClick(() => this.onOpenProfile())
         }.width('100%').alignItems(HorizontalAlign.Start).padding(20)
-          .backgroundColor(AppTheme.surface).borderRadius(18)
+          .backgroundColor(this.palette.surface).borderRadius(18)
       } else {
         if (this.librarySections().length === 0) {
-          Text('当前没有可展示的图书馆数据').fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
-            .padding(20).backgroundColor(AppTheme.surface).borderRadius(20)
+          Text('当前没有可展示的图书馆数据').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
+            .padding(20).backgroundColor(this.palette.surface).borderRadius(20)
         } else {
           ForEach(this.librarySections(), (section: HDUHelpDisplaySection) => {
             this.liveDataSection(section)
@@ -613,12 +615,12 @@ export struct CampusServicesPage {
     Column({ space: 14 }) {
       Row() {
         Column({ space: 4 }) {
-          Text('校园卡余额').fontSize(19).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
-          Text('余额与其他校园生活动态').fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary)
+          Text('校园卡余额').fontSize(19).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
+          Text('余额与其他校园生活动态').fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
         }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-        Button('刷新').constraintSize({ minHeight: 48 }).fontSize(AppTheme.metaSize).fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft)
+        Button('刷新').constraintSize({ minHeight: 48 }).fontSize(this.palette.metaSize).fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft)
           .borderRadius(12).onClick(() => this.loadCampusInfo())
-      }.width('100%').padding(18).backgroundColor(AppTheme.surface).borderRadius(20)
+      }.width('100%').padding(18).backgroundColor(this.palette.surface).borderRadius(20)
 
       if (this.campusInfoLoading) {
         FeedbackPanel({ kind: 'loading', title: '正在读取校园卡数据', message: '正在读取已连接的校园数据。' })
@@ -629,8 +631,8 @@ export struct CampusServicesPage {
           actionLabel: '打开数据与连接', onAction: () => this.onOpenProfile() })
       } else {
         if (this.campusCardSections().length === 0) {
-          Text('当前没有可展示的校园卡数据').fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
-            .padding(20).backgroundColor(AppTheme.surface).borderRadius(20)
+          Text('当前没有可展示的校园卡数据').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
+            .padding(20).backgroundColor(this.palette.surface).borderRadius(20)
         } else {
           ForEach(this.campusCardSections(), (section: HDUHelpDisplaySection) => {
             this.liveDataSection(section)
@@ -638,7 +640,7 @@ export struct CampusServicesPage {
         }
 
         if (this.otherLiveSections().length > 0) {
-          Text('其他校园服务').fontSize(AppTheme.bodySize).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink).width('100%')
+          Text('其他校园服务').fontSize(this.palette.bodySize).fontWeight(FontWeight.Bold).fontColor(this.palette.ink).width('100%')
           ForEach(this.otherLiveSections(), (section: HDUHelpDisplaySection) => {
             this.liveDataSection(section)
           }, (section: HDUHelpDisplaySection) => section.resource)
@@ -652,12 +654,12 @@ export struct CampusServicesPage {
     Column() {
       Row({ space: 12 }) {
         Button() {
-          AppIcon({ name: 'back', iconSize: 22, color: AppTheme.accent })
-        }.width(48).constraintSize({ minHeight: 48 }).backgroundColor(AppTheme.surface)
+          AppIcon({ name: 'back', iconSize: 22, color: this.palette.accent })
+        }.width(48).constraintSize({ minHeight: 48 }).backgroundColor(this.palette.surface)
           .borderRadius(22).accessibilityText('返回上一页').onClick(() => this.onBack())
         Column({ space: 3 }) {
-          Text('校园服务').fontSize(AppTheme.pageTitle).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
-          Text('查看教室与已连接的校园信息').fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary)
+          Text('校园服务').fontSize(this.palette.pageTitle).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
+          Text('查看教室与已连接的校园信息').fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
         }.alignItems(HorizontalAlign.Start).layoutWeight(1)
       }.width('100%').padding({ left: 18, right: 18, top: 14, bottom: 12 })
 
@@ -667,7 +669,7 @@ export struct CampusServicesPage {
         this.serviceTab(2, '图书馆')
         this.serviceTab(3, '校园卡')
       }.width('90%').alignSelf(ItemAlign.Center).padding(4)
-        .backgroundColor(AppTheme.separator).borderRadius(14)
+        .backgroundColor(this.palette.separator).borderRadius(14)
 
       Scroll(this.scrollers[this.activeService]) {
         Column() {
@@ -684,6 +686,6 @@ export struct CampusServicesPage {
           .padding({ left: 18, right: 18, top: 16, bottom: 32 })
       }.layoutWeight(1).width('100%')
     }.width('100%').height('100%').alignItems(HorizontalAlign.Start)
-      .justifyContent(FlexAlign.Start).backgroundColor(AppTheme.bg)
+      .justifyContent(FlexAlign.Start).backgroundColor(this.palette.bg)
   }
 }

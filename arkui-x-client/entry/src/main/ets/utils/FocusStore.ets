@@ -32,6 +32,9 @@ export function focusBytes(value: string): number {
 }
 function emptyDocument(): FocusDocument { return { schemaVersion: 1, scope: '', revision: 0, deviceId: '', records: [], operations: [] }; }
 function invalid(): Error { return new Error('本机专注记录格式不可核验，未覆盖原文件。'); }
+export class FocusScopeError extends Error {
+  constructor() { super('请先明确清理原账号的本机专注记录。'); this.name = 'FocusScopeError'; }
+}
 export function validFocusAnchor(anchor: FocusAnchor, recordId: string): boolean {
   if (!focusKeys(anchor, ['recordId','segmentId','intervalId','clockSessionId','sequence','firstSample','lastAcceptedSample','elapsedMs']) ||
     anchor.recordId !== recordId || !focusUuid(anchor.segmentId) || !focusUuid(anchor.intervalId) || !focusUuid(anchor.clockSessionId) ||
@@ -104,7 +107,7 @@ export class FocusStore {
     const generation = this.generation;
     await this.enqueue(async () => {
       if (generation !== this.generation || this.blocked) { throw invalid(); }
-      if (this.document.scope !== '' && this.document.scope !== scope) { throw new Error('请先明确清理原账号的本机专注记录。'); }
+      if (this.document.scope !== '' && this.document.scope !== scope) { throw new FocusScopeError(); }
       if (this.document.scope === '') {
         if (!focusUuid(deviceId)) { throw invalid(); }
         const next: FocusDocument = { schemaVersion: 1, scope: scope, revision: 1, deviceId: deviceId, records: [], operations: [] };

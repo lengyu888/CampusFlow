@@ -1,6 +1,7 @@
+import './helpers/theme-fixture.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { stripTypeScriptTypes } from 'node:module';
+import { stripThemeTypeScriptTypes as stripTypeScriptTypes } from './helpers/theme-fixture.mjs';
 import { test } from 'node:test';
 const read=name=>readFileSync(new URL(`../entry/src/main/ets/utils/${name}.ets`,import.meta.url),'utf8').replace(/^import [^\n]+;\r?\n/gm,'');
 const feedback=await import(`data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(read('AgentFeedback'))).toString('base64')}`);

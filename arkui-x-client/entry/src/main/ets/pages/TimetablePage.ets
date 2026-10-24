@@ -10,6 +10,7 @@ import { ImportRowChoice, parseImportReview, assembleSelectedImport } from '../u
 import { TimetableEntryEditor } from '../components/TimetableEntryEditor';
 import { TimetableImportPanel } from '../components/TimetableImportPanel';
 import { AppTheme } from '../theme/AppTheme';
+import { ThemePalette, themePalette } from '../theme/ThemePalette';
 import { EvidencePanel } from '../components/EvidencePanel';
 import { AppIcon } from '../components/AppIcon';
 import { FeedbackPanel } from '../components/FeedbackPanel';
@@ -18,6 +19,7 @@ interface CourseRow { index: number; entry: TimetableEntry; }
 
 @Component
 export struct TimetablePage {
+  @StorageLink('campusflowThemePalette') private palette: ThemePalette = themePalette('paper-green');
   @Watch('editorConnectionChanged') @Prop baseUrl: string;
   @Watch('editorConnectionChanged') @Prop token: string;
   @Watch('draftLeaseChanged') @Prop draftLease: DraftLease | null = null;
@@ -472,14 +474,14 @@ export struct TimetablePage {
   private FormField(label: string, placeholder: string, value: string, error: string,
     onChange: (value: string) => void, inputType: InputType = InputType.Normal) {
     Column({ space: 6 }) {
-      Text(label).fontSize(AppTheme.bodySize).fontWeight(FontWeight.Medium).fontColor(AppTheme.ink).width('100%')
+      Text(label).fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium).fontColor(this.palette.ink).width('100%')
       TextInput({ text: value, placeholder: placeholder }).type(inputType)
-        .constraintSize({ minHeight: 50 }).fontSize(AppTheme.bodySize).fontColor(AppTheme.ink)
-        .backgroundColor(AppTheme.canvas).borderRadius(AppTheme.controlRadius)
+        .constraintSize({ minHeight: 50 }).fontSize(this.palette.bodySize).fontColor(this.palette.ink)
+        .backgroundColor(this.palette.canvas).borderRadius(this.palette.controlRadius)
         .padding({ left: 12, right: 12 }).enabled(!this.loading && this.editable())
         .accessibilityText(`${label}${error.length > 0 ? `，${error}` : ''}`).onChange(onChange)
       if (error.length > 0) {
-        Text(error).fontSize(AppTheme.metaSize).fontColor(AppTheme.danger).width('100%')
+        Text(error).fontSize(this.palette.metaSize).fontColor(this.palette.danger).width('100%')
       }
     }.width('100%').alignItems(HorizontalAlign.Start)
   }
@@ -487,21 +489,21 @@ export struct TimetablePage {
   @Builder
   private CourseCard(row: CourseRow, editable: boolean) {
     Column({ space: 8 }) {
-      Text(`${row.index + 1}. ${row.entry.title}`).fontSize(AppTheme.bodySize).fontWeight(FontWeight.Medium)
-        .fontColor(AppTheme.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
+      Text(`${row.index + 1}. ${row.entry.title}`).fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium)
+        .fontColor(this.palette.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
       Text(`${row.entry.date}  ·  ${row.entry.start_time}–${row.entry.end_time}`)
-        .fontSize(AppTheme.metaSize).fontColor(AppTheme.accent).width('100%').wordBreak(WordBreak.BREAK_WORD)
+        .fontSize(this.palette.metaSize).fontColor(this.palette.accent).width('100%').wordBreak(WordBreak.BREAK_WORD)
       Text(`${row.entry.location || '地点未填写'}${row.entry.teacher.length > 0 ? ` · ${row.entry.teacher}` : ''}`)
-        .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%').wordBreak(WordBreak.BREAK_WORD)
+        .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%').wordBreak(WordBreak.BREAK_WORD)
       if (editable) {
         Row({ space: 10 }) {
-          Button('编辑').layoutWeight(1).constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
-            .fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft)
+          Button('编辑').layoutWeight(1).constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
+            .fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft)
             .enabled(!this.loading && this.editable()).accessibilityText(`编辑 ${row.entry.date} 的 ${row.entry.title}`)
             .onClick(() => this.editEntry(row.index))
           Button(this.pendingDelete === row.index ? '确认移除' : '移除').layoutWeight(1)
-            .constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize).fontColor(AppTheme.danger)
-            .backgroundColor(AppTheme.surface).enabled(!this.loading && this.editable())
+            .constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize).fontColor(this.palette.danger)
+            .backgroundColor(this.palette.surface).enabled(!this.loading && this.editable())
             .accessibilityText(`${this.pendingDelete === row.index ? '确认移除' : '移除'} ${row.entry.date} 的 ${row.entry.title}`)
             .onClick(() => {
               if (this.pendingDelete === row.index) { this.removeEntry(row.index); }
@@ -510,28 +512,28 @@ export struct TimetablePage {
         }.width('100%')
         if (this.pendingDelete === row.index) {
           Text('只从当前草稿移除；再次点“确认移除”生效。')
-            .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
-          Button('保留这条课程').constraintSize({ minHeight: 48 }).fontSize(AppTheme.metaSize)
-            .fontColor(AppTheme.quiet).backgroundColor(Color.Transparent).enabled(!this.loading && this.editable())
+            .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
+          Button('保留这条课程').constraintSize({ minHeight: 48 }).fontSize(this.palette.metaSize)
+            .fontColor(this.palette.quiet).backgroundColor(Color.Transparent).enabled(!this.loading && this.editable())
             .onClick(() => this.pendingDelete = -1)
         }
       }
-    }.width('100%').alignItems(HorizontalAlign.Start).padding(AppTheme.cardInset)
-      .backgroundColor(AppTheme.surface).borderRadius(AppTheme.cardRadius)
-      .border({ width: 1, color: AppTheme.line })
+    }.width('100%').alignItems(HorizontalAlign.Start).padding(this.palette.cardInset)
+      .backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
+      .border({ width: 1, color: this.palette.line })
   }
 
   @Builder
   private Pagination() {
     Row({ space: 8 }) {
-      Button('上一页').layoutWeight(1).constraintSize({ minHeight: 48 }).fontSize(AppTheme.metaSize)
-        .fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft)
+      Button('上一页').layoutWeight(1).constraintSize({ minHeight: 48 }).fontSize(this.palette.metaSize)
+        .fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft)
         .enabled(this.pageIndex > 0)
         .onClick(() => { this.pageIndex--; })
       Text(`${this.pageIndex + 1} / ${Math.max(1, Math.ceil(this.entries.length / 10))}`)
-        .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet)
-      Button('下一页').layoutWeight(1).constraintSize({ minHeight: 48 }).fontSize(AppTheme.metaSize)
-        .fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft)
+        .fontSize(this.palette.metaSize).fontColor(this.palette.quiet)
+      Button('下一页').layoutWeight(1).constraintSize({ minHeight: 48 }).fontSize(this.palette.metaSize)
+        .fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft)
         .enabled((this.pageIndex + 1) * 10 <
           this.entries.length)
         .onClick(() => { this.pageIndex++; })
@@ -554,15 +556,15 @@ export struct TimetablePage {
   @Builder
   private ImportPanel() {
     Column({ space: 16 }) {
-      Text('从订阅获取预览').fontSize(AppTheme.sectionTitle).fontWeight(FontWeight.Bold)
-        .fontColor(AppTheme.ink).width('100%')
+      Text('从订阅获取预览').fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Bold)
+        .fontColor(this.palette.ink).width('100%')
       this.FormField('HDUHelp 课表订阅链接', '粘贴 HTTPS 课表订阅链接', this.scheduleUrl, '',
         (value: string) => this.updateScheduleUrl(value), InputType.Password)
       Text('链接可能含私人凭据，仅用于本次读取。这里只读取候选课程，不保存订阅链接，也不会自动同步。')
-        .fontSize(AppTheme.metaSize).lineHeight(21).fontColor(AppTheme.quiet).width('100%')
+        .fontSize(this.palette.metaSize).lineHeight(21).fontColor(this.palette.quiet).width('100%')
       Button(this.loading && this.busyLabel === '正在读取课表预览…' ? '正在读取…' : '读取预览，不保存')
-        .width('100%').constraintSize({ minHeight: 50 }).fontSize(AppTheme.bodySize).fontColor(AppTheme.onAccent)
-        .backgroundColor(AppTheme.accent).borderRadius(AppTheme.controlRadius)
+        .width('100%').constraintSize({ minHeight: 50 }).fontSize(this.palette.bodySize).fontColor(this.palette.onAccent)
+        .backgroundColor(this.palette.accent).borderRadius(this.palette.controlRadius)
         .enabled(!this.loading && this.editable() && this.importRows.length === 0).onClick(() => this.previewImport())
       if (this.importRows.length > 0) {
         TimetableImportPanel({ rows: this.importRows, currentDraft: this.entries, choices: this.importChoices,
@@ -571,49 +573,49 @@ export struct TimetablePage {
           onChoicesChanged: (choices: ImportRowChoice[]) => this.changeImportChoices(choices),
           onAccept: () => this.acceptImport(), onCancel: () => this.cancelPreview() })
       }
-    }.width('100%').alignItems(HorizontalAlign.Start).padding(AppTheme.cardInset)
-      .backgroundColor(AppTheme.surface).borderRadius(AppTheme.cardRadius)
+    }.width('100%').alignItems(HorizontalAlign.Start).padding(this.palette.cardInset)
+      .backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
   }
 
   @Builder
   private DraftList() {
     Column({ space: 12 }) {
       Row() {
-        Text(`课表草稿 · ${this.entries.length} 次`).fontSize(AppTheme.sectionTitle)
-          .fontWeight(FontWeight.Bold).fontColor(AppTheme.ink).layoutWeight(1)
+        Text(`课表草稿 · ${this.entries.length} 次`).fontSize(this.palette.sectionTitle)
+          .fontWeight(FontWeight.Bold).fontColor(this.palette.ink).layoutWeight(1)
         if (!this.reviewOpen && !this.editorOpen && this.source === 'manual') {
-          Button('继续添加').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
-            .fontColor(AppTheme.accent).backgroundColor(Color.Transparent)
+          Button('继续添加').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
+            .fontColor(this.palette.accent).backgroundColor(Color.Transparent)
             .enabled(!this.loading && this.editable()).onClick(() => this.newEntry())
         }
       }.width('100%')
-      Text(this.courseRange()).fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+      Text(this.courseRange()).fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
       if (this.sourceWarnings.length > 0) {
         Column({ space: 8 }) {
-          Text('导入来源提示').fontSize(AppTheme.bodySize).fontWeight(FontWeight.Medium).fontColor(AppTheme.warning).width('100%')
+          Text('导入来源提示').fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium).fontColor(this.palette.warning).width('100%')
           ForEach(this.sourceWarnings, (warning: TimetableIssue) => {
-            Text(warning.message).fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+            Text(warning.message).fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
           }, (_warning: TimetableIssue, index: number) => `source-warning-${this.draftRevision}-${index}`)
-        }.width('100%').padding(AppTheme.cardInset).backgroundColor(AppTheme.surface).borderRadius(AppTheme.controlRadius)
+        }.width('100%').padding(this.palette.cardInset).backgroundColor(this.palette.surface).borderRadius(this.palette.controlRadius)
       }
       if (this.entries.length === 0) {
         FeedbackPanel({ kind: 'empty', title: '当前课表为空', message: '手动添加课程，或从订阅读取预览后加入；空课表保存需要明确确认。' })
       }
       if (this.warnings.length > 0) {
         Column({ space: 8 }) {
-          Text(`有 ${this.warnings.length} 处时间重叠，请核对`).fontSize(AppTheme.bodySize)
-            .fontWeight(FontWeight.Medium).fontColor(AppTheme.warning).width('100%')
+          Text(`有 ${this.warnings.length} 处时间重叠，请核对`).fontSize(this.palette.bodySize)
+            .fontWeight(FontWeight.Medium).fontColor(this.palette.warning).width('100%')
           ForEach(this.showAllWarnings ? this.warnings : this.warnings.slice(0, 5), (warning: TimetableIssue) => {
-            Text(warning.message).fontSize(AppTheme.metaSize).fontColor(AppTheme.warning).width('100%')
+            Text(warning.message).fontSize(this.palette.metaSize).fontColor(this.palette.warning).width('100%')
           }, (_warning: TimetableIssue, index: number) => `warning-${this.draftRevision}-${index}`)
           if (this.warnings.length > 5) {
             Button(this.showAllWarnings ? '收起提示' : `查看全部 ${this.warnings.length} 处提示`)
-              .constraintSize({ minHeight: 48 }).fontSize(AppTheme.metaSize).fontColor(AppTheme.warning)
+              .constraintSize({ minHeight: 48 }).fontSize(this.palette.metaSize).fontColor(this.palette.warning)
               .backgroundColor(Color.Transparent).onClick(() => this.showAllWarnings = !this.showAllWarnings)
           }
           Text('重叠课程不会自动删除；请返回编辑，或确认保留这些安排。')
-            .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
-        }.width('100%').padding(AppTheme.cardInset).backgroundColor(AppTheme.surface).borderRadius(AppTheme.controlRadius)
+            .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
+        }.width('100%').padding(this.palette.cardInset).backgroundColor(this.palette.surface).borderRadius(this.palette.controlRadius)
       }
       ForEach(this.draftRows(), (row: CourseRow) => {
         this.CourseCard(row, !this.reviewOpen)
@@ -629,8 +631,8 @@ export struct TimetablePage {
         message: '可恢复表单与原课表版本；未加入的订阅预览与逐行选择未存入本机，需重新读取。待核对的保存先查询原操作。',
         actionLabel: '恢复草稿', onAction: () => this.restoreStoredDraft() })
       if ((this.recoverableDraft.payload as TimetableDraft).submission === null) {
-        Button('舍弃这份本机草稿').width('100%').constraintSize({ minHeight: 48 }).fontColor(AppTheme.quiet)
-          .backgroundColor(AppTheme.surface).onClick(() => this.discardStoredDraft())
+        Button('舍弃这份本机草稿').width('100%').constraintSize({ minHeight: 48 }).fontColor(this.palette.quiet)
+          .backgroundColor(this.palette.surface).onClick(() => this.discardStoredDraft())
       }
     }
     if (this.draftMessage.length > 0) {
@@ -641,11 +643,11 @@ export struct TimetablePage {
       FeedbackPanel({ kind: 'info', title: '原草稿与最新课表不同',
         message: `下方保留本机 ${this.entries.length} 次课程；账号最新为 ${(this.view.latestEntries ?? []).length} 次。不会把旧草稿绑定到新版本。` })
       Button(this.latestExpanded ? '收起账号最新课表' : '查看账号最新课表').width('100%').constraintSize({ minHeight: 48 })
-        .fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft).onClick(() => this.latestExpanded = !this.latestExpanded)
+        .fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft).onClick(() => this.latestExpanded = !this.latestExpanded)
       if (this.latestExpanded) {
         ForEach(this.latestRows(), (row: CourseRow) => { this.CourseCard(row, false) },
           (row: CourseRow) => `latest-${this.view.latestRevision}-${row.index}`)
-        if ((this.view.latestEntries ?? []).length === 0) { Text('账号最新课表为空').fontColor(AppTheme.quiet) }
+        if ((this.view.latestEntries ?? []).length === 0) { Text('账号最新课表为空').fontColor(this.palette.quiet) }
         Row({ space: 8 }) {
           Button('上一页').constraintSize({ minHeight: 48 }).layoutWeight(1).enabled(this.latestPage > 0)
             .onClick(() => this.latestPage--)
@@ -663,8 +665,8 @@ export struct TimetablePage {
         actionLabel: '核对保存结果', busy: this.loading, onAction: () => { this.controller?.checkResult(); } })
       if (this.view.phase === 'retryable') {
         Button('用原标识和原课表重试').width('100%').constraintSize({ minHeight: 48 })
-          .fontSize(AppTheme.bodySize).fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft)
-          .borderRadius(AppTheme.controlRadius).onClick(() => { this.controller?.retrySameOperation(); })
+          .fontSize(this.palette.bodySize).fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft)
+          .borderRadius(this.palette.controlRadius).onClick(() => { this.controller?.retrySameOperation(); })
       }
     } else if (this.view.phase === 'applied') {
       FeedbackPanel({ kind: 'info', title: '已收到保存回执', message: this.view.message,
@@ -685,16 +687,16 @@ export struct TimetablePage {
   build() {
     Column() {
       Row({ space: 12 }) {
-        Button({ type: ButtonType.Circle }) { AppIcon({ name: 'back', iconSize: 22, color: AppTheme.accent }) }
-          .width(48).height(48).backgroundColor(AppTheme.surface).accessibilityText('返回校园').onClick(() => this.onBack())
+        Button({ type: ButtonType.Circle }) { AppIcon({ name: 'back', iconSize: 22, color: this.palette.accent }) }
+          .width(48).height(48).backgroundColor(this.palette.surface).accessibilityText('返回校园').onClick(() => this.onBack())
         Column({ space: 4 }) {
-          Text(this.reviewOpen ? '确认课表' : '课表维护').fontSize(AppTheme.pageTitle).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
+          Text(this.reviewOpen ? '确认课表' : '课表维护').fontSize(this.palette.pageTitle).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
           Text(this.view.dirty ? '有未保存草稿 · 返回后可继续' : '课程、日期和地点集中维护')
-            .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).wordBreak(WordBreak.BREAK_WORD)
+            .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).wordBreak(WordBreak.BREAK_WORD)
         }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-      }.width('100%').padding({ left: AppTheme.pageInset, right: AppTheme.pageInset, top: 16, bottom: 12 })
+      }.width('100%').padding({ left: this.palette.pageInset, right: this.palette.pageInset, top: 16, bottom: 12 })
       Scroll(this.scroller) {
-        Column({ space: AppTheme.sectionGap }) {
+        Column({ space: this.palette.sectionGap }) {
           this.DraftRecovery()
           this.SavingFeedback()
           if (this.loading) {
@@ -702,82 +704,82 @@ export struct TimetablePage {
               message: '现有课表与草稿会保留，请稍候。' })
             if (this.previewBusy) {
               Button('取消读取预览').width('100%').constraintSize({ minHeight: 48 })
-                .fontColor(AppTheme.quiet).backgroundColor(AppTheme.surface).onClick(() => this.cancelPreview())
+                .fontColor(this.palette.quiet).backgroundColor(this.palette.surface).onClick(() => this.cancelPreview())
             }
           }
           if (this.message.length > 0) { FeedbackPanel({ kind: 'error', title: '请先核对', message: this.message }) }
-          if (this.notice.length > 0 && !this.reviewOpen) { Text(this.notice).fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%') }
+          if (this.notice.length > 0 && !this.reviewOpen) { Text(this.notice).fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%') }
           if (this.view.revision.length > 0) {
             Text(this.view.dirty ? '以下来源对应已载入版本；当前未保存修改仅为本页草稿。' : '已载入课表的来源')
-              .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%').wordBreak(WordBreak.BREAK_WORD)
+              .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%').wordBreak(WordBreak.BREAK_WORD)
             EvidencePanel({ evidence: this.view.evidence ?? [], active: this.active })
             if (this.reviewOpen) {
               FeedbackPanel({ kind: 'info', title: this.entries.length === 0 ? '即将清空账号课表' : `即将保存 ${this.entries.length} 次课程`,
                 message: '只更新课表，不修改校园资料、地图或订阅连接。保存前会核对版本；不会再次抓取导入链接。' })
             } else if (this.editable()) {
               Row({ space: 12 }) {
-                Button('手动录入').layoutWeight(1).constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
-                  .fontColor(this.source === 'manual' ? AppTheme.surface : AppTheme.accent)
-                  .backgroundColor(this.source === 'manual' ? AppTheme.accent : AppTheme.accentSoft)
-                  .borderRadius(AppTheme.controlRadius).enabled(!this.loading).onClick(() => this.selectSource('manual'))
-                Button('导入预览').layoutWeight(1).constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
-                  .fontColor(this.source === 'subscription' ? AppTheme.surface : AppTheme.accent)
-                  .backgroundColor(this.source === 'subscription' ? AppTheme.accent : AppTheme.accentSoft)
-                  .borderRadius(AppTheme.controlRadius).enabled(!this.loading).onClick(() => this.selectSource('subscription'))
+                Button('手动录入').layoutWeight(1).constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
+                  .fontColor(this.source === 'manual' ? this.palette.surface : this.palette.accent)
+                  .backgroundColor(this.source === 'manual' ? this.palette.accent : this.palette.accentSoft)
+                  .borderRadius(this.palette.controlRadius).enabled(!this.loading).onClick(() => this.selectSource('manual'))
+                Button('导入预览').layoutWeight(1).constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
+                  .fontColor(this.source === 'subscription' ? this.palette.surface : this.palette.accent)
+                  .backgroundColor(this.source === 'subscription' ? this.palette.accent : this.palette.accentSoft)
+                  .borderRadius(this.palette.controlRadius).enabled(!this.loading).onClick(() => this.selectSource('subscription'))
               }.width('100%')
               if (this.source === 'manual') {
                 if (this.editorOpen) { this.Editor() }
                 else {
-                  Button('添加课程').width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
-                    .fontColor(AppTheme.onAccent).backgroundColor(AppTheme.accent).borderRadius(AppTheme.controlRadius)
+                  Button('添加课程').width('100%').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
+                    .fontColor(this.palette.onAccent).backgroundColor(this.palette.accent).borderRadius(this.palette.controlRadius)
                     .onClick(() => this.newEntry())
                 }
               } else { this.ImportPanel() }
             }
             this.DraftList()
             if (!this.reviewOpen && this.editable()) {
-              Button('重新读取账号课表').width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
-                .fontColor(AppTheme.accent).backgroundColor(AppTheme.surface).enabled(!this.loading).onClick(() => this.requestRefresh())
-              Button('清空课表草稿').width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
-                .fontColor(AppTheme.danger).backgroundColor(AppTheme.dangerSoft).enabled(!this.loading && this.entries.length > 0)
+              Button('重新读取账号课表').width('100%').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
+                .fontColor(this.palette.accent).backgroundColor(this.palette.surface).enabled(!this.loading).onClick(() => this.requestRefresh())
+              Button('清空课表草稿').width('100%').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
+                .fontColor(this.palette.danger).backgroundColor(this.palette.dangerSoft).enabled(!this.loading && this.entries.length > 0)
                 .onClick(() => this.requestClear())
             }
           }
           if (this.clearRequested) {
             FeedbackPanel({ kind: 'info', title: '移除草稿里的全部课程？', message: '账号课表仍保留，只有最后确认保存才会清空账号课表。' })
-            Button('确认清空草稿').width('100%').constraintSize({ minHeight: 48 }).fontColor(AppTheme.danger)
-              .backgroundColor(AppTheme.dangerSoft).enabled(this.editable() && !this.loading).onClick(() => this.clearDraft())
-            Button('保留草稿').width('100%').constraintSize({ minHeight: 48 }).fontColor(AppTheme.quiet)
-              .backgroundColor(AppTheme.surface).onClick(() => this.clearRequested = false)
+            Button('确认清空草稿').width('100%').constraintSize({ minHeight: 48 }).fontColor(this.palette.danger)
+              .backgroundColor(this.palette.dangerSoft).enabled(this.editable() && !this.loading).onClick(() => this.clearDraft())
+            Button('保留草稿').width('100%').constraintSize({ minHeight: 48 }).fontColor(this.palette.quiet)
+              .backgroundColor(this.palette.surface).onClick(() => this.clearRequested = false)
           }
           if (this.reloadRequested) {
             FeedbackPanel({ kind: 'info', title: '放弃本页草稿并重新载入？', message: '包括未加入的表单和导入候选。读取失败会保留原草稿。' })
-            Button('放弃草稿并读取最新课表').width('100%').constraintSize({ minHeight: 48 }).fontColor(AppTheme.danger)
-              .backgroundColor(AppTheme.dangerSoft).enabled(!this.loading).onClick(() => this.discardAndReload())
-            Button('保留当前草稿').width('100%').constraintSize({ minHeight: 48 }).fontColor(AppTheme.quiet)
-              .backgroundColor(AppTheme.surface).onClick(() => this.reloadRequested = false)
+            Button('放弃草稿并读取最新课表').width('100%').constraintSize({ minHeight: 48 }).fontColor(this.palette.danger)
+              .backgroundColor(this.palette.dangerSoft).enabled(!this.loading).onClick(() => this.discardAndReload())
+            Button('保留当前草稿').width('100%').constraintSize({ minHeight: 48 }).fontColor(this.palette.quiet)
+              .backgroundColor(this.palette.surface).onClick(() => this.reloadRequested = false)
           }
           Text('未完成草稿可保存在本机，恢复时仍需核对原课表版本；退出账号会清除。所有课程按北京时间填写。')
-            .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
-        }.width('100%').alignItems(HorizontalAlign.Start).padding({ left: AppTheme.pageInset, right: AppTheme.pageInset, top: 12, bottom: 24 })
+            .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
+        }.width('100%').alignItems(HorizontalAlign.Start).padding({ left: this.palette.pageInset, right: this.palette.pageInset, top: 12, bottom: 24 })
       }.width('100%').layoutWeight(1).scrollBar(BarState.Off)
       if (this.editable() && this.view.phase !== 'stale') {
         Column({ space: 8 }) {
           if (this.reviewOpen) {
             Button(this.entries.length === 0 ? '确认清空账号课表' : '确认保存这份课表').width('100%').constraintSize({ minHeight: 48 })
-              .fontSize(AppTheme.bodySize).fontColor(AppTheme.onAccent)
-              .backgroundColor(this.entries.length === 0 ? AppTheme.danger : AppTheme.accent)
-              .borderRadius(AppTheme.controlRadius).enabled(!this.loading).onClick(() => this.save())
-            Button('返回编辑').width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
-              .fontColor(AppTheme.quiet).backgroundColor(AppTheme.surface).enabled(!this.loading).onClick(() => this.returnFromReview())
+              .fontSize(this.palette.bodySize).fontColor(this.palette.onAccent)
+              .backgroundColor(this.entries.length === 0 ? this.palette.danger : this.palette.accent)
+              .borderRadius(this.palette.controlRadius).enabled(!this.loading).onClick(() => this.save())
+            Button('返回编辑').width('100%').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
+              .fontColor(this.palette.quiet).backgroundColor(this.palette.surface).enabled(!this.loading).onClick(() => this.returnFromReview())
           } else {
-            Button('核对整份课表').width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
-              .fontColor(AppTheme.onAccent).backgroundColor(AppTheme.accent).borderRadius(AppTheme.controlRadius)
+            Button('核对整份课表').width('100%').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
+              .fontColor(this.palette.onAccent).backgroundColor(this.palette.accent).borderRadius(this.palette.controlRadius)
               .enabled(!this.loading && this.view.dirty).onClick(() => this.reviewSave())
           }
-        }.width('100%').padding({ left: AppTheme.pageInset, right: AppTheme.pageInset, top: 12, bottom: 16 })
-          .backgroundColor(AppTheme.surface).border({ width: { top: 1 }, color: AppTheme.line })
+        }.width('100%').padding({ left: this.palette.pageInset, right: this.palette.pageInset, top: 12, bottom: 16 })
+          .backgroundColor(this.palette.surface).border({ width: { top: 1 }, color: this.palette.line })
       }
-    }.width('100%').height('100%').backgroundColor(AppTheme.canvas)
+    }.width('100%').height('100%').backgroundColor(this.palette.canvas)
   }
 }

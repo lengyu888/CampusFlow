@@ -6,6 +6,7 @@ import { shanghaiDate } from '../utils/DailyAgenda';
 import { localHistory } from '../services/LocalHistory';
 import { MessageContent } from '../components/MessageContent';
 import { AppTheme } from '../theme/AppTheme';
+import { ThemePalette, themePalette } from '../theme/ThemePalette';
 import { EvidencePanel } from '../components/EvidencePanel';
 import { validModelCatalog, modelUnavailableReason, modelLabel } from '../utils/ModelCatalog';
 import { AppIcon } from '../components/AppIcon';
@@ -61,6 +62,7 @@ interface HistorySaveGeneration {
 
 @Component
 export struct AgentPage {
+  @StorageLink('campusflowThemePalette') private palette: ThemePalette = themePalette('paper-green');
   @Watch('modelConnectionChanged') @Prop baseUrl: string;
   @Watch('modelConnectionChanged') @Prop token: string;
   @Prop historyScope: string = '';
@@ -527,7 +529,13 @@ export struct AgentPage {
     }
     this.restoredRunIds = this.restoredRunIds.includes(operation.id) ? this.restoredRunIds : this.restoredRunIds.concat([operation.id]);
     this.liveRecoveredRunIds = this.liveRecoveredRunIds.includes(operation.id) ? this.liveRecoveredRunIds : this.liveRecoveredRunIds.concat([operation.id]);
-    if (operation.runRequest !== null) { await this.runController().recoverRequest(operation.runRequest); }
+    if (operation.runRequest !== null) {
+      const saved = operation.runRequest;
+      const request: RunStartRequest = { run_id: saved.run_id, session_id: saved.session_id, model: saved.model, message: saved.message };
+      if (saved.session_mode !== undefined) { request.session_mode = saved.session_mode; }
+      if (saved.expected_context_revision !== undefined) { request.expected_context_revision = saved.expected_context_revision; }
+      await this.runController().recoverRequest(request);
+    }
     else { await this.runController().recover(operation.id); }
   }
 
@@ -882,20 +890,24 @@ export struct AgentPage {
   private recordScrollOffset(offset: number): void {
     if (!Number.isFinite(offset)) { return; }
     this.scrollOffset = offset;
-    this.followLatest = this.contentHeight <= this.viewportHeight ||
-      this.contentHeight - this.viewportHeight - offset <= 48;
+    // Offset updates can arrive after a manual upward gesture. Reaching the
+    // bottom (or explicitly sending/viewing latest) is what resumes following.
+    if (this.contentHeight > this.viewportHeight && this.contentHeight - this.viewportHeight - offset > 48) {
+      this.followLatest = false;
+    }
     if (this.followLatest) { this.unreadMessages = 0; }
     else { this.scrollForNewMessage = false; }
   }
 
   private chatContentChanged(height: number): void {
+    const heightChanged = height !== this.contentHeight;
     this.contentHeight = height;
     if (this.restoreOptionsOffset >= 0) {
       this.chatScroller.scrollTo({ xOffset: 0, yOffset: this.restoreOptionsOffset, animation: false });
       this.restoreOptionsOffset = -1;
       return;
     }
-    if (this.voiceActive && this.scrollForNewMessage) {
+    if (heightChanged && this.voiceActive && this.followLatest && this.scrollForNewMessage && this.hasConversation()) {
       this.scrollForNewMessage = false;
       this.unreadMessages = 0;
       this.chatScroller.scrollEdge(Edge.Bottom);
@@ -1756,12 +1768,12 @@ export struct AgentPage {
 
   private toolStateColor(state: string): string {
     if (state === 'error') {
-      return AppTheme.danger;
+      return this.palette.danger;
     }
     if (state === 'unavailable' || state === 'unverified' || state === 'demo') {
-      return AppTheme.warning;
+      return this.palette.warning;
     }
-    return AppTheme.secondary;
+    return this.palette.secondary;
   }
 
   private toggleToolResults(messageId: string): void {
@@ -1786,67 +1798,67 @@ export struct AgentPage {
   private ConversationSwitch() {
     Column({ space: 12 }) {
       Text(this.switchTarget.length === 0 ? '开始新的对话？' : '继续另一段对话？')
-        .fontSize(AppTheme.sectionTitle).fontWeight(FontWeight.Medium).fontColor(AppTheme.ink).width('100%')
+        .fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Medium).fontColor(this.palette.ink).width('100%')
       Text('当前输入先保存到本机会话草稿。服务端运行不会自动取消；返回后按原编号核对。未执行候选不会从历史文字恢复。')
-        .fontSize(AppTheme.bodySize).fontColor(AppTheme.secondary).width('100%')
+        .fontSize(this.palette.bodySize).fontColor(this.palette.secondary).width('100%')
       if (this.capturePending()) {
-        Text('语音仍有待处理文字，请先填入输入或明确放弃。').fontSize(AppTheme.bodySize).fontColor(AppTheme.warning).width('100%')
-        Button('放弃本次语音').constraintSize({ minHeight: 48 }).fontColor(AppTheme.danger).backgroundColor(AppTheme.dangerSoft)
+        Text('语音仍有待处理文字，请先填入输入或明确放弃。').fontSize(this.palette.bodySize).fontColor(this.palette.warning).width('100%')
+        Button('放弃本次语音').constraintSize({ minHeight: 48 }).fontColor(this.palette.danger).backgroundColor(this.palette.dangerSoft)
           .onClick(() => this.cancelVoice())
       }
       Row({ space: 8 }) {
-        Button('留在当前对话').layoutWeight(1).constraintSize({ minHeight: 48 }).fontColor(AppTheme.secondary)
-          .backgroundColor(AppTheme.field).onClick(() => this.switchConfirmOpen = false)
+        Button('留在当前对话').layoutWeight(1).constraintSize({ minHeight: 48 }).fontColor(this.palette.secondary)
+          .backgroundColor(this.palette.field).onClick(() => this.switchConfirmOpen = false)
         Button(this.sessionLoading ? '正在核对…' : '保存并切换').layoutWeight(1).constraintSize({ minHeight: 48 })
-          .fontColor(AppTheme.onAccent).backgroundColor(AppTheme.accent)
+          .fontColor(this.palette.onAccent).backgroundColor(this.palette.accent)
           .enabled(!this.sessionLoading && !this.capturePending() && this.decisionId.length === 0 && this.decisionOperations.length === 0)
           .onClick(() => this.switchConversation())
       }.width('100%')
-    }.width('100%').padding(16).backgroundColor(AppTheme.surface).borderRadius(AppTheme.cardRadius).alignItems(HorizontalAlign.Start)
+    }.width('100%').padding(16).backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius).alignItems(HorizontalAlign.Start)
   }
 
   @Builder
   private VoiceExplanation() {
     Column({ space: 12 }) {
-      Text('关于语音').fontSize(AppTheme.sectionTitle).fontWeight(FontWeight.Medium).fontColor(AppTheme.ink).width('100%')
+      Text('关于语音').fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Medium).fontColor(this.palette.ink).width('100%')
       Text('语音识别与播报由设备系统服务处理，部分系统可能联网。行简不保存录音；识别文字先供你编辑，再由你手动发送给所选模型。')
-        .fontSize(AppTheme.bodySize).fontColor(AppTheme.secondary).width('100%')
+        .fontSize(this.palette.bodySize).fontColor(this.palette.secondary).width('100%')
       Text('继续后才检测系统能力并按需申请权限。拒绝权限仍可输入文字；切换会话会停止语音。')
-        .fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
+        .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
       Row({ space: 8 }) {
-        Button('稍后再说').layoutWeight(1).constraintSize({ minHeight: 48 }).backgroundColor(AppTheme.field).fontColor(AppTheme.secondary)
+        Button('稍后再说').layoutWeight(1).constraintSize({ minHeight: 48 }).backgroundColor(this.palette.field).fontColor(this.palette.secondary)
           .onClick(() => { this.voiceExplanationOpen = false; this.explainedSpeechId = ''; })
         Button(this.explainedSpeechId.length > 0 ? '继续播报' : '继续语音输入').layoutWeight(1).constraintSize({ minHeight: 48 })
-          .backgroundColor(AppTheme.accent).fontColor(AppTheme.onAccent).onClick(() => this.acceptVoiceExplanation())
+          .backgroundColor(this.palette.accent).fontColor(this.palette.onAccent).onClick(() => this.acceptVoiceExplanation())
       }.width('100%')
-    }.width('100%').padding(16).backgroundColor(AppTheme.surface).borderRadius(AppTheme.cardRadius).alignItems(HorizontalAlign.Start)
+    }.width('100%').padding(16).backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius).alignItems(HorizontalAlign.Start)
   }
 
   @Builder
   private DecisionRecovery() {
     if (this.decisionOperations.length > 0) {
       Column({ space: 10 }) {
-        Text('有操作结果待核对').fontSize(AppTheme.bodySize).fontWeight(FontWeight.Medium).fontColor(AppTheme.warning).width('100%')
+        Text('有操作结果待核对').fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium).fontColor(this.palette.warning).width('100%')
         Text('先查询持久记录；不会自动重复确认、取消或修改许可。核对前不能切换会话。')
-          .fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
+          .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
         ForEach(this.decisionOperations, (operation: DraftOperation) => {
           Button(operation.kind === 'course-permission' ? '核对原课内许可设置' : '核对原提案操作')
-            .width('100%').constraintSize({ minHeight: 48 }).fontColor(AppTheme.accent).backgroundColor(AppTheme.surface)
+            .width('100%').constraintSize({ minHeight: 48 }).fontColor(this.palette.accent).backgroundColor(this.palette.surface)
             .enabled(this.decisionId.length === 0 && !this.loading).onClick(() => this.recoverDecisionOperation(operation))
         }, (operation: DraftOperation) => `${operation.kind}-${operation.id}`)
-      }.width('100%').padding(16).backgroundColor(AppTheme.warningSoft).borderRadius(AppTheme.cardRadius).alignItems(HorizontalAlign.Start)
+      }.width('100%').padding(16).backgroundColor(this.palette.warningSoft).borderRadius(this.palette.cardRadius).alignItems(HorizontalAlign.Start)
     }
     ForEach(this.otherDecisionOperations, (operation: DraftOperation) => {
       Button('返回有待核对操作的原会话').width('100%').constraintSize({ minHeight: 48 })
-        .fontColor(AppTheme.warning).backgroundColor(AppTheme.warningSoft)
+        .fontColor(this.palette.warning).backgroundColor(this.palette.warningSoft)
         .onClick(() => this.requestConversation(operation.sessionId ?? ''))
     }, (operation: DraftOperation) => `${operation.kind}-${operation.id}`)
     if (this.runRecordsExpanded) {
       ForEach(this.otherDrafts, (record: DraftRecord) => {
         Column({ space: 8 }) {
-          Text((record.payload as AssistantDraft).text).fontSize(AppTheme.bodySize).fontColor(AppTheme.ink).width('100%').maxLines(3)
+          Text((record.payload as AssistantDraft).text).fontSize(this.palette.bodySize).fontColor(this.palette.ink).width('100%').maxLines(3)
           Button('返回这份未发送草稿').width('100%').constraintSize({ minHeight: 48 })
-            .fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft).onClick(() => this.requestDraftConversation(record))
+            .fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft).onClick(() => this.requestDraftConversation(record))
         }.width('100%').alignItems(HorizontalAlign.Start)
       }, (record: DraftRecord) => `${record.ownerId}-${record.localRevision}`)
     }
@@ -1855,50 +1867,50 @@ export struct AgentPage {
   @Builder
   private AdjustmentEditor() {
     Column({ space: 12 }) {
-      Text('调整日期、时长或偏好').fontSize(AppTheme.sectionTitle).fontWeight(FontWeight.Medium).fontColor(AppTheme.ink).width('100%')
+      Text('调整日期、时长或偏好').fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Medium).fontColor(this.palette.ink).width('100%')
       Text(this.adjustmentReady ? '已核对原候选取消。调整描述不会直接执行，仍需发送并确认新的候选。' :
         '编辑以下描述，然后取消原候选。只有取得取消记录后，才开放填入输入；结果未知时先查询原编号。')
-        .fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
+        .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
       TextArea({ text: this.adjustmentText, placeholder: '希望日期、时长与其他偏好' })
-        .width('100%').constraintSize({ minHeight: 140, maxHeight: 240 }).fontSize(AppTheme.bodySize)
-        .backgroundColor(AppTheme.field).borderRadius(AppTheme.controlRadius)
+        .width('100%').constraintSize({ minHeight: 140, maxHeight: 240 }).fontSize(this.palette.bodySize)
+        .backgroundColor(this.palette.field).borderRadius(this.palette.controlRadius)
         .onChange((value: string) => this.changeAdjustment(value))
       if (this.adjustmentReady) {
         Button(this.prompt.length > 0 ? '追加到现有输入' : '填入输入').width('100%').constraintSize({ minHeight: 48 })
-          .fontColor(AppTheme.onAccent).backgroundColor(AppTheme.accent).enabled(this.recoverableDraft === null)
+          .fontColor(this.palette.onAccent).backgroundColor(this.palette.accent).enabled(this.recoverableDraft === null)
           .onClick(() => this.adoptAdjustment(this.prompt.length > 0))
       } else {
         ForEach(this.pendingActions.filter((action: PendingAction) => action.proposal_id === this.adjustingProposalId && action.status === 'pending'), (action: PendingAction) => {
-          Button('取消原候选，再调整').width('100%').constraintSize({ minHeight: 48 }).fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft)
+          Button('取消原候选，再调整').width('100%').constraintSize({ minHeight: 48 }).fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft)
             .enabled(this.decisionId.length === 0 && !this.needsReview(action.proposal_id)).onClick(() => this.decide(action, false))
         }, (action: PendingAction) => action.proposal_id)
-        Button('核对原候选是否已取消').width('100%').constraintSize({ minHeight: 48 }).fontColor(AppTheme.accent).backgroundColor(Color.Transparent)
+        Button('核对原候选是否已取消').width('100%').constraintSize({ minHeight: 48 }).fontColor(this.palette.accent).backgroundColor(Color.Transparent)
           .enabled(this.decisionId.length === 0).onClick(() => this.queryAdjustment())
       }
-      Button('放弃这份调整描述').width('100%').constraintSize({ minHeight: 48 }).fontColor(AppTheme.secondary).backgroundColor(Color.Transparent)
+      Button('放弃这份调整描述').width('100%').constraintSize({ minHeight: 48 }).fontColor(this.palette.secondary).backgroundColor(Color.Transparent)
         .enabled(this.decisionId.length === 0 && !this.needsReview(this.adjustingProposalId) &&
           !this.decisionOperations.some((item: DraftOperation) => item.id === this.adjustingProposalId)).onClick(() => this.dismissAdjustment())
-    }.width('100%').padding(16).backgroundColor(AppTheme.surface).borderRadius(AppTheme.cardRadius).alignItems(HorizontalAlign.Start)
+    }.width('100%').padding(16).backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius).alignItems(HorizontalAlign.Start)
   }
 
   @Builder
   private CoursePermissionEditor(action: PendingAction) {
     Column({ space: 10 }) {
       Text('仅对所选任务允许课内完成。系统仍会显示具体课程和重叠时间，需要再次确认；任务之间的冲突不会被忽略。')
-        .fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
+        .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
       ForEach(courseCandidates(action), (task: PlanningTaskDraft) => {
         Column({ space: 8 }) {
-          Text(task.title).fontSize(AppTheme.bodySize).fontColor(AppTheme.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
+          Text(task.title).fontSize(this.palette.bodySize).fontColor(this.palette.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
           TaskScheduleDetails({ startAt: task.start_at, endAt: task.end_at, location: task.location, reminderMinutes: task.reminder_minutes })
           Button(this.permissionValue(task) ? '已选：可在上课时完成' : '不允许在上课时完成').width('100%').constraintSize({ minHeight: 48 })
-            .fontColor(this.permissionValue(task) ? AppTheme.onAccent : AppTheme.accent)
-            .backgroundColor(this.permissionValue(task) ? AppTheme.accent : AppTheme.accentSoft)
+            .fontColor(this.permissionValue(task) ? this.palette.onAccent : this.palette.accent)
+            .backgroundColor(this.permissionValue(task) ? this.palette.accent : this.palette.accentSoft)
             .enabled(this.decisionId.length === 0 && !this.decisionOperations.some((item: DraftOperation) => item.id === action.proposal_id))
             .onClick(() => this.togglePermission(task))
-        }.width('100%').padding(12).backgroundColor(AppTheme.field).borderRadius(AppTheme.controlRadius).alignItems(HorizontalAlign.Start)
+        }.width('100%').padding(12).backgroundColor(this.palette.field).borderRadius(this.palette.controlRadius).alignItems(HorizontalAlign.Start)
       }, (task: PlanningTaskDraft) => task.candidate_id ?? '')
-      Button('按这份设置重新预览').width('100%').constraintSize({ minHeight: 48 }).fontColor(AppTheme.accent)
-        .backgroundColor(AppTheme.accentSoft).enabled(this.decisionId.length === 0 && !this.loading && !this.needsReview(action.proposal_id))
+      Button('按这份设置重新预览').width('100%').constraintSize({ minHeight: 48 }).fontColor(this.palette.accent)
+        .backgroundColor(this.palette.accentSoft).enabled(this.decisionId.length === 0 && !this.loading && !this.needsReview(action.proposal_id))
         .onClick(() => this.previewCoursePermissions(action))
     }.width('100%').alignItems(HorizontalAlign.Start)
   }
@@ -1906,39 +1918,39 @@ export struct AgentPage {
   @Builder
   private DraftRecovery() {
     Column({ space: 8 }) {
-      Text(`本机草稿 · ${this.draftMessage}`).fontSize(AppTheme.metaSize)
-        .fontColor(this.draftPhase === 'error' ? AppTheme.danger : AppTheme.quiet).width('100%')
+      Text(`本机草稿 · ${this.draftMessage}`).fontSize(this.palette.metaSize)
+        .fontColor(this.draftPhase === 'error' ? this.palette.danger : this.palette.quiet).width('100%')
       if (this.draftPhase === 'error') {
-        Button('重试本机保存').constraintSize({ minHeight: 48 }).fontColor(AppTheme.accent)
-          .backgroundColor(AppTheme.accentSoft).onClick(() => this.flushDraft())
+        Button('重试本机保存').constraintSize({ minHeight: 48 }).fontColor(this.palette.accent)
+          .backgroundColor(this.palette.accentSoft).onClick(() => this.flushDraft())
       }
       if (this.recoverableDraft !== null) {
-        Text('发现上次未提交的输入').fontSize(AppTheme.bodySize).fontWeight(FontWeight.Medium).fontColor(AppTheme.ink).width('100%')
-        Text((this.recoverableDraft.payload as AssistantDraft).text).fontSize(AppTheme.metaSize)
-          .fontColor(AppTheme.quiet).maxLines(3).textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
+        Text('发现上次未提交的输入').fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium).fontColor(this.palette.ink).width('100%')
+        Text((this.recoverableDraft.payload as AssistantDraft).text).fontSize(this.palette.metaSize)
+          .fontColor(this.palette.quiet).maxLines(3).textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
         Text(`原日期 ${(this.recoverableDraft.payload as AssistantDraft).anchorDate} · 上海时区。恢复后请核对相对日期。`)
-          .fontSize(AppTheme.metaSize).fontColor(AppTheme.warning).width('100%')
+          .fontSize(this.palette.metaSize).fontColor(this.palette.warning).width('100%')
         Flex({ wrap: FlexWrap.Wrap }) {
-          Button('恢复文字').constraintSize({ minHeight: 48 }).fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft)
+          Button('恢复文字').constraintSize({ minHeight: 48 }).fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft)
             .enabled(this.prompt.length === 0).onClick(() => this.restoreStoredDraft())
-          Button('舍弃上次草稿').constraintSize({ minHeight: 48 }).fontColor(AppTheme.secondary).backgroundColor(AppTheme.field)
+          Button('舍弃上次草稿').constraintSize({ minHeight: 48 }).fontColor(this.palette.secondary).backgroundColor(this.palette.field)
             .onClick(() => this.discardStoredDraft())
         }.width('100%')
       }
       ForEach(this.draftOperations, (operation: DraftOperation) => {
         Column({ space: 4 }) {
-          Text('这次提交仍需核对，未自动重发。').fontSize(AppTheme.metaSize).fontColor(AppTheme.warning).width('100%')
-          Button('核对原运行').constraintSize({ minHeight: 48 }).fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft)
+          Text('这次提交仍需核对，未自动重发。').fontSize(this.palette.metaSize).fontColor(this.palette.warning).width('100%')
+          Button('核对原运行').constraintSize({ minHeight: 48 }).fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft)
             .enabled(this.voiceActive && !this.deletionBusy && !['creating', 'cancelling', 'checking'].includes(this.runState.phase))
             .onClick(() => this.recoverDraftRun(operation))
         }.width('100%')
       }, (operation: DraftOperation) => operation.id)
       if (this.draftNotice.length > 0) {
-        Text(this.draftNotice).fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+        Text(this.draftNotice).fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
       }
       if (this.prompt.length > 0 && this.draftAnchorDate.length > 0 && this.draftAnchorDate !== shanghaiDate(Date.now())) {
         Text(`这份输入起于 ${this.draftAnchorDate}（上海时区），请核对“今天、明天”等表达后再发送。`)
-          .fontSize(AppTheme.metaSize).fontColor(AppTheme.warning).width('100%')
+          .fontSize(this.palette.metaSize).fontColor(this.palette.warning).width('100%')
       }
     }.width('100%').alignItems(HorizontalAlign.Start)
   }
@@ -1947,24 +1959,24 @@ export struct AgentPage {
   private ToolResults(message: ConversationEntry) {
     Column({ space: 8 }) {
       if (message.tools.length === 0) {
-        Text('本轮未提供工具记录').fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
+        Text('本轮未提供工具记录').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
       } else {
         Button({ type: ButtonType.Normal }) {
           Text(`本轮工具记录 · ${message.tools.length} 项 · ${this.collapsedToolIds.includes(message.id) ? '展开' : '收起'}`)
-            .fontSize(AppTheme.metaSize).fontColor(AppTheme.accent).width('100%').textAlign(TextAlign.Start)
+            .fontSize(this.palette.metaSize).fontColor(this.palette.accent).width('100%').textAlign(TextAlign.Start)
         }.width('100%').constraintSize({ minHeight: 48 }).padding(0).backgroundColor(Color.Transparent)
           .onClick(() => this.toggleToolResults(message.id))
         if (!this.collapsedToolIds.includes(message.id)) {
           ForEach(message.tools, (item: ToolDisplaySummary) => {
             Column({ space: 4 }) {
               Row({ space: 8 }) {
-                Text(item.label).fontSize(AppTheme.metaSize).fontWeight(FontWeight.Medium).fontColor(AppTheme.ink).layoutWeight(1)
-                Text(this.toolStateLabel(item.state)).fontSize(AppTheme.metaSize).fontColor(this.toolStateColor(item.state))
+                Text(item.label).fontSize(this.palette.metaSize).fontWeight(FontWeight.Medium).fontColor(this.palette.ink).layoutWeight(1)
+                Text(this.toolStateLabel(item.state)).fontSize(this.palette.metaSize).fontColor(this.toolStateColor(item.state))
               }.width('100%')
-              Text(item.summary).fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
+              Text(item.summary).fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
               EvidencePanel({ evidence: item.evidence ?? [], active: this.voiceActive })
             }.width('100%').alignItems(HorizontalAlign.Start).padding(10)
-              .backgroundColor(AppTheme.field).borderRadius(10)
+              .backgroundColor(this.palette.field).borderRadius(10)
           }, (_item: ToolDisplaySummary, index: number) => `${message.id}-tool-${index}`)
         }
       }
@@ -1974,23 +1986,23 @@ export struct AgentPage {
   @Builder
   private RequestFailure(message: ConversationEntry) {
     Column({ space: 8 }) {
-      Text('请求未完成').fontSize(AppTheme.bodySize).fontWeight(FontWeight.Bold).fontColor(AppTheme.danger).width('100%')
-      Text(message.content).fontSize(AppTheme.metaSize).fontColor(AppTheme.ink).width('100%')
+      Text('请求未完成').fontSize(this.palette.bodySize).fontWeight(FontWeight.Bold).fontColor(this.palette.danger).width('100%')
+      Text(message.content).fontSize(this.palette.metaSize).fontColor(this.palette.ink).width('100%')
       Text('原输入已保留在对话中，可复制或恢复后手动发送。若请求曾到达服务端，请先查看历史和已有提案。')
-        .fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
+        .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
       Button(this.inputLength(this.prompt) > 0 ? '输入框已有草稿' : '恢复本次输入')
-        .constraintSize({ minHeight: 48 }).fontSize(AppTheme.metaSize).fontColor(AppTheme.accent)
-        .backgroundColor(AppTheme.accentSoft).enabled(!this.loading && this.inputLength(this.prompt) === 0)
+        .constraintSize({ minHeight: 48 }).fontSize(this.palette.metaSize).fontColor(this.palette.accent)
+        .backgroundColor(this.palette.accentSoft).enabled(!this.loading && this.inputLength(this.prompt) === 0)
         .onClick(() => this.changePrompt(restoreDraft(this.prompt, message.failedPrompt), true))
       if (message.failureCode === 'LOGIN_REQUIRED' || message.failureCode === 'MODEL_AUTH_INVALID' ||
         message.failureCode === 'MODEL_KEY_REQUIRED') {
         Text(message.failureCode === 'LOGIN_REQUIRED' ? '重新登录前，请先复制要保留的输入。' : '可在个人设置检查模型 API Key。')
-          .fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
-        Button('前往个人设置').constraintSize({ minHeight: 48 }).fontSize(AppTheme.metaSize)
-          .fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft).onClick(() => this.onOpenProfile())
+          .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
+        Button('前往个人设置').constraintSize({ minHeight: 48 }).fontSize(this.palette.metaSize)
+          .fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft).onClick(() => this.onOpenProfile())
       }
     }.width('100%').padding(14).alignItems(HorizontalAlign.Start)
-      .backgroundColor(AppTheme.surface).borderRadius(16)
+      .backgroundColor(this.palette.surface).borderRadius(16)
   }
 
   private proposalTaskCount(action: PendingAction): number {
@@ -2018,7 +2030,7 @@ export struct AgentPage {
   @Builder
   private TaskDraftDetails(task: PlanningTaskDraft) {
     Column({ space: 8 }) {
-      Text(task.title).fontSize(AppTheme.bodySize).fontWeight(FontWeight.Medium).fontColor(AppTheme.ink)
+      Text(task.title).fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium).fontColor(this.palette.ink)
         .width('100%').wordBreak(WordBreak.BREAK_WORD)
       TaskScheduleDetails({ startAt: task.start_at, endAt: task.end_at, location: task.location, reminderMinutes: task.reminder_minutes })
     }.width('100%').alignItems(HorizontalAlign.Start)
@@ -2027,34 +2039,34 @@ export struct AgentPage {
   @Builder
   private PlanDraftDetails(plan: PlanningPlanDraft) {
     Column({ space: 8 }) {
-      Text(plan.title).fontSize(AppTheme.bodySize).fontWeight(FontWeight.Medium).fontColor(AppTheme.ink)
+      Text(plan.title).fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium).fontColor(this.palette.ink)
         .width('100%').wordBreak(WordBreak.BREAK_WORD)
-      Text(plan.summary.length > 0 ? plan.summary : '未填写计划说明').fontSize(AppTheme.bodySize)
-        .fontColor(AppTheme.quiet).width('100%').wordBreak(WordBreak.BREAK_WORD)
-      Text(plan.target_date === null ? '未设截止日' : `截止 ${plan.target_date}`).fontSize(AppTheme.metaSize)
-        .fontColor(AppTheme.quiet).width('100%')
+      Text(plan.summary.length > 0 ? plan.summary : '未填写计划说明').fontSize(this.palette.bodySize)
+        .fontColor(this.palette.quiet).width('100%').wordBreak(WordBreak.BREAK_WORD)
+      Text(plan.target_date === null ? '未设截止日' : `截止 ${plan.target_date}`).fontSize(this.palette.metaSize)
+        .fontColor(this.palette.quiet).width('100%')
     }.width('100%').alignItems(HorizontalAlign.Start)
   }
 
   @Builder
   private ProposalChanges(action: PendingAction) {
     Column({ space: 12 }) {
-      Text(action.action === 'delete' ? '将删除的原内容' : '修改前').fontSize(AppTheme.bodySize)
-        .fontWeight(FontWeight.Medium).fontColor(AppTheme.ink).width('100%')
+      Text(action.action === 'delete' ? '将删除的原内容' : '修改前').fontSize(this.palette.bodySize)
+        .fontWeight(FontWeight.Medium).fontColor(this.palette.ink).width('100%')
       ForEach(this.beforeTasks(action), (task: PlanningTaskDraft) => {
         this.TaskDraftDetails(task)
       }, (_task: PlanningTaskDraft) => `${action.proposal_id}-before-task`)
       ForEach(this.beforePlans(action), (plan: PlanningPlanDraft) => {
         this.PlanDraftDetails(plan)
       }, (_plan: PlanningPlanDraft) => `${action.proposal_id}-before-plan`)
-      Divider().color(AppTheme.line)
+      Divider().color(this.palette.line)
       if (action.action === 'delete') {
         Text(action.kind === 'plan' ?
           `只移除计划与里程碑，${action.before_plan?.task_count ?? 0} 项现有任务将保留为独立待办。` :
           '确认后移除此任务；如果它属于计划，计划的任务计数也会更新。')
-          .fontSize(AppTheme.bodySize).fontColor(AppTheme.danger).width('100%').wordBreak(WordBreak.BREAK_WORD)
+          .fontSize(this.palette.bodySize).fontColor(this.palette.danger).width('100%').wordBreak(WordBreak.BREAK_WORD)
       } else {
-        Text('修改后').fontSize(AppTheme.bodySize).fontWeight(FontWeight.Medium).fontColor(AppTheme.accent).width('100%')
+        Text('修改后').fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium).fontColor(this.palette.accent).width('100%')
         ForEach(this.afterTasks(action), (task: PlanningTaskDraft) => {
           this.TaskDraftDetails(task)
         }, (_task: PlanningTaskDraft) => `${action.proposal_id}-after-task`)
@@ -2063,11 +2075,11 @@ export struct AgentPage {
         }, (_plan: PlanningPlanDraft) => `${action.proposal_id}-after-plan`)
         if (action.kind === 'plan') {
           Text('本次只修改计划资料；原有里程碑与任务不会自动改期或删除。')
-            .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+            .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
         }
       }
     }.width('100%').alignItems(HorizontalAlign.Start).padding(12)
-      .backgroundColor(AppTheme.canvas).borderRadius(AppTheme.controlRadius)
+      .backgroundColor(this.palette.canvas).borderRadius(this.palette.controlRadius)
   }
 
   private proposalExpanded(proposalId: string): boolean {
@@ -2085,28 +2097,28 @@ export struct AgentPage {
   @Builder
   private ProposalMilestones(action: PendingAction) {
     Column({ space: 12 }) {
-      Text('以下时间均为北京时间').fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
+      Text('以下时间均为北京时间').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
       ForEach(action.payload.milestones ?? [], (milestone: PendingMilestonePreview, milestoneIndex: number) => {
         Column({ space: 10 }) {
           Text(`${milestoneIndex + 1}. ${milestone.title}`)
-            .fontSize(AppTheme.bodySize).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink).width('100%')
+            .fontSize(this.palette.bodySize).fontWeight(FontWeight.Bold).fontColor(this.palette.ink).width('100%')
           Text(`截止：${formatPlanDateTime(milestone.due_at)} · ${milestone.tasks.length} 项任务`)
-            .fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
+            .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
           if (milestone.tasks.length === 0) {
-            Text('这个里程碑尚无任务').fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
+            Text('这个里程碑尚无任务').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
           }
           ForEach(milestone.tasks, (task: PendingTaskPreview, taskIndex: number) => {
             Column({ space: 6 }) {
               Text(`${milestoneIndex + 1}.${taskIndex + 1} ${task.title}`)
-                .fontSize(AppTheme.bodySize).fontWeight(FontWeight.Medium).fontColor(AppTheme.ink).width('100%')
+                .fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium).fontColor(this.palette.ink).width('100%')
               TaskScheduleDetails({ startAt: task.start_at, endAt: task.end_at,
                 location: task.location, reminderMinutes: task.reminder_minutes })
             }.width('100%').alignItems(HorizontalAlign.Start).padding(12)
-              .backgroundColor(AppTheme.field).borderRadius(12)
+              .backgroundColor(this.palette.field).borderRadius(12)
           }, (_task: PendingTaskPreview, taskIndex: number) =>
             `${action.proposal_id}-${milestoneIndex}-${taskIndex}`)
         }.width('100%').alignItems(HorizontalAlign.Start).padding(12)
-          .backgroundColor(AppTheme.surface).borderRadius(14)
+          .backgroundColor(this.palette.surface).borderRadius(14)
       }, (_milestone: PendingMilestonePreview, milestoneIndex: number) =>
         `${action.proposal_id}-${milestoneIndex}`)
     }.width('100%').alignItems(HorizontalAlign.Start)
@@ -2117,19 +2129,19 @@ export struct AgentPage {
     Button({ type: ButtonType.Normal }) {
       Row({ space: 12 }) {
         Row() {
-          AppIcon({ name: icon, iconSize: 22, color: AppTheme.accent })
+          AppIcon({ name: icon, iconSize: 22, color: this.palette.accent })
         }.width(40).height(40).justifyContent(FlexAlign.Center)
-          .backgroundColor(AppTheme.accentSoft).borderRadius(12)
+          .backgroundColor(this.palette.accentSoft).borderRadius(12)
         Column({ space: 4 }) {
-          Text(title).fontSize(AppTheme.bodySize).fontWeight(FontWeight.Medium).fontColor(AppTheme.ink)
+          Text(title).fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium).fontColor(this.palette.ink)
             .width('100%').textAlign(TextAlign.Start).wordBreak(WordBreak.BREAK_WORD)
-          Text(detail).fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+          Text(detail).fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
             .textAlign(TextAlign.Start).wordBreak(WordBreak.BREAK_WORD)
         }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-        AppIcon({ name: 'chevron', iconSize: 16, color: AppTheme.quiet })
+        AppIcon({ name: 'chevron', iconSize: 16, color: this.palette.quiet })
       }.width('100%')
     }.width('100%').padding(16).constraintSize({ minHeight: 76 })
-      .backgroundColor(AppTheme.surface).borderRadius(AppTheme.cardRadius)
+      .backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
       .accessibilityText(`${title}，${detail}，填入输入框`)
       .onClick(() => this.choosePrompt(prompt))
   }
@@ -2139,131 +2151,131 @@ export struct AgentPage {
     Column({ space: 12 }) {
       Row({ space: 10 }) {
         if (this.voiceState.phase === 'starting' || this.voiceState.phase === 'recognizing') {
-          LoadingProgress().width(20).height(20).color(AppTheme.accent)
+          LoadingProgress().width(20).height(20).color(this.palette.accent)
         } else {
-          AppIcon({ name: 'microphone', iconSize: 20, color: AppTheme.accent })
+          AppIcon({ name: 'microphone', iconSize: 20, color: this.palette.accent })
         }
         Text(this.voiceState.phase === 'review' ? '核对语音文字' :
           (this.voiceState.phase === 'error' ? '语音提示' : '语音输入'))
-          .fontSize(AppTheme.bodySize).fontWeight(FontWeight.Medium).fontColor(AppTheme.ink).layoutWeight(1)
+          .fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium).fontColor(this.palette.ink).layoutWeight(1)
         if (this.voiceState.phase === 'listening') {
-          Text('录音中').fontSize(AppTheme.metaSize).fontColor(AppTheme.accent)
+          Text('录音中').fontSize(this.palette.metaSize).fontColor(this.palette.accent)
         }
       }.width('100%')
-      Text(this.voiceState.message).fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+      Text(this.voiceState.message).fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
       if (this.voiceState.phase === 'review') {
         TextArea({ text: this.voiceState.transcript, placeholder: '识别文字，可在这里修改…' })
-          .width('100%').fontSize(AppTheme.bodySize).fontColor(AppTheme.ink)
+          .width('100%').fontSize(this.palette.bodySize).fontColor(this.palette.ink)
           .constraintSize({ minHeight: 72, maxHeight: 140 })
-          .backgroundColor(AppTheme.surface).borderRadius(AppTheme.controlRadius).padding(12)
-          .border({ width: 1, color: AppTheme.outline })
+          .backgroundColor(this.palette.surface).borderRadius(this.palette.controlRadius).padding(12)
+          .border({ width: 1, color: this.palette.outline })
           .accessibilityText('识别文字，可编辑，尚未发送')
           .onChange((value: string) => this.editVoiceTranscript(value))
         Row({ space: 10 }) {
           Button('放弃文字').layoutWeight(1).constraintSize({ minHeight: 48 })
-            .fontSize(AppTheme.bodySize).fontColor(AppTheme.quiet).backgroundColor(AppTheme.surface)
+            .fontSize(this.palette.bodySize).fontColor(this.palette.quiet).backgroundColor(this.palette.surface)
             .onClick(() => this.cancelVoice())
           Button('填入输入框').layoutWeight(1).constraintSize({ minHeight: 48 })
-            .fontSize(AppTheme.bodySize).fontColor(AppTheme.onAccent).backgroundColor(AppTheme.accent)
+            .fontSize(this.palette.bodySize).fontColor(this.palette.onAccent).backgroundColor(this.palette.accent)
             .accessibilityText('将识别文字追加到输入框，不自动发送')
             .onClick(() => this.useVoiceTranscript())
         }.width('100%')
         Text('识别文字将追加到原输入，检查后再手动发送。')
-          .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+          .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
       } else if (this.capturePending()) {
         if (this.voiceState.transcript.length > 0) {
-          Text(this.voiceState.transcript).fontSize(AppTheme.bodySize).fontColor(AppTheme.ink).width('100%')
+          Text(this.voiceState.transcript).fontSize(this.palette.bodySize).fontColor(this.palette.ink).width('100%')
             .maxLines(3).textOverflow({ overflow: TextOverflow.Ellipsis })
         }
         Row({ space: 10 }) {
           Button('取消录音').layoutWeight(1).constraintSize({ minHeight: 48 })
-            .fontSize(AppTheme.bodySize).fontColor(AppTheme.quiet).backgroundColor(AppTheme.surface)
+            .fontSize(this.palette.bodySize).fontColor(this.palette.quiet).backgroundColor(this.palette.surface)
             .onClick(() => this.cancelVoice())
           if (this.voiceState.phase === 'listening') {
             Button('完成录音').layoutWeight(1).constraintSize({ minHeight: 48 })
-              .fontSize(AppTheme.bodySize).fontColor(AppTheme.onAccent).backgroundColor(AppTheme.accent)
+              .fontSize(this.palette.bodySize).fontColor(this.palette.onAccent).backgroundColor(this.palette.accent)
               .onClick(() => this.voiceInteraction?.finishListening())
           }
         }.width('100%')
         Text('录音最长 60 秒，说完后可编辑文字；行简不保存录音。')
-          .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+          .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
       } else {
-        Button('知道了').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
-          .fontColor(AppTheme.accent).backgroundColor(AppTheme.surface)
+        Button('知道了').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
+          .fontColor(this.palette.accent).backgroundColor(this.palette.surface)
           .onClick(() => this.cancelVoice())
       }
-    }.width('100%').alignItems(HorizontalAlign.Start).padding(AppTheme.cardInset)
-      .backgroundColor(AppTheme.accentSoft).borderRadius(AppTheme.cardRadius)
-      .border({ width: 1, color: AppTheme.line })
+    }.width('100%').alignItems(HorizontalAlign.Start).padding(this.palette.cardInset)
+      .backgroundColor(this.palette.accentSoft).borderRadius(this.palette.cardRadius)
+      .border({ width: 1, color: this.palette.line })
   }
 
   @Builder
   private ModelOptions() {
     Column({ space: 12 }) {
-      Text('后续消息使用的模型').fontSize(AppTheme.bodySize).fontWeight(FontWeight.Medium)
-        .fontColor(AppTheme.ink).width('100%')
-      Text(`当前：${this.selectedModelLabel()}`).fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
-      if (this.modelsLoading) { Text('正在核对模型配置…').fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%') }
-      if (this.modelsMessage.length > 0) { Text(this.modelsMessage).fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%') }
+      Text('后续消息使用的模型').fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium)
+        .fontColor(this.palette.ink).width('100%')
+      Text(`当前：${this.selectedModelLabel()}`).fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
+      if (this.modelsLoading) { Text('正在核对模型配置…').fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%') }
+      if (this.modelsMessage.length > 0) { Text(this.modelsMessage).fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%') }
       if (this.modelCatalog !== null) {
         ForEach(this.modelCatalog.models, (option: ModelOption) => {
           Column({ space: 4 }) {
             Button(`${option.label}${this.model === option.id ? ' · 已选' : ''}${this.modelCatalog?.default_model === option.id ? ' · 服务推荐' : ''}`).width('100%')
-              .constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
-              .fontColor(this.model === option.id ? AppTheme.onAccent : AppTheme.accent)
-              .backgroundColor(this.model === option.id ? AppTheme.accent : AppTheme.accentSoft)
-              .borderRadius(AppTheme.controlRadius).enabled(!this.loading && this.decisionId.length === 0 && !this.deletionBusy && modelUnavailableReason(option).length === 0)
+              .constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
+              .fontColor(this.model === option.id ? this.palette.onAccent : this.palette.accent)
+              .backgroundColor(this.model === option.id ? this.palette.accent : this.palette.accentSoft)
+              .borderRadius(this.palette.controlRadius).enabled(!this.loading && this.decisionId.length === 0 && !this.deletionBusy && modelUnavailableReason(option).length === 0)
               .onClick(() => this.selectModel(option.id))
             Text(`${option.provider} · 工具${option.supports_tools ? '支持' : '未声明'} · 增量回答${option.supports_streaming ? '支持' : '未声明'} · 推理${option.supports_reasoning ? '已声明' : '未声明'}`)
-              .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%').wordBreak(WordBreak.BREAK_WORD)
+              .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%').wordBreak(WordBreak.BREAK_WORD)
             if (modelUnavailableReason(option).length > 0) {
-              Text(modelUnavailableReason(option)).fontSize(AppTheme.metaSize).fontColor(AppTheme.danger).width('100%').wordBreak(WordBreak.BREAK_WORD)
+              Text(modelUnavailableReason(option)).fontSize(this.palette.metaSize).fontColor(this.palette.danger).width('100%').wordBreak(WordBreak.BREAK_WORD)
             }
           }.width('100%').alignItems(HorizontalAlign.Start)
         }, (option: ModelOption) => `${option.id}-${this.modelsDataRevision}`)
       }
-      Button('刷新模型列表').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize).fontColor(AppTheme.accent)
-        .backgroundColor(AppTheme.surface).enabled(!this.modelsLoading).onClick(() => this.loadModels())
+      Button('刷新模型列表').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize).fontColor(this.palette.accent)
+        .backgroundColor(this.palette.surface).enabled(!this.modelsLoading).onClick(() => this.loadModels())
       Text('能力来自服务配置声明，可用表示配置已就绪，不代表已完成真实模型评测。切换只影响后续消息，历史模型仍按原记录展示。')
-        .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
-      Button('语音使用说明').width('100%').constraintSize({ minHeight: 48 }).fontColor(AppTheme.accent).backgroundColor(AppTheme.surface)
+        .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
+      Button('语音使用说明').width('100%').constraintSize({ minHeight: 48 }).fontColor(this.palette.accent).backgroundColor(this.palette.surface)
         .onClick(() => { this.explainedSpeechId = ''; this.voiceExplanationOpen = true; })
       if (this.sessionMode === 'continue') {
-        Button('刷新会话上下文').width('100%').constraintSize({ minHeight: 48 }).fontColor(AppTheme.accent).backgroundColor(AppTheme.surface)
+        Button('刷新会话上下文').width('100%').constraintSize({ minHeight: 48 }).fontColor(this.palette.accent).backgroundColor(this.palette.surface)
           .enabled(!this.loading && !this.sessionLoading).onClick(() => this.refreshSessionContext())
       }
       Button('个人与模型凭据').width('100%').constraintSize({ minHeight: 48 })
-        .fontSize(AppTheme.bodySize).fontColor(AppTheme.accent).backgroundColor(AppTheme.surface)
-        .borderRadius(AppTheme.controlRadius).onClick(() => this.onOpenProfile())
+        .fontSize(this.palette.bodySize).fontColor(this.palette.accent).backgroundColor(this.palette.surface)
+        .borderRadius(this.palette.controlRadius).onClick(() => this.onOpenProfile())
       Button('校园导航').width('100%').constraintSize({ minHeight: 48 })
-        .fontSize(AppTheme.bodySize).fontColor(AppTheme.accent).backgroundColor(AppTheme.surface)
-        .borderRadius(AppTheme.controlRadius).onClick(() => this.onOpenRoute())
-    }.width('100%').padding(AppTheme.cardInset).backgroundColor(AppTheme.field)
-      .borderRadius(AppTheme.cardRadius).alignItems(HorizontalAlign.Start)
+        .fontSize(this.palette.bodySize).fontColor(this.palette.accent).backgroundColor(this.palette.surface)
+        .borderRadius(this.palette.controlRadius).onClick(() => this.onOpenRoute())
+    }.width('100%').padding(this.palette.cardInset).backgroundColor(this.palette.field)
+      .borderRadius(this.palette.cardRadius).alignItems(HorizontalAlign.Start)
   }
 
   @Builder
   private SuggestedPrompt() {
     Column({ space: 12 }) {
       Text(`新的输入建议 · ${this.promptSuggestions.length} 条待处理`)
-        .fontSize(AppTheme.bodySize).fontWeight(FontWeight.Medium).fontColor(AppTheme.ink).width('100%')
-      Text(this.promptSuggestions[0] ?? '').fontSize(AppTheme.bodySize).fontColor(AppTheme.quiet)
+        .fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium).fontColor(this.palette.ink).width('100%')
+      Text(this.promptSuggestions[0] ?? '').fontSize(this.palette.bodySize).fontColor(this.palette.quiet)
         .width('100%').wordBreak(WordBreak.BREAK_WORD).copyOption(CopyOptions.InApp)
       Text('原输入不会被替换。追加后仍需你手动发送。')
-        .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+        .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
       Row({ space: 8 }) {
-        Button('略过').layoutWeight(1).constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
-          .fontColor(AppTheme.quiet).backgroundColor(AppTheme.surface).borderRadius(AppTheme.controlRadius)
+        Button('略过').layoutWeight(1).constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
+          .fontColor(this.palette.quiet).backgroundColor(this.palette.surface).borderRadius(this.palette.controlRadius)
           .onClick(() => this.dismissSuggestion())
-        Button('采用').layoutWeight(1).constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
-          .fontColor(AppTheme.accent).backgroundColor(AppTheme.surface).borderRadius(AppTheme.controlRadius)
+        Button('采用').layoutWeight(1).constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
+          .fontColor(this.palette.accent).backgroundColor(this.palette.surface).borderRadius(this.palette.controlRadius)
           .enabled(this.inputLength(this.prompt) === 0).onClick(() => this.applySuggestion(false))
-        Button('追加').layoutWeight(1).constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
-          .fontColor(AppTheme.onAccent).backgroundColor(AppTheme.accent).borderRadius(AppTheme.controlRadius)
+        Button('追加').layoutWeight(1).constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
+          .fontColor(this.palette.onAccent).backgroundColor(this.palette.accent).borderRadius(this.palette.controlRadius)
           .onClick(() => this.applySuggestion(true))
       }.width('100%')
-    }.width('100%').padding(AppTheme.cardInset).backgroundColor(AppTheme.accentSoft)
-      .borderRadius(AppTheme.cardRadius).alignItems(HorizontalAlign.Start)
+    }.width('100%').padding(this.palette.cardInset).backgroundColor(this.palette.accentSoft)
+      .borderRadius(this.palette.cardRadius).alignItems(HorizontalAlign.Start)
   }
 
   @Builder
@@ -2272,34 +2284,34 @@ export struct AgentPage {
       Row({ space: 8 }) {
         Text(this.runState.errorCode === 'RUN_DELETED' ? '运行已删除' : this.runState.snapshot !== null ? this.runStatusLabel(this.runState.snapshot) :
           (this.runState.phase === 'creating' ? '正在提交运行' : '核对本次运行'))
-          .fontSize(AppTheme.bodySize).fontWeight(FontWeight.Medium).fontColor(AppTheme.ink).layoutWeight(1)
+          .fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium).fontColor(this.palette.ink).layoutWeight(1)
         if (['creating', 'polling', 'checking', 'cancelling'].includes(this.runState.phase)) {
-          LoadingProgress().width(20).height(20).color(AppTheme.accent)
+          LoadingProgress().width(20).height(20).color(this.palette.accent)
         }
       }.width('100%')
       if (this.runState.message.length > 0) {
-        Text(this.runState.message).fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+        Text(this.runState.message).fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
           .wordBreak(WordBreak.BREAK_WORD)
       }
       if (this.runState.snapshot !== null) {
         Text(`实际模型调用 ${this.runState.snapshot.model_calls} 次 · 工具调用 ${this.runState.snapshot.tool_calls} 次`)
-          .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+          .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
         if (this.restoredRunIds.includes(this.runState.runId)) {
           Text(this.runState.snapshot.session_id === this.sessionId ? '已回到这次运行所属的会话，后续输入沿用该会话。' : '这是恢复查看的运行，后续输入仍属于当前会话。')
-            .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+            .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
         }
         if (this.runState.snapshot.tool_progress.length > 0) {
           Button(this.runProgressExpanded ? '收起实际工具进度' : `查看 ${this.runState.snapshot.tool_progress.length} 条实际工具进度`)
-            .width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
-            .fontColor(AppTheme.accent).backgroundColor(Color.Transparent)
+            .width('100%').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
+            .fontColor(this.palette.accent).backgroundColor(Color.Transparent)
             .onClick(() => this.runProgressExpanded = !this.runProgressExpanded)
           if (this.runProgressExpanded) {
             ForEach(this.runState.snapshot.tool_progress, (tool: RunToolProgress) => {
               Column({ space: 4 }) {
                 Text(`${tool.label} · ${tool.state === 'running' ? '正在执行' : tool.state === 'success' ? '已返回' : '调用失败'}`)
-                  .fontSize(AppTheme.bodySize).fontColor(AppTheme.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
+                  .fontSize(this.palette.bodySize).fontColor(this.palette.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
                 if (tool.summary.length > 0) {
-                  Text(tool.summary).fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%').wordBreak(WordBreak.BREAK_WORD)
+                  Text(tool.summary).fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%').wordBreak(WordBreak.BREAK_WORD)
                 }
               }.width('100%').alignItems(HorizontalAlign.Start)
             }, (tool: RunToolProgress) => `${this.runState.runId}-${tool.call_id}-${this.runState.lastAppliedSeq}`)
@@ -2307,59 +2319,59 @@ export struct AgentPage {
         }
       }
       if (this.canCancelRun()) {
-        Button('取消本次运行').width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
-          .fontColor(AppTheme.danger).backgroundColor(AppTheme.dangerSoft).borderRadius(AppTheme.controlRadius)
+        Button('取消本次运行').width('100%').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
+          .fontColor(this.palette.danger).backgroundColor(this.palette.dangerSoft).borderRadius(this.palette.controlRadius)
           .enabled(!this.deletionBusy).onClick(() => this.cancelRun())
       }
       if (this.runState.canRetryStart) {
         Text(this.runState.phase === 'local_error' ? '本次尚未发送；先完成本机保存，再沿用同一运行标识提交。' :
           '尚不能确定首次提交是否到达。重试会沿用同一运行标识和原问题，不创建另一笔请求。')
-          .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
-        Button('重试提交同一运行').width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
-          .fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft).borderRadius(AppTheme.controlRadius)
+          .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
+        Button('重试提交同一运行').width('100%').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
+          .fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft).borderRadius(this.palette.controlRadius)
           .enabled(!this.deletionBusy).onClick(() => this.retryRunStart())
       }
       if (this.runState.errorCode !== 'RUN_DELETED') {
-        Button('核对运行状态').width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
-          .fontColor(AppTheme.accent).backgroundColor(Color.Transparent)
+        Button('核对运行状态').width('100%').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
+          .fontColor(this.palette.accent).backgroundColor(Color.Transparent)
           .enabled(!this.deletionBusy && !['creating', 'checking', 'cancelling', 'polling'].includes(this.runState.phase))
           .onClick(() => this.refreshRun())
       }
       if (this.loading) {
         Text('切换页面会暂停本机刷新，服务端可能继续运行；返回后将核对实际状态。')
-          .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+          .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
       }
-    }.width('100%').padding(AppTheme.cardInset).backgroundColor(AppTheme.canvas)
-      .alignItems(HorizontalAlign.Start).borderRadius(AppTheme.cardRadius)
+    }.width('100%').padding(this.palette.cardInset).backgroundColor(this.palette.canvas)
+      .alignItems(HorizontalAlign.Start).borderRadius(this.palette.cardRadius)
   }
 
   @Builder
   private RunRecords() {
     Column({ space: 12 }) {
-      Text('最近运行 · 仅联网查看').fontSize(AppTheme.sectionTitle).fontWeight(FontWeight.Medium).fontColor(AppTheme.ink).width('100%')
+      Text('最近运行 · 仅联网查看').fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Medium).fontColor(this.palette.ink).width('100%')
       Text('最多显示最近 20 次。恢复只查询原运行，不重新发送问题；重启后的中断运行需你明确发起新请求。')
-        .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+        .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
       if (this.runState.listMessage.length > 0) {
-        Text(this.runState.listMessage).fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+        Text(this.runState.listMessage).fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
       }
-      if (this.runState.listLoading) { LoadingProgress().width(24).height(24).color(AppTheme.accent) }
+      if (this.runState.listLoading) { LoadingProgress().width(24).height(24).color(this.palette.accent) }
       if (!this.runState.listLoading && this.runState.recent.length === 0) {
-        Text('暂无可展示的运行记录。').fontSize(AppTheme.bodySize).fontColor(AppTheme.quiet).width('100%')
+        Text('暂无可展示的运行记录。').fontSize(this.palette.bodySize).fontColor(this.palette.quiet).width('100%')
       }
       ForEach(this.runState.recent, (run: RunSnapshot) => {
         Column({ space: 8 }) {
-          Text(run.message).fontSize(AppTheme.bodySize).fontColor(AppTheme.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
+          Text(run.message).fontSize(this.palette.bodySize).fontColor(this.palette.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
           Text(`${this.runStatusLabel(run)} · ${formatPlanDateTime(run.created_at)}（北京时间）`)
-            .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+            .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
           Button(this.runState.runId === run.run_id ? '核对当前运行' : '恢复查看这次运行').width('100%')
-            .constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize).fontColor(AppTheme.accent)
-            .backgroundColor(AppTheme.accentSoft).borderRadius(AppTheme.controlRadius)
+            .constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize).fontColor(this.palette.accent)
+            .backgroundColor(this.palette.accentSoft).borderRadius(this.palette.controlRadius)
             .enabled(!this.deletionBusy && (!this.loading || this.runState.runId === run.run_id))
             .onClick(() => this.runState.runId === run.run_id ? this.refreshRun() : this.recoverRun(run.run_id))
-        }.width('100%').alignItems(HorizontalAlign.Start).padding(12).backgroundColor(AppTheme.surface).borderRadius(AppTheme.controlRadius)
+        }.width('100%').alignItems(HorizontalAlign.Start).padding(12).backgroundColor(this.palette.surface).borderRadius(this.palette.controlRadius)
       }, (run: RunSnapshot) => `${run.run_id}-${run.seq}`)
-      Button('刷新运行记录').width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
-        .fontColor(AppTheme.accent).backgroundColor(Color.Transparent).enabled(!this.runState.listLoading)
+      Button('刷新运行记录').width('100%').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
+        .fontColor(this.palette.accent).backgroundColor(Color.Transparent).enabled(!this.runState.listLoading)
         .onClick(() => this.runController().loadRecent())
     }.width('100%').alignItems(HorizontalAlign.Start)
   }
@@ -2373,22 +2385,22 @@ export struct AgentPage {
         if (message.role === 'user') { Blank() }
         Column({ space: 12 }) {
           if (message.restored === true && message.role === 'user') {
-            Text('恢复的运行 · 原问题').fontSize(AppTheme.metaSize).fontColor(AppTheme.onAccent).width('100%')
+            Text('恢复的运行 · 原问题').fontSize(this.palette.metaSize).fontColor(this.palette.onAccent).width('100%')
           }
           if (message.role === 'assistant') {
             Row({ space: 8 }) {
-              AppIcon({ name: 'assistant', iconSize: 20, color: AppTheme.accent })
-              Text('行简').fontSize(AppTheme.metaSize).fontWeight(FontWeight.Medium)
-                .fontColor(AppTheme.quiet).layoutWeight(1)
+              AppIcon({ name: 'assistant', iconSize: 20, color: this.palette.accent })
+              Text('行简').fontSize(this.palette.metaSize).fontWeight(FontWeight.Medium)
+                .fontColor(this.palette.quiet).layoutWeight(1)
               Button({ type: ButtonType.Normal }) {
                 Row({ space: 6 }) {
                   AppIcon({ name: this.voiceState.speakingMessageId === message.id ? 'stop' : 'speaker',
-                    iconSize: 20, color: AppTheme.accent })
+                    iconSize: 20, color: this.palette.accent })
                   Text(this.voiceState.speakingMessageId === message.id ? '停止' : '播报')
-                    .fontSize(AppTheme.metaSize).fontColor(AppTheme.accent)
+                    .fontSize(this.palette.metaSize).fontColor(this.palette.accent)
                 }
               }.constraintSize({ minHeight: 48, minWidth: 72 }).padding(8)
-                .backgroundColor(Color.Transparent).borderRadius(AppTheme.controlRadius)
+                .backgroundColor(Color.Transparent).borderRadius(this.palette.controlRadius)
                 .accessibilityText(this.voiceState.speakingMessageId === message.id ? '停止播报这条回答' : '播报这条回答正文')
                 .enabled(message.incomplete !== true && (this.speechPending() && this.voiceState.speakingMessageId === message.id ||
                   !this.loading && !this.deletionBusy && this.decisionId.length === 0 && !this.capturePending()))
@@ -2396,15 +2408,15 @@ export struct AgentPage {
             }.width('100%')
           }
           if (message.incomplete === true) {
-            Text('已收到的回答片段 · 尚未形成完整结果').fontSize(AppTheme.metaSize)
-              .fontColor(AppTheme.warning).width('100%')
+            Text('已收到的回答片段 · 尚未形成完整结果').fontSize(this.palette.metaSize)
+              .fontColor(this.palette.warning).width('100%')
           }
           MessageContent({ content: message.content, isUser: message.role === 'user' })
           if (message.role === 'assistant') { this.ToolResults(message) }
         }.alignItems(HorizontalAlign.Start)
           .padding(message.role === 'user' ? 16 : 0)
           .width(message.role === 'user' ? '90%' : '100%')
-          .backgroundColor(message.role === 'user' ? AppTheme.accent : Color.Transparent)
+          .backgroundColor(message.role === 'user' ? this.palette.accent : Color.Transparent)
           .borderRadius(message.role === 'user' ? { topLeft: 18, topRight: 18, bottomLeft: 18, bottomRight: 4 }
             : { topLeft: 0, topRight: 0, bottomLeft: 0, bottomRight: 0 })
         if (message.role !== 'user') { Blank() }
@@ -2417,11 +2429,11 @@ export struct AgentPage {
     Column({ space: 12 }) {
       Row({ space: 8 }) {
         Text(`${this.operationLabel(action)}提案`)
-          .fontSize(AppTheme.metaSize).fontWeight(FontWeight.Medium).fontColor(AppTheme.accent).layoutWeight(1)
-        Text(this.decisionLabel(action)).fontSize(AppTheme.metaSize)
-          .fontColor(this.needsReview(action.proposal_id) ? AppTheme.warning : AppTheme.quiet)
+          .fontSize(this.palette.metaSize).fontWeight(FontWeight.Medium).fontColor(this.palette.accent).layoutWeight(1)
+        Text(this.decisionLabel(action)).fontSize(this.palette.metaSize)
+          .fontColor(this.needsReview(action.proposal_id) ? this.palette.warning : this.palette.quiet)
       }.width('100%')
-      Text(action.title).fontSize(AppTheme.sectionTitle).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
+      Text(action.title).fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
         .width('100%').wordBreak(WordBreak.BREAK_WORD)
       if (!this.receiptCollapsed(action)) {
         AgentProposalSummary({ action: action, evidence: this.sourcesForProposal(action), active: this.voiceActive })
@@ -2430,16 +2442,16 @@ export struct AgentPage {
           onToggle: (review: CourseReview) => this.toggleCourseAck(action, review) })
         if (action.status === 'pending' && validReliableAction(action) && !this.needsReview(action.proposal_id) && courseCandidates(action).length > 0) {
           Button(this.permissionProposalId === action.proposal_id ? '收起课内许可设置' : '逐项设置课内许可')
-            .width('100%').constraintSize({ minHeight: 48 }).fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft)
+            .width('100%').constraintSize({ minHeight: 48 }).fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft)
             .enabled(this.decisionId.length === 0).onClick(() => this.togglePermissionEditor(action))
           if (this.permissionProposalId === action.proposal_id) { this.CoursePermissionEditor(action) }
-          Button('调整日期、时长或偏好').width('100%').constraintSize({ minHeight: 48 }).fontColor(AppTheme.accent)
+          Button('调整日期、时长或偏好').width('100%').constraintSize({ minHeight: 48 }).fontColor(this.palette.accent)
             .backgroundColor(Color.Transparent).enabled(this.decisionId.length === 0 && this.adjustingProposalId.length === 0)
             .onClick(() => this.beginAdjustment(action))
         }
-        Text(this.proposalMeta(action)).fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+        Text(this.proposalMeta(action)).fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
         if ((action.payload.summary ?? '').length > 0) {
-          Text(action.payload.summary ?? '').fontSize(AppTheme.bodySize).fontColor(AppTheme.quiet).width('100%')
+          Text(action.payload.summary ?? '').fontSize(this.palette.bodySize).fontColor(this.palette.quiet).width('100%')
         }
         if (action.action !== 'create' && validReliableAction(action)) {
           this.ProposalChanges(action)
@@ -2448,116 +2460,116 @@ export struct AgentPage {
             Button({ type: ButtonType.Normal }) {
               Text(this.proposalExpanded(action.proposal_id) ? '收起完整计划' :
                 `查看全部 ${action.payload.milestones?.length ?? 0} 个里程碑 · ${this.proposalTaskCount(action)} 项任务`)
-                .fontSize(AppTheme.bodySize).fontWeight(FontWeight.Medium).fontColor(AppTheme.accent)
+                .fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium).fontColor(this.palette.accent)
                 .width('100%').textAlign(TextAlign.Start).wordBreak(WordBreak.BREAK_WORD)
             }.width('100%').constraintSize({ minHeight: 48 }).padding(12)
-              .backgroundColor(AppTheme.accentSoft).borderRadius(AppTheme.controlRadius)
+              .backgroundColor(this.palette.accentSoft).borderRadius(this.palette.controlRadius)
               .accessibilityText(`${action.title}，${this.proposalExpanded(action.proposal_id) ? '已展开，收起完整计划' : '已折叠，查看完整计划'}`)
               .onClick(() => this.toggleProposal(action.proposal_id))
             if (this.proposalExpanded(action.proposal_id)) { this.ProposalMilestones(action) }
           } else {
             Text('提案中暂无里程碑，请补充计划后再确认。')
-              .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+              .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
           }
         } else {
           TaskScheduleDetails({ startAt: action.start_at, endAt: action.end_at,
             location: action.payload.task?.location ?? action.payload.location ?? null, reminderMinutes: action.reminder_minutes })
         }
         if (action.conflicts.length > 0) {
-          Text('需要调整的冲突').fontSize(AppTheme.bodySize).fontWeight(FontWeight.Medium).fontColor(AppTheme.danger).width('100%')
+          Text('需要调整的冲突').fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium).fontColor(this.palette.danger).width('100%')
           ForEach(action.conflicts, (conflict: string, index: number) => {
-            Text(`${index + 1}. ${conflict}`).fontSize(AppTheme.metaSize).fontColor(AppTheme.danger).width('100%')
+            Text(`${index + 1}. ${conflict}`).fontSize(this.palette.metaSize).fontColor(this.palette.danger).width('100%')
               .wordBreak(WordBreak.BREAK_WORD)
           }, (_conflict: string, index: number) => `${action.proposal_id}-conflict-${index}`)
         }
         if ((action.warnings ?? []).length > 0) {
-          Text('仍需手动核对').fontSize(AppTheme.bodySize).fontWeight(FontWeight.Medium).fontColor(AppTheme.warning).width('100%')
+          Text('仍需手动核对').fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium).fontColor(this.palette.warning).width('100%')
           ForEach(action.warnings ?? [], (warning: string, index: number) => {
-            Text(`${index + 1}. ${warning}`).fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+            Text(`${index + 1}. ${warning}`).fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
               .wordBreak(WordBreak.BREAK_WORD)
           }, (_warning: string, index: number) => `${action.proposal_id}-warning-${index}`)
         }
         if (validReliableAction(action)) {
           Text(action.status === 'pending' ? `预览有效至 ${formatPlanDateTime(action.expires_at ?? null)}（北京时间）` :
             `原预览生成于 ${formatPlanDateTime(action.created_at ?? null)}（北京时间）`)
-            .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+            .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
         }
         if ((action.reason ?? '').length > 0) {
-          Text(action.reason ?? '').fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%').wordBreak(WordBreak.BREAK_WORD)
+          Text(action.reason ?? '').fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%').wordBreak(WordBreak.BREAK_WORD)
         }
       }
       if (validatedActionReceipt(action) !== null) {
         Text(`执行回执 · ${formatPlanDateTime(action.receipt?.applied_at ?? null)}（北京时间）`)
-          .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
-        Text(this.completedMessage(action)).fontSize(AppTheme.bodySize).fontColor(AppTheme.ink).width('100%')
+          .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
+        Text(this.completedMessage(action)).fontSize(this.palette.bodySize).fontColor(this.palette.ink).width('100%')
       }
       if (this.feedbackFor(action.proposal_id) !== undefined) {
-        Text(this.feedbackFor(action.proposal_id)?.message ?? '').fontSize(AppTheme.metaSize).width('100%')
-          .fontColor(this.needsReview(action.proposal_id) ? AppTheme.warning : AppTheme.quiet)
+        Text(this.feedbackFor(action.proposal_id)?.message ?? '').fontSize(this.palette.metaSize).width('100%')
+          .fontColor(this.needsReview(action.proposal_id) ? this.palette.warning : this.palette.quiet)
       }
       if (this.feedbackFor(action.proposal_id)?.code === 'LOGIN_REQUIRED') {
-        Button('前往个人设置重新登录').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
-          .fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft)
+        Button('前往个人设置重新登录').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
+          .fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft)
           .onClick(() => this.onOpenProfile())
       }
       if (this.needsReview(action.proposal_id)) {
         Button(this.decisionId === action.proposal_id ? '核对中…' : '核对状态')
-          .width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
-          .fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft).borderRadius(AppTheme.controlRadius)
+          .width('100%').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
+          .fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft).borderRadius(this.palette.controlRadius)
           .enabled(!this.loading && !this.deletionBusy && this.decisionId.length === 0)
           .onClick(() => this.checkDecision(action))
-        Button('查看计划列表').width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
-          .fontColor(AppTheme.accent).backgroundColor(Color.Transparent).onClick(() => this.onOpenPlan())
+        Button('查看计划列表').width('100%').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
+          .fontColor(this.palette.accent).backgroundColor(Color.Transparent).onClick(() => this.onOpenPlan())
       } else if (decisionDisposition(action) === 'confirmed' || decisionDisposition(action) === 'cancelled') {
         Button(this.receiptCollapsed(action) ? '查看原提案' : '收起原提案')
-          .width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
-          .fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft).borderRadius(AppTheme.controlRadius)
+          .width('100%').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
+          .fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft).borderRadius(this.palette.controlRadius)
           .onClick(() => this.toggleReceipt(action.proposal_id))
         if (action.status === 'confirmed') {
           if (receiptTaskId(action).length > 0 || receiptPlanId(action).length > 0) {
             Button(action.kind === 'task' ? '查看这个任务' : '查看这个计划').width('100%').constraintSize({ minHeight: 48 })
-              .fontSize(AppTheme.bodySize).fontColor(AppTheme.accent).backgroundColor(Color.Transparent)
+              .fontSize(this.palette.bodySize).fontColor(this.palette.accent).backgroundColor(Color.Transparent)
               .onClick(() => this.openReceipt(action))
           } else {
-            Button('查看计划列表').width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
-              .fontColor(AppTheme.accent).backgroundColor(Color.Transparent).onClick(() => this.onOpenPlan())
+            Button('查看计划列表').width('100%').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
+              .fontColor(this.palette.accent).backgroundColor(Color.Transparent).onClick(() => this.onOpenPlan())
           }
         }
       } else if (this.requiresNewPreview(action)) {
-        Text(this.proposalBlockMessage(action)).fontSize(AppTheme.metaSize).fontColor(AppTheme.warning).width('100%')
-        Button('填入重新规划建议').width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
-          .fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft).borderRadius(AppTheme.controlRadius)
+        Text(this.proposalBlockMessage(action)).fontSize(this.palette.metaSize).fontColor(this.palette.warning).width('100%')
+        Button('填入重新规划建议').width('100%').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
+          .fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft).borderRadius(this.palette.controlRadius)
           .onClick(() => this.regenerateProposal(action))
         if (action.status === 'confirmed' || action.status === 'cancelled') {
-          Button('核对持久状态').width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
-            .fontColor(AppTheme.accent).backgroundColor(Color.Transparent)
+          Button('核对持久状态').width('100%').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
+            .fontColor(this.palette.accent).backgroundColor(Color.Transparent)
             .enabled(!this.loading && !this.deletionBusy && this.decisionId.length === 0).onClick(() => this.checkDecision(action))
         } else if (action.status === 'pending' && validReliableAction(action)) {
-          Button('取消这份预览').width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
-            .fontColor(AppTheme.quiet).backgroundColor(Color.Transparent)
+          Button('取消这份预览').width('100%').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
+            .fontColor(this.palette.quiet).backgroundColor(Color.Transparent)
             .enabled(!this.loading && !this.deletionBusy && this.decisionId.length === 0).onClick(() => this.decide(action, false))
         }
       } else if (action.status === 'pending') {
         if (this.anotherDecisionUnknown(action.proposal_id)) {
           Text('先核对另一份提案的执行结果，再确认这份提案。仍可取消预览或继续聊天。')
-            .fontSize(AppTheme.metaSize).fontColor(AppTheme.warning).width('100%').wordBreak(WordBreak.BREAK_WORD)
+            .fontSize(this.palette.metaSize).fontColor(this.palette.warning).width('100%').wordBreak(WordBreak.BREAK_WORD)
         }
         Row({ space: 8 }) {
-          Button('暂不执行').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize).fontColor(AppTheme.quiet)
-            .backgroundColor(AppTheme.field).borderRadius(AppTheme.controlRadius).layoutWeight(1)
+          Button('暂不执行').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize).fontColor(this.palette.quiet)
+            .backgroundColor(this.palette.field).borderRadius(this.palette.controlRadius).layoutWeight(1)
             .enabled(!this.loading && !this.deletionBusy && this.decisionId.length === 0)
             .onClick(() => this.decide(action, false))
           Button(this.decisionId === action.proposal_id ? '处理中…' : `确认${this.operationLabel(action)}`)
-            .constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize).fontColor(AppTheme.onAccent)
-            .backgroundColor(AppTheme.accent).borderRadius(AppTheme.controlRadius).layoutWeight(1)
+            .constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize).fontColor(this.palette.onAccent)
+            .backgroundColor(this.palette.accent).borderRadius(this.palette.controlRadius).layoutWeight(1)
             .enabled(!this.loading && !this.deletionBusy && this.decisionId.length === 0 && canConfirmAction(action) &&
               !this.anotherDecisionUnknown(action.proposal_id) && validCourseAcknowledgements(action, this.acksFor(action)))
             .onClick(() => this.decide(action, true))
         }.width('100%')
       }
-    }.width('100%').padding(AppTheme.cardInset).backgroundColor(AppTheme.surface)
-      .alignItems(HorizontalAlign.Start).borderRadius(AppTheme.cardRadius)
-      .border({ width: 1, color: this.focusedProposalId === action.proposal_id ? AppTheme.accent : AppTheme.line })
+    }.width('100%').padding(this.palette.cardInset).backgroundColor(this.palette.surface)
+      .alignItems(HorizontalAlign.Start).borderRadius(this.palette.cardRadius)
+      .border({ width: 1, color: this.focusedProposalId === action.proposal_id ? this.palette.accent : this.palette.line })
       .onAreaChange((_oldArea: Area, newArea: Area) => {
         this.rememberProposalAnchor(action.proposal_id, Number(newArea.position.y));
       })
@@ -2567,36 +2579,36 @@ export struct AgentPage {
     Column() {
       Row({ space: 8 }) {
         Column({ space: 4 }) {
-          Text('助手').fontSize(AppTheme.pageTitle).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink).width('100%')
-          Text(conversationTitle(this.sessionTitle)).fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+          Text('助手').fontSize(this.palette.pageTitle).fontWeight(FontWeight.Bold).fontColor(this.palette.ink).width('100%')
+          Text(conversationTitle(this.sessionTitle)).fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
             .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
         }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-        Button('新对话').constraintSize({ minHeight: 48, minWidth: 60 }).fontSize(AppTheme.metaSize)
-          .fontColor(AppTheme.accent).backgroundColor(Color.Transparent).enabled(!this.sessionLoading)
+        Button('新对话').constraintSize({ minHeight: 48, minWidth: 60 }).fontSize(this.palette.metaSize)
+          .fontColor(this.palette.accent).backgroundColor(Color.Transparent).enabled(!this.sessionLoading)
           .onClick(() => this.requestConversation())
         Button({ type: ButtonType.Normal }) {
-          AppIcon({ name: 'history', iconSize: 24, color: AppTheme.accent })
+          AppIcon({ name: 'history', iconSize: 24, color: this.palette.accent })
         }.width(48).constraintSize({ minHeight: 48 }).backgroundColor(Color.Transparent)
-          .borderRadius(AppTheme.controlRadius).accessibilityText('历史会话').onClick(() => this.onOpenHistory())
+          .borderRadius(this.palette.controlRadius).accessibilityText('历史会话').onClick(() => this.onOpenHistory())
         Button(this.optionsExpanded ? '收起' : '更多').constraintSize({ minHeight: 48, minWidth: 48 })
-          .fontSize(AppTheme.metaSize).fontColor(AppTheme.accent).backgroundColor(Color.Transparent)
-          .borderRadius(AppTheme.controlRadius)
+          .fontSize(this.palette.metaSize).fontColor(this.palette.accent).backgroundColor(Color.Transparent)
+          .borderRadius(this.palette.controlRadius)
           .accessibilityText(this.optionsExpanded ? '收起模型与快捷入口' : '展开模型与快捷入口')
           .onClick(() => this.toggleOptions())
-      }.width('100%').constraintSize({ minHeight: 64 }).padding({ left: AppTheme.pageInset, right: 12, top: 4, bottom: 4 })
-        .backgroundColor(AppTheme.surface).border({ width: { bottom: 1 }, color: AppTheme.line })
+      }.width('100%').constraintSize({ minHeight: 64 }).padding({ left: this.palette.pageInset, right: 12, top: 4, bottom: 4 })
+        .backgroundColor(this.palette.surface).border({ width: { bottom: 1 }, color: this.palette.line })
 
       if (this.attentionActions().length > 0) {
         Button({ type: ButtonType.Normal }) {
           Row({ space: 8 }) {
-            Text(this.attentionLabel()).fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet)
+            Text(this.attentionLabel()).fontSize(this.palette.metaSize).fontColor(this.palette.quiet)
               .layoutWeight(1).textAlign(TextAlign.Start).wordBreak(WordBreak.BREAK_WORD)
-            Text('定位提案').fontSize(AppTheme.metaSize).fontColor(AppTheme.accent)
-            AppIcon({ name: 'chevron', iconSize: 20, color: AppTheme.accent })
+            Text('定位提案').fontSize(this.palette.metaSize).fontColor(this.palette.accent)
+            AppIcon({ name: 'chevron', iconSize: 20, color: this.palette.accent })
           }.width('100%')
-        }.width('100%').constraintSize({ minHeight: 48 }).padding({ left: AppTheme.pageInset, right: 16, top: 8, bottom: 8 })
+        }.width('100%').constraintSize({ minHeight: 48 }).padding({ left: this.palette.pageInset, right: 16, top: 8, bottom: 8 })
           .backgroundColor(this.attentionActions().some((action: PendingAction) => this.needsReview(action.proposal_id)) ?
-            AppTheme.warningSoft : AppTheme.accentSoft)
+            this.palette.warningSoft : this.palette.accentSoft)
           .accessibilityText(`${this.attentionLabel()}，按顺序定位需处理的提案`)
           .onClick(() => this.jumpToNextProposal())
       }
@@ -2604,26 +2616,26 @@ export struct AgentPage {
       Scroll(this.chatScroller) {
         Column({ space: 24 }) {
           if (this.sessionNotice.length > 0) {
-            Text(this.sessionNotice).fontSize(AppTheme.bodySize).fontColor(AppTheme.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+            Text(this.sessionNotice).fontSize(this.palette.bodySize).fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
           }
-          if (this.sessionLoading) { LoadingProgress().width(24).height(24).color(AppTheme.accent) }
+          if (this.sessionLoading) { LoadingProgress().width(24).height(24).color(this.palette.accent) }
           if (this.switchConfirmOpen) { this.ConversationSwitch() }
           if (this.voiceExplanationOpen) { this.VoiceExplanation() }
           if (this.optionsExpanded) { this.ModelOptions() }
           this.DecisionRecovery()
           if (this.adjustingProposalId.length > 0) { this.AdjustmentEditor() }
           Button(this.runRecordsExpanded ? '收起最近运行' : '最近运行 · 恢复查看').width('100%')
-            .constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize).fontColor(AppTheme.accent)
+            .constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize).fontColor(this.palette.accent)
             .backgroundColor(Color.Transparent).onClick(() => this.toggleRunRecords())
           this.DraftRecovery()
           if (this.runRecordsExpanded) { this.RunRecords() }
           if (this.runState.runId.length > 0) { this.RunPanel() }
           if (!this.hasConversation()) {
             Column({ space: 12 }) {
-              Text('想安排什么？').fontSize(AppTheme.pageTitle).fontWeight(FontWeight.Bold)
-                .fontColor(AppTheme.ink).width('100%')
+              Text('想安排什么？').fontSize(this.palette.pageTitle).fontWeight(FontWeight.Bold)
+                .fontColor(this.palette.ink).width('100%')
               Text('结合课表找时间，把目标拆成可确认的计划。')
-                .fontSize(AppTheme.bodySize).fontColor(AppTheme.quiet).width('100%')
+                .fontSize(this.palette.bodySize).fontColor(this.palette.quiet).width('100%')
             }.width('100%').alignItems(HorizontalAlign.Start).padding({ top: 12 })
             Column({ space: 12 }) {
               this.suggestion('安排一段专注时间', '结合课程，找到今天的空闲', 'calendar',
@@ -2633,7 +2645,7 @@ export struct AgentPage {
               this.suggestion('看看我的校园安排', '查询已同步的个人校园信息', 'classroom',
                 '查看我已同步的校园信息，结合最近的课表，提醒我接下来需要关注的事项。')
             }.width('100%')
-            Text('建议只填入草稿，准备好后再发送。').fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+            Text('建议只填入草稿，准备好后再发送。').fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
           }
           ForEach(this.messages.filter((item: ConversationEntry) => item.id !== 'welcome'), (message: ConversationEntry) => {
             Column({ space: 16 }) {
@@ -2648,92 +2660,102 @@ export struct AgentPage {
           }, (message: ConversationEntry) => `${message.id}-${message.revision ?? 0}`)
           if (this.loading) {
             Row({ space: 10 }) {
-              LoadingProgress().width(20).height(20).color(AppTheme.accent)
-              Text('正在处理请求…').fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet)
+              LoadingProgress().width(20).height(20).color(this.palette.accent)
+              Text('正在处理请求…').fontSize(this.palette.metaSize).fontColor(this.palette.quiet)
             }.width('100%')
           }
           if (this.promptSuggestions.length > 0) { this.SuggestedPrompt() }
           if (this.capturePending() || this.voiceState.phase === 'error') { this.VoicePanel() }
-        }.width('100%').padding({ left: AppTheme.pageInset, right: AppTheme.pageInset, top: 16, bottom: 24 })
+        }.width('100%').padding({ left: this.palette.pageInset, right: this.palette.pageInset, top: 16, bottom: 24 })
           .onAreaChange((_oldArea: Area, newArea: Area) => this.chatContentChanged(Number(newArea.height)))
       }.layoutWeight(1).width('100%').clip(true).scrollBar(BarState.Off).align(Alignment.TopStart)
         .onAreaChange((_oldArea: Area, newArea: Area) => this.viewportHeight = Number(newArea.height))
+        .onWillScroll((_xOffset: number, yOffset: number, _state: ScrollState, source: ScrollSource) => {
+          if (yOffset < 0 && source !== ScrollSource.SCROLLER && source !== ScrollSource.SCROLLER_ANIMATION) {
+            this.followLatest = false;
+            this.scrollForNewMessage = false;
+          }
+        })
+        .onReachEnd(() => {
+          this.followLatest = true;
+          this.unreadMessages = 0;
+        })
         .onScroll(() => this.recordScrollOffset(this.chatScroller.currentOffset().yOffset))
 
       if (this.unreadMessages > 0 || this.promptSuggestions.length > 0) {
         Button(this.promptSuggestions.length > 0 ? `查看 ${this.promptSuggestions.length} 条输入建议` :
           `查看 ${this.unreadMessages} 条新消息`).width('100%').constraintSize({ minHeight: 48 })
-          .fontSize(AppTheme.metaSize).fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft)
+          .fontSize(this.palette.metaSize).fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft)
           .onClick(() => this.viewLatest())
       }
       if (this.cacheNotice.length > 0 && this.cacheNotice !== '对话已保存到本机，可在历史会话离线回看。') {
-        Text(this.cacheNotice).fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
-          .padding({ left: 20, right: 20, top: 8, bottom: 8 }).backgroundColor(AppTheme.accentSoft)
+        Text(this.cacheNotice).fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
+          .padding({ left: 20, right: 20, top: 8, bottom: 8 }).backgroundColor(this.palette.accentSoft)
       }
       if (this.deletionBusy) {
-        Text('正在删除会话，完成后可继续发送。').fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
+        Text('正在删除会话，完成后可继续发送。').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
           .padding({ left: 18, right: 18, top: 6, bottom: 4 })
       }
       if (this.selectedModelBlocked()) {
         Column({ space: 4 }) {
-          Text(this.selectedModelReason()).fontSize(AppTheme.metaSize).fontColor(AppTheme.danger).width('100%').wordBreak(WordBreak.BREAK_WORD)
-          Button('选择可用模型').constraintSize({ minHeight: 48 }).fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft)
+          Text(this.selectedModelReason()).fontSize(this.palette.metaSize).fontColor(this.palette.danger).width('100%').wordBreak(WordBreak.BREAK_WORD)
+          Button('选择可用模型').constraintSize({ minHeight: 48 }).fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft)
             .onClick(() => this.showModelOptions())
         }.width('100%').padding({ left: 20, right: 20, top: 8, bottom: 8 })
       }
       if (this.inputLength(this.prompt) > 8000) {
         Text(`当前 ${this.inputLength(this.prompt)} 字，超过 8000 字上限，请精简后发送。原文仍保留在输入框中。`)
-          .fontSize(AppTheme.metaSize).fontColor(AppTheme.danger).width('100%')
+          .fontSize(this.palette.metaSize).fontColor(this.palette.danger).width('100%')
           .padding({ left: 18, right: 18, top: 6, bottom: 6 })
       }
       Column({ space: 8 }) {
         Row() {
           Text(this.speechPending() ? this.voiceState.message :
             `当前模型 · ${this.selectedModelLabel()}`)
-            .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).layoutWeight(1)
+            .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).layoutWeight(1)
           if (this.capturePending() || this.speechPending()) {
             Button(this.speechPending() ? '停止播报' : '取消语音')
-              .constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize).fontColor(AppTheme.accent)
+              .constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize).fontColor(this.palette.accent)
               .backgroundColor(Color.Transparent).onClick(() => this.cancelVoice())
           } else {
             Button({ type: ButtonType.Normal }) {
               Row({ space: 6 }) {
-                AppIcon({ name: 'microphone', iconSize: 19, color: AppTheme.accent })
-                Text(this.voiceProbeBusy ? '正在检测…' : '语音输入').fontSize(AppTheme.bodySize).fontColor(AppTheme.accent)
+                AppIcon({ name: 'microphone', iconSize: 19, color: this.palette.accent })
+                Text(this.voiceProbeBusy ? '正在检测…' : '语音输入').fontSize(this.palette.bodySize).fontColor(this.palette.accent)
               }
             }.constraintSize({ minHeight: 48 }).padding({ left: 10, right: 10 })
-              .backgroundColor(Color.Transparent).borderRadius(AppTheme.controlRadius)
+              .backgroundColor(Color.Transparent).borderRadius(this.palette.controlRadius)
               .accessibilityText('开始语音输入，识别后可编辑，不自动发送')
               .enabled(this.voiceActive && !this.voiceProbeBusy && !this.loading && !this.deletionBusy && this.decisionId.length === 0)
               .onClick(() => this.startVoice())
           }
         }.width('100%')
         if (this.suggestionNotice.length > 0) {
-          Text(this.suggestionNotice).fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+          Text(this.suggestionNotice).fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
         }
         if (this.voiceNotice.length > 0) {
-          Text(this.voiceNotice).fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+          Text(this.voiceNotice).fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
         }
         Row({ space: 8 }) {
           TextArea({ text: this.prompt, placeholder: '描述你的目标或安排…' })
-            .layoutWeight(1).fontSize(AppTheme.bodySize)
+            .layoutWeight(1).fontSize(this.palette.bodySize)
             .constraintSize({ minHeight: 48, maxHeight: Math.max(48, Math.min(160, this.availableHeight * 0.3)) })
             .accessibilityText('输入目标或安排').enabled(!this.sessionLoading)
-            .fontColor(AppTheme.ink).placeholderColor(AppTheme.muted)
-            .backgroundColor(AppTheme.canvas).borderRadius(AppTheme.controlRadius)
-            .border({ width: 1, color: AppTheme.outline })
+            .fontColor(this.palette.ink).placeholderColor(this.palette.muted)
+            .backgroundColor(this.palette.canvas).borderRadius(this.palette.controlRadius)
+            .border({ width: 1, color: this.palette.outline })
             .padding({ left: 15, right: 12, top: 13, bottom: 10 })
             .onChange((value) => this.changePrompt(value))
-          Button('发送').constraintSize({ minWidth: 64, minHeight: 48 }).fontSize(AppTheme.bodySize).fontWeight(FontWeight.Medium)
-            .fontColor(this.inputLength(this.prompt) > 0 && this.inputLength(this.prompt) <= 8000 ? AppTheme.onAccent : AppTheme.muted)
-            .backgroundColor(this.inputLength(this.prompt) > 0 && this.inputLength(this.prompt) <= 8000 ? AppTheme.accent : AppTheme.field)
-            .borderRadius(AppTheme.controlRadius)
+          Button('发送').constraintSize({ minWidth: 64, minHeight: 48 }).fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium)
+            .fontColor(this.inputLength(this.prompt) > 0 && this.inputLength(this.prompt) <= 8000 ? this.palette.onAccent : this.palette.muted)
+            .backgroundColor(this.inputLength(this.prompt) > 0 && this.inputLength(this.prompt) <= 8000 ? this.palette.accent : this.palette.field)
+            .borderRadius(this.palette.controlRadius)
             .enabled(!this.sessionLoading && !this.switchConfirmOpen && this.adjustingProposalId.length === 0 && !this.draftBlocksSend() && !this.selectedModelBlocked() && !this.capturePending() && !this.loading && !this.deletionBusy && this.decisionId.length === 0 && this.inputLength(this.prompt) > 0 && this.inputLength(this.prompt) <= 8000).onClick(() => this.send())
         }.width('100%').alignItems(VerticalAlign.Bottom)
-      }.width('100%').padding({ left: 20, right: 20, top: 12, bottom: 12 }).backgroundColor(AppTheme.surface)
-        .border({ width: { top: 0.5 }, color: AppTheme.line })
+      }.width('100%').padding({ left: 20, right: 20, top: 12, bottom: 12 }).backgroundColor(this.palette.surface)
+        .border({ width: { top: 0.5 }, color: this.palette.line })
     }.width('100%').height('100%').alignItems(HorizontalAlign.Start)
-      .justifyContent(FlexAlign.Start).backgroundColor(AppTheme.canvas)
+      .justifyContent(FlexAlign.Start).backgroundColor(this.palette.canvas)
       .onAreaChange((_oldArea: Area, newArea: Area) => {
         const height = Number(newArea.height);
         if (height > 0 && height !== this.availableHeight) {

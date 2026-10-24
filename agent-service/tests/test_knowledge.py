@@ -1,6 +1,7 @@
 """Exercise reviewed retrieval, tool permissions and real authenticated ASGI routes offline."""
 
 import json
+import socket
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -29,6 +30,14 @@ def no_network():
 
     with deny_network(denied):
         yield
+
+
+def test_offline_guard_rejects_connection_helpers_and_raw_sockets():
+    with pytest.raises(pytest.fail.Exception, match="must not open network connections"):
+        socket.create_connection(("example.invalid", 443))
+    with socket.socket() as connection:
+        with pytest.raises(pytest.fail.Exception, match="must not open network connections"):
+            connection.connect(("203.0.113.1", 443))
 
 
 @pytest.fixture

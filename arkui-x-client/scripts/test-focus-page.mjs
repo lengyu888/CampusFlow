@@ -1,6 +1,7 @@
+import './helpers/theme-fixture.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { stripTypeScriptTypes } from 'node:module';
+import { stripThemeTypeScriptTypes as stripTypeScriptTypes } from './helpers/theme-fixture.mjs';
 import { test } from 'node:test';
 import { focusEntryFixture } from './helpers/focus-entry-fixture.mjs';
 import { emptyFocusState, FocusApi, focusRecord, uuid, deferred, tick, FocusMemoryDriver } from './helpers/focus-fixture.mjs';
@@ -43,6 +44,20 @@ test('optional goal and explicit local mode: zero, fractions and over-limit valu
  for(const text of ['0','1.5','241','-1','abc']){p.targetText=text;p.startRequested();assert.equal(p.targetText,text);assert.match(p.inputMessage,/1–240/);}
  assert.equal(calls.length,1);p.targetText=' 25 ';p.offline=true;p.startRequested();assert.deepEqual(calls[1],['task-a',1500000,'offline']);
  p.active=false;p.startRequested();assert.equal(calls.length,2);
+});
+test('unreadable local storage cannot offer a start action or pretend the clock was tested',()=>{
+ const p=panel({...emptyFocusState(),phase:'error',message:'本机专注记录未能安全读取，请重试或明确清理；不会覆盖原内容。'}),calls=[];
+ p.onStart=(...args)=>calls.push(args);assert.equal(p.startAllowed(),false);p.startRequested();assert.deepEqual(calls,[]);
+ assert.equal(p.showClockNotice(),false);p.state.phase='ready';assert.equal(p.showClockNotice(),true);
+ const source=read('pages/FocusPage');assert.match(source,/Button\('重试读取本机记录'\)/);assert.match(source,/onRetryStorage\(\)/);
+});
+test('root local-storage retry keeps the displayed task and page open and never clears another owner',async()=>{
+ const driver=new FocusMemoryDriver(),old=focusEntryFixture(driver);await old.ready;await old.store.activate('old-synthetic-owner',uuid(1));const original=driver.text;
+ const f=await entry({driver});try{
+  f.page.openFocus(f.task);assert.equal(f.page.focusState.phase,'error');assert.equal(f.page.focusState.errorCode,'FOCUS_SCOPE_MISMATCH');
+  await f.page.retryFocusStorage();assert.equal(driver.text,original);assert.equal(f.page.focusPageOpen,true);assert.equal(f.page.focusEntryTaskId,f.task.task_id);
+  assert.equal(f.page.focusState.phase,'error');assert.equal(f.remote.calls.some(c=>c[0]==='post'),false);
+ }finally{f.page.aboutToDisappear();}
 });
 test('goal reached is only a label at exact/over target; duration is forward elapsed and no end/completion callback fires',()=>{
  const p=panel(),calls=[];p.onEnd=()=>calls.push('end');p.onCompleteTask=()=>calls.push('complete');

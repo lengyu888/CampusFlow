@@ -1,7 +1,8 @@
+import './helpers/theme-fixture.mjs';
 import { focusEntryFixture } from './helpers/focus-entry-fixture.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { stripTypeScriptTypes } from 'node:module';
+import { stripThemeTypeScriptTypes as stripTypeScriptTypes } from './helpers/theme-fixture.mjs';
 import { test } from 'node:test';
 import { TaskStatusController, draftFixture, DraftMemoryDriver, CampusFlowRequestError,
   statusTask, completedTask, completeOperation, restoreOperation, appliedRestore, overlappingRestore,

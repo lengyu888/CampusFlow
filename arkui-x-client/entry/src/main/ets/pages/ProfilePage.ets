@@ -10,6 +10,7 @@ import {
 } from '../model/ApiModels';
 import { CampusFlowApi } from '../services/CampusFlowApi';
 import { AppTheme } from '../theme/AppTheme';
+import { AppThemeId, ThemePalette, themePalette, selectAppTheme } from '../theme/ThemePalette';
 import { AppIcon } from '../components/AppIcon';
 import { FeedbackPanel } from '../components/FeedbackPanel';
 import { CampusFlowRequestError } from '../utils/AgentFeedback';
@@ -18,6 +19,7 @@ import { ReminderState } from '../utils/ReminderCoordinator';
 
 @Component
 export struct ProfilePage {
+  @StorageLink('campusflowThemePalette') private palette: ThemePalette = themePalette('paper-green');
   @StorageLink('reduceMotion') private reduceMotion: boolean = false;
   @Prop baseUrl: string;
   @Prop token: string;
@@ -142,7 +144,7 @@ export struct ProfilePage {
   }
   private toggleGroup(group: string): void {
     const next = group === 'preferences' ? 'data' : group;
-    if (!['account', 'learning', 'model', 'reminders', 'connections', 'data', 'admin'].includes(next) ||
+    if (!['account', 'learning', 'appearance', 'model', 'reminders', 'connections', 'data', 'admin'].includes(next) ||
       next === 'admin' && this.user.role !== 'admin') { return; }
     this.section = this.section === next ? '' : next;
     this.onInnerNavigationChanged(this.section.length > 0 || this.showHduHelpData);
@@ -162,6 +164,7 @@ export struct ProfilePage {
   private sectionTitle(): string {
     if (this.section === 'account') { return '账号与校园'; }
     if (this.section === 'learning') { return '学习偏好'; }
+    if (this.section === 'appearance') { return '外观与动效'; }
     if (this.section === 'model') { return '模型连接'; }
     if (this.section === 'reminders') { return '语音与提醒'; }
     if (this.section === 'connections') { return '校园数据连接'; }
@@ -513,9 +516,9 @@ export struct ProfilePage {
   @Builder
   private field(label: string, value: string, onChange: (value: string) => void, secure: boolean = false) {
     Column({ space: 6 }) {
-      Text(label).fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
+      Text(label).fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
       TextInput({ text: value }).type(secure ? InputType.Password : InputType.Normal)
-        .constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize).backgroundColor(AppTheme.field).borderRadius(AppTheme.controlRadius).enabled(!this.settingsBusy).onChange(onChange)
+        .constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize).backgroundColor(this.palette.field).borderRadius(this.palette.controlRadius).enabled(!this.settingsBusy).onChange(onChange)
     }.width('100%').alignItems(HorizontalAlign.Start)
   }
 
@@ -523,20 +526,20 @@ export struct ProfilePage {
   private dataItem(item: HDUHelpDisplayItem) {
     if (item.label.length > 12 || item.value.length > 22) {
       Column({ space: 5 }) {
-        Text(item.label).fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
+        Text(item.label).fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
         Text(item.value).fontSize(item.emphasis ? 17 : 15)
           .fontWeight(item.emphasis ? FontWeight.Bold : FontWeight.Medium)
-          .fontColor(item.emphasis ? AppTheme.accent : AppTheme.ink)
+          .fontColor(item.emphasis ? this.palette.accent : this.palette.ink)
           .width('100%')
       }.width('100%').alignItems(HorizontalAlign.Start)
-        .padding(11).backgroundColor(AppTheme.field).borderRadius(AppTheme.controlRadius)
+        .padding(11).backgroundColor(this.palette.field).borderRadius(this.palette.controlRadius)
     } else {
       Row() {
-        Text(item.label).fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary)
+        Text(item.label).fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
         Blank()
         Text(item.value).fontSize(item.emphasis ? 17 : 15)
           .fontWeight(item.emphasis ? FontWeight.Bold : FontWeight.Medium)
-          .fontColor(item.emphasis ? AppTheme.accent : AppTheme.ink)
+          .fontColor(item.emphasis ? this.palette.accent : this.palette.ink)
           .constraintSize({ maxWidth: '68%' })
 
       }.width('100%')
@@ -548,23 +551,23 @@ export struct ProfilePage {
     Column() {
       Row({ space: 12 }) {
         Button() {
-          AppIcon({ name: 'back', iconSize: 22, color: AppTheme.accent })
+          AppIcon({ name: 'back', iconSize: 22, color: this.palette.accent })
         }.width(48).constraintSize({ minHeight: 48 })
-          .backgroundColor(AppTheme.surface).borderRadius(22)
+          .backgroundColor(this.palette.surface).borderRadius(22)
           .onClick(() => this.closeHduHelpData())
         Column({ space: 3 }) {
-          Text('我的校园档案').fontSize(23).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
-          Text('由 HDUHelp 同步，助手可按需调用').fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary)
+          Text('我的校园档案').fontSize(23).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
+          Text('由 HDUHelp 同步，助手可按需调用').fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
         }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-        Button('刷新').constraintSize({ minHeight: 48 }).fontSize(AppTheme.metaSize).fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft)
+        Button('刷新').constraintSize({ minHeight: 48 }).fontSize(this.palette.metaSize).fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft)
           .borderRadius(14).onClick(() => this.openHduHelpData())
       }.width('100%').padding({ left: 18, right: 18, top: 18, bottom: 12 })
 
       Scroll() {
         Column({ space: 14 }) {
           if (this.hduHelpDataLoading) {
-            Text('正在整理校园数据…').fontSize(AppTheme.bodySize).fontColor(AppTheme.secondary).width('100%')
-              .padding(AppTheme.cardInset).backgroundColor(AppTheme.surface).borderRadius(20)
+            Text('正在整理校园数据…').fontSize(this.palette.bodySize).fontColor(this.palette.secondary).width('100%')
+              .padding(this.palette.cardInset).backgroundColor(this.palette.surface).borderRadius(20)
           } else if (this.hduHelpDataError.length > 0) {
             FeedbackPanel({ kind: 'error', title: '校园档案未更新', message: this.hduHelpDataError,
               actionLabel: '重试读取', busy: this.hduHelpDataLoading, onAction: () => this.openHduHelpData() })
@@ -573,65 +576,65 @@ export struct ProfilePage {
               FeedbackPanel({ kind: 'info', title: '暂无可展示的校园档案', message: '可返回连接设置，检查 HDUHelp 授权与同步状态。' })
             }
             Column({ space: 7 }) {
-              Text('已连接的数据').fontSize(AppTheme.metaSize).fontWeight(FontWeight.Bold).fontColor(AppTheme.accent).width('100%')
+              Text('已连接的数据').fontSize(this.palette.metaSize).fontWeight(FontWeight.Bold).fontColor(this.palette.accent).width('100%')
               Text(`${this.hduHelpSections.length} 个信息分区`).fontSize(20).fontWeight(FontWeight.Bold)
-                .fontColor(AppTheme.ink).width('100%')
-            }.width('100%').padding(AppTheme.cardInset).backgroundColor(AppTheme.accentSoft).borderRadius(18)
+                .fontColor(this.palette.ink).width('100%')
+            }.width('100%').padding(this.palette.cardInset).backgroundColor(this.palette.accentSoft).borderRadius(18)
 
             ForEach(this.hduHelpSections, (section: HDUHelpDisplaySection) => {
               Column({ space: 10 }) {
                 Row() {
                   Column({ space: 3 }) {
-                    Text(section.title).fontSize(17).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
-                    Text(section.summary).fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary)
+                    Text(section.title).fontSize(17).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
+                    Text(section.summary).fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
                   }.alignItems(HorizontalAlign.Start)
                   Blank()
                   Row() {
-                    AppIcon({ name: 'check', iconSize: 16, color: AppTheme.success })
+                    AppIcon({ name: 'check', iconSize: 16, color: this.palette.success })
                   }.width(28).height(28).justifyContent(FlexAlign.Center)
-                    .backgroundColor(AppTheme.successSoft).borderRadius(10)
+                    .backgroundColor(this.palette.successSoft).borderRadius(10)
                 }.width('100%')
                 ForEach(section.items, (item: HDUHelpDisplayItem) => {
                   this.dataItem(item)
                 }, (item: HDUHelpDisplayItem) => `${section.resource}-${item.label}`)
-              }.width('100%').padding(17).backgroundColor(AppTheme.surface).borderRadius(18)
+              }.width('100%').padding(17).backgroundColor(this.palette.surface).borderRadius(18)
             }, (section: HDUHelpDisplaySection) => section.resource)
 
             if (this.hduHelpSyncErrors.length > 0) {
               Column({ space: 8 }) {
-                Text('暂不可用的数据').fontSize(AppTheme.bodySize).fontWeight(FontWeight.Bold)
-                  .fontColor(AppTheme.danger).width('100%')
+                Text('暂不可用的数据').fontSize(this.palette.bodySize).fontWeight(FontWeight.Bold)
+                  .fontColor(this.palette.danger).width('100%')
                 Text('以下项目需要在 HDUHelp 补充权限或服务授权，其余成功数据已全部展示。')
-                  .fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
+                  .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
                 ForEach(this.hduHelpSyncErrors, (message: string) => {
-                  Text(message).fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%').maxLines(3)
+                  Text(message).fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%').maxLines(3)
 
                 }, (message: string) => message)
-              }.width('100%').padding(17).backgroundColor(AppTheme.bg).borderRadius(18)
+              }.width('100%').padding(17).backgroundColor(this.palette.bg).borderRadius(18)
             }
 
             if (this.hduHelpPrompts.length > 0) {
               Column({ space: 11 }) {
-                Text('问问助手').fontSize(AppTheme.sectionTitle).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink).width('100%')
-                Text('基于已连接的数据继续完成任务').fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
+                Text('问问助手').fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Bold).fontColor(this.palette.ink).width('100%')
+                Text('基于已连接的数据继续完成任务').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
                 ForEach(this.hduHelpPrompts, (suggestion: HDUHelpSuggestedPrompt) => {
                   Button() {
                     Row({ space: 10 }) {
-                      Text(suggestion.title).fontSize(AppTheme.bodySize).fontColor(AppTheme.accent)
+                      Text(suggestion.title).fontSize(this.palette.bodySize).fontColor(this.palette.accent)
                         .layoutWeight(1)
-                      AppIcon({ name: 'chevron', iconSize: 16, color: AppTheme.accent })
+                      AppIcon({ name: 'chevron', iconSize: 16, color: this.palette.accent })
                     }.width('100%')
                   }.width('100%').constraintSize({ minHeight: 48 }).padding({ left: 14, right: 14 })
-                    .backgroundColor(AppTheme.accentSoft).borderRadius(12)
+                    .backgroundColor(this.palette.accentSoft).borderRadius(12)
                     .onClick(() => this.onOpenAgent(suggestion.prompt))
                 }, (suggestion: HDUHelpSuggestedPrompt) => suggestion.prompt_id)
-              }.width('100%').padding(AppTheme.cardInset).backgroundColor(AppTheme.surface).borderRadius(18)
+              }.width('100%').padding(this.palette.cardInset).backgroundColor(this.palette.surface).borderRadius(18)
             }
           }
         }.width('100%').padding({ left: 18, right: 18, bottom: 28 })
       }.layoutWeight(1).width('100%')
     }.width('100%').height('100%').alignItems(HorizontalAlign.Start)
-      .justifyContent(FlexAlign.Start).backgroundColor(AppTheme.bg)
+      .justifyContent(FlexAlign.Start).backgroundColor(this.palette.bg)
   }
 
   @Builder
@@ -640,15 +643,48 @@ export struct ProfilePage {
       Button({ type: ButtonType.Normal }) {
         Row({ space: 12 }) {
           Column({ space: 5 }) {
-            Text(title).fontSize(AppTheme.bodySize).fontWeight(FontWeight.Medium).fontColor(AppTheme.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
-            Text(summary).fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+            Text(title).fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium).fontColor(this.palette.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
+            Text(summary).fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
           }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-          AppIcon({ name: 'chevron', iconSize: 18, color: AppTheme.quiet })
+          AppIcon({ name: 'chevron', iconSize: 18, color: this.palette.quiet })
         }.width('100%')
-      }.width('100%').constraintSize({ minHeight: 76 }).padding(AppTheme.cardInset)
-        .backgroundColor(AppTheme.surface).borderRadius(AppTheme.cardRadius)
+      }.width('100%').constraintSize({ minHeight: 76 }).padding(this.palette.cardInset)
+        .backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
         .accessibilityText(`打开${title}，${summary}`).onClick(() => this.toggleGroup(group))
     }
+  }
+
+  private changeTheme(id: AppThemeId): void {
+    // Appearance only: leave account drafts, selected settings section and navigation intact.
+    selectAppTheme(id);
+  }
+
+  @Builder
+  private themeChoice(id: AppThemeId, label: string, description: string) {
+    Button({ type: ButtonType.Normal }) {
+      Column({ space: 10 }) {
+        Column({ space: 7 }) {
+          Row() {
+            Text('今日安排').fontSize(12).fontColor(themePalette(id).ink)
+            Blank()
+            Row().width(14).height(14).backgroundColor(themePalette(id).accent).borderRadius(7)
+          }.width('100%')
+          Row().width('100%').height(8).backgroundColor(themePalette(id).surface).borderRadius(4)
+          Row().width('72%').height(8).backgroundColor(themePalette(id).accentSoft).borderRadius(4)
+        }.width('100%').padding(12).backgroundColor(themePalette(id).canvas).borderRadius(10)
+          .accessibilityLevel('no')
+        Row({ space: 6 }) {
+          Text(label).fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium).fontColor(this.palette.ink)
+            .layoutWeight(1)
+          if (this.palette.id === id) { AppIcon({ name: 'check', iconSize: 18, color: this.palette.accent }) }
+        }.width('100%')
+        Text(description).fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
+          .wordBreak(WordBreak.BREAK_WORD)
+      }.width('100%').alignItems(HorizontalAlign.Start)
+    }.layoutWeight(1).padding(12).backgroundColor(this.palette.surface)
+      .border({ width: this.palette.id === id ? 2 : 1, color: this.palette.id === id ? this.palette.accent : this.palette.line })
+      .borderRadius(this.palette.cardRadius).accessibilityText(`${label}，${this.palette.id === id ? '当前主题' : '点击切换'}，${description}`)
+      .onClick(() => this.changeTheme(id))
   }
 
   build() {
@@ -656,18 +692,18 @@ export struct ProfilePage {
       Scroll(this.pageScroller) {
         Column({ space: 16 }) {
           Row({ space: 12 }) {
-            Text(this.user.display_name.slice(0, 1)).fontSize(20).fontWeight(FontWeight.Bold).fontColor(AppTheme.accent)
-              .width(48).constraintSize({ minHeight: 48 }).textAlign(TextAlign.Center).backgroundColor(AppTheme.accentSoft).borderRadius(24)
+            Text(this.user.display_name.slice(0, 1)).fontSize(20).fontWeight(FontWeight.Bold).fontColor(this.palette.accent)
+              .width(48).constraintSize({ minHeight: 48 }).textAlign(TextAlign.Center).backgroundColor(this.palette.accentSoft).borderRadius(24)
             Column({ space: 4 }) {
-              Text(this.user.display_name).fontSize(AppTheme.sectionTitle).fontWeight(FontWeight.Medium).fontColor(AppTheme.ink).width('100%')
-              Text(this.user.email).fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%').wordBreak(WordBreak.BREAK_ALL)
+              Text(this.user.display_name).fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Medium).fontColor(this.palette.ink).width('100%')
+              Text(this.user.email).fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%').wordBreak(WordBreak.BREAK_ALL)
             }.alignItems(HorizontalAlign.Start).layoutWeight(1)
           }.width('100%').padding({ top: 8, bottom: 8 })
           if (this.section.length > 0) {
             Row({ space: 10 }) {
-              Button('返回').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize).fontColor(AppTheme.accent)
+              Button('返回').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize).fontColor(this.palette.accent)
                 .backgroundColor(Color.Transparent).onClick(() => this.sectionBack())
-              Text(this.sectionTitle()).fontSize(AppTheme.sectionTitle).fontWeight(FontWeight.Medium).fontColor(AppTheme.ink).layoutWeight(1)
+              Text(this.sectionTitle()).fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Medium).fontColor(this.palette.ink).layoutWeight(1)
             }.width('100%')
           }
           if (this.settingsNeedsCheck) {
@@ -677,145 +713,166 @@ export struct ProfilePage {
           this.groupHeader('account', '账号与校园', this.accountDirty() ? '有未保存修改 · 昵称、学校与数据连接' : '昵称、学校、校区与数据连接')
           if (this.section === 'account') {
             Column({ space: 16 }) {
-              Text(this.accountDirty() ? '有未保存修改，返回仍保留本页输入。' : '当前输入与已保存资料一致。').fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
+              Text(this.accountDirty() ? '有未保存修改，返回仍保留本页输入。' : '当前输入与已保存资料一致。').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
               this.field('昵称', this.displayName, (value) => this.displayName = value)
               this.field('学校', this.school, (value) => this.school = value)
               this.field('校区', this.campus, (value) => this.campus = value)
               this.field('学期', this.semester, (value) => this.semester = value)
               Text('这里保存校园资料；录入课程、导入和订阅请进入课表维护。')
-                .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+                .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
               if (this.profileMessage.length > 0) {
                 FeedbackPanel({ kind: this.profileError ? 'error' : 'info', title: '账号资料', message: this.profileMessage })
               }
               Button(this.settingsBusy ? '正在保存…' : '保存账号与校园').width('100%').constraintSize({ minHeight: 48 })
-                .fontSize(AppTheme.bodySize).fontColor(AppTheme.onAccent).backgroundColor(AppTheme.accent).borderRadius(AppTheme.controlRadius)
+                .fontSize(this.palette.bodySize).fontColor(this.palette.onAccent).backgroundColor(this.palette.accent).borderRadius(this.palette.controlRadius)
                 .enabled(!this.settingsBusy && !this.settingsNeedsCheck).onClick(() => this.saveProfile())
-              Button('课表维护').width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
-                .fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft).borderRadius(AppTheme.controlRadius)
+              Button('课表维护').width('100%').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
+                .fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft).borderRadius(this.palette.controlRadius)
                 .onClick(() => this.onOpenTimetable())
-            }.width('100%').padding(AppTheme.cardInset).backgroundColor(AppTheme.surface).borderRadius(AppTheme.cardRadius)
+            }.width('100%').padding(this.palette.cardInset).backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
           }
           this.groupHeader('learning', '学习偏好', '单次时长、休息与每日安排目标')
           LearningPreferencesPanel({ baseUrl: this.baseUrl, token: this.token, userId: this.user.user_id, active: this.active && this.section === 'learning' && !this.showHduHelpData })
             .visibility(this.section === 'learning' ? Visibility.Visible : Visibility.None)
+          this.groupHeader('appearance', '外观与动效', `${this.palette.name} · 本机偏好`)
+          if (this.section === 'appearance') {
+            Column({ space: 16 }) {
+              Text('选择喜欢的外观').fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Medium)
+                .fontColor(this.palette.ink).width('100%')
+              Text('即时生效并保存在本机。不改变账号、课表、对话或未保存的输入。')
+                .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
+              Row({ space: 12 }) {
+                this.themeChoice('ios-blue', '清透蓝', '轻盈明亮，清晰聚焦')
+                this.themeChoice('paper-green', '纸页绿', '温和纸色，安静阅读')
+              }.width('100%').alignItems(VerticalAlign.Top)
+              Row({ space: 12 }) {
+                Column({ space: 4 }) {
+                  Text('减少动态效果').fontSize(this.palette.bodySize).fontColor(this.palette.ink)
+                  Text('简化页面切换与交互动画').fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
+                }.alignItems(HorizontalAlign.Start).layoutWeight(1)
+                Toggle({ type: ToggleType.Switch, isOn: this.reduceMotion }).selectedColor(this.palette.success)
+                  .onChange((value: boolean) => this.reduceMotion = value).accessibilityText('减少动态效果')
+              }.width('100%').constraintSize({ minHeight: 48 })
+            }.width('100%').padding(this.palette.cardInset).backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
+          }
           this.groupHeader('reminders', '语音与提醒', '语音使用方式与本机系统通知')
           if (this.section === 'reminders') {
             Column({ space: 12 }) {
               Text('语音在助手输入框中开启。首次使用会请求麦克风及识别所需权限；识别文字先核对，再由你发送。回答播报可随时停止。')
-                .fontSize(AppTheme.bodySize).fontColor(AppTheme.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
-              Text('识别和播报是否可用，以设备实际支持和权限状态为准。').fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
+                .fontSize(this.palette.bodySize).fontColor(this.palette.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
+              Text('识别和播报是否可用，以设备实际支持和权限状态为准。').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
               Text('仅对已确认、设置了具体时间和提前分钟数的未完成任务安排提醒。锁屏只显示通用提示，不显示任务内容。')
-                .fontSize(AppTheme.bodySize).fontColor(AppTheme.quiet).width('100%')
+                .fontSize(this.palette.bodySize).fontColor(this.palette.quiet).width('100%')
               FeedbackPanel({ kind: this.reminderState.phase === 'error' ? 'error' : this.reminderBusy() ? 'loading' : 'info',
                 title: this.reminderState.enabled ? '本机提醒已启用' : '本机提醒状态', message: this.reminderState.message })
               Text(`系统接受 ${this.reminderState.scheduled} 项；${this.reminderState.skipped} 项因无具体提醒时间、已过期或超出一年范围未安排。`)
-                .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+                .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
               if (this.reminderState.limited) {
                 Text('仅安排系统容量内的近期提醒，最多 60 项，部分系统上限更低。重新打开应用或刷新核对时更新后续提醒。')
-                  .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+                  .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
               }
               Text('系统接受不等于已送达；通知设置、省电和系统调度可能影响提醒。退出账号会尝试清理本机提醒，后台切换不会取消。')
-                .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+                .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
               if (!this.reminderState.enabled) {
-                Button('请求通知权限并启用提醒').width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
-                  .fontColor(AppTheme.onAccent).backgroundColor(AppTheme.accent).borderRadius(AppTheme.controlRadius)
+                Button('请求通知权限并启用提醒').width('100%').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
+                  .fontColor(this.palette.onAccent).backgroundColor(this.palette.accent).borderRadius(this.palette.controlRadius)
                   .enabled(!this.reminderBusy()).onClick(() => this.onEnableReminders())
               }
-              Button('刷新核对').width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
-                .fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft).borderRadius(AppTheme.controlRadius)
+              Button('刷新核对').width('100%').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
+                .fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft).borderRadius(this.palette.controlRadius)
                 .enabled(!this.reminderBusy()).onClick(() => this.onRefreshReminders())
-              Button('关闭并清理本机提醒').width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
-                .fontColor(AppTheme.danger).backgroundColor(AppTheme.dangerSoft).borderRadius(AppTheme.controlRadius)
+              Button('关闭并清理本机提醒').width('100%').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
+                .fontColor(this.palette.danger).backgroundColor(this.palette.dangerSoft).borderRadius(this.palette.controlRadius)
                 .enabled(!this.reminderBusy()).onClick(() => this.onDisableReminders())
-            }.width('100%').padding(AppTheme.cardInset).backgroundColor(AppTheme.surface).borderRadius(AppTheme.cardRadius)
+            }.width('100%').padding(this.palette.cardInset).backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
           }
           this.groupHeader('model', '模型连接', this.newApiKey.length > 0 ? '有新密钥尚未保存' : `当前密钥 ${this.user.api_key_hint ?? '未配置'}`)
           if (this.section === 'model') {
             Column({ space: 16 }) {
-              Text(this.newApiKey.length > 0 ? '新密钥尚未保存。' : '留空保留现有连接。').fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
+              Text(this.newApiKey.length > 0 ? '新密钥尚未保存。' : '留空保留现有连接。').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
               this.field('新的 DeepSeek API Key', this.newApiKey, (value) => this.newApiKey = value, true)
               Text('留空保留现有密钥。保存模型配置不会提交账号与校园的未保存草稿。')
-                .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+                .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
               if (this.modelMessage.length > 0) {
                 FeedbackPanel({ kind: this.modelError ? 'error' : 'info', title: '模型配置', message: this.modelMessage })
               }
               Button(this.settingsBusy ? '正在保存…' : '保存新密钥').width('100%').constraintSize({ minHeight: 48 })
-                .fontSize(AppTheme.bodySize).fontColor(AppTheme.onAccent).backgroundColor(AppTheme.accent).borderRadius(AppTheme.controlRadius)
+                .fontSize(this.palette.bodySize).fontColor(this.palette.onAccent).backgroundColor(this.palette.accent).borderRadius(this.palette.controlRadius)
                 .enabled(!this.settingsBusy && !this.settingsNeedsCheck).onClick(() => this.saveModel())
-            }.width('100%').padding(AppTheme.cardInset).backgroundColor(AppTheme.surface).borderRadius(AppTheme.cardRadius)
+            }.width('100%').padding(this.palette.cardInset).backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
           }
           this.groupHeader('connections', '数据连接', 'HDUHelp 校园数据与课表订阅')
           if (this.section === 'connections') {
         Column({ space: 12 }) {
           Row() {
             Column({ space: 4 }) {
-              Text('HDUHelp 校园档案').fontSize(17).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
-              Text('PAT 加密保存，也支持官方 OAuth；不提交杭电密码').fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary)
+              Text('HDUHelp 校园档案').fontSize(17).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
+              Text('PAT 加密保存，也支持官方 OAuth；不提交杭电密码').fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
             }.alignItems(HorizontalAlign.Start).layoutWeight(1)
             Blank()
-            Text(!this.hduHelpLoaded ? '状态待核对' : this.hduHelp.configured ? '已连接' : '未连接').fontSize(AppTheme.metaSize)
-              .fontColor(this.hduHelp.configured ? AppTheme.success : AppTheme.muted)
+            Text(!this.hduHelpLoaded ? '状态待核对' : this.hduHelp.configured ? '已连接' : '未连接').fontSize(this.palette.metaSize)
+              .fontColor(this.hduHelp.configured ? this.palette.success : this.palette.muted)
           }.width('100%')
           if (this.hduHelpBusy) {
             FeedbackPanel({ kind: 'loading', title: '正在核对校园连接', message: '请稍候，连接操作不会重复提交。' })
           }
-          Button('刷新连接状态').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
-            .fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft).enabled(!this.hduHelpBusy)
+          Button('刷新连接状态').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
+            .fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft).enabled(!this.hduHelpBusy)
             .onClick(() => this.loadHduHelp())
           if (this.confirmDisconnect) {
-            Text('确认断开后，将删除服务端同步的校园数据。').fontSize(AppTheme.metaSize).fontColor(AppTheme.danger).width('100%')
-            Button('保留连接').constraintSize({ minHeight: 48 }).fontColor(AppTheme.accent)
-              .backgroundColor(AppTheme.accentSoft).enabled(!this.hduHelpBusy).onClick(() => this.confirmDisconnect = false)
+            Text('确认断开后，将删除服务端同步的校园数据。').fontSize(this.palette.metaSize).fontColor(this.palette.danger).width('100%')
+            Button('保留连接').constraintSize({ minHeight: 48 }).fontColor(this.palette.accent)
+              .backgroundColor(this.palette.accentSoft).enabled(!this.hduHelpBusy).onClick(() => this.confirmDisconnect = false)
           }
           if (this.hduHelpMessage.length > 0) {
-            Text(this.hduHelpMessage).fontSize(AppTheme.metaSize)
-              .fontColor(this.hduHelpMessageIsError ? AppTheme.danger : AppTheme.accent)
+            Text(this.hduHelpMessage).fontSize(this.palette.metaSize)
+              .fontColor(this.hduHelpMessageIsError ? this.palette.danger : this.palette.accent)
               .width('100%').padding(11)
-              .backgroundColor(this.hduHelpMessageIsError ? AppTheme.bg : AppTheme.accentSoft)
+              .backgroundColor(this.hduHelpMessageIsError ? this.palette.bg : this.palette.accentSoft)
               .borderRadius(12)
           }
           if (this.hduHelp.configured) {
             Column({ space: 3 }) {
               Text(`${this.hduHelp.auth_mode === 'pat' ? `个人令牌 ${this.hduHelp.token_hint ?? ''}` : '官方 OAuth'} · ${this.hduHelp.external_name ?? '当前用户'}`)
-                .fontSize(AppTheme.bodySize).fontColor(AppTheme.accent).width('100%')
+                .fontSize(this.palette.bodySize).fontColor(this.palette.accent).width('100%')
 
               Text(`${this.hduHelp.resources.length} 类校园数据可供助手使用`)
-                .fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
-            }.width('100%').padding(12).backgroundColor(AppTheme.accentSoft).borderRadius(AppTheme.controlRadius)
+                .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
+            }.width('100%').padding(12).backgroundColor(this.palette.accentSoft).borderRadius(this.palette.controlRadius)
             Row({ space: 9 }) {
-              Button('同步数据').layoutWeight(1).constraintSize({ minHeight: 48 }).fontColor(AppTheme.onAccent).backgroundColor(AppTheme.accent)
-                .borderRadius(AppTheme.controlRadius).enabled(this.hduHelpLoaded && !this.hduHelpBusy).onClick(() => this.syncHduHelp())
-              Button(this.confirmDisconnect ? '确认断开并删除' : '断开并删除').layoutWeight(1).constraintSize({ minHeight: 48 }).fontColor(AppTheme.danger).backgroundColor(AppTheme.bg)
-                .borderRadius(AppTheme.controlRadius).enabled(this.hduHelpLoaded && !this.hduHelpBusy && !this.hduHelpDataLoading).onClick(() => this.disconnectHduHelp())
+              Button('同步数据').layoutWeight(1).constraintSize({ minHeight: 48 }).fontColor(this.palette.onAccent).backgroundColor(this.palette.accent)
+                .borderRadius(this.palette.controlRadius).enabled(this.hduHelpLoaded && !this.hduHelpBusy).onClick(() => this.syncHduHelp())
+              Button(this.confirmDisconnect ? '确认断开并删除' : '断开并删除').layoutWeight(1).constraintSize({ minHeight: 48 }).fontColor(this.palette.danger).backgroundColor(this.palette.bg)
+                .borderRadius(this.palette.controlRadius).enabled(this.hduHelpLoaded && !this.hduHelpBusy && !this.hduHelpDataLoading).onClick(() => this.disconnectHduHelp())
             }.width('100%')
-            Button('查看校园档案与推荐问题').width('100%').constraintSize({ minHeight: 48 }).fontColor(AppTheme.accent)
-              .backgroundColor(AppTheme.accentSoft).borderRadius(AppTheme.controlRadius).enabled(!this.hduHelpBusy && !this.hduHelpDataLoading).onClick(() => this.openHduHelpData())
+            Button('查看校园档案与推荐问题').width('100%').constraintSize({ minHeight: 48 }).fontColor(this.palette.accent)
+              .backgroundColor(this.palette.accentSoft).borderRadius(this.palette.controlRadius).enabled(!this.hduHelpBusy && !this.hduHelpDataLoading).onClick(() => this.openHduHelpData())
           } else {
-            Text('HDUHelp 个人访问令牌').fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+            Text('HDUHelp 个人访问令牌').fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
             TextInput({ text: this.hduHelpPat, placeholder: 'hduhelp_pat_…' }).type(InputType.Password)
-              .constraintSize({ minHeight: 48 }).backgroundColor(AppTheme.field).borderRadius(AppTheme.controlRadius)
+              .constraintSize({ minHeight: 48 }).backgroundColor(this.palette.field).borderRadius(this.palette.controlRadius)
               .enabled(!this.hduHelpBusy).onChange((value) => this.hduHelpPat = value)
-            Text('令牌发送到当前配置的行简服务端，并加密保存。').fontSize(AppTheme.metaSize)
-              .fontColor(AppTheme.secondary).width('100%')
-            Button('使用令牌连接并同步').width('100%').constraintSize({ minHeight: 48 }).fontColor(AppTheme.onAccent)
-              .backgroundColor(AppTheme.accent).borderRadius(AppTheme.controlRadius).enabled(this.hduHelpLoaded && !this.hduHelpBusy && !this.hduHelpDataLoading).onClick(() => this.connectHduHelpPat())
-            Button('或使用官方 OAuth').width('100%').constraintSize({ minHeight: 48 }).fontColor(AppTheme.accent)
-              .backgroundColor(AppTheme.accentSoft).borderRadius(AppTheme.controlRadius).enabled(this.hduHelpLoaded && !this.hduHelpBusy && !this.hduHelpDataLoading).onClick(() => this.connectHduHelp())
+            Text('令牌发送到当前配置的行简服务端，并加密保存。').fontSize(this.palette.metaSize)
+              .fontColor(this.palette.secondary).width('100%')
+            Button('使用令牌连接并同步').width('100%').constraintSize({ minHeight: 48 }).fontColor(this.palette.onAccent)
+              .backgroundColor(this.palette.accent).borderRadius(this.palette.controlRadius).enabled(this.hduHelpLoaded && !this.hduHelpBusy && !this.hduHelpDataLoading).onClick(() => this.connectHduHelpPat())
+            Button('或使用官方 OAuth').width('100%').constraintSize({ minHeight: 48 }).fontColor(this.palette.accent)
+              .backgroundColor(this.palette.accentSoft).borderRadius(this.palette.controlRadius).enabled(this.hduHelpLoaded && !this.hduHelpBusy && !this.hduHelpDataLoading).onClick(() => this.connectHduHelp())
             if (this.hduHelpAuthorizeUrl.length > 0) {
               Hyperlink(this.hduHelpAuthorizeUrl, '打开 HDUHelp 官方授权页 ↗')
-                .color(AppTheme.accent).width('100%')
-              Button('我已授权，检查连接').width('100%').constraintSize({ minHeight: 48 }).fontColor(AppTheme.accent)
-                .backgroundColor(AppTheme.accentSoft).borderRadius(AppTheme.controlRadius).enabled(!this.hduHelpBusy && !this.hduHelpDataLoading).onClick(() => this.loadHduHelp())
+                .color(this.palette.accent).width('100%')
+              Button('我已授权，检查连接').width('100%').constraintSize({ minHeight: 48 }).fontColor(this.palette.accent)
+                .backgroundColor(this.palette.accentSoft).borderRadius(this.palette.controlRadius).enabled(!this.hduHelpBusy && !this.hduHelpDataLoading).onClick(() => this.loadHduHelp())
             }
           }
-        }.width('100%').padding(AppTheme.cardInset).backgroundColor(AppTheme.surface).borderRadius(18)
+        }.width('100%').padding(this.palette.cardInset).backgroundColor(this.palette.surface).borderRadius(18)
 
         Column({ space: 12 }) {
           Row() {
-            Text('课表订阅').fontSize(17).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
+            Text('课表订阅').fontSize(17).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
             Blank()
             Text(!this.subscriptionLoaded ? '状态待核对' : this.subscription.configured ? `${this.subscription.event_count} 节` : '未连接')
-              .fontSize(AppTheme.metaSize).fontColor(this.subscription.configured ? AppTheme.success : AppTheme.muted)
+              .fontSize(this.palette.metaSize).fontColor(this.subscription.configured ? this.palette.success : this.palette.muted)
           }.width('100%')
           if (this.subscriptionLoading) {
             FeedbackPanel({ kind: 'loading', title: '正在读取订阅状态' })
@@ -823,69 +880,69 @@ export struct ProfilePage {
           if (this.message.length > 0) {
             FeedbackPanel({ kind: this.subscriptionError ? 'error' : 'info', title: '课表订阅', message: this.message })
           }
-          Button('刷新订阅状态').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
-            .fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft)
+          Button('刷新订阅状态').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
+            .fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft)
             .enabled(!this.subscriptionBusy && !this.subscriptionLoading).onClick(() => this.loadSubscription())
-          Text('订阅链接').fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+          Text('订阅链接').fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
           TextInput({ text: this.scheduleUrl, placeholder: '粘贴 HDUHelp 订阅链接' }).constraintSize({ minHeight: 48 })
-            .backgroundColor(AppTheme.field).borderRadius(AppTheme.controlRadius).enabled(!this.subscriptionBusy)
+            .backgroundColor(this.palette.field).borderRadius(this.palette.controlRadius).enabled(!this.subscriptionBusy)
             .onChange((value) => this.scheduleUrl = value)
           Row({ space: 9 }) {
             Button(this.subscriptionBusy ? '处理中…' : '连接新课表').layoutWeight(1).constraintSize({ minHeight: 48 })
-              .fontColor(AppTheme.onAccent).backgroundColor(AppTheme.accent).enabled(!this.subscriptionBusy)
-              .borderRadius(AppTheme.controlRadius).onClick(() => this.saveSubscription())
+              .fontColor(this.palette.onAccent).backgroundColor(this.palette.accent).enabled(!this.subscriptionBusy)
+              .borderRadius(this.palette.controlRadius).onClick(() => this.saveSubscription())
             if (this.subscription.configured) {
-              Button('立即同步').layoutWeight(1).constraintSize({ minHeight: 48 }).fontColor(AppTheme.accent)
-                .backgroundColor(AppTheme.accentSoft).enabled(!this.subscriptionBusy)
-                .borderRadius(AppTheme.controlRadius).onClick(() => this.syncSubscription())
+              Button('立即同步').layoutWeight(1).constraintSize({ minHeight: 48 }).fontColor(this.palette.accent)
+                .backgroundColor(this.palette.accentSoft).enabled(!this.subscriptionBusy)
+                .borderRadius(this.palette.controlRadius).onClick(() => this.syncSubscription())
             }
           }.width('100%')
           if (this.timetableUpdated || this.subscriptionNeedsCheck) {
             Text(this.subscriptionNeedsCheck ? '本次同步结果尚未确认，请先核对课表再重试。' :
               '课表已更新，去计划核对冲突。已有任务的时间不会自动改变。')
-              .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%').wordBreak(WordBreak.BREAK_WORD)
+              .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%').wordBreak(WordBreak.BREAK_WORD)
             Button(this.subscriptionNeedsCheck ? '先查看当前课表' : '去计划核对冲突').width('100%').constraintSize({ minHeight: 48 })
-              .fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft)
-              .enabled(!this.subscriptionBusy).borderRadius(AppTheme.controlRadius).onClick(() => { if (this.subscriptionNeedsCheck) { this.onOpenTimetable(); } else { this.onOpenPlan(); } })
+              .fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft)
+              .enabled(!this.subscriptionBusy).borderRadius(this.palette.controlRadius).onClick(() => { if (this.subscriptionNeedsCheck) { this.onOpenTimetable(); } else { this.onOpenPlan(); } })
           }
-        }.width('100%').padding(AppTheme.cardInset).backgroundColor(AppTheme.surface).borderRadius(18)
+        }.width('100%').padding(this.palette.cardInset).backgroundColor(this.palette.surface).borderRadius(18)
 
           }
           this.groupHeader('data', '历史与数据', '会话历史、本机草稿与应用偏好')
           if (this.section === 'data') {
             Column({ space: 16 }) {
-              Button('打开会话历史').width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
-                .fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft).onClick(() => this.onOpenHistory())
+              Button('打开会话历史').width('100%').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
+                .fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft).onClick(() => this.onOpenHistory())
               Row({ space: 12 }) {
                 Column({ space: 4 }) {
-                  Text('减少动态效果').fontSize(AppTheme.bodySize).fontColor(AppTheme.ink)
-                  Text('简化页面切换与交互动画').fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet)
+                  Text('减少动态效果').fontSize(this.palette.bodySize).fontColor(this.palette.ink)
+                  Text('简化页面切换与交互动画').fontSize(this.palette.metaSize).fontColor(this.palette.quiet)
                 }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-                Toggle({ type: ToggleType.Switch, isOn: this.reduceMotion }).selectedColor(AppTheme.success)
+                Toggle({ type: ToggleType.Switch, isOn: this.reduceMotion }).selectedColor(this.palette.success)
                   .onChange((value: boolean) => this.reduceMotion = value).accessibilityText('减少动态效果')
               }.width('100%').constraintSize({ minHeight: 48 })
-              Text('本机草稿').fontSize(AppTheme.bodySize).fontColor(AppTheme.ink).width('100%')
+              Text('本机草稿').fontSize(this.palette.bodySize).fontColor(this.palette.ink).width('100%')
               Text(this.draftNotice || '未提交的输入只保存在这台设备。退出账号会清除，不包含密码或模型凭据。')
-                .fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+                .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
               if (this.draftClearConfirm) {
                 Text('确定清除本机未提交草稿？账号内已经保存的安排不受影响。')
-                  .fontSize(AppTheme.bodySize).fontColor(AppTheme.warning).width('100%')
+                  .fontSize(this.palette.bodySize).fontColor(this.palette.warning).width('100%')
                 Button('保留草稿').constraintSize({ minHeight: 48 }).onClick(() => this.onCancelClearDrafts())
               }
               Button(this.draftClearConfirm ? '确认清除本机草稿' : '清除本机草稿')
-                .width('100%').constraintSize({ minHeight: 48 }).fontColor(AppTheme.danger)
-                .backgroundColor(AppTheme.dangerSoft).enabled(!this.draftCleanupBusy).onClick(() => this.onClearDrafts())
-              Text('当前服务地址').fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
-              Text(this.baseUrl).fontSize(AppTheme.bodySize).fontColor(AppTheme.ink).width('100%').wordBreak(WordBreak.BREAK_ALL)
-            }.width('100%').padding(AppTheme.cardInset).backgroundColor(AppTheme.surface).borderRadius(AppTheme.cardRadius)
+                .width('100%').constraintSize({ minHeight: 48 }).fontColor(this.palette.danger)
+                .backgroundColor(this.palette.dangerSoft).enabled(!this.draftCleanupBusy).onClick(() => this.onClearDrafts())
+              Text('当前服务地址').fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
+              Text(this.baseUrl).fontSize(this.palette.bodySize).fontColor(this.palette.ink).width('100%').wordBreak(WordBreak.BREAK_ALL)
+            }.width('100%').padding(this.palette.cardInset).backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
           }
           if (this.user.role === 'admin') { this.groupHeader('admin', '用户管理', '管理员可查看的账号摘要') }
         if (this.user.role === 'admin' && this.section === 'admin') {
           Column({ space: 12 }) {
             Row() {
-              Text('用户管理').fontSize(17).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
+              Text('用户管理').fontSize(17).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
               Blank()
-              Text(`${this.adminUsers.length} 人`).fontSize(AppTheme.metaSize).fontColor(AppTheme.accent)
+              Text(`${this.adminUsers.length} 人`).fontSize(this.palette.metaSize).fontColor(this.palette.accent)
             }.width('100%')
             if (this.adminLoading) { FeedbackPanel({ kind: 'loading', title: '正在读取用户列表' }) }
             if (this.adminMessage.length > 0) {
@@ -894,35 +951,35 @@ export struct ProfilePage {
             }
             ForEach(this.adminUsers, (account: AdminUserSummary) => {
               Row({ space: 11 }) {
-                Text(account.display_name.slice(0, 1)).fontSize(AppTheme.bodySize).fontWeight(FontWeight.Bold)
-                  .fontColor(AppTheme.accent).width(36).height(36).textAlign(TextAlign.Center)
-                  .backgroundColor(AppTheme.accentSoft).borderRadius(12)
+                Text(account.display_name.slice(0, 1)).fontSize(this.palette.bodySize).fontWeight(FontWeight.Bold)
+                  .fontColor(this.palette.accent).width(36).height(36).textAlign(TextAlign.Center)
+                  .backgroundColor(this.palette.accentSoft).borderRadius(12)
                 Column({ space: 3 }) {
                   Row({ space: 6 }) {
-                    Text(account.display_name).fontSize(AppTheme.bodySize).fontWeight(FontWeight.Medium).fontColor(AppTheme.ink)
+                    Text(account.display_name).fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium).fontColor(this.palette.ink)
                     if (account.role === 'admin') {
-                      Text('管理员').fontSize(AppTheme.metaSize).fontColor(AppTheme.onAccent).backgroundColor(AppTheme.accent)
+                      Text('管理员').fontSize(this.palette.metaSize).fontColor(this.palette.onAccent).backgroundColor(this.palette.accent)
                         .padding({ left: 5, right: 5, top: 2, bottom: 2 }).borderRadius(7)
                     }
                   }
-                  Text(account.email).fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary)
+                  Text(account.email).fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
 
                   Text(`${account.timetable_count} 节课 · ${account.campus_place_count} 个地点 · ${account.api_key_configured ? '凭据已配置' : '凭据未配置'}`)
-                    .fontSize(AppTheme.metaSize).fontColor(AppTheme.muted)
+                    .fontSize(this.palette.metaSize).fontColor(this.palette.muted)
                 }.alignItems(HorizontalAlign.Start).layoutWeight(1)
               }.width('100%')
             }, (account: AdminUserSummary) => account.user_id)
-          }.width('100%').padding(AppTheme.cardInset).backgroundColor(AppTheme.surface).borderRadius(18)
+          }.width('100%').padding(this.palette.cardInset).backgroundColor(this.palette.surface).borderRadius(18)
         }
 
           if (this.section === 'data') {
-          Button('退出登录').width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
-            .fontColor(AppTheme.danger).backgroundColor(AppTheme.dangerSoft).borderRadius(AppTheme.controlRadius)
+          Button('退出登录').width('100%').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
+            .fontColor(this.palette.danger).backgroundColor(this.palette.dangerSoft).borderRadius(this.palette.controlRadius)
             .onClick(() => this.onLogout())
           }
         }.width('100%').alignItems(HorizontalAlign.Start)
-          .padding({ left: AppTheme.pageInset, right: AppTheme.pageInset, top: 16, bottom: 24 })
-      }.width('100%').height('100%').backgroundColor(AppTheme.canvas)
+          .padding({ left: this.palette.pageInset, right: this.palette.pageInset, top: 16, bottom: 24 })
+      }.width('100%').height('100%').backgroundColor(this.palette.canvas)
         .visibility(this.showHduHelpData ? Visibility.Hidden : Visibility.Visible)
       if (this.showHduHelpData) { this.hduHelpDataView() }
     }.width('100%').height('100%')

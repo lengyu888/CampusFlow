@@ -2,6 +2,8 @@
 
 import asyncio
 import json
+from contextlib import asynccontextmanager
+from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
@@ -9,6 +11,7 @@ from cryptography.fernet import Fernet
 from httpx import ASGITransport, AsyncClient, Request, Response
 from openai import AuthenticationError, RateLimitError
 
+from campusflow_agent import run_service as run_service_module
 from campusflow_agent.accounts import AccountStore
 from campusflow_agent.agent import AgentBudgetExceeded, AgentReply
 from campusflow_agent.api import create_app
@@ -172,33 +175,88 @@ async def test_failure_is_safe_and_partial_is_not_full_history(scene, failure, s
     await service.shutdown()
 
 
-async def test_whole_run_deadline_stops_wait_and_no_more_steps(scene, monkeypatch):
+@pytest.mark.parametrize("stage", ["before_tool_start", "tool_wait"])
+async def test_whole_run_deadline_stops_wait_and_no_more_steps(scene, monkeypatch, stage):
     service, store, runtime = scene
     service.settings.agent_timeout_seconds = 0.025
-    deadline = asyncio.Timeout(None)
-    requested_delays = []
+    deadline = None
+    before_tool_start = asyncio.Event()
+    continue_to_tool = asyncio.Event()
+    stage_task = None
+    original_emit = service._emit
 
-    def controlled_deadline(delay):
-        requested_delays.append(delay)
-        return deadline
+    @asynccontextmanager
+    async def controlled_timeout(seconds):
+        nonlocal deadline
+        assert seconds == 0.025
+        async with asyncio.timeout(seconds) as timeout:
+            # Keep real timeout cancellation; let SQLite reach the chosen stage before expiry.
+            timeout.reschedule(None)
+            deadline = timeout
+            yield timeout
 
-    # Keep asyncio's real timeout/cancellation path, but make the point of expiry
-    # explicit. A Windows SQLite commit need not finish within 25 milliseconds.
-    monkeypatch.setattr("campusflow_agent.run_service.asyncio.timeout", controlled_deadline)
+    async def emit(user_id, run_id, kind, data):
+        if stage == "before_tool_start" and kind == "tool_start":
+            before_tool_start.set()
+            await continue_to_tool.wait()
+        await original_emit(user_id, run_id, kind, data)
+
+    # Patch only RunService's module reference, leaving the test's safety timeout independent.
+    monkeypatch.setattr(
+        run_service_module,
+        "asyncio",
+        SimpleNamespace(**(vars(asyncio) | {"timeout": controlled_timeout})),
+    )
+    monkeypatch.setattr(service, "_emit", emit)
     try:
-        run = service.start("u", request(), "private-test-provider-value")
-        await asyncio.wait_for(runtime.started.wait(), timeout=5)
-        assert requested_delays == [0.025]
-        deadline.reschedule(asyncio.get_running_loop().time())
-        final = await settle(service, run.run_id)
-        assert deadline.expired()
-        assert final.status == "timed_out" and final.error_code == "RUN_TIMEOUT"
-        assert final.result is None and final.partial_answer == "部分回答"
-        assert len(final.tool_progress) == 1 and final.tool_progress[0].state == "running"
-        assert not runtime.release.is_set() and runtime.calls == 1
-        assert store.get_history("u", "session") == []
+        async with asyncio.timeout(5):
+            run = service.start("u", request(), "private-test-provider-value")
+            ready = before_tool_start if stage == "before_tool_start" else runtime.started
+            stage_task = asyncio.create_task(ready.wait())
+            done, _ = await asyncio.wait(
+                {stage_task, service.tasks[run.run_id]}, return_when=asyncio.FIRST_COMPLETED
+            )
+            assert stage_task in done, "run ended before reaching the requested timeout stage"
+            assert deadline is not None and not deadline.expired()
+            assert service.get("u", run.run_id).status == "running"
+            deadline.reschedule(asyncio.get_running_loop().time())
+            final = await settle(service, run.run_id)
+
+            assert deadline.expired()
+            assert final.status == "timed_out" and final.error_code == "RUN_TIMEOUT"
+            assert final.partial_answer == "部分回答" and final.result is None
+            assert final.model_calls == 1 and runtime.calls == 1
+            assert store.get_history("u", "session") == []
+            if stage == "before_tool_start":
+                assert not runtime.started.is_set()
+                assert final.tool_progress == [] and final.tool_calls == 0
+            else:
+                assert runtime.started.is_set()
+                assert len(final.tool_progress) == 1 and final.tool_calls == 1
+                assert final.tool_progress[0].call_id == "c1"
+                assert final.tool_progress[0].state == "running"
+
+            terminal = service.events("u", run.run_id, 0)
+            expected_kinds = ["status", "status", "model_start", "answer_reset", "answer_delta"]
+            if stage == "tool_wait":
+                expected_kinds.append("tool_start")
+            assert [event.kind for event in terminal.events] == [*expected_kinds, "status"]
+            assert terminal.events[-1].data == {"status": "timed_out"}
+            runtime.release.set()
+            continue_to_tool.set()
+            await asyncio.sleep(0)
+            assert service.events("u", run.run_id, 0) == terminal
+            assert service.get("u", run.run_id) == final
+            assert store.get_history("u", "session") == []
     finally:
+        runtime.release.set()
+        continue_to_tool.set()
+        if stage_task is not None:
+            stage_task.cancel()
+            await asyncio.gather(stage_task, return_exceptions=True)
         await service.shutdown()
+        service.connection.close()
+        store._campus_data._connection.close()
 
 
 async def test_deadline_before_first_tool_does_not_invent_progress(scene):

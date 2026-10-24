@@ -1,3 +1,4 @@
+import asyncio
 import json
 from datetime import UTC, datetime
 from types import SimpleNamespace
@@ -226,3 +227,69 @@ async def test_legacy_direct_route_obeys_caller_owned_history_commit(monkeypatch
         persist_history=False,
     )
     assert reply.message == "路线估算"
+
+
+@pytest.mark.asyncio
+async def test_user_message_is_persisted_before_model_reply() -> None:
+    store = CampusStore()
+    service = AgentService(Settings(app_env="test"), store)
+    history_when_model_ran: list[list[str]] = []
+
+    class FakeGraph:
+        async def ainvoke(self, payload: dict) -> dict:
+            history_when_model_ran.append(
+                [item.role for item in store.get_history("student-001", "pending-session")]
+            )
+            return {"messages": [AIMessage(content="已收到，正在安排。")]}
+
+    service._build_graph = lambda **kwargs: FakeGraph()  # type: ignore[method-assign]
+
+    reply = await service.chat(
+        user_id="student-001",
+        session_id="pending-session",
+        api_key="test-key",
+        model_name="deepseek-v4-pro",
+        message="帮我安排今天的复习",
+    )
+
+    # 模型开始工作时，用户提问已经可在历史目录中查询到。
+    assert history_when_model_ran == [["user"]]
+    assert store.list_sessions("student-001")[0].status == "active"
+    assert reply.message == "已收到，正在安排。"
+    assert [item.role for item in store.get_history("student-001", "pending-session")] == [
+        "user",
+        "assistant",
+    ]
+
+
+@pytest.mark.parametrize("persist_history", [False, True])
+@pytest.mark.parametrize("failure_type", [RuntimeError, asyncio.CancelledError])
+async def test_legacy_failed_chat_only_closes_history_when_it_owns_commit(
+    monkeypatch, persist_history, failure_type
+):
+    store = CampusStore()
+    service = AgentService(Settings(_env_file=None, app_env="test"), store)
+
+    async def invoke(value):
+        raise failure_type("offline failure")
+
+    monkeypatch.setattr(service, "_build_graph", lambda **kwargs: SimpleNamespace(ainvoke=invoke))
+
+    with pytest.raises(failure_type):
+        await service.chat(
+            user_id="u",
+            session_id="s",
+            api_key="offline-key",
+            model_name="deepseek-flash",
+            message="继续安排",
+            frozen_history=[] if not persist_history else None,
+            persist_history=persist_history,
+        )
+
+    history = store.get_history("u", "s")
+    if persist_history:
+        assert [item.role for item in history] == ["user", "assistant"]
+        assert store.list_sessions("u")[0].status == "active"
+    else:
+        assert history == []
+        assert store.list_sessions("u") == []

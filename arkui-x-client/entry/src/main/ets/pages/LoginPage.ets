@@ -1,11 +1,13 @@
 import { AuthResponse } from '../model/ApiModels';
 import { CampusFlowApi } from '../services/CampusFlowApi';
 import { AppTheme } from '../theme/AppTheme';
+import { ThemePalette, themePalette } from '../theme/ThemePalette';
 import { FeedbackPanel } from '../components/FeedbackPanel';
 import { CampusFlowRequestError } from '../utils/AgentFeedback';
 
 @Component
 export struct LoginPage {
+  @StorageLink('campusflowThemePalette') private palette: ThemePalette = themePalette('paper-green');
   @Prop baseUrl: string;
   @Prop localHistoryCount: number = 0;
   @Prop localDisplayName: string = '';
@@ -81,13 +83,13 @@ export struct LoginPage {
   private inputField(label: string, hint: string, value: string, onChange: (value: string) => void,
     inputType: InputType = InputType.Normal) {
     Column({ space: 7 }) {
-      Text(label).fontSize(AppTheme.bodySize).fontColor(AppTheme.secondary).fontWeight(FontWeight.Medium).width('100%')
+      Text(label).fontSize(this.palette.bodySize).fontColor(this.palette.secondary).fontWeight(FontWeight.Medium).width('100%')
       TextInput({ placeholder: hint, text: value })
         .type(inputType)
         .constraintSize({ minHeight: 52 })
-        .fontSize(AppTheme.bodySize)
-        .backgroundColor(AppTheme.field)
-        .borderRadius(AppTheme.controlRadius)
+        .fontSize(this.palette.bodySize)
+        .backgroundColor(this.palette.field)
+        .borderRadius(this.palette.controlRadius)
         .padding({ left: 16, right: 16 })
         .enabled(!this.loading)
         .onChange(onChange)
@@ -100,13 +102,13 @@ export struct LoginPage {
     Scroll() {
       Column({ space: 22 }) {
         Column({ space: 8 }) {
-          Text('行简').fontSize(AppTheme.pageTitle).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
-          Text('登录后，把课表和待办安排在一起。').fontSize(AppTheme.bodySize).fontColor(AppTheme.quiet)
+          Text('行简').fontSize(this.palette.pageTitle).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
+          Text('登录后，把课表和待办安排在一起。').fontSize(this.palette.bodySize).fontColor(this.palette.quiet)
         }.width('100%').alignItems(HorizontalAlign.Start)
 
         Column({ space: 16 }) {
           Text(this.registerMode ? '创建账号' : '登录账号')
-            .fontSize(AppTheme.sectionTitle).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink).width('100%')
+            .fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Bold).fontColor(this.palette.ink).width('100%')
           if (this.registerMode) {
             this.inputField('昵称', '你的称呼', this.displayName, (value) => this.displayName = value)
           }
@@ -115,33 +117,33 @@ export struct LoginPage {
           this.inputField('密码', '至少 8 位', this.password, (value) => this.password = value, InputType.Password)
           if (this.registerMode) {
             Text('先创建账号，再确认校园与课表。手动维护课表和待办不需要模型密钥。')
-              .fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
+              .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
             Button(this.showModelConfig ? '收起模型配置（可选）' : '现在配置模型（可选）')
-              .width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
-              .fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft)
+              .width('100%').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
+              .fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft)
               .enabled(!this.loading).onClick(() => this.showModelConfig = !this.showModelConfig)
             if (this.showModelConfig) {
               this.inputField('DeepSeek API Key（可选）', 'sk-…（服务端加密保存）', this.apiKey,
                 (value) => this.apiKey = value, InputType.Password)
               Text('填写后会随注册保存；只做输入校验，不会在注册时调用模型。')
-                .fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
+                .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
             } else if (this.apiKey.trim().length > 0) {
               Text('已填写模型密钥，将随注册保存；展开可修改或清空。')
-                .fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
+                .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
             }
             Text('也可留空，登录后从个人设置 → 模型配置中补充。助手对话与图片识别需要可用的模型配置。')
-              .fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
+              .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
           }
           if (this.errorText.length > 0) {
             FeedbackPanel({ kind: 'error', title: '暂未完成', message: this.errorText })
           }
           Button(this.loading ? '连接中…' : (this.registerMode ? '注册并继续' : '登录'))
-            .width('100%').constraintSize({ minHeight: 52 }).fontSize(AppTheme.bodySize).fontWeight(FontWeight.Bold)
-            .fontColor(AppTheme.onAccent).backgroundColor(AppTheme.accent).borderRadius(AppTheme.controlRadius)
+            .width('100%').constraintSize({ minHeight: 52 }).fontSize(this.palette.bodySize).fontWeight(FontWeight.Bold)
+            .fontColor(this.palette.onAccent).backgroundColor(this.palette.accent).borderRadius(this.palette.controlRadius)
             .enabled(!this.loading)
             .onClick(() => this.submit())
           Button(this.registerMode ? '已有账号，直接登录' : '第一次使用？创建账号')
-            .width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize).fontColor(AppTheme.accent)
+            .width('100%').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize).fontColor(this.palette.accent)
             .backgroundColor(Color.Transparent)
             .enabled(!this.loading)
             .onClick(() => {
@@ -152,46 +154,46 @@ export struct LoginPage {
             })
         }
         .width('100%')
-        .padding(AppTheme.cardInset)
-        .backgroundColor(AppTheme.surface)
-        .borderRadius(AppTheme.cardRadius)
+        .padding(this.palette.cardInset)
+        .backgroundColor(this.palette.surface)
+        .borderRadius(this.palette.cardRadius)
 
         if (this.localHistoryCount > 0) {
           Column({ space: 8 }) {
             Text(`${this.localDisplayName} · 本机已保存 ${this.localHistoryCount} 个会话`)
-              .fontSize(AppTheme.bodySize).fontColor(AppTheme.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
+              .fontSize(this.palette.bodySize).fontColor(this.palette.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
             Button('离线查看本机对话').constraintSize({ minHeight: 48 }).width('100%')
-              .fontSize(AppTheme.bodySize).fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft)
+              .fontSize(this.palette.bodySize).fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft)
               .enabled(!this.loading).onClick(() => this.onOpenLocalHistory())
             Text('仅查看已保存的文字，不会登录或发送请求。解锁此设备的人可查看；退出账号会清除本机记录。')
-              .fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
+              .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
           }.width('100%').alignItems(HorizontalAlign.Start)
         }
         if (this.cacheNotice.length > 0) {
-          Text(this.cacheNotice).fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
+          Text(this.cacheNotice).fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
         }
         if (this.cleanupNeeded) {
           if (this.confirmCleanup) {
             Text('清除本机记录不会删除服务端会话。清除后需联网重新保存。')
-              .fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).width('100%')
+              .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
             Button('确认清除本机记录').constraintSize({ minHeight: 48 }).width('100%')
-              .fontColor(AppTheme.danger).backgroundColor(AppTheme.surface).enabled(!this.loading)
+              .fontColor(this.palette.danger).backgroundColor(this.palette.surface).enabled(!this.loading)
               .onClick(() => this.clearLocalHistory())
             Button('保留').constraintSize({ minHeight: 48 }).enabled(!this.loading)
               .onClick(() => this.confirmCleanup = false)
           } else {
             Button('清理本机记录后重试').constraintSize({ minHeight: 48 }).width('100%')
-              .fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft).enabled(!this.loading)
+              .fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft).enabled(!this.loading)
               .onClick(() => this.confirmCleanup = true)
           }
         }
         Text('已有模型配置会继续保留；未配置也可以登录，之后再从个人设置补充。')
-          .fontSize(AppTheme.metaSize).fontColor(AppTheme.secondary).textAlign(TextAlign.Center)
+          .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).textAlign(TextAlign.Center)
       }
       .width('100%')
       .alignItems(HorizontalAlign.Start).justifyContent(FlexAlign.Start)
       .padding({ left: 20, right: 20, top: 24, bottom: 32 })
     }
-    .width('100%').height('100%').backgroundColor(AppTheme.bg)
+    .width('100%').height('100%').backgroundColor(this.palette.bg)
   }
 }

@@ -1,12 +1,14 @@
 import { SkillSummary, SkillPermission } from '../model/ApiModels';
 import { CampusFlowApi } from '../services/CampusFlowApi';
 import { AppTheme } from '../theme/AppTheme';
+import { ThemePalette, themePalette } from '../theme/ThemePalette';
 import { AppIcon } from '../components/AppIcon';
 import { FeedbackPanel } from '../components/FeedbackPanel';
 import { CampusFlowRequestError } from '../utils/AgentFeedback';
 
 @Component
 export struct SkillsPage {
+  @StorageLink('campusflowThemePalette') private palette: ThemePalette = themePalette('paper-green');
   @Prop baseUrl: string;
   @Prop token: string;
   @Prop @Watch('activeChanged') active: boolean = true;
@@ -95,16 +97,16 @@ export struct SkillsPage {
     Scroll() {
       Column({ space: 24 }) {
         Text('查看用途和权限，再决定是否交给助手使用。')
-          .fontSize(AppTheme.bodySize).fontColor(AppTheme.quiet).width('100%')
+          .fontSize(this.palette.bodySize).fontColor(this.palette.quiet).width('100%')
         Row({ space: 8 }) {
           Button(this.loaded ? `全部 ${this.skills.length}` : '全部').layoutWeight(1).constraintSize({ minHeight: 48 })
-            .fontSize(AppTheme.bodySize).fontColor(!this.installedOnly ? AppTheme.onAccent : AppTheme.accent)
-            .backgroundColor(!this.installedOnly ? AppTheme.accent : AppTheme.accentSoft)
-            .borderRadius(AppTheme.controlRadius).onClick(() => this.selectFilter(false))
+            .fontSize(this.palette.bodySize).fontColor(!this.installedOnly ? this.palette.onAccent : this.palette.accent)
+            .backgroundColor(!this.installedOnly ? this.palette.accent : this.palette.accentSoft)
+            .borderRadius(this.palette.controlRadius).onClick(() => this.selectFilter(false))
           Button(this.loaded ? `已安装 ${this.installedCount()}` : '已安装').layoutWeight(1).constraintSize({ minHeight: 48 })
-            .fontSize(AppTheme.bodySize).fontColor(this.installedOnly ? AppTheme.onAccent : AppTheme.accent)
-            .backgroundColor(this.installedOnly ? AppTheme.accent : AppTheme.accentSoft)
-            .borderRadius(AppTheme.controlRadius).onClick(() => this.selectFilter(true))
+            .fontSize(this.palette.bodySize).fontColor(this.installedOnly ? this.palette.onAccent : this.palette.accent)
+            .backgroundColor(this.installedOnly ? this.palette.accent : this.palette.accentSoft)
+            .borderRadius(this.palette.controlRadius).onClick(() => this.selectFilter(true))
         }.width('100%')
         if (this.loading) {
           FeedbackPanel({ kind: 'loading', title: '正在读取能力', message: '已有内容仍可查看，读取完成后可操作。', busy: true })
@@ -124,44 +126,44 @@ export struct SkillsPage {
         ForEach(this.visibleSkills(), (skill: SkillSummary) => {
           Column({ space: 12 }) {
             Row({ space: 12 }) {
-              AppIcon({ name: 'skills', iconSize: 24, color: AppTheme.accent })
-              Text(skill.name).fontSize(AppTheme.sectionTitle).fontWeight(FontWeight.Medium)
-                .fontColor(AppTheme.ink).layoutWeight(1).wordBreak(WordBreak.BREAK_WORD)
+              AppIcon({ name: 'skills', iconSize: 24, color: this.palette.accent })
+              Text(skill.name).fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Medium)
+                .fontColor(this.palette.ink).layoutWeight(1).wordBreak(WordBreak.BREAK_WORD)
             }.width('100%')
             Text(`${skill.official ? '官方 · ' : ''}${skill.category} · ${!skill.installed ? '未安装' : skill.enabled ? '已启用' : '已停用'}`)
-              .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
-            Text(skill.description).fontSize(AppTheme.bodySize).fontColor(AppTheme.ink).width('100%')
+              .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
+            Text(skill.description).fontSize(this.palette.bodySize).fontColor(this.palette.ink).width('100%')
             Button(this.expandedIds.includes(skill.skill_id) ? '收起权限与版本' : `查看 ${skill.permissions.length} 项权限与版本`)
-              .width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
-              .fontColor(AppTheme.accent).backgroundColor(AppTheme.accentSoft).borderRadius(AppTheme.controlRadius)
+              .width('100%').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
+              .fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft).borderRadius(this.palette.controlRadius)
               .onClick(() => this.toggleDetails(skill.skill_id))
             if (this.expandedIds.includes(skill.skill_id)) {
               Text(`版本 ${skill.version} · ${skill.author}${skill.update_available ? ' · 有可用更新' : ''}`)
-                .fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+                .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
               if (skill.permissions.length === 0) {
-                Text('无需额外权限').fontSize(AppTheme.bodySize).fontColor(AppTheme.quiet).width('100%')
+                Text('无需额外权限').fontSize(this.palette.bodySize).fontColor(this.palette.quiet).width('100%')
               }
               ForEach(skill.permissions, (permission: SkillPermission) => {
                 Column({ space: 4 }) {
-                  Text(permission.label).fontSize(AppTheme.bodySize).fontWeight(FontWeight.Medium).fontColor(AppTheme.ink).width('100%')
-                  Text(`${permission.access} · ${permission.description}`).fontSize(AppTheme.metaSize).fontColor(AppTheme.quiet).width('100%')
+                  Text(permission.label).fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium).fontColor(this.palette.ink).width('100%')
+                  Text(`${permission.access} · ${permission.description}`).fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
                 }.width('100%').alignItems(HorizontalAlign.Start)
               }, (permission: SkillPermission) => permission.code)
               Button(this.busyId === skill.skill_id ? '正在提交…' : !skill.installed ? '同意以上权限并安装' : skill.enabled ? '停用此能力' : '启用以上权限')
-                .width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
-                .fontColor(AppTheme.onAccent).backgroundColor(AppTheme.accent).borderRadius(AppTheme.controlRadius)
+                .width('100%').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
+                .fontColor(this.palette.onAccent).backgroundColor(this.palette.accent).borderRadius(this.palette.controlRadius)
                 .enabled(!this.loading && this.busyId.length === 0 && this.errorText.length === 0)
                 .onClick(() => { if (skill.installed) { this.toggle(skill); } else { this.install(skill); } })
             } else if (skill.installed && skill.enabled) {
-              Button('停用此能力').width('100%').constraintSize({ minHeight: 48 }).fontSize(AppTheme.bodySize)
-                .fontColor(AppTheme.quiet).backgroundColor(AppTheme.field).borderRadius(AppTheme.controlRadius)
+              Button('停用此能力').width('100%').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
+                .fontColor(this.palette.quiet).backgroundColor(this.palette.field).borderRadius(this.palette.controlRadius)
                 .enabled(!this.loading && this.busyId.length === 0 && this.errorText.length === 0)
                 .onClick(() => this.toggle(skill))
             }
-          }.width('100%').padding(AppTheme.cardInset).alignItems(HorizontalAlign.Start)
-            .backgroundColor(AppTheme.surface).borderRadius(AppTheme.cardRadius)
+          }.width('100%').padding(this.palette.cardInset).alignItems(HorizontalAlign.Start)
+            .backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
         }, (skill: SkillSummary) => `${skill.skill_id}-${skill.installed}-${skill.enabled}`)
-      }.width('100%').padding({ left: AppTheme.pageInset, right: AppTheme.pageInset, top: 16, bottom: 24 })
-    }.width('100%').height('100%').backgroundColor(AppTheme.canvas)
+      }.width('100%').padding({ left: this.palette.pageInset, right: this.palette.pageInset, top: 16, bottom: 24 })
+    }.width('100%').height('100%').backgroundColor(this.palette.canvas)
   }
 }

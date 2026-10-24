@@ -1,0 +1,2 @@
+# Keep the upstream MPL license byte-for-byte, including its original line-end space.
+agent-service/src/campusflow_agent/web/vendor/DOMPurify-LICENSE-MPL whitespace=-blank-at-eol

@@ -86,6 +86,7 @@ class CampusStore:
                     last_message TEXT NOT NULL DEFAULT '',
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'active',
                     PRIMARY KEY (user_id, session_id)
                 );
 
@@ -154,6 +155,7 @@ class CampusStore:
                 ON planning_tasks(user_id, status, start_at);
                 """
             )
+            self._migrate_session_status()
 
         from .course_policy import ensure_schema
         from .session_service import ensure_session_schema
@@ -161,6 +163,22 @@ class CampusStore:
         ensure_schema(self._connection)
         with self._connection:
             ensure_session_schema(self._connection)
+
+    def _migrate_session_status(self) -> None:
+        """为旧数据库补齐会话状态列，保证升级后历史目录仍可用。"""
+        if self._connection is None:
+            return
+        columns = {
+            row["name"]
+            for row in self._connection.execute(
+                "PRAGMA table_info(conversation_sessions)"
+            )
+        }
+        if "status" not in columns:
+            self._connection.execute(
+                "ALTER TABLE conversation_sessions "
+                "ADD COLUMN status TEXT NOT NULL DEFAULT 'active'"
+            )
 
     def set_user_context(
         self,
@@ -531,6 +549,9 @@ class CampusStore:
         if self._connection is not None:
             now = message.created_at.isoformat()
             title = self._session_title(content) if role == "user" else "新会话"
+            # 用户提问先落库并把会话标记为 pending，助手回复落库后回到 active，
+            # 这样模型“思考中”的会话也能立刻出现在历史目录里。
+            status = "pending" if role == "user" else "active"
             with self._lock, self._connection:
                 self._connection.execute("BEGIN IMMEDIATE")
                 self._check_session_alive(user_id, session_id)
@@ -538,12 +559,13 @@ class CampusStore:
                     """
                     INSERT INTO conversation_sessions (
                         user_id, session_id, title, model_name, last_message,
-                        created_at, updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                        created_at, updated_at, status
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(user_id, session_id) DO UPDATE SET
                         model_name = COALESCE(?, conversation_sessions.model_name),
                         last_message = excluded.last_message,
-                        updated_at = excluded.updated_at
+                        updated_at = excluded.updated_at,
+                        status = excluded.status
                     """,
                     (
                         user_id,
@@ -553,6 +575,7 @@ class CampusStore:
                         content,
                         now,
                         now,
+                        status,
                         model_name,
                     ),
                 )
@@ -605,6 +628,7 @@ class CampusStore:
         if self._connection is not None:
             sql = """
                 SELECT session_id, title, model_name, last_message, created_at, updated_at,
+                       status,
                        (SELECT COUNT(*) FROM conversation_messages messages
                         WHERE messages.user_id = conversation_sessions.user_id
                           AND messages.session_id = conversation_sessions.session_id
@@ -651,6 +675,7 @@ class CampusStore:
                         message_count=len(messages),
                         created_at=messages[0].created_at,
                         updated_at=messages[-1].created_at,
+                        status="pending" if messages[-1].role == "user" else "active",
                     )
                 )
         return sorted(sessions, key=lambda item: item.updated_at, reverse=True)

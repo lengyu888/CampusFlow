@@ -1,5 +1,5 @@
 import { FocusClock, FocusClockSample, FocusGateway, FocusRequest, FocusRecord, FocusOperation, FocusInterval, FocusGap } from '../model/FocusModels';
-import { FocusStore, FocusLease, FocusDocument, LocalFocusRecord, LocalFocusOperation, FocusLocalState } from './FocusStore';
+import { FocusStore, FocusScopeError, FocusLease, FocusDocument, LocalFocusRecord, LocalFocusOperation, FocusLocalState } from './FocusStore';
 import { FocusAnchor, FocusTimer, FocusGapReason, validFocusSample, FOCUS_SAMPLE_MS, FOCUS_CHECKPOINT_MS } from './FocusTimer';
 import { focusUuid, focusTarget, validFocusRequest, validFocusOperation, validFocusActive, validFocusDetail, validFocusList } from './FocusValidation';
 import { CampusFlowRequestError } from './AgentFeedback';
@@ -29,7 +29,7 @@ export function emptyFocusState(): FocusState {
     localRecords: [], record: null, activeRecord: null, pendingOperations: [], history: [], historyLoading: false, historyHasMore: false,
     historyError: '', intervals: [], unknownGaps: [], intervalLoading: false, intervalError: '' };
 }
-function safeCode(error: Error): string { return error instanceof CampusFlowRequestError ? error.code : ''; }
+function safeCode(error: Error): string { return error instanceof FocusScopeError ? 'FOCUS_SCOPE_MISMATCH' : error instanceof CampusFlowRequestError ? error.code : ''; }
 function definitive(error: Error): boolean {
   return error instanceof CampusFlowRequestError && [400,401,403,404,409,410,422].includes(error.statusCode) && error.code !== 'INVALID_RESPONSE';
 }
@@ -104,6 +104,8 @@ export class FocusController {
     this.scope = scope; this.userId = userId; this.api = api; this.lease = null;
     const foreground = this.state.foreground; this.state = emptyFocusState(); this.state.foreground = foreground; this.publish();
     try {
+      await this.store.initialize();
+      if (this.disposed || generation !== this.generation) { return; }
       const lease = await this.store.activate(scope, this.uuid()); if (this.disposed || generation !== this.generation) { return; }
       this.lease = lease;
       await this.queue(async () => {
@@ -119,7 +121,14 @@ export class FocusController {
       if (!this.valid(generation)) { return; }
       this.state.phase = 'ready'; this.state.selectedRecordId = this.document().records[0]?.recordId ?? ''; this.publish();
       if (this.state.foreground) { await this.readCurrent(); }
-    } catch (error) { if (generation === this.generation && !this.disposed) { this.state.phase = 'error'; this.fail(error as Error, '本机专注记录未能安全读取，请重试或明确清理；不会覆盖原内容。'); } }
+    } catch (error) {
+      if (generation === this.generation && !this.disposed) {
+        this.state.phase = 'error';
+        this.fail(error as Error, error instanceof FocusScopeError ?
+          '本机保留了另一账号或服务地址的专注缓存。为保护记录，本次未切换、未计时。可返回原账号使用，或在下方明确清除本机缓存后重试；不会自动删除或覆盖。' :
+          '本机专注记录未能安全读取，本次未开始计时。可重试读取；若仍失败，请先保留记录，或在下方明确清理。不会自动覆盖原内容。');
+      }
+    }
   }
   setForeground(active: boolean): void {
     if (this.disposed || active === this.state.foreground) { return; }
