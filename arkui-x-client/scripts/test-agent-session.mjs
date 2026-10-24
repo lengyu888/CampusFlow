@@ -1,21 +1,13 @@
 import './helpers/theme-fixture.mjs';
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync } from 'node:fs';
-import { createRequire } from 'node:module';
-import path from 'node:path';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { conversationDependencies } from './helpers/conversation-fixture.mjs';
 import { reliability } from './helpers/course-review-fixture.mjs';
 import { makeDraftFixture, makeRunController, runSnapshot, shanghaiDate } from './helpers/agent-run-ui-fixture.mjs';
+import { loadTypeScript } from './helpers/typescript-fixture.mjs';
 
-const compilerSuffix = 'sdk/default/openharmony/ets/build-tools/ets-loader/node_modules/typescript';
-const compilerPath = [process.env.CAMPUSFLOW_TYPESCRIPT_PATH,
-  process.env.DEVECO_STUDIO_HOME && path.join(process.env.DEVECO_STUDIO_HOME, compilerSuffix),
-  path.join('D:/DevEco Studio', compilerSuffix),
-  path.join('C:/Program Files/Huawei/DevEco Studio', compilerSuffix)
-].find(candidate => candidate && existsSync(candidate));
-assert.ok(compilerPath, 'Set CAMPUSFLOW_TYPESCRIPT_PATH or DEVECO_STUDIO_HOME to the existing compiler.');
-const ts = createRequire(import.meta.url)(compilerPath);
+const ts = loadTypeScript();
 const source = readFileSync(process.env.CAMPUSFLOW_AGENT_SOURCE ??
   new URL('../entry/src/main/ets/pages/AgentPage.ets', import.meta.url), 'utf8');
 assert.doesNotMatch(source, /^<<<<<<< /m, 'Resolve merge markers before testing the page.');

@@ -1,24 +1,11 @@
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync } from 'node:fs';
-import { createRequire } from 'node:module';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
+import { loadTypeScript } from './helpers/typescript-fixture.mjs';
 
-// Use the compiler already shipped with DevEco; no dependency installation or output files.
-const compilerRelativePath = 'sdk/default/openharmony/ets/build-tools/ets-loader/node_modules/typescript';
-const compilerCandidates = [
-  process.env.CAMPUSFLOW_TYPESCRIPT_PATH,
-  process.env.DEVECO_STUDIO_HOME ? path.join(process.env.DEVECO_STUDIO_HOME, compilerRelativePath) : undefined,
-  path.join('C:/Program Files/Huawei/DevEco Studio', compilerRelativePath),
-  path.join('D:/DevEco Studio', compilerRelativePath)
-];
-const compilerPath = compilerCandidates.find(candidate => candidate && existsSync(candidate));
-assert.ok(compilerPath,
-  'DevEco TypeScript compiler missing; set CAMPUSFLOW_TYPESCRIPT_PATH to its existing directory ' +
-  'or DEVECO_STUDIO_HOME to your DevEco Studio installation.');
-const require = createRequire(import.meta.url);
-const ts = require(compilerPath);
+const ts = loadTypeScript();
 const parserPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)),
   '../entry/src/main/ets/utils/MarkdownParser.ets');
 const parserSource = readFileSync(parserPath, 'utf8');

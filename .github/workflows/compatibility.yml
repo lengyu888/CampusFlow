@@ -44,6 +44,9 @@ jobs:
           git rev-parse HEAD
           node --version
           python --version
+      - name: Install locked client test compiler (no DevEco SDK)
+        working-directory: arkui-x-client
+        run: npm ci --ignore-scripts --audit=false --fund=false
       - name: Backend lint
         working-directory: agent-service
         run: python -m ruff check src tests

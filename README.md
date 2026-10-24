@@ -217,6 +217,7 @@ python -m pytest -q -m integration
 
 ```powershell
 cd arkui-x-client
+npm ci --ignore-scripts --audit=false --fund=false
 npm test
 npm run check
 # Python 路径不同，可设置 CAMPUSFLOW_TEST_PYTHON 指向已安装后端依赖的解释器。

@@ -12,5 +12,8 @@
     "build:android": "node scripts/build-native.mjs android --execute",
     "build:ios": "node scripts/build-native.mjs ios --execute",
     "test:journey": "node scripts/ux11-journey.mjs"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3"
   }
 }

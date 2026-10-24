@@ -129,11 +129,14 @@ hdc rport tcp:8000 tcp:8000
 
 ```powershell
 cd arkui-x-client
+npm ci --ignore-scripts --audit=false --fund=false
 npm test
 npm run check
 ```
 
-`npm test` 使用已有 Node.js 24 LTS 执行共享逻辑和实际页面控制器方法测试，不安装依赖，不启动原生应用。不要使用 DevEco 内置的 Node 18 执行这些测试；它仍可用于其自带的 Hvigor 构建。
+先用 `npm ci --ignore-scripts --audit=false --fund=false` 安装锁定的 TypeScript 测试编译器；逻辑测试不需要 DevEco SDK。Agent 会话测试保留 AST 回调解析，Markdown 测试保留完整严格类型诊断，不以去除类型代替类型检查。需刻意对比本机编译器时可设置 `CAMPUSFLOW_TYPESCRIPT_PATH`，默认只使用仓库声明的依赖。
+
+`npm test` 使用已有 Node.js 24 LTS 执行共享逻辑和实际页面控制器方法测试，本身不安装依赖、不启动原生应用。不要使用 DevEco 内置的 Node 18 执行这些测试；它仍可用于其自带的 Hvigor 构建。
 
 现有后端测试 Python 可通过 `CAMPUSFLOW_TEST_PYTHON=/path/to/python npm run test:journey` 运行 UX11 连续旅程。它经实际 API 访问同一进程 FastAPI/SQLite，模型供应商和系统能力明确使用替身；缺依赖时失败，不自动安装。最终结果和复现边界见[UX11说明](../docs/ux-11-experience-polish.md)。
 
