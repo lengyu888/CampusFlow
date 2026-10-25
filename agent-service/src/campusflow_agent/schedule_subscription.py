@@ -100,6 +100,60 @@ class _Property:
     bad_params: bool = False
 
 
+@dataclass(frozen=True)
+class _FixedTimezone:
+    onset: datetime
+    offset: timedelta
+
+
+def _fixed_timezone(
+    properties: list[tuple[tuple[str, ...], _Property]], components: list[tuple[str, ...]]
+) -> _FixedTimezone | None:
+    """Accept only one complete fixed STANDARD observance, never arbitrary overrides."""
+    if components != [("STANDARD",)]:
+        return None
+    header: dict[str, str] = {}
+    standard: dict[str, str] = {}
+    for path, prop in properties:
+        if prop.bad_params or prop.params or path not in ((), ("STANDARD",)):
+            return None
+        values = header if not path else standard
+        allowed = (
+            {"TZID", "TZURL", "LAST-MODIFIED", "X-LIC-LOCATION"}
+            if not path else {"DTSTART", "TZOFFSETFROM", "TZOFFSETTO", "TZNAME"}
+        )
+        if prop.name not in allowed or prop.name in values:
+            return None
+        values[prop.name] = prop.value
+    name = header.get("TZID")
+    if name not in SUPPORTED_ZONES or header.get("X-LIC-LOCATION", name) != name:
+        return None
+    onset = standard.get("DTSTART", "")
+    if re.fullmatch(r"[0-9]{8}T[0-9]{6}", onset) is None:
+        return None
+    try:
+        start = datetime.strptime(onset, "%Y%m%dT%H%M%S")
+    except ValueError:
+        return None
+    offsets: list[timedelta] = []
+    for key in ("TZOFFSETFROM", "TZOFFSETTO"):
+        match = re.fullmatch(r"([+-])([0-9]{2})([0-9]{2})([0-9]{2})?", standard.get(key, ""))
+        if match is None:
+            return None
+        hours, minutes, seconds = int(match[2]), int(match[3]), int(match[4] or "0")
+        if hours > 23 or minutes > 59 or seconds != 0:
+            return None
+        offset = timedelta(hours=hours, minutes=minutes)
+        if match[1] == "-":
+            if offset == timedelta(0):
+                return None  # RFC 5545 UTC-OFFSET cannot use negative zero.
+            offset = -offset
+        offsets.append(offset)
+    if offsets[0] != offsets[1]:
+        return None
+    return _FixedTimezone(onset=start, offset=offsets[0])
+
+
 def _property(line: str) -> _Property | None:
     # A quoted parameter can contain ':' or ';'; neither is a property separator.
     quoted = False
@@ -144,13 +198,17 @@ def _property(line: str) -> _Property | None:
     return _Property(name, value, params, bad)
 
 
-def _calendar(text: str) -> tuple[str, list[list[_Property]], set[str], str, bool]:
+def _calendar(
+    text: str,
+) -> tuple[str, list[list[_Property]], dict[str, _FixedTimezone | None], str, bool]:
     if len(text.encode("utf-8")) > MAX_CALENDAR_BYTES:
         raise ScheduleSubscriptionError("订阅课表超过 2 MiB，未返回部分内容。", "IMPORT_TOO_LARGE")
     stack: list[str] = []
     events: list[list[_Property]] = []
     current: list[_Property] = []
-    custom_zones: set[str] = set()
+    custom_zones: dict[str, _FixedTimezone | None] = {}
+    zone_properties: list[tuple[tuple[str, ...], _Property]] = []
+    zone_components: list[tuple[str, ...]] = []
     metadata: dict[str, str] = {}
     finished = False
     for line in _unfold(text):
@@ -175,6 +233,11 @@ def _calendar(text: str) -> tuple[str, list[list[_Property]], set[str], str, boo
                 component in {"VEVENT", "VTIMEZONE"} and stack != ["VCALENDAR"]
             ):
                 raise ScheduleSubscriptionError("日历组件嵌套无效，未返回部分课程。")
+            if component == "VTIMEZONE":
+                zone_properties, zone_components = [], []
+            elif stack[:2] == ["VCALENDAR", "VTIMEZONE"]:
+                # Two levels suffice to reject nested observances; never copy an unbounded stack.
+                zone_components.append((*stack[2:3], component))
             stack.append(component)
             if component == "VEVENT":
                 current = []
@@ -189,12 +252,20 @@ def _calendar(text: str) -> tuple[str, list[list[_Property]], set[str], str, boo
                         "源日历超过 500 条事件，请缩小范围；本次未返回部分课程。",
                         "IMPORT_TOO_MANY_EVENTS",
                     )
+            if component == "VTIMEZONE":
+                fixed = _fixed_timezone(zone_properties, zone_components)
+                for path, item in zone_properties:
+                    if not path and item.name == "TZID":
+                        # Repeated definitions are conflicting even if one looks valid.
+                        custom_zones[item.value] = (
+                            None if item.value in custom_zones else fixed
+                        )
             if component == "VCALENDAR":
                 finished = True
         elif stack == ["VCALENDAR", "VEVENT"]:
             current.append(prop)
-        elif stack == ["VCALENDAR", "VTIMEZONE"] and prop.name == "TZID":
-            custom_zones.add(prop.value)
+        elif stack[:2] == ["VCALENDAR", "VTIMEZONE"]:
+            zone_properties.append((tuple(stack[2:4]), prop))
         elif stack == ["VCALENDAR"] and prop.name in {
             "X-WR-CALNAME",
             "X-WR-TIMEZONE",
@@ -233,7 +304,7 @@ def _parse_time(
     prop: _Property | None,
     field: str,
     issues: list,
-    custom: set[str],
+    custom: dict[str, _FixedTimezone | None],
     hint: str,
 ) -> datetime | None:
     if prop is None or not prop.value:
@@ -280,7 +351,9 @@ def _parse_time(
         if match[7]:
             aware = naive.replace(tzinfo=UTC)
         elif zone_name is not None:
-            if zone_name not in SUPPORTED_ZONES or zone_name in custom:
+            if zone_name not in SUPPORTED_ZONES or (
+                zone_name in custom and custom[zone_name] is None
+            ):
                 _issue(
                     issues,
                     field,
@@ -305,6 +378,15 @@ def _parse_time(
                     field,
                     "AMBIGUOUS_LOCAL_TIME",
                     "该本地时间不存在或有多个解释，请手动核对。",
+                )
+                return None
+            fixed = custom.get(zone_name)
+            if fixed is not None and (
+                naive < fixed.onset or valid[0].utcoffset() != fixed.offset
+            ):
+                _issue(
+                    issues, field, "TIMEZONE_UNSUPPORTED",
+                    "内嵌时区规则与课程日期或标准时区不一致，请手动核对。",
                 )
                 return None
             aware = valid[0]
@@ -342,7 +424,7 @@ def _parse_time(
 def _inspect_event(
     index: int,
     props: list[_Property],
-    custom: set[str],
+    custom: dict[str, _FixedTimezone | None],
     hint: str,
     cancelled: bool,
 ) -> ScheduleImportRow:
