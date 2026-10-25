@@ -1,11 +1,11 @@
 import { UserProfile, WeatherForecast } from '../model/ApiModels';
 import { AppIcon } from '../components/AppIcon';
-import { AppIllustration } from '../components/AppIllustration';
 import { AppTheme } from '../theme/AppTheme';
 import { ThemePalette, themePalette } from '../theme/ThemePalette';
 import { EvidencePanel } from '../components/EvidencePanel';
 import { CampusKnowledgePanel } from '../components/CampusKnowledgePanel';
 import { FeedbackPanel } from '../components/FeedbackPanel';
+import { InfoDisclosure } from '../components/InfoDisclosure';
 import { CampusFlowApi } from '../services/CampusFlowApi';
 import { shanghaiDate } from '../utils/DailyAgenda';
 import { validWeather, weatherUsable } from '../utils/EvidencePresentation';
@@ -120,7 +120,7 @@ export struct CampusPage {
       Row({ space: 12 }) {
         Column({ space: 4 }) {
           Text('今日天气').fontSize(this.palette.bodySize).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
-          Text('城市级预报 · 不读取设备位置').fontSize(this.palette.metaSize).fontColor(this.palette.quiet)
+          Text('城市级预报').fontSize(this.palette.metaSize).fontColor(this.palette.quiet)
         }.layoutWeight(1).alignItems(HorizontalAlign.Start)
         Button('刷新').constraintSize({ minHeight: 48, minWidth: 64 }).fontSize(this.palette.metaSize)
           .fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft).enabled(!this.weatherLoading)
@@ -144,20 +144,22 @@ export struct CampusPage {
           Text('暂无可用天气预报，请展开来源查看覆盖范围或获取状态。')
             .fontSize(this.palette.bodySize).fontColor(this.palette.quiet).width('100%').wordBreak(WordBreak.BREAK_WORD)
         }
-        Button(this.weatherExpanded ? '收起天气来源' : '查看天气来源').constraintSize({ minHeight: 48 }).fontSize(this.palette.metaSize)
+        Button(this.weatherExpanded ? '收起来源' : '天气来源').constraintSize({ minHeight: 44 }).fontSize(this.palette.metaSize)
           .fontColor(this.palette.accent).backgroundColor(Color.Transparent).onClick(() => this.weatherExpanded = !this.weatherExpanded)
         if (this.weatherExpanded) { EvidencePanel({ evidence: this.forecast.evidence, active: this.active }) }
       }
     }.width('100%').alignItems(HorizontalAlign.Start).padding(this.palette.cardInset)
       .backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
+      .border({ width: 1, color: this.palette.line })
   }
 
   @Builder
   private Entry(icon: string, title: string, description: string, action: () => void) {
     Button({ type: ButtonType.Normal }) {
       Row({ space: 12 }) {
-        Stack() { AppIcon({ name: icon, iconSize: 24, color: this.palette.accent }) }.width(44).height(44)
-        Column({ space: 5 }) {
+        Stack() { AppIcon({ name: icon, iconSize: 21, color: this.palette.accent }) }
+          .width(36).height(36).backgroundColor(this.palette.accentSoft).borderRadius(10)
+        Column({ space: 3 }) {
           Text(title).fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium)
             .fontColor(this.palette.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
           Text(description).fontSize(this.palette.metaSize).fontColor(this.palette.quiet)
@@ -165,27 +167,14 @@ export struct CampusPage {
         }.layoutWeight(1).alignItems(HorizontalAlign.Start)
         AppIcon({ name: 'chevron', iconSize: 16, color: this.palette.quiet })
       }.width('100%')
-    }.width('100%').constraintSize({ minHeight: 84 }).padding(this.palette.cardInset)
-      .backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
+    }.width('100%').constraintSize({ minHeight: 72 }).padding({ left: 16, right: 16, top: 12, bottom: 12 })
+      .backgroundColor(Color.Transparent).borderRadius(0)
       .accessibilityText(`${title}，${description}`).onClick(action)
   }
 
   @Builder
-  private IllustratedEntry(icon: string, title: string, description: string, action: () => void, illustration: Resource) {
-    Button({ type: ButtonType.Normal }) {
-      Row({ space: 12 }) {
-        AppIllustration({ source: illustration, imageWidth: 44, imageHeight: 44, fallbackIcon: icon })
-        Column({ space: 5 }) {
-          Text(title).fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium)
-            .fontColor(this.palette.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
-          Text(description).fontSize(this.palette.metaSize).fontColor(this.palette.quiet)
-            .width('100%').wordBreak(WordBreak.BREAK_WORD)
-        }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-        AppIcon({ name: 'chevron', iconSize: 16, color: this.palette.quiet })
-      }.width('100%')
-    }.width('100%').constraintSize({ minHeight: 84 }).padding(this.palette.cardInset)
-      .backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
-      .accessibilityText(`${title}，${description}`).onClick(action)
+  private EntryDivider() {
+    Row() { Divider().color(this.palette.line) }.width('100%').padding({ left: 64, right: 16 })
   }
 
   build() {
@@ -203,45 +192,47 @@ export struct CampusPage {
           }.width(48).height(48).backgroundColor(this.palette.accentSoft)
             .accessibilityText('打开个人设置').onClick(() => this.onOpenProfile())
         }.width('100%')
-        Column({ space: 12 }) {
-          this.IllustratedEntry('calendar', '我的课表', '手动维护、预览导入与检查变更', () => this.onOpenTimetable(), $r('app.media.xj_course_entry'))
-          this.IllustratedEntry('route', '校园导航', '选择地点，查看路线和步行估算', () => this.onOpenRoute(), $r('app.media.xj_campus_entry'))
-          this.Entry('classroom', '校园服务', '教室、借阅与个人校园信息', () => this.onOpenServices())
-        }.width('100%')
+        Column({ space: 10 }) {
+          Text('日常工具').fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Medium).fontColor(this.palette.ink)
+          Column() {
+            this.Entry('calendar', '我的课表', '课程与订阅导入', () => this.onOpenTimetable())
+            this.EntryDivider()
+            this.Entry('route', '校园导航', '选地点，查看步行路线', () => this.onOpenRoute())
+            this.EntryDivider()
+            this.Entry('classroom', '校园实时服务', '空闲教室、电费、图书馆、校园卡', () => this.onOpenServices())
+          }.width('100%').backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
+            .border({ width: 1, color: this.palette.line }).clip(true)
+        }.width('100%').alignItems(HorizontalAlign.Start)
         this.WeatherCard()
         Button({ type: ButtonType.Normal }) {
           Row({ space: 12 }) {
             Column({ space: 5 }) {
               Text('校园资料').fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium).fontColor(this.palette.ink).width('100%')
-              Text('图书馆、校园网络等已收录官方指南').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+              Text('图书馆、校园网络等指南').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
             }.layoutWeight(1).alignItems(HorizontalAlign.Start)
             Text(this.knowledgeExpanded ? '收起' : '查询').fontSize(this.palette.metaSize).fontColor(this.palette.accent)
           }.width('100%')
         }.width('100%').constraintSize({ minHeight: 72 }).padding(this.palette.cardInset).backgroundColor(this.palette.surface)
-          .borderRadius(this.palette.cardRadius).accessibilityText(`校园资料，${this.knowledgeExpanded ? '已展开' : '已收起'}`)
+          .borderRadius(this.palette.cardRadius).border({ width: 1, color: this.palette.line })
+          .accessibilityText(`校园资料，${this.knowledgeExpanded ? '已展开' : '已收起'}`)
           .onClick(() => this.knowledgeExpanded = !this.knowledgeExpanded)
         CampusKnowledgePanel({ baseUrl: this.baseUrl, token: this.token, campusScope: this.campusIdentity(), active: this.active && this.knowledgeExpanded })
           .visibility(this.knowledgeExpanded ? Visibility.Visible : Visibility.None)
-        this.Entry('skills', '能力管理', '查看权限，按需要启用或停用', () => this.onOpenSkills())
-        this.Entry('calendar', '数据与连接', '校园账号、模型和个人设置', () => this.onOpenProfile())
-        Button({ type: ButtonType.Normal }) {
-          Row({ space: 12 }) {
-            AppIcon({ name: 'assistant', iconSize: 24, color: this.palette.accent })
-            Column({ space: 5 }) {
-              Text('让助手帮你找').fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium)
-                .fontColor(this.palette.accent).width('100%')
-              Text('结合已有课表，先核对再安排').fontSize(this.palette.metaSize)
-                .fontColor(this.palette.quiet).width('100%').wordBreak(WordBreak.BREAK_WORD)
-            }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-          }.width('100%')
-        }.width('100%').constraintSize({ minHeight: 80 }).padding(this.palette.cardInset)
-          .backgroundColor(this.palette.accentSoft).borderRadius(this.palette.cardRadius)
-          .onClick(() => this.onOpenAgent('根据我的课表，帮我看看今天需要注意的校园安排。请说明信息来源。'))
-        Text('校园信息的覆盖范围以连接的数据源为准。时间安排先预览，确认后再执行。')
-          .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
-          .wordBreak(WordBreak.BREAK_WORD)
+        Column({ space: 10 }) {
+          Text('更多服务').fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Medium).fontColor(this.palette.ink)
+          Column() {
+            this.Entry('skills', '能力管理', '查看用途与权限', () => this.onOpenSkills())
+            this.EntryDivider()
+            this.Entry('calendar', '数据与连接', '校园账号与模型设置', () => this.onOpenProfile())
+            this.EntryDivider()
+            this.Entry('assistant', '问问助手', '结合课表安排校园生活',
+              () => this.onOpenAgent('根据我的课表，帮我看看今天需要注意的校园安排。请说明信息来源。'))
+          }.width('100%').backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
+            .border({ width: 1, color: this.palette.line }).clip(true)
+        }.width('100%').alignItems(HorizontalAlign.Start)
+        InfoDisclosure({ title: '信息来源与使用说明', message: '校园信息以已连接的数据源为准。天气为城市级预报，不读取设备位置；时间安排须预览确认后执行。' })
       }.width('100%').alignItems(HorizontalAlign.Start)
         .padding({ left: this.palette.pageInset, right: this.palette.pageInset, top: 20, bottom: 32 })
-    }.width('100%').height('100%').backgroundColor(this.palette.canvas).scrollBar(BarState.Off)
+    }.width('100%').height('100%').backgroundColor(this.palette.canvas).scrollBar(BarState.Off).align(Alignment.TopStart)
   }
 }

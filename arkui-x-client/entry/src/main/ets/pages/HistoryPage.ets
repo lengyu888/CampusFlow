@@ -8,6 +8,7 @@ import { AppTheme } from '../theme/AppTheme';
 import { ThemePalette, themePalette } from '../theme/ThemePalette';
 import { AppIcon } from '../components/AppIcon';
 import { FeedbackPanel } from '../components/FeedbackPanel';
+import { InfoDisclosure } from '../components/InfoDisclosure';
 
 @Component
 export struct HistoryPage {
@@ -262,8 +263,12 @@ export struct HistoryPage {
         FeedbackPanel({ kind: 'error', title: '历史记录未更新', message: this.errorText,
           actionLabel: this.pendingDeleteId.length > 0 ? '' : '重试读取', busy: this.loading || this.deleting, onAction: () => this.retryRead() })
       }
-      Text(this.sourceText).fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
-        .padding({ left: 20, right: 20, top: 6, bottom: 6 })
+      if (this.sourceText.length > 0) {
+        Column() {
+          InfoDisclosure({ title: this.offlineOnly ? '离线只读' :
+            (this.sourceText.startsWith('本机') ? '本机副本 · 待同步' : '记录来源'), message: this.sourceText })
+        }.width('100%').padding({ left: 20, right: 20, top: 4, bottom: 4 })
+      }
       if (this.loading && (this.sessions.length > 0 || this.selected !== null)) {
         Text('正在同步，已保存的内容仍可阅读…').fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
           .width('100%').padding({ left: 20, right: 20, bottom: 6 })
@@ -284,29 +289,35 @@ export struct HistoryPage {
         }.layoutWeight(1).width('100%').justifyContent(FlexAlign.Center)
       } else if (this.selected === null) {
         Scroll(this.listScroller) {
-          Column({ space: 18 }) {
-            Text(`${this.sessions.length} 个会话 · ${this.offlineOnly ? '离线只读' : '回顾或继续讨论'}`).fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
+          Column({ space: 16 }) {
+            Text(`${this.sessions.length} 段对话`).fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
             if (this.sessions.length === 0 && this.errorText.length === 0) {
               FeedbackPanel({ kind: 'info', title: this.offlineOnly ? '本机暂无完整会话' : '还没有会话',
-                message: this.offlineOnly ? '联网登录后可保存完整对话，再在这里离线回看。' : '向助手描述一个目标，之后可在这里回顾文字。',
+                message: this.offlineOnly ? '联网打开会话后，可在此离线回看。' : '和助手聊聊，记录会保存在这里。',
                 actionLabel: this.offlineOnly ? '返回登录' : '前往助手', onAction: () => this.onBack() })
             }
-            Column() {
+            Column({ space: 10 }) {
               ForEach(this.sessions, (session: SessionSummary, index: number) => {
+                if (index === 0 || session.updated_at.substring(0, 10) !== this.sessions[index - 1].updated_at.substring(0, 10)) {
+                  Text(session.updated_at.substring(0, 10)).fontSize(this.palette.metaSize)
+                    .fontWeight(FontWeight.Medium).fontColor(this.palette.quiet).width('100%')
+                    .margin({ top: index === 0 ? 0 : 14, bottom: 2 })
+                }
                 Column({ space: 0 }) {
                   Row({ space: 10 }) {
-                    Column({ space: 7 }) {
-                      Text(session.title).fontSize(17).fontWeight(FontWeight.Medium).fontColor(this.palette.ink)
-                        .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
-                      Text(plainMessage(session.last_message)).fontSize(this.palette.bodySize)
+                    Column({ space: 6 }) {
+                      Text(session.title).fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium).fontColor(this.palette.ink)
+                        .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
+                      Text(plainMessage(session.last_message)).fontSize(this.palette.metaSize)
                         .fontColor(this.palette.secondary).maxLines(2)
                         .textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
                     }.alignItems(HorizontalAlign.Start).layoutWeight(1)
                     AppIcon({ name: 'chevron', iconSize: 16, color: this.palette.muted })
-                  }.width('100%').padding({ top: 17, bottom: 4 }).constraintSize({ minHeight: 76 })
+                  }.width('100%').padding({ top: 16, bottom: 4 }).constraintSize({ minHeight: 76 })
+                    .accessibilityText(`打开会话：${session.title}`)
                     .onClick(() => this.openSession(session))
                   Row({ space: 6 }) {
-                    Text(`${session.updated_at.substring(0, 10)}  ·  ${session.message_count} 条消息`)
+                    Text(`${session.message_count} 条消息`)
                       .fontSize(this.palette.metaSize).fontColor(this.palette.muted).layoutWeight(1)
                     Text(session.model_name === 'deepseek-flash' ? 'Flash' : session.model_name === 'deepseek-v4-pro' ? 'V4 Pro' : session.model_name)
                       .fontSize(this.palette.metaSize).fontColor(this.palette.muted)
@@ -333,27 +344,24 @@ export struct HistoryPage {
                       .backgroundColor(this.palette.field).borderRadius(15)
                       .transition(TransitionEffect.OPACITY.animation({ duration: AppTheme.motion(180) }))
                   }
-                }.width('100%').padding({ left: 17, right: 12 })
-                if (index < this.sessions.length - 1) {
-                  Divider().color(this.palette.separator).strokeWidth(0.5).margin({ left: 17 })
-                }
+                }.width('100%').padding({ left: 16, right: 12 })
+                  .backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
+                  .border({ width: 1, color: this.palette.line })
               }, (session: SessionSummary) => session.session_id)
-            }.width('100%').backgroundColor(this.palette.surface).borderRadius(20).clip(true)
+            }.width('100%')
           }.width('100%').padding({ left: this.palette.pageInset, right: this.palette.pageInset, top: 8, bottom: 24 })
             .onAreaChange(() => this.restoreListPosition())
-        }.layoutWeight(1).width('100%').scrollBar(BarState.Off)
+        }.layoutWeight(1).width('100%').scrollBar(BarState.Off).align(Alignment.TopStart)
           .onScroll(() => { if (!this.restoreList) { this.listOffset = this.listScroller.currentOffset().yOffset; } })
       } else {
         Scroll() {
-          Column({ space: 15 }) {
-            Text((this.selected as SessionSummary).title).fontSize(20).fontWeight(FontWeight.Bold)
-              .fontColor(this.palette.ink).wordBreak(WordBreak.BREAK_WORD).width('100%')
+          Column({ space: 20 }) {
+            InfoDisclosure({ title: '会话信息', message: `${(this.selected as SessionSummary).title}\n${(this.selected as SessionSummary).updated_at.substring(0, 10)}` })
             if (!this.offlineOnly) {
               Button('继续此会话').width('100%').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
                 .fontColor(this.palette.onAccent).backgroundColor(this.palette.accent).borderRadius(this.palette.controlRadius)
                 .enabled(this.canContinue()).onClick(() => this.continueSession())
-              Text('先核对服务端上下文，再回到助手。历史中的旧安排只供阅读，不会恢复为待执行提案。')
-                .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+              InfoDisclosure({ title: '继续会话说明', message: '继续前会核对服务端上下文。历史中的安排仅供阅读，不会恢复为待执行提案。' })
             }
             Text('只读文字 · 不能从历史执行提案').fontSize(this.palette.metaSize).fontColor(this.palette.muted).width('100%')
               .textAlign(TextAlign.Center).margin({ bottom: 4, top: 4 })
@@ -370,7 +378,8 @@ export struct HistoryPage {
                   MessageContent({ content: message.content, isUser: message.role === 'user' })
                 }.padding({ left: 16, right: 16, top: 13, bottom: 13 })
                   .width(message.role === 'user' ? '90%' : '100%')
-                  .backgroundColor(message.role === 'user' ? this.palette.accent : Color.Transparent)
+                  .backgroundColor(message.role === 'user' ? this.palette.accent : this.palette.surface)
+                  .border({ width: message.role === 'user' ? 0 : 1, color: this.palette.line })
                   .borderRadius(message.role === 'user' ? { topLeft: 20, topRight: 20, bottomLeft: 20, bottomRight: 6 }
                     : { topLeft: 20, topRight: 20, bottomLeft: 6, bottomRight: 20 })
                 if (message.role !== 'user') {
@@ -379,7 +388,7 @@ export struct HistoryPage {
               }.width('100%')
             }, (message: HistoryMessage, index: number) => `${index}-${message.created_at}`)
           }.width('100%').padding({ left: 18, right: 18, top: 12, bottom: 24 })
-        }.layoutWeight(1).width('100%').scrollBar(BarState.Off)
+        }.layoutWeight(1).width('100%').scrollBar(BarState.Off).align(Alignment.TopStart)
       }
     }.width('100%').height('100%').alignItems(HorizontalAlign.Start)
       .justifyContent(FlexAlign.Start).backgroundColor(this.palette.bg)

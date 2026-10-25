@@ -4,6 +4,7 @@ import { formatPlanDateTime } from '../utils/PlanPresentation';
 import { AppTheme } from '../theme/AppTheme';
 import { ThemePalette, themePalette } from '../theme/ThemePalette';
 import { AppIllustration } from '../components/AppIllustration';
+import { InfoDisclosure } from '../components/InfoDisclosure';
 
 // Only a view. Index owns the account-level clock, durable queue and server gateway.
 @Component
@@ -188,25 +189,26 @@ export struct FocusPage {
   private StartCard() {
     Column({ space: 12 }) {
       Row({ space: 12 }) {
-        AppIllustration({ source: $r('app.media.xj_focus_entry'), imageWidth: 72, imageHeight: 72, fallbackIcon: 'book' })
+        AppIllustration({ source: $r('app.media.xj_focus_entry'), imageWidth: 40, imageHeight: 40, fallbackIcon: 'book' })
         Column({ space: 4 }) {
-          Text('给这一件事，一段专心的时间').fontSize(this.palette.sectionTitle).fontColor(this.palette.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
-          Text(this.taskTitle || '从首页或计划的具体任务进入，才能开始记录。').fontSize(this.palette.bodySize).fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+          Text('开始专注').fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Medium).fontColor(this.palette.ink).width('100%')
+          Text(this.taskTitle || '请先从待办选择一项任务').fontSize(this.palette.bodySize).fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
         }.layoutWeight(1).alignItems(HorizontalAlign.Start)
       }.width('100%')
       Text('目标分钟（可不填）').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
       TextInput({ text: this.targetText, placeholder: '不设目标，正向计时' }).height(52).fontSize(this.palette.bodySize).backgroundColor(this.palette.field)
         .onChange((value: string) => { this.targetText = value; this.inputMessage = ''; })
       if (this.inputMessage.length > 0) { Text(this.inputMessage).fontSize(this.palette.bodySize).fontColor(this.palette.danger).width('100%').wordBreak(WordBreak.BREAK_WORD) }
-      Button(this.offline ? '已选：仅在本机记录（点此改为联网）' : '联网记录（点此改为仅本机）').width('100%').constraintSize({ minHeight: 48 })
+      Button(this.offline ? '仅本机记录 · 切换为联网' : '联网记录 · 切换为仅本机').width('100%').constraintSize({ minHeight: 48 })
         .fontSize(this.palette.bodySize).backgroundColor(this.palette.accentSoft).fontColor(this.palette.accent).enabled(this.active).onClick(() => this.offline = !this.offline)
-      Text(this.offline ? '仅本机模式：不会立即发出开始请求，不能保证其他设备没有进行中的记录。之后需主动同步，冲突不会自动覆盖。' :
-        '联网模式：确认开始成功后计时，网络等待不计入。应用内切页继续，退到后台会暂停。')
+      Text(this.offline ? '需主动同步；暂无法核对其他设备的记录，冲突不会覆盖。' :
+        '开始确认后计时，退到后台自动暂停。')
         .fontSize(this.palette.metaSize).fontColor(this.offline ? this.palette.warning : this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
       if (this.showClockNotice()) { Text('可靠计时能力尚未确认。点击开始会重新核对；无法取得可靠时钟时不会计时。').fontSize(this.palette.bodySize).fontColor(this.palette.warning).width('100%').wordBreak(WordBreak.BREAK_WORD) }
-      Button('开始这项任务的专注记录').width('100%').constraintSize({ minHeight: 48 }).fontColor(this.palette.onAccent).backgroundColor(this.palette.accent)
+      Button('开始专注').width('100%').constraintSize({ minHeight: 48 }).fontColor(this.palette.onAccent).backgroundColor(this.palette.accent)
         .fontSize(this.palette.bodySize).enabled(this.startAllowed()).onClick(() => this.startRequested())
     }.width('100%').padding(16).alignItems(HorizontalAlign.Start).backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
+      .border({ width: 1, color: this.palette.line })
   }
 
   @Builder
@@ -225,6 +227,7 @@ export struct FocusPage {
         if (this.state.local.canEnd) { Button('结束本次记录').width('100%').constraintSize({ minHeight: 48 }).enabled(this.active).onClick(() => this.askEnd()) }
         if (this.state.local.localState === 'ended') { AppIllustration({ source: $r('app.media.xj_focus_end'), imageWidth: 100, imageHeight: 67, fallbackIcon: 'check' }) }
       }.width('100%').padding(16).alignItems(HorizontalAlign.Start).backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
+        .border({ width: 1, color: this.palette.line })
     }
   }
 
@@ -299,6 +302,7 @@ export struct FocusPage {
           .enabled(this.active && !this.state.pendingOperations.some((op: FocusPendingView) => op.recordId === this.state.record?.record_id))
           .onClick(() => { if (this.state.record !== null) { this.askDelete(this.state.record); } }) }
       }.width('100%').padding(16).alignItems(HorizontalAlign.Start).backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
+        .border({ width: 1, color: this.palette.line })
     }
   }
 
@@ -310,7 +314,6 @@ export struct FocusPage {
       }.width('100%')
       Scroll() {
         Column({ space: 16 }) {
-          Text('专心做一件事，完成与否由你决定。').fontSize(this.palette.bodySize).fontColor(this.palette.secondary).width('100%')
           if (this.state.phase === 'loading') { Text('正在读取本机专注记录…').fontSize(this.palette.bodySize).fontColor(this.palette.secondary).width('100%') }
           if (this.notice.length > 0) { Text(this.notice).fontSize(this.palette.bodySize).fontColor(this.noticeIsWarning() ? this.palette.warning : this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD) }
           if (this.state.message.length > 0) { Text(this.state.message).fontSize(this.palette.bodySize).fontColor(this.messageIsWarning() ? this.palette.warning : this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD) }
@@ -338,7 +341,7 @@ export struct FocusPage {
             Button('同步本机记录').width('100%').constraintSize({ minHeight: 48 }).enabled(this.active).onClick(() => this.onSync())
           }
           if (this.completionTaskId().length > 0) {
-            Text('计时结束与任务完成是两件事。下方会先读取最新任务，再单独记录完成状态。').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+            Text('专注已结束，任务完成状态仍由你确认。').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
             Button(this.completingTask ? '正在核对最新任务…' : '另外标记这项任务已完成').width('100%').constraintSize({ minHeight: 48 }).enabled(this.active && !this.completingTask).onClick(() => this.completeRequested())
           }
           if (this.confirmation.length > 0) {
@@ -366,7 +369,6 @@ export struct FocusPage {
           if (this.state.historyLoading) { Text('正在读取记录…').fontSize(this.palette.bodySize).fontColor(this.palette.secondary) }
           if (this.state.historyError.length > 0) { Text(this.state.historyError).fontSize(this.palette.bodySize).fontColor(this.palette.warning).width('100%').wordBreak(WordBreak.BREAK_WORD) }
           if (!this.state.historyLoading && this.state.historyError.length === 0 && this.state.history.length === 0) { Text('还没有已读取的同步记录。').fontSize(this.palette.bodySize).fontColor(this.palette.secondary).width('100%') }
-          if (this.state.record !== null) { Text('当前所选记录已在上方展示；这里列出其他已读取记录。').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%') }
           ForEach(this.otherHistoryRecords(), (record: FocusRecord) => {
             Button({ type: ButtonType.Normal }) {
               Column({ space: 4 }) {
@@ -377,10 +379,12 @@ export struct FocusPage {
           }, (record: FocusRecord) => `${record.record_id}-${record.revision}`)
           if (this.state.historyHasMore) { Button('加载更多记录').width('100%').constraintSize({ minHeight: 48 }).enabled(this.active && !this.state.historyLoading).onClick(() => this.onLoadMore()) }
 
-          Button('清除本机专注记录与待同步内容').width('100%').constraintSize({ minHeight: 48 }).fontColor(this.palette.danger).backgroundColor(this.palette.dangerSoft)
+          InfoDisclosure({ title: '计时与同步说明', message: '只累计可靠计时器确认的片段；切换应用内页面可继续计时，进入后台自动暂停。未确认的区间不补算，网络等待不计入。联网模式确认开始后计时；仅本机模式需主动同步。结束记录不会自动完成任务。' })
+          Divider().color(this.palette.line)
+          Button('清除本机专注记录与待同步内容').width('100%').constraintSize({ minHeight: 48 }).fontColor(this.palette.danger).backgroundColor(Color.Transparent)
             .enabled(this.active).onClick(() => this.confirmation = 'clear')
-        }.width('100%').alignItems(HorizontalAlign.Start)
-      }.width('100%').layoutWeight(1)
+        }.width('100%').alignItems(HorizontalAlign.Start).padding({ top: 12, bottom: 12 })
+      }.width('100%').layoutWeight(1).align(Alignment.TopStart)
     }.width('100%').height('100%').padding({ left: 20, right: 20, bottom: 16 }).backgroundColor(this.palette.bg)
   }
 }

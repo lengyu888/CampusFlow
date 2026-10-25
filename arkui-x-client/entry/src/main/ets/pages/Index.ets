@@ -910,13 +910,16 @@ struct Index {
   private navItem(tab: number, icon: string, label: string) {
     Button({ type: ButtonType.Normal }) {
       Column({ space: 4 }) {
-        AppIcon({ name: icon, iconSize: 23,
-          color: this.selectedTab() === tab ? this.palette.accent : this.palette.secondary })
-        Text(label).fontSize(this.palette.metaSize).fontWeight(this.selectedTab() === tab ? FontWeight.Medium : FontWeight.Regular)
+        Row() {
+          AppIcon({ name: icon, iconSize: 22,
+            color: this.selectedTab() === tab ? this.palette.accent : this.palette.secondary })
+        }.width(48).height(28).justifyContent(FlexAlign.Center)
+          .backgroundColor(this.selectedTab() === tab ? this.palette.accentSoft : Color.Transparent).borderRadius(14)
+        Text(label).fontSize(11).fontWeight(this.selectedTab() === tab ? FontWeight.Medium : FontWeight.Regular)
           .fontColor(this.selectedTab() === tab ? this.palette.accent : this.palette.secondary)
       }.constraintSize({ minHeight: 48 }).justifyContent(FlexAlign.Center)
     }.layoutWeight(1).constraintSize({ minHeight: 56 }).padding({ top: 4, bottom: 4 })
-      .backgroundColor(this.selectedTab() === tab ? this.palette.accentSoft : Color.Transparent).borderRadius(this.palette.controlRadius)
+      .backgroundColor(Color.Transparent).borderRadius(this.palette.controlRadius)
       .accessibilityText(`${label}${this.selectedTab() === tab ? '，已选中' : ''}`)
       .onClick(() => this.selectTab(tab))
   }

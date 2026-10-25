@@ -4,6 +4,7 @@ import { PlanningReplanController, ReplanViewState, hasCourseClassification, con
 import { formatPlanDateTime, formatPlanTimeRange } from '../utils/PlanPresentation';
 import { AppTheme } from '../theme/AppTheme';
 import { ThemePalette, themePalette } from '../theme/ThemePalette';
+import { AppIcon } from './AppIcon';
 
 @Component
 export struct PlanningConflictsPanel {
@@ -134,6 +135,14 @@ export struct PlanningConflictsPanel {
 
   private openDetails(): void {
     if (this.active) { this.onOpenDetails(); }
+  }
+
+  private compactNeedsDetail(): boolean {
+    const report = this.state.report;
+    return report === null || this.state.message.length > 0 || this.busy() ||
+      this.needsResultCheck() || this.state.phase === 'review' ||
+      !hasCourseClassification(report) || report.unchecked.length > 0 ||
+      this.overlapCount('conflicts') + this.overlapCount('reviews') > 0;
   }
 
   private busyText(): string {
@@ -419,21 +428,28 @@ export struct PlanningConflictsPanel {
   build() {
     if (this.compact) {
       Button({ type: ButtonType.Normal }) {
-        Column({ space: 8 }) {
-          Text(this.summaryTitle()).fontSize(16).fontWeight(FontWeight.Medium)
-            .fontColor(this.needsResultCheck() || this.overlapCount('conflicts') + this.overlapCount('reviews') > 0 ? this.palette.warning : this.palette.ink)
-            .width('100%').wordBreak(WordBreak.BREAK_WORD)
-          Text(this.summaryDetail()).fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
-            .width('100%').wordBreak(WordBreak.BREAK_WORD)
+        Column({ space: 6 }) {
+          Row({ space: 8 }) {
+            Text(this.compactNeedsDetail() ? this.summaryTitle() : '本次无待处理的课程重叠')
+              .fontSize(this.palette.metaSize).fontWeight(FontWeight.Medium)
+              .fontColor(this.needsResultCheck() || this.overlapCount('conflicts') + this.overlapCount('reviews') > 0 ? this.palette.warning : this.palette.secondary)
+              .layoutWeight(1).textAlign(TextAlign.Start).wordBreak(WordBreak.BREAK_WORD)
+            AppIcon({ name: 'chevron', iconSize: 14, color: this.palette.secondary })
+          }.width('100%')
+          if (this.compactNeedsDetail()) {
+            Text(this.summaryDetail()).fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
+              .width('100%').textAlign(TextAlign.Start).wordBreak(WordBreak.BREAK_WORD)
+          }
         }.width('100%').alignItems(HorizontalAlign.Start)
-      }.width('100%').constraintSize({ minHeight: 48 }).padding(this.palette.cardInset)
-        .backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius).enabled(this.active)
+      }.width('100%').constraintSize({ minHeight: 44 }).padding({ left: 12, right: 12, top: 10, bottom: 10 })
+        .backgroundColor(this.compactNeedsDetail() ? this.palette.surface : Color.Transparent)
+        .borderRadius(this.palette.controlRadius).enabled(this.active)
         .accessibilityText(`${this.summaryTitle()}，${this.summaryDetail()}`)
         .onClick(() => this.openDetails())
     } else {
       Scroll() {
         this.FullContent()
-      }.width('100%').height('100%')
+      }.width('100%').height('100%').align(Alignment.TopStart)
     }
   }
 }

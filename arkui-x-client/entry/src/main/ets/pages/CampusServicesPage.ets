@@ -17,6 +17,7 @@ import { ThemePalette, themePalette } from '../theme/ThemePalette';
 import { AppIcon } from '../components/AppIcon';
 import { FeedbackPanel } from '../components/FeedbackPanel';
 import { EvidencePanel } from '../components/EvidencePanel';
+import { InfoDisclosure } from '../components/InfoDisclosure';
 import { evidenceTime } from '../utils/EvidencePresentation';
 
 class CampusServiceOption implements SelectOption {
@@ -272,17 +273,22 @@ export struct CampusServicesPage {
 
   @Builder
   private serviceTab(index: number, label: string) {
-    Button() {
-      Text(label).fontSize(this.palette.metaSize)
-        .fontWeight(this.activeService === index ? FontWeight.Bold : FontWeight.Medium)
-        .fontColor(this.activeService === index ? this.palette.ink : this.palette.secondary)
-        .maxLines(1)
+    Button({ type: ButtonType.Normal }) {
+      Row({ space: 10 }) {
+        AppIcon({ name: index === 0 ? 'classroom' : index === 1 ? 'bolt' : index === 2 ? 'book' : 'card',
+          iconSize: 21, color: this.activeService === index ? this.palette.accent : this.palette.secondary })
+        Text(label).fontSize(this.palette.bodySize)
+          .fontWeight(this.activeService === index ? FontWeight.Bold : FontWeight.Medium)
+          .fontColor(this.activeService === index ? this.palette.accent : this.palette.ink).maxLines(1)
+      }.width('100%')
     }
       .layoutWeight(1)
-      .constraintSize({ minHeight: 48 })
-      .padding({ left: 4, right: 4 })
-      .backgroundColor(this.activeService === index ? this.palette.surface : Color.Transparent)
-      .borderRadius(10)
+      .constraintSize({ minHeight: 60 })
+      .padding({ left: 12, right: 12 })
+      .backgroundColor(this.activeService === index ? this.palette.accentSoft : this.palette.surface)
+      .border({ width: 1, color: this.activeService === index ? this.palette.accent : this.palette.line })
+      .borderRadius(this.palette.controlRadius)
+      .accessibilityText(`${label}${this.activeService === index ? '，已选择' : ''}`)
       .onClick(() => {
         this.getUIContext().animateTo({ duration: AppTheme.motion(180), curve: Curve.EaseOut }, () => {
           this.selectService(index);
@@ -307,7 +313,7 @@ export struct CampusServicesPage {
     .width('100%')
     .padding(16)
     .backgroundColor(this.palette.surface)
-    .borderRadius(18)
+    .borderRadius(this.palette.cardRadius).border({ width: 1, color: this.palette.line })
     .onClick(() => this.loadUsage(room))
   }
 
@@ -317,8 +323,7 @@ export struct CampusServicesPage {
       Column({ space: 12 }) {
         Row() {
           Column({ space: 3 }) {
-            Text('查询教室空闲记录').fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
-            Text('按节次查询；出发前核对来源与现场情况').fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
+            Text('查找空闲教室').fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
           }.alignItems(HorizontalAlign.Start).layoutWeight(1)
           Button('刷新').constraintSize({ minHeight: 48 }).fontSize(this.palette.metaSize).fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft)
             .borderRadius(12).onClick(() => this.loadClassrooms())
@@ -350,7 +355,9 @@ export struct CampusServicesPage {
               })
           }, (label: string) => label)
         }.width('100%')
-      }.width('100%').padding(18).backgroundColor(this.palette.surface).borderRadius(20)
+        InfoDisclosure({ title: '查询说明', message: '按教学楼和节次查询。空闲记录不代表现场一定可用，出发前请核对来源与现场情况。' })
+      }.width('100%').padding(this.palette.cardInset).backgroundColor(this.palette.surface)
+        .borderRadius(this.palette.cardRadius).border({ width: 1, color: this.palette.line })
 
       if (this.usageTitle.length > 0) {
         Column({ space: 10 }) {
@@ -385,7 +392,8 @@ export struct CampusServicesPage {
           if (!this.usageLoading && this.usageError.length === 0) {
             EvidencePanel({ evidence: this.usageEvidence, active: this.active })
           }
-        }.width('100%').padding(18).backgroundColor(this.palette.surface).borderRadius(18)
+        }.width('100%').padding(this.palette.cardInset).backgroundColor(this.palette.surface)
+          .borderRadius(this.palette.cardRadius).border({ width: 1, color: this.palette.line })
       }
 
       Row() {
@@ -398,7 +406,7 @@ export struct CampusServicesPage {
         EvidencePanel({ evidence: this.classroomEvidence, active: this.active })
       }
       if (this.classroomLoading) {
-        FeedbackPanel({ kind: 'loading', title: '正在查询空闲教室', message: '查询完成前，请勿将上次结果作为当前可用状态。' })
+        FeedbackPanel({ kind: 'loading', title: '正在查询空闲教室', message: '上次结果暂不作为当前状态。' })
       } else if (this.classroomError.length > 0) {
         FeedbackPanel({ kind: 'error', title: '查询未完成', message: this.classroomError, actionLabel: '重试', onAction: () => this.loadClassrooms() })
       } else if (this.classrooms.length === 0) {
@@ -417,23 +425,24 @@ export struct CampusServicesPage {
 
   @Builder
   private electricityView() {
-    Column({ space: 14 }) {
+    Column({ space: this.palette.sectionGap }) {
       if (this.electricityLoading) {
         FeedbackPanel({ kind: 'loading', title: '正在读取寝室电费', message: '以数据源记录的更新时间为准。' })
       } else if (this.electricityError.length > 0) {
         FeedbackPanel({ kind: 'error', title: '电费数据暂不可用', message: this.electricityError, actionLabel: '重试', onAction: () => this.loadElectricity() })
       } else if (!this.electricityData.bound) {
         Column({ space: 8 }) {
-          Text('本次未取得已绑定电表记录').fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
-          Text('请先核对来源状态。若尚未绑定，可在 HDUHelp 中完成绑定后刷新。').fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
+          Text('未取得电表记录').fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
+          Text('请核对来源；未绑定电表时，先在 HDUHelp 绑定。').fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
           Button('重新检查').constraintSize({ minHeight: 48 }).fontColor(this.palette.onAccent).backgroundColor(this.palette.accent).borderRadius(13)
             .onClick(() => this.loadElectricity())
-        }.width('100%').alignItems(HorizontalAlign.Start).padding(20).backgroundColor(this.palette.surface).borderRadius(18)
+        }.width('100%').alignItems(HorizontalAlign.Start).padding(this.palette.cardInset).backgroundColor(this.palette.surface)
+          .borderRadius(this.palette.cardRadius).border({ width: 1, color: this.palette.line })
       } else {
         Column({ space: 18 }) {
           Row() {
             Column({ space: 4 }) {
-              Text('最近记录的电费余额').fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
+              Text('电费余额 · 最近记录').fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
               Row({ space: 5 }) {
                 Text('¥').fontSize(21).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
                 Text(this.balanceText()).fontSize(40).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
@@ -452,7 +461,8 @@ export struct CampusServicesPage {
             Button('刷新余额').constraintSize({ minHeight: 48 }).fontSize(this.palette.metaSize).fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft)
               .borderRadius(11).onClick(() => this.loadElectricity())
           }.width('100%')
-        }.width('100%').padding(20).backgroundColor(this.palette.surface).borderRadius(20)
+        }.width('100%').padding(this.palette.cardInset).backgroundColor(this.palette.surface)
+          .borderRadius(this.palette.cardRadius).border({ width: 1, color: this.palette.line })
 
         Column({ space: 12 }) {
           Row() {
@@ -548,7 +558,8 @@ export struct CampusServicesPage {
         this.campusDataItem(item)
       }, (item: HDUHelpDisplayItem) => `${section.resource}-${item.label}`)
       EvidencePanel({ evidence: section.evidence ?? [], active: this.active })
-    }.width('100%').padding(17).backgroundColor(this.palette.surface).borderRadius(18)
+    }.width('100%').padding(this.palette.cardInset).backgroundColor(this.palette.surface)
+      .borderRadius(this.palette.cardRadius).border({ width: 1, color: this.palette.line })
   }
 
   @Builder
@@ -568,21 +579,23 @@ export struct CampusServicesPage {
             .backgroundColor(this.palette.accentSoft).borderRadius(12)
             .onClick(() => this.onOpenAgent(suggestion.prompt))
         }, (suggestion: HDUHelpSuggestedPrompt) => suggestion.prompt_id)
-      }.width('100%').padding(18).backgroundColor(this.palette.surface).borderRadius(18)
+      }.width('100%').padding(this.palette.cardInset).backgroundColor(this.palette.surface)
+        .borderRadius(this.palette.cardRadius).border({ width: 1, color: this.palette.line })
     }
   }
 
   @Builder
   private libraryView() {
-    Column({ space: 14 }) {
+    Column({ space: this.palette.sectionGap }) {
       Row() {
         Column({ space: 4 }) {
-          Text('我的图书馆').fontSize(19).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
+          Text('图书馆记录').fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
           Text('到馆、借阅与座位使用记录').fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
         }.alignItems(HorizontalAlign.Start).layoutWeight(1)
         Button('刷新').constraintSize({ minHeight: 48 }).fontSize(this.palette.metaSize).fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft)
           .borderRadius(12).onClick(() => this.loadCampusInfo())
-      }.width('100%').padding(18).backgroundColor(this.palette.surface).borderRadius(20)
+      }.width('100%').padding(this.palette.cardInset).backgroundColor(this.palette.surface)
+        .borderRadius(this.palette.cardRadius).border({ width: 1, color: this.palette.line })
 
       if (this.campusInfoLoading) {
         FeedbackPanel({ kind: 'loading', title: '正在读取图书馆数据', message: '正在读取已连接的校园数据。' })
@@ -591,11 +604,11 @@ export struct CampusServicesPage {
       } else if (!this.campusConfigured) {
         Column({ space: 8 }) {
           Text('尚未连接 HDUHelp').fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
-          Text('请在个人设置中配置个人令牌，连接后可查看图书馆记录。')
+          Text('在数据连接中配置令牌，即可读取图书馆记录。')
             .fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
           Button('打开数据与连接').constraintSize({ minHeight: 48 }).onClick(() => this.onOpenProfile())
         }.width('100%').alignItems(HorizontalAlign.Start).padding(20)
-          .backgroundColor(this.palette.surface).borderRadius(18)
+          .backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius).border({ width: 1, color: this.palette.line })
       } else {
         if (this.librarySections().length === 0) {
           Text('当前没有可展示的图书馆数据').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
@@ -612,15 +625,16 @@ export struct CampusServicesPage {
 
   @Builder
   private campusCardView() {
-    Column({ space: 14 }) {
+    Column({ space: this.palette.sectionGap }) {
       Row() {
         Column({ space: 4 }) {
-          Text('校园卡余额').fontSize(19).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
+          Text('校园卡').fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
           Text('余额与其他校园生活动态').fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
         }.alignItems(HorizontalAlign.Start).layoutWeight(1)
         Button('刷新').constraintSize({ minHeight: 48 }).fontSize(this.palette.metaSize).fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft)
           .borderRadius(12).onClick(() => this.loadCampusInfo())
-      }.width('100%').padding(18).backgroundColor(this.palette.surface).borderRadius(20)
+      }.width('100%').padding(this.palette.cardInset).backgroundColor(this.palette.surface)
+        .borderRadius(this.palette.cardRadius).border({ width: 1, color: this.palette.line })
 
       if (this.campusInfoLoading) {
         FeedbackPanel({ kind: 'loading', title: '正在读取校园卡数据', message: '正在读取已连接的校园数据。' })
@@ -659,17 +673,20 @@ export struct CampusServicesPage {
           .borderRadius(22).accessibilityText('返回上一页').onClick(() => this.onBack())
         Column({ space: 3 }) {
           Text('校园服务').fontSize(this.palette.pageTitle).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
-          Text('查看教室与已连接的校园信息').fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
+          Text('选择一项服务').fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
         }.alignItems(HorizontalAlign.Start).layoutWeight(1)
       }.width('100%').padding({ left: 18, right: 18, top: 14, bottom: 12 })
 
-      Row({ space: 6 }) {
-        this.serviceTab(0, '空闲教室')
-        this.serviceTab(1, '寝室电费')
-        this.serviceTab(2, '图书馆')
-        this.serviceTab(3, '校园卡')
-      }.width('90%').alignSelf(ItemAlign.Center).padding(4)
-        .backgroundColor(this.palette.separator).borderRadius(14)
+      Column({ space: 8 }) {
+        Row({ space: 8 }) {
+          this.serviceTab(0, '空闲教室')
+          this.serviceTab(1, '寝室电费')
+        }.width('100%')
+        Row({ space: 8 }) {
+          this.serviceTab(2, '图书馆')
+          this.serviceTab(3, '校园卡')
+        }.width('100%')
+      }.width('100%').padding({ left: this.palette.pageInset, right: this.palette.pageInset, bottom: 8 })
 
       Scroll(this.scrollers[this.activeService]) {
         Column() {
@@ -684,7 +701,7 @@ export struct CampusServicesPage {
           }
         }.width('100%').alignItems(HorizontalAlign.Start).justifyContent(FlexAlign.Start)
           .padding({ left: 18, right: 18, top: 16, bottom: 32 })
-      }.layoutWeight(1).width('100%')
+      }.layoutWeight(1).width('100%').align(Alignment.TopStart)
     }.width('100%').height('100%').alignItems(HorizontalAlign.Start)
       .justifyContent(FlexAlign.Start).backgroundColor(this.palette.bg)
   }

@@ -96,8 +96,8 @@ export struct SkillsPage {
   build() {
     Scroll() {
       Column({ space: 24 }) {
-        Text('查看用途和权限，再决定是否交给助手使用。')
-          .fontSize(this.palette.bodySize).fontColor(this.palette.quiet).width('100%')
+        Text('按需要为助手添加能力。')
+          .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
         Row({ space: 8 }) {
           Button(this.loaded ? `全部 ${this.skills.length}` : '全部').layoutWeight(1).constraintSize({ minHeight: 48 })
             .fontSize(this.palette.bodySize).fontColor(!this.installedOnly ? this.palette.onAccent : this.palette.accent)
@@ -132,12 +132,18 @@ export struct SkillsPage {
             }.width('100%')
             Text(`${skill.official ? '官方 · ' : ''}${skill.category} · ${!skill.installed ? '未安装' : skill.enabled ? '已启用' : '已停用'}`)
               .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
-            Text(skill.description).fontSize(this.palette.bodySize).fontColor(this.palette.ink).width('100%')
-            Button(this.expandedIds.includes(skill.skill_id) ? '收起权限与版本' : `查看 ${skill.permissions.length} 项权限与版本`)
+            if (!this.expandedIds.includes(skill.skill_id)) {
+              Text(skill.description).fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
+                .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
+            }
+            Button(this.expandedIds.includes(skill.skill_id) ? '收起详情' : `用途与权限（${skill.permissions.length}）`)
               .width('100%').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
-              .fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft).borderRadius(this.palette.controlRadius)
+              .fontColor(this.palette.accent).backgroundColor(this.palette.field).borderRadius(this.palette.controlRadius)
               .onClick(() => this.toggleDetails(skill.skill_id))
             if (this.expandedIds.includes(skill.skill_id)) {
+              Text(skill.description).fontSize(this.palette.bodySize).fontColor(this.palette.ink).width('100%')
+                .wordBreak(WordBreak.BREAK_WORD)
+              Divider().color(this.palette.line)
               Text(`版本 ${skill.version} · ${skill.author}${skill.update_available ? ' · 有可用更新' : ''}`)
                 .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
               if (skill.permissions.length === 0) {
@@ -162,8 +168,9 @@ export struct SkillsPage {
             }
           }.width('100%').padding(this.palette.cardInset).alignItems(HorizontalAlign.Start)
             .backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
+            .border({ width: 1, color: this.palette.line })
         }, (skill: SkillSummary) => `${skill.skill_id}-${skill.installed}-${skill.enabled}`)
       }.width('100%').padding({ left: this.palette.pageInset, right: this.palette.pageInset, top: 16, bottom: 24 })
-    }.width('100%').height('100%').backgroundColor(this.palette.canvas)
+    }.width('100%').height('100%').backgroundColor(this.palette.canvas).align(Alignment.TopStart)
   }
 }

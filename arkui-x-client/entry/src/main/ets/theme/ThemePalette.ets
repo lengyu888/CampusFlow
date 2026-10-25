@@ -49,7 +49,7 @@ export function themePalette(id: string): ThemePalette {
     red: blue ? '#D70015' : AppTheme.red, redSoft: blue ? '#FFF0F1' : AppTheme.redSoft,
     separator: blue ? '#E5E5EA' : AppTheme.separator,
     pageInset: AppTheme.pageInset, sectionGap: AppTheme.sectionGap, cardInset: AppTheme.cardInset,
-    cardRadius: blue ? 24 : AppTheme.cardRadius, controlRadius: blue ? 16 : AppTheme.controlRadius,
+    cardRadius: AppTheme.cardRadius, controlRadius: AppTheme.controlRadius,
     pageTitle: AppTheme.pageTitle, sectionTitle: AppTheme.sectionTitle,
     bodySize: AppTheme.bodySize, metaSize: AppTheme.metaSize
   };

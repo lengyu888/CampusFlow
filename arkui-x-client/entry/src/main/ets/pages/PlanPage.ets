@@ -111,10 +111,10 @@ export struct PlanPage {
 
   build() {
     Scroll() {
-      Column({ space: 18 }) {
+      Column({ space: this.palette.sectionGap }) {
         Column({ space: 4 }) {
           Text('计划').fontSize(this.palette.pageTitle).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
-          Text('课程、日历与行动在同一条时间线上').fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
+          Text('课程与待办').fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
         }.width('100%').alignItems(HorizontalAlign.Start)
 
         Column({ space: 12 }) {
@@ -170,7 +170,8 @@ export struct PlanPage {
                 Row({ space: 10 }) {
                   Text(course.start_time).fontSize(this.palette.metaSize).fontWeight(FontWeight.Bold).fontColor(this.palette.accent).width(42)
                   Column({ space: 2 }) {
-                    Text(course.title).fontSize(this.palette.metaSize).fontWeight(FontWeight.Medium).fontColor(this.palette.ink)
+                    Text(course.title).fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium).fontColor(this.palette.ink)
+                      .width('100%').wordBreak(WordBreak.BREAK_WORD)
                     Text(`${course.location}${course.teacher.length > 0 ? ` · ${course.teacher}` : ''}`)
                       .fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
                   }.alignItems(HorizontalAlign.Start).layoutWeight(1)
@@ -178,7 +179,8 @@ export struct PlanPage {
               }, (course: TimetableEntry) => `${course.date}-${course.start_time}-${course.title}`)
             }
           }.width('100%').padding(13).backgroundColor(this.palette.accentSoft).borderRadius(16)
-        }.width('100%').padding(17).backgroundColor(this.palette.surface).borderRadius(22)
+        }.width('100%').padding(this.palette.cardInset).backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
+          .border({ width: 1, color: this.palette.line })
 
         Row({ space: 12 }) {
           Column({ space: 6 }) {
@@ -215,9 +217,10 @@ export struct PlanPage {
               Text(task.location ?? (task.source === 'agent' ? '由助手创建' : '手动创建'))
                 .fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
             }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-          }.width('100%').padding(17).backgroundColor(this.palette.surface).borderRadius(18)
+          }.width('100%').padding(this.palette.cardInset).backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
+            .border({ width: 1, color: this.palette.line })
         }, (task: PlanningTask) => task.task_id)
       }.width('100%').padding({ left: this.palette.pageInset, right: this.palette.pageInset, top: 18, bottom: 110 })
-    }.width('100%').height('100%').backgroundColor(this.palette.canvas)
+    }.width('100%').height('100%').backgroundColor(this.palette.canvas).align(Alignment.TopStart)
   }
 }
