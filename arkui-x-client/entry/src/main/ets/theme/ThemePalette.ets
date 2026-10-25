@@ -20,7 +20,7 @@ export interface ThemePalette {
 
 export const THEME_PALETTE_KEY: string = 'campusflowThemePalette';
 export const THEME_ID_KEY: string = 'campusflowThemeId';
-export const DEFAULT_THEME_ID: AppThemeId = 'paper-green';
+export const DEFAULT_THEME_ID: AppThemeId = 'ios-blue';
 
 export function themePalette(id: string): ThemePalette {
   const blue = id === 'ios-blue';
@@ -56,7 +56,7 @@ export function themePalette(id: string): ThemePalette {
 }
 
 export function validThemeId(value: string | undefined): AppThemeId {
-  return value === 'ios-blue' ? 'ios-blue' : DEFAULT_THEME_ID;
+  return value === 'ios-blue' || value === 'paper-green' ? value : DEFAULT_THEME_ID;
 }
 
 let initialized: boolean = false;

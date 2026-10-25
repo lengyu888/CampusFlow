@@ -9,11 +9,12 @@ test('palettes preserve main iOS blue and paper green, with every static token r
   assert.equal(paper.accent, '#416454'); assert.equal(paper.canvas, '#F6F4EF');
   assert.equal(blue.accent, '#007AFF'); assert.equal(blue.canvas, '#F2F2F7'); assert.equal(blue.ink, '#1C1C1E');
   for (const key of Object.keys(fixture.AppTheme)) assert.ok(key in paper && key in blue, `missing token ${key}`);
-  assert.equal(fixture.validThemeId('untrusted-id'), 'paper-green');
+  assert.equal(fixture.validThemeId('untrusted-id'), 'ios-blue');
+  assert.equal(fixture.validThemeId('paper-green'), 'paper-green');
 });
 
 test('switch publishes fresh observable values to every subscriber and persists only the theme id', () => {
-  const fixture = createThemeFixture(); fixture.initializeAppTheme();
+  const fixture = createThemeFixture({ campusflowThemeId: 'paper-green' }); fixture.initializeAppTheme();
   const business = { account: 'account-a', draft: '未保存草稿', route: 'planning', selectedDate: '2030-10-23' };
   fixture.AppStorage.setOrCreate('business', business);
   fixture.AppStorage.setOrCreate('reduceMotion', true);
@@ -36,7 +37,7 @@ test('a fresh process restores a saved id before pages appear without persisting
   assert.equal(restarted.AppStorage.get(restarted.THEME_PALETTE_KEY).id, 'ios-blue');
   assert.equal(restarted.AppStorage.get(restarted.THEME_PALETTE_KEY).canvas, '#F2F2F7');
   const invalid = createThemeFixture({ campusflowThemeId: 'deleted-theme' }); invalid.initializeAppTheme();
-  assert.equal(invalid.AppStorage.get(invalid.THEME_PALETTE_KEY).id, 'paper-green');
+  assert.equal(invalid.AppStorage.get(invalid.THEME_PALETTE_KEY).id, 'ios-blue');
 });
 
 test('Profile theme action does not change account form, inner navigation, model input or user', () => {

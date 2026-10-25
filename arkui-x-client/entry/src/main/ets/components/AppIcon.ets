@@ -100,6 +100,27 @@ export struct AppIcon {
         this.line([[12, 4], [12, 20]]);
         this.line([[4, 12], [20, 12]]);
         break;
+      case 'send':
+        this.line([[12, 20], [12, 4]]);
+        this.line([[5, 11], [12, 4], [19, 11]]);
+        break;
+      case 'more':
+        this.line([[4, 12], [4.4, 12]]);
+        this.line([[12, 12], [12.4, 12]]);
+        this.line([[20, 12], [20.4, 12]]);
+        break;
+      case 'expand':
+        this.line([[4, 9], [4, 4], [9, 4]]);
+        this.line([[15, 20], [20, 20], [20, 15]]);
+        this.line([[4, 4], [9, 9]]);
+        this.line([[15, 15], [20, 20]]);
+        break;
+      case 'collapse':
+        this.line([[4, 4], [9, 9], [4, 9]]);
+        this.line([[9, 9], [9, 4]]);
+        this.line([[20, 20], [15, 15], [20, 15]]);
+        this.line([[15, 15], [15, 20]]);
+        break;
       case 'microphone':
         this.roundedBox(9, 2, 6, 12);
         this.context.moveTo(6, 10);

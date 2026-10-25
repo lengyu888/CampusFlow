@@ -59,7 +59,7 @@ test('first install defaults only after UI success and later theme selection sti
   const { ability, theme, createStage, finish } = startup({}); ability.onCreate({}, {});
   assert.equal(theme.values.has(theme.THEME_ID_KEY), false);
   await createStage(); finish();
-  assert.equal(theme.AppStorage.get(theme.THEME_PALETTE_KEY).id, 'paper-green');
+  assert.equal(theme.AppStorage.get(theme.THEME_PALETTE_KEY).id, 'ios-blue');
   theme.selectAppTheme('ios-blue');
   assert.equal(theme.persisted.get(theme.THEME_ID_KEY), 'ios-blue');
   assert.equal(theme.AppStorage.get(theme.THEME_PALETTE_KEY).accent, '#007AFF');

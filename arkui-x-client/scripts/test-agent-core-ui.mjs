@@ -205,6 +205,85 @@ test('reading an older answer preserves scroll when a new response arrives and e
   assert.equal(page.unreadMessages, 0);
 });
 
+test('chat viewport shrink follows the latest answer without needing content growth or a new-message flag', async () => {
+  const { page, scroll, calls } = await harness();
+  page.appendMessage('assistant', '已显示的长回答');
+  page.contentHeight = 1800; page.viewportHeight = 400; page.scrollOffset = 1400;
+  page.followLatest = true; page.scrollForNewMessage = false; page.unreadMessages = 2;
+  page.prompt = '尚未发送的草稿';
+  page.chatViewportChanged(220);
+  assert.equal(page.viewportHeight, 220);
+  assert.equal(page.contentHeight, 1800, 'keyboard or composer growth does not require a content-size event');
+  assert.deepEqual(scroll, [{ kind: 'edge', edge: 'bottom' }]);
+  assert.equal(page.unreadMessages, 0);
+  assert.equal(page.followLatest, true);
+  assert.equal(page.scrollOffset, 1400, 'only measured scroll callbacks update the recorded offset');
+  assert.equal(page.prompt, '尚未发送的草稿');
+  assert.deepEqual(calls, [], 'a viewport change never sends or writes');
+});
+
+test('chat viewport changes preserve a reader of older messages and their unsent draft', async () => {
+  const { page, scroll } = await harness();
+  page.appendMessage('assistant', '正在阅读的旧回答');
+  page.contentHeight = 1800; page.viewportHeight = 400; page.scrollOffset = 120;
+  page.followLatest = false; page.scrollForNewMessage = false; page.unreadMessages = 3;
+  page.prompt = '编辑中的多行\n草稿';
+  page.chatViewportChanged(220);
+  page.chatViewportChanged(480);
+  assert.equal(page.viewportHeight, 480);
+  assert.deepEqual(scroll, []);
+  assert.equal(page.followLatest, false);
+  assert.equal(page.scrollForNewMessage, false);
+  assert.equal(page.scrollOffset, 120);
+  assert.equal(page.unreadMessages, 3);
+  assert.equal(page.prompt, '编辑中的多行\n草稿');
+});
+
+test('chat viewport changes do not scroll a hidden conversation or the empty welcome page', async () => {
+  for (const state of ['hidden', 'welcome']) {
+    const { page, scroll } = await harness();
+    if (state === 'hidden') { page.appendMessage('assistant', '隐藏会话的回答'); page.voiceActive = false; }
+    page.viewportHeight = 400; page.followLatest = true; page.unreadMessages = 1;
+    page.chatViewportChanged(220);
+    assert.equal(page.viewportHeight, 220);
+    assert.deepEqual(scroll, [], state);
+    assert.equal(page.unreadMessages, 1, state);
+  }
+});
+
+test('chat viewport ignores unmeasured, non-finite and repeated heights without issuing scroll commands', async () => {
+  const { page, scroll } = await harness();
+  page.appendMessage('assistant', '当前回答');
+  page.viewportHeight = 400; page.followLatest = true; page.unreadMessages = 2;
+  for (const height of [0, -1, NaN, Infinity, -Infinity, 400]) { page.chatViewportChanged(height); }
+  assert.equal(page.viewportHeight, 400);
+  assert.deepEqual(scroll, []);
+  assert.equal(page.unreadMessages, 2);
+});
+
+test('chat viewport resize does not steal an options restoration or pending proposal jump', async () => {
+  for (const guarded of ['restore', 'jump', 'options']) {
+    const { page, scroll } = await harness();
+    page.appendMessage('assistant', '包含提案的回答');
+    page.viewportHeight = 400; page.followLatest = true; page.unreadMessages = 2;
+    page.scrollOffset = 840; page.restoreOptionsOffset = guarded === 'restore' ? 840 : -1;
+    page.pendingJumpId = guarded === 'jump' ? 'pending-proposal' : '';
+    page.optionsExpanded = guarded === 'options';
+    page.messageAnchors = [{ id: 'answer', y: 420 }];
+    page.proposalAnchors = [{ id: 'pending-proposal', y: 180 }];
+    page.chatViewportChanged(220);
+    assert.equal(page.viewportHeight, 220);
+    assert.deepEqual(scroll, [], guarded);
+    assert.equal(page.scrollOffset, 840, guarded);
+    assert.equal(page.restoreOptionsOffset, guarded === 'restore' ? 840 : -1, guarded);
+    assert.equal(page.pendingJumpId, guarded === 'jump' ? 'pending-proposal' : '', guarded);
+    assert.equal(page.optionsExpanded, guarded === 'options', guarded);
+    assert.equal(page.unreadMessages, 2, guarded);
+    assert.deepEqual(page.messageAnchors, [{ id: 'answer', y: 420 }], guarded);
+    assert.deepEqual(page.proposalAnchors, [{ id: 'pending-proposal', y: 180 }], guarded);
+  }
+});
+
 test('hidden-page responses do not move its scroll or replace the draft on return', async () => {
   const { page, scroll } = await harness();
   let suspended = 0;

@@ -390,8 +390,8 @@ export struct HomePage {
         }.width('100%')
       }.width('100%').constraintSize({ minHeight: 48 }).padding(12)
         .backgroundColor(this.palette.accentSoft).borderRadius(this.palette.controlRadius).onClick(() => this.nextAction(row))
-    }.width('100%').padding(this.palette.cardInset).backgroundColor(this.palette.surface)
-      .borderRadius(this.palette.cardRadius).border({ width: { left: 3 }, color: this.palette.accent })
+    }.width('100%').padding(20).backgroundColor(this.palette.surface)
+      .borderRadius(this.palette.cardRadius)
   }
 
   @Builder
@@ -448,8 +448,7 @@ export struct HomePage {
         this.TimelineRow(row)
         if (index < rows.length - 1) { Divider().color(this.palette.line).margin({ left: 86, right: 16 }) }
       }, (row: AgendaRow) => `${row.id}-${row.done}-${this.dataRevision}`)
-    }.width('100%').backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
-      .border({ width: 1, color: this.palette.line })
+    }.width('100%').backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius).clip(true)
   }
 
   @Builder
@@ -533,47 +532,83 @@ export struct HomePage {
       Text(title).fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Bold).fontColor(this.palette.ink).layoutWeight(1)
       if (link.length > 0) {
         Button(link).fontSize(this.palette.metaSize).fontColor(this.palette.accent).backgroundColor(Color.Transparent)
-          .constraintSize({ minHeight: 48 }).padding(8).onClick(() => this.onOpenPlan(view))
+          .constraintSize({ minHeight: 44 }).padding({ left: 8, right: 0 }).onClick(() => this.onOpenPlan(view))
       }
     }.width('100%')
   }
 
   @Builder
   private FocusEntry() {
-    Column({ space: 12 }) {
+    Column({ space: 8 }) {
       Row({ space: 8 }) {
         Text('专注').fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Medium).fontColor(this.palette.ink).layoutWeight(1)
-        Button('查看记录').constraintSize({ minHeight: 48 }).fontColor(this.palette.accent).backgroundColor(Color.Transparent)
+        Button('查看记录').constraintSize({ minHeight: 44 }).fontSize(this.palette.metaSize)
+          .padding({ left: 8, right: 0 }).fontColor(this.palette.accent).backgroundColor(Color.Transparent)
           .onClick(() => this.onOpenFocusRecords())
       }.width('100%')
-      ForEach(this.focusCandidates(), (task: PlanningTask) => {
-        Button({ type: ButtonType.Normal }) {
-          Column({ space: 5 }) {
-            Text(task.title).fontSize(this.palette.bodySize).fontColor(this.palette.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
-            Text('开始专注').fontSize(this.palette.metaSize).fontColor(this.palette.accent).width('100%')
-          }.width('100%').alignItems(HorizontalAlign.Start)
-        }.width('100%').constraintSize({ minHeight: 64 }).padding(14).backgroundColor(this.palette.surface).borderRadius(this.palette.controlRadius)
-          .onClick(() => this.focusRequested(task))
-      }, (task: PlanningTask) => `${task.task_id}-${this.refreshKey}`)
-      if (this.taskPhase !== 'ready') {
-        Text('待办未读取，可查看已有记录。').fontSize(this.palette.metaSize).fontColor(this.palette.warning).width('100%')
-      }
-      InfoDisclosure({ title: '专注与完成状态', message: '开始前选择一项待办。专注结束后，再决定是否标记完成；其他任务也可从计划详情开始。' })
+      Column() {
+        ForEach(this.focusCandidates(), (task: PlanningTask, index: number) => {
+          if (index > 0) { Divider().color(this.palette.line).strokeWidth(0.5).margin({ left: 52, right: 16 }) }
+          Button({ type: ButtonType.Normal }) {
+            Row({ space: 12 }) {
+              AppIcon({ name: 'bolt', iconSize: 22, color: this.palette.accent })
+              Text(task.title).fontSize(this.palette.bodySize).fontColor(this.palette.ink)
+                .layoutWeight(1).wordBreak(WordBreak.BREAK_WORD)
+              Text('开始').fontSize(this.palette.metaSize).fontColor(this.palette.accent)
+            }.width('100%')
+          }.width('100%').constraintSize({ minHeight: 60 }).padding({ left: 16, right: 16, top: 12, bottom: 12 })
+            .backgroundColor(Color.Transparent).borderRadius(0).onClick(() => this.focusRequested(task))
+        }, (task: PlanningTask) => `${task.task_id}-${this.refreshKey}`)
+        if (this.taskPhase === 'ready' && this.focusCandidates().length === 0) {
+          Button({ type: ButtonType.Normal }) {
+            Row({ space: 12 }) {
+              AppIcon({ name: 'bolt', iconSize: 22, color: this.palette.accent })
+              Text('选择待办开始专注').fontSize(this.palette.bodySize).fontColor(this.palette.ink).layoutWeight(1)
+              AppIcon({ name: 'chevron', iconSize: 14, color: this.palette.muted })
+            }.width('100%')
+          }.width('100%').constraintSize({ minHeight: 60 }).padding(16).backgroundColor(Color.Transparent)
+            .borderRadius(0).onClick(() => this.onOpenPlan('tasks'))
+        }
+        if (this.taskPhase !== 'ready') {
+          Text('待办未读取，可查看已有记录。').fontSize(this.palette.metaSize).fontColor(this.palette.warning)
+            .width('100%').padding(16)
+        }
+        Column() {
+          InfoDisclosure({ title: '专注说明', message: '开始前选择一项待办。专注结束后，再决定是否标记完成；其他任务也可从计划详情开始。' })
+        }.width('100%').padding({ left: 16, right: 16 })
+      }.width('100%').backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius).clip(true)
     }.width('100%').alignItems(HorizontalAlign.Start)
+  }
+
+  @Builder
+  private QuickEntry(icon: string, title: string, action: () => void) {
+    Button({ type: ButtonType.Normal }) {
+      Row({ space: 12 }) {
+        AppIcon({ name: icon, iconSize: 21, color: this.palette.accent })
+        Text(title).fontSize(this.palette.bodySize).fontColor(this.palette.ink).layoutWeight(1)
+          .textAlign(TextAlign.Start).wordBreak(WordBreak.BREAK_WORD)
+        AppIcon({ name: 'chevron', iconSize: 14, color: this.palette.muted })
+      }.width('100%')
+    }.width('100%').constraintSize({ minHeight: 56 }).padding({ left: 16, right: 16, top: 12, bottom: 12 })
+      .backgroundColor(Color.Transparent).borderRadius(0).onClick(action)
   }
 
   build() {
     Scroll(this.scroller) {
       Column({ space: this.palette.sectionGap }) {
-        Row({ space: 12 }) {
-          Column({ space: 6 }) {
-            Text('今日').fontSize(this.palette.pageTitle).fontWeight(FontWeight.Bold).fontColor(this.palette.ink).width('100%')
-            Text(`${this.dateLabel()} · ${this.greeting()}`).fontSize(this.palette.metaSize).fontColor(this.palette.quiet)
+        Row({ space: 8 }) {
+          Column({ space: 3 }) {
+            Text(this.dateLabel()).fontSize(this.palette.metaSize).fontColor(this.palette.quiet)
               .width('100%').wordBreak(WordBreak.BREAK_WORD)
+            Text('今日').fontSize(this.palette.pageTitle).fontWeight(FontWeight.Bold).fontColor(this.palette.ink).width('100%')
           }.alignItems(HorizontalAlign.Start).layoutWeight(1)
           Button({ type: ButtonType.Circle }) {
-            Text(this.user.display_name.slice(0, 1)).fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Medium).fontColor(this.palette.accent)
-          }.width(48).height(48).backgroundColor(this.palette.accentSoft)
+            AppIcon({ name: 'plus', iconSize: 22, color: this.palette.accent })
+          }.width(44).height(44).backgroundColor(this.palette.surface)
+            .accessibilityText('添加待办，记一件事').onClick(() => this.openCapture())
+          Button({ type: ButtonType.Circle }) {
+            Text(this.user.display_name.slice(0, 1)).fontSize(18).fontWeight(FontWeight.Medium).fontColor(this.palette.accent)
+          }.width(44).height(44).backgroundColor(this.palette.accentSoft)
             .accessibilityText('打开个人设置').onClick(() => this.onOpenProfile())
         }.width('100%')
         if (this.coursePhase !== 'ready' || this.taskPhase !== 'ready' ||
@@ -595,15 +630,7 @@ export struct HomePage {
         } else if (this.agenda().next !== null) {
           this.NextCard(this.agenda().next!)
         }
-        Button({ type: ButtonType.Normal }) {
-          Row({ space: 12 }) {
-            AppIcon({ name: 'plus', iconSize: 21, color: this.palette.onAccent })
-            Text('记一件事').fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium)
-              .fontColor(this.palette.onAccent).layoutWeight(1).textAlign(TextAlign.Start)
-          }.width('100%')
-        }.width('100%').constraintSize({ minHeight: 52 }).padding(16).backgroundColor(this.palette.accent)
-          .borderRadius(this.palette.controlRadius).onClick(() => this.openCapture())
-        Column({ space: 12 }) {
+        Column({ space: 8 }) {
           this.SectionTitle('今日日程', '查看日历')
           if (this.groups().upcoming.length > 0) {
             this.TimelineList(this.groups().upcoming)
@@ -612,7 +639,7 @@ export struct HomePage {
               '日程尚未完整读取，请重试。' : '暂无接下来的定时安排'))
               .fontSize(this.palette.bodySize).fontColor(this.palette.quiet).width('100%').padding(this.palette.cardInset)
               .backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
-              .border({ width: 1, color: this.palette.line }).wordBreak(WordBreak.BREAK_WORD)
+              .wordBreak(WordBreak.BREAK_WORD)
           }
           if (this.groups().overdue.length > 0) {
             Text(`待处理 · ${this.groups().overdue.length} 项`).fontSize(this.palette.bodySize)
@@ -639,7 +666,7 @@ export struct HomePage {
             }.width('100%').backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
           }
         }.width('100%')
-        Column({ space: 12 }) {
+        Column({ space: 8 }) {
           this.SectionTitle('待安排', '全部待办', 'tasks')
           if (this.agenda().unscheduled.length > 0) {
             Column() {
@@ -657,21 +684,12 @@ export struct HomePage {
               .backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
           }
         }.width('100%')
-        Button({ type: ButtonType.Normal }) {
-          Row({ space: 12 }) {
-            AppIcon({ name: 'assistant', iconSize: 24, color: this.palette.accent })
-            Column({ space: 5 }) {
-              Text('请助手安排').fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium)
-                .fontColor(this.palette.accent).width('100%')
-            }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-            AppIcon({ name: 'chevron', iconSize: 16, color: this.palette.accent })
-          }.width('100%')
-        }.width('100%').constraintSize({ minHeight: 56 }).padding(this.palette.cardInset)
-          .backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
-          .border({ width: 1, color: this.palette.line }).onClick(() => this.onOpenAgent())
         this.FocusEntry()
-        Button('回看这一天').width('100%').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
-          .fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft).borderRadius(this.palette.controlRadius).onClick(() => this.reviewRequested())
+        Column() {
+          this.QuickEntry('assistant', '请助手安排', () => this.onOpenAgent())
+          Divider().color(this.palette.line).strokeWidth(0.5).margin({ left: 52, right: 16 })
+          this.QuickEntry('history', '回看这一天', () => this.reviewRequested())
+        }.width('100%').backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius).clip(true)
         if (this.activePlans().length > 0 || this.loading || this.taskPhase !== 'ready') {
         Column({ space: 12 }) {
           this.SectionTitle('目标进展', '查看全部', 'goals')

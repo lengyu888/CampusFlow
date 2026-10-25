@@ -57,6 +57,7 @@ export struct ProfilePage {
   @State private message: string = '';
   @State private section: string = '';
   private connectionsReturnSection: string = '';
+  private adminReturnSection: string = 'data';
   private pageScroller: Scroller = new Scroller();
   @State private profileMessage: string = '';
   @State private modelMessage: string = '';
@@ -151,6 +152,9 @@ export struct ProfilePage {
     if (next === 'connections' && this.section !== 'connections') {
       this.connectionsReturnSection = this.section === 'account' ? 'account' : '';
     }
+    if (next === 'admin' && this.section !== 'admin') {
+      this.adminReturnSection = this.section === 'data' ? 'data' : '';
+    }
     this.section = this.section === next ? '' : next;
     this.onInnerNavigationChanged(this.section.length > 0 || this.showHduHelpData);
     this.pageScroller.scrollTo({ xOffset: 0, yOffset: 0, animation: false });
@@ -158,7 +162,8 @@ export struct ProfilePage {
   private backRequested(): void { if (this.active && this.pageActive) { this.sectionBack(); } }
   private sectionBack(): void {
     if (this.showHduHelpData) { this.closeHduHelpData(); return; }
-    this.section = this.section === 'connections' ? this.connectionsReturnSection : this.section === 'admin' ? 'data' : '';
+    this.section = this.section === 'connections' ? this.connectionsReturnSection :
+      this.section === 'admin' ? this.adminReturnSection : '';
     this.onInnerNavigationChanged(this.section.length > 0);
     this.pageScroller.scrollTo({ xOffset: 0, yOffset: 0, animation: false });
   }
@@ -643,29 +648,62 @@ export struct ProfilePage {
   }
 
   @Builder
-  private groupHeader(group: string, title: string, summary: () => string) {
-    if (this.sectionVisible(group) || group === 'connections' && this.section.length === 0) {
+  private groupHeader(group: string, title: string, summary: () => string, homeRow: boolean = false) {
+    if (this.section.length === 0 ? homeRow : this.sectionVisible(group)) {
       Button({ type: ButtonType.Normal }) {
         Row({ space: 12 }) {
           Stack() {
             AppIcon({ name: group === 'appearance' ? 'skills' : group === 'reminders' ? 'speaker' :
-              group === 'connections' ? 'classroom' : group === 'data' ? 'history' : 'person',
-              iconSize: 21, color: this.palette.accent })
-          }.width(34).height(34).backgroundColor(this.palette.accentSoft).borderRadius(10)
+              group === 'connections' ? 'classroom' : group === 'data' ? 'history' : group === 'learning' ? 'book' : 'person',
+              iconSize: 19, color: this.palette.accent })
+          }.width(30).height(30).backgroundColor(this.palette.accentSoft).borderRadius(8)
           Column({ space: 3 }) {
-            Text(title).fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium).fontColor(this.palette.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
-            Text(summary())
-              .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
+            Text(title).fontSize(this.palette.bodySize).fontColor(this.palette.ink).width('100%')
               .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+            if (group === 'appearance' || group === 'model' || group === 'connections' || group === 'account' && this.accountDirty()) {
+              Text(summary()).fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
+                .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+            }
           }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-          AppIcon({ name: 'chevron', iconSize: 18, color: this.palette.quiet })
+          AppIcon({ name: 'chevron', iconSize: 16, color: this.palette.muted })
         }.width('100%')
-      }.width('100%').constraintSize({ minHeight: 68 }).padding({ left: 16, right: 16, top: 12, bottom: 12 })
-        .backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
-        .border({ width: 1, color: this.palette.line })
+      }.width('100%').constraintSize({ minHeight: 58 }).padding({ left: 16, right: 16, top: 11, bottom: 11 })
+        .backgroundColor(this.palette.surface).borderRadius(this.section.length === 0 ? 0 : this.palette.cardRadius)
         .accessibilityText(`打开${title}，${summary()}`)
         .onClick(() => this.toggleGroup(group))
     }
+  }
+
+  @Builder
+  private settingSeparator() {
+    Divider().color(this.palette.line).strokeWidth(0.5).margin({ left: 58 })
+  }
+
+  @Builder
+  private SettingsHome() {
+    Column({ space: 20 }) {
+      Column() {
+        this.groupHeader('account', '账号与校园', () => this.accountDirty() ? '有未保存修改' : '昵称、学校与学期', true)
+        this.settingSeparator()
+        this.groupHeader('connections', '校园数据连接', () => !this.hduHelpLoaded ? '连接状态待核对' : this.hduHelp.configured ? 'HDUHelp 已连接' : 'HDUHelp 与课表订阅', true)
+      }.width('100%').backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius).clip(true)
+      Column() {
+        this.groupHeader('learning', '学习偏好', () => '单次时长、休息与每日安排目标', true)
+        this.settingSeparator()
+        this.groupHeader('appearance', '外观与动效', () => this.palette.name, true)
+        this.settingSeparator()
+        this.groupHeader('reminders', '语音与提醒', () => '语音使用方式与本机系统通知', true)
+      }.width('100%').backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius).clip(true)
+      Column() {
+        this.groupHeader('model', '模型连接', () => this.newApiKey.length > 0 ? '有新密钥尚未保存' : `当前密钥 ${this.user.api_key_hint ?? '未配置'}`, true)
+        this.settingSeparator()
+        this.groupHeader('data', '历史与本机数据', () => '会话记录、草稿与服务地址', true)
+        if (this.user.role === 'admin') {
+          this.settingSeparator()
+          this.groupHeader('admin', '用户管理', () => '管理员可查看的账号摘要', true)
+        }
+      }.width('100%').backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius).clip(true)
+    }.width('100%')
   }
 
   private changeTheme(id: AppThemeId): void {
@@ -713,7 +751,8 @@ export struct ProfilePage {
               Text(this.user.display_name).fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Medium).fontColor(this.palette.ink).width('100%')
               Text(this.user.email).fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%').wordBreak(WordBreak.BREAK_ALL)
             }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-          }.width('100%').padding({ top: 8, bottom: 16 })
+          }.width('100%').padding(16).backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
+          this.SettingsHome()
           }
           if (this.section.length > 0) {
             Row({ space: 10 }) {

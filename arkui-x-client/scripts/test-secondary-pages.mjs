@@ -179,6 +179,18 @@ test('campus connections return to the actual settings origin without touching d
  }
 });
 
+test('administrator settings return to their actual home or data origin without changing drafts',()=>{
+ for(const origin of ['', 'data']) {
+  const f=profileFixture(),p=f.page,nav=[];p.user.role='admin';p.onInnerNavigationChanged=value=>nav.push(value);
+  p.displayName='未保存昵称';p.newApiKey='SYNTHETIC_NEW';p.scheduleUrl='synthetic-url';
+  if(origin)p.toggleGroup(origin);
+  p.toggleGroup('admin');assert.equal(p.section,'admin');
+  p.backRequested();assert.equal(p.section,origin);
+  assert.equal(nav.at(-1),origin.length>0);assert.deepEqual(f.calls,[]);
+  assert.deepEqual([p.displayName,p.newApiKey,p.scheduleUrl],['未保存昵称','SYNTHETIC_NEW','synthetic-url']);
+ }
+});
+
 test('unsaved status follows server receipt, and a later key draft is not cleared by an older successful save',async()=>{
  const pending=deferred(),f=profileFixture({settings:()=>pending.promise}),p=f.page;
  p.displayName='已保存昵称';p.school='已保存学校';p.campus='已保存校区';p.semester='已保存学期';assert.equal(p.accountDirty(),false);

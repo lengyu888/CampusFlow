@@ -135,6 +135,7 @@ export struct PlanCenterPage {
   @State private conflictRefresh: number = 0;
   @State private currentView: string = 'schedule';
   @State private taskFilter: string = 'all';
+  @State private taskFiltersExpanded: boolean = false;
   @State private detailKind: string = '';
   @State private detailId: string = '';
   @State private detailRevision: number = 0;
@@ -579,6 +580,13 @@ export struct PlanCenterPage {
   }
 
   private queryResult(): TaskQueryResult { return filterPlanningTasks(this.overview.tasks, this.query()); }
+  private querySummary(): string {
+    const query = this.query();
+    const status = query.status === 'pending' ? '待完成' : query.status === 'completed' ? '已完成' : '全部状态';
+    const date = query.dateMode === 'day' ? this.selectedDate : query.dateMode === 'range' ?
+      `${this.queryFromDate || '开始日期'} 至 ${this.queryToDate || '结束日期'}` : query.dateMode === 'undated' ? '待定日期' : '不限日期';
+    return `${status} · ${date} · ${query.sort === 'created' ? '最近创建' : '按安排时间'}`;
+  }
   private filteredTasks(): PlanningTask[] { return this.queryResult().tasks; }
   private visibleTasks(): PlanningTask[] {
     const page = Math.min(this.queryPage, Math.max(0, Math.ceil(this.filteredTasks().length / 20) - 1));
@@ -1694,10 +1702,9 @@ export struct PlanCenterPage {
   private TaskFilter(label: string, filter: string) {
     Button({ type: ButtonType.Normal }) {
       Text(label).fontSize(this.palette.bodySize).textAlign(TextAlign.Center).width('100%').wordBreak(WordBreak.BREAK_WORD)
-        .fontColor(this.taskFilter === filter ? this.palette.onAccent : this.palette.secondary)
-    }.layoutWeight(1).constraintSize({ minHeight: 48 }).padding(8)
-      .fontColor(this.taskFilter === filter ? this.palette.onAccent : this.palette.secondary)
-      .backgroundColor(this.taskFilter === filter ? this.palette.accent : this.palette.surface).borderRadius(this.palette.controlRadius)
+        .fontWeight(this.taskFilter === filter ? FontWeight.Medium : FontWeight.Regular).fontColor(this.palette.ink)
+    }.layoutWeight(1).constraintSize({ minHeight: 44 }).padding(8)
+      .backgroundColor(this.taskFilter === filter ? this.palette.surface : Color.Transparent).borderRadius(9)
       .accessibilityText(`${label}${this.taskFilter === filter ? '，已选中' : ''}`).onClick(() => this.selectTaskFilter(filter))
   }
 
@@ -1715,12 +1722,22 @@ export struct PlanCenterPage {
   @Builder
   private AllTasks() {
     Column({ space: 12 }) {
-      TextInput({ text: this.queryText, placeholder: '搜索标题或地点' }).width('100%').constraintSize({ minHeight: 48 })
+      Row({ space: 8 }) {
+      TextInput({ text: this.queryText, placeholder: '搜索标题或地点' }).layoutWeight(1).height(44)
         .fontSize(this.palette.bodySize).fontColor(this.palette.ink).backgroundColor(this.palette.surface).borderRadius(this.palette.controlRadius)
         .onChange((value: string) => { this.queryText = value; this.queryPage = 0; })
+      Button(this.taskFiltersExpanded ? '收起' : '筛选').constraintSize({ minWidth: 52, minHeight: 44 })
+        .fontSize(this.palette.bodySize).fontColor(this.palette.accent).backgroundColor(Color.Transparent)
+        .accessibilityText(this.taskFiltersExpanded ? '收起详细筛选，保留当前条件' : '展开详细筛选')
+        .onClick(() => animateTo({ duration: AppTheme.motion(180), curve: Curve.EaseOut }, () => this.taskFiltersExpanded = !this.taskFiltersExpanded))
+      }.width('100%')
+      Text(`${this.queryResult().matched} 项待办 · ${this.querySummary()}`)
+        .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+      if (this.taskFiltersExpanded) {
+      Column({ space: 12 }) {
       Row({ space: 8 }) { this.TaskFilter('全部', 'all')
         this.TaskFilter('待完成', 'pending')
-        this.TaskFilter('已完成', 'completed') }.width('100%')
+        this.TaskFilter('已完成', 'completed') }.width('100%').padding(3).backgroundColor(this.palette.field).borderRadius(12)
       Text('日期条件 · 与状态、搜索同时生效').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
       Row({ space: 8 }) { this.QueryDate('不限日期', 'all')
         this.QueryDate('日历所选', 'day') }.width('100%')
@@ -1739,11 +1756,16 @@ export struct PlanCenterPage {
           .fontSize(this.palette.metaSize).fontColor(this.palette.accent).backgroundColor(this.querySort === 'created' ? this.palette.accentSoft : this.palette.surface)
           .onClick(() => { this.querySort = 'created'; this.queryPage = 0; })
       }.width('100%')
-      Text(this.querySort === 'created' ? '创建时间由近到远；相同时按稳定编号排序。' : '安排时间由早到晚；无日期与异常日期在末尾，同时间按创建时间与编号排序。')
-        .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+      InfoDisclosure({ title: '排序说明', message: this.querySort === 'created' ? '创建时间由近到远；相同时按稳定编号排序。' : '安排时间由早到晚；无日期与异常日期在末尾，同时间按创建时间与编号排序。' })
       Text(`匹配 ${this.queryResult().matched} 项 / 已读取 ${this.queryResult().total} 项 · 本页 ${this.visibleTasks().length} 项`)
         .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
+      Button('清除全部筛选').constraintSize({ minHeight: 44 }).fontSize(this.palette.bodySize).fontColor(this.palette.accent)
+        .backgroundColor(Color.Transparent).onClick(() => this.clearQuery())
+      }.width('100%').padding(16).backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
+      }
+      if (this.planningState !== 'ready') {
       Text(this.sourceLabel(this.planningState, '任务')).fontSize(this.palette.metaSize).fontColor(this.planningState === 'ready' ? this.palette.secondary : this.palette.warning).width('100%')
+      }
       if (!this.queryResult().valid) { Text(this.queryResult().message).fontSize(this.palette.bodySize).fontColor(this.palette.warning).width('100%') }
       if (this.queryResult().invalidDateCount > 0) {
         Text(`${this.queryResult().invalidDateCount} 项日期格式需核对；可在“待定日期”中查看，不会计入指定日期。`)
@@ -1753,8 +1775,6 @@ export struct PlanCenterPage {
         Text(this.overview.tasks.length === 0 ? '还没有保存的待办。记下第一件事，再慢慢安排时间。' : '没有同时符合这些条件的待办。原有任务未被删除。')
           .fontSize(this.palette.bodySize).fontColor(this.palette.secondary).width('100%')
       }
-      Button('清除全部筛选').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize).fontColor(this.palette.accent)
-        .backgroundColor(this.palette.accentSoft).borderRadius(this.palette.controlRadius).onClick(() => this.clearQuery())
       ForEach(this.visibleTasks(), (task: PlanningTask) => { this.TaskRow(task) }, (task: PlanningTask) => `${task.task_id}-${this.planningRevision}`)
       if (this.filteredTasks().length > 20) {
         Text(`第 ${this.currentQueryPage() + 1} / ${Math.ceil(this.filteredTasks().length / 20)} 页`).fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
@@ -1769,12 +1789,12 @@ export struct PlanCenterPage {
   @Builder
   private ViewTab(label: string, view: string) {
     Button({ type: ButtonType.Normal }) {
-      Text(label).fontSize(this.palette.bodySize).fontWeight(this.currentView === view ? FontWeight.Bold : FontWeight.Regular)
-        .fontColor(this.currentView === view ? this.palette.accent : this.palette.quiet)
+      Text(label).fontSize(15).fontWeight(this.currentView === view ? FontWeight.Medium : FontWeight.Regular)
+        .fontColor(this.palette.ink)
         .width('100%').textAlign(TextAlign.Center).wordBreak(WordBreak.BREAK_WORD)
-    }.layoutWeight(1).constraintSize({ minHeight: 48 }).padding({ left: 4, right: 4, top: 8, bottom: 8 })
-      .backgroundColor(this.currentView === view ? this.palette.accentSoft : Color.Transparent)
-      .borderRadius(this.palette.controlRadius).accessibilityText(`${label}${this.currentView === view ? '，已选中' : ''}`)
+    }.layoutWeight(1).constraintSize({ minHeight: 44 }).padding({ left: 4, right: 4, top: 6, bottom: 6 })
+      .backgroundColor(this.currentView === view ? this.palette.surface : Color.Transparent)
+      .borderRadius(9).accessibilityText(`${label}${this.currentView === view ? '，已选中' : ''}`)
       .onClick(() => this.selectView(view))
   }
 
@@ -1809,12 +1829,14 @@ export struct PlanCenterPage {
       }.width('100%')
       this.WeekStrip()
       Row({ space: 8 }) {
-        Button('当天').layoutWeight(1).constraintSize({ minHeight: 44 }).fontSize(this.palette.metaSize)
-          .fontColor(this.scheduleMode === 'day' ? this.palette.accent : this.palette.secondary).backgroundColor(this.scheduleMode === 'day' ? this.palette.accentSoft : Color.Transparent)
-          .onClick(() => this.scheduleMode = 'day')
-        Button('整周').layoutWeight(1).constraintSize({ minHeight: 44 }).fontSize(this.palette.metaSize)
-          .fontColor(this.scheduleMode === 'week' ? this.palette.accent : this.palette.secondary).backgroundColor(this.scheduleMode === 'week' ? this.palette.accentSoft : Color.Transparent)
-          .onClick(() => this.scheduleMode = 'week')
+        Row({ space: 2 }) {
+          Button('当天').layoutWeight(1).constraintSize({ minHeight: 44 }).fontSize(this.palette.metaSize)
+            .fontColor(this.palette.ink).backgroundColor(this.scheduleMode === 'day' ? this.palette.surface : Color.Transparent)
+            .borderRadius(8).onClick(() => this.scheduleMode = 'day')
+          Button('整周').layoutWeight(1).constraintSize({ minHeight: 44 }).fontSize(this.palette.metaSize)
+            .fontColor(this.palette.ink).backgroundColor(this.scheduleMode === 'week' ? this.palette.surface : Color.Transparent)
+            .borderRadius(8).onClick(() => this.scheduleMode = 'week')
+        }.layoutWeight(1).padding(2).backgroundColor(this.palette.field).borderRadius(10)
         Button('今天').constraintSize({ minHeight: 44 }).fontSize(this.palette.metaSize)
           .fontColor(this.palette.accent).backgroundColor(Color.Transparent)
           .onClick(() => this.selectDay(this.relativeDate(0)))
@@ -1827,7 +1849,6 @@ export struct PlanCenterPage {
         this.MonthCalendar()
       }
       }.width('100%').padding(12).backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
-        .border({ width: 1, color: this.palette.line })
       if (!this.sourcesComplete()) { this.SourceStatus() }
       if (this.scheduleMode === 'week') { this.WeekOverview() } else { this.DayTimeline() }
       this.LoadSummary(() => this.dayLoad(this.selectedDate), '当前预计负荷')
@@ -1964,8 +1985,10 @@ export struct PlanCenterPage {
             .fontWeight(FontWeight.Bold).fontColor(this.palette.ink).width('100%')
         }.layoutWeight(1).alignItems(HorizontalAlign.Start)
         if (this.detailKind.length === 0) {
-          Button('添加待办').constraintSize({ minHeight: 48 }).padding(12).fontSize(this.palette.bodySize)
-            .fontColor(this.palette.onAccent).backgroundColor(this.palette.accent).borderRadius(this.palette.controlRadius)
+          Button({ type: ButtonType.Circle }) {
+            AppIcon({ name: 'plus', iconSize: 24, color: this.palette.accent })
+          }.width(44).height(44).backgroundColor(this.palette.accentSoft)
+            .accessibilityText('添加待办')
             .onClick(() => this.openDetails('draft'))
         }
       }.width('100%').padding({ left: this.palette.pageInset, right: this.palette.pageInset, top: 16 })
@@ -2021,11 +2044,13 @@ export struct PlanCenterPage {
         .layoutWeight(this.detailKind === 'conflicts' ? 1 : 0)
         .padding({ left: this.palette.pageInset, right: this.palette.pageInset })
       if (this.detailKind.length === 0) {
-        Row({ space: 4 }) {
-          this.ViewTab('日程', 'schedule')
-          this.ViewTab('目标计划', 'plans')
-          this.ViewTab('全部待办', 'tasks')
-        }.width('100%').padding({ left: this.palette.pageInset, right: this.palette.pageInset, bottom: 8 })
+        Column() {
+          Row({ space: 2 }) {
+            this.ViewTab('日程', 'schedule')
+            this.ViewTab('目标计划', 'plans')
+            this.ViewTab('全部待办', 'tasks')
+          }.width('100%').padding(3).backgroundColor(this.palette.line).borderRadius(12)
+        }.width('100%').padding({ left: this.palette.pageInset, right: this.palette.pageInset, bottom: 0 })
       }
       Stack({ alignContent: Alignment.TopStart }) {
         // Keep each list and Scroller mounted: opening details or switching views does not reset scroll.

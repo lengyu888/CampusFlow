@@ -909,16 +909,15 @@ struct Index {
   @Builder
   private navItem(tab: number, icon: string, label: string) {
     Button({ type: ButtonType.Normal }) {
-      Column({ space: 4 }) {
+      Column({ space: 3 }) {
         Row() {
           AppIcon({ name: icon, iconSize: 22,
             color: this.selectedTab() === tab ? this.palette.accent : this.palette.secondary })
-        }.width(48).height(28).justifyContent(FlexAlign.Center)
-          .backgroundColor(this.selectedTab() === tab ? this.palette.accentSoft : Color.Transparent).borderRadius(14)
-        Text(label).fontSize(11).fontWeight(this.selectedTab() === tab ? FontWeight.Medium : FontWeight.Regular)
+        }.width(48).height(26).justifyContent(FlexAlign.Center)
+        Text(label).fontSize(10).fontWeight(this.selectedTab() === tab ? FontWeight.Medium : FontWeight.Regular)
           .fontColor(this.selectedTab() === tab ? this.palette.accent : this.palette.secondary)
       }.constraintSize({ minHeight: 48 }).justifyContent(FlexAlign.Center)
-    }.layoutWeight(1).constraintSize({ minHeight: 56 }).padding({ top: 4, bottom: 4 })
+    }.layoutWeight(1).constraintSize({ minHeight: 52 }).padding({ top: 4, bottom: 0 })
       .backgroundColor(Color.Transparent).borderRadius(this.palette.controlRadius)
       .accessibilityText(`${label}${this.selectedTab() === tab ? '，已选中' : ''}`)
       .onClick(() => this.selectTab(tab))
@@ -997,9 +996,9 @@ struct Index {
             this.navItem(1, 'assistant', '助手')
             this.navItem(2, 'calendar', '计划')
             this.navItem(8, 'classroom', '校园')
-          }.width('100%').constraintSize({ minHeight: 64 })
-            .padding({ left: 10, right: 10, bottom: 4 }).backgroundColor(this.palette.surface)
-            .border({ width: { top: 1 }, color: this.palette.line })
+          }.width('100%').constraintSize({ minHeight: 58 })
+            .padding({ left: 10, right: 10, bottom: 0 }).backgroundColor(this.palette.surface)
+            .border({ width: { top: 0.5 }, color: this.palette.line })
         }
       }.width('100%').height('100%').backgroundColor(this.palette.bg)
     }
