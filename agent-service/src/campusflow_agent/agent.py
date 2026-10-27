@@ -77,6 +77,11 @@ SYSTEM_PROMPT = """你是 CampusFlow 大学规划与执行 Agent，服务高校�
     已许可任务可继承该标记，但内容或课表变化后的准确重叠仍须用户重新确认。
     accepted 是已接受的课内安排，不要擅自移走；needs_review 须提醒用户复核。
     课内许可只涉及课程，不允许忽略任务互相冲突或截止时间。
+20. 面向用户解释状态，不直接输出 open/null、内部字段或调试术语；例如说“开放时间尚未核实”。
+    只有 propose 工具成功返回可核验提案后，才能说“方案已生成，请在卡片确认”；
+    调用前只说明将要生成，不得先宣称已有提案，也不得把文字建议当成已保存的计划。
+    规划提案使用简短摘要、标题和必要时间块；先调用工具生成候选，不在调用前重复长篇罗列。
+    工具成功后概括方案与需要核对之处，具体任务由确认卡片展示。
 """
 
 CAMPUS_TIMEZONE = timezone(timedelta(hours=8), name="Asia/Shanghai")
@@ -160,7 +165,7 @@ class AgentService:
         system_prompt: str | None = None, runtime_tools: list | None = None,
     ) -> Any:
         route, credential = self.model_catalog.credentials(model_name, api_key)
-        options = self.model_catalog.completion_options(model_name)
+        options = self.model_catalog.completion_options(model_name, thinking_enabled=False)
         # LangChain's generic message converter drops DeepSeek reasoning_content.
         # Legacy DeepSeek uses non-thinking mode so tool continuation remains valid.
         if route.protocol == "deepseek":
@@ -334,22 +339,27 @@ class AgentService:
             "propose_plan_change",
         }:
             try:
-                pending = PendingAction.model_validate(trace.result)
+                candidate = PendingAction.model_validate(trace.result)
+                expected_kind = "task" if name == "propose_task_change" else "plan"
+                if candidate.kind == expected_kind and candidate.status == "pending":
+                    pending = candidate
             except ValueError:
                 pass
         trace.display = present_tool_trace(trace, [pending] if pending else [])
         if self.skill_store is not None and tool is not None:
             self.skill_store.record_tool_run(user_id, name)
-        await emit(
-            "tool_end",
-            {
-                "call_id": call["id"],
-                "tool_name": event_name,
-                "label": trace.display.label,
-                "state": trace.status,
-                "summary": trace.display.summary,
-            },
-        )
+        outcome = {
+            "call_id": call["id"],
+            "tool_name": event_name,
+            "label": trace.display.label,
+            "state": trace.status,
+            "summary": trace.display.summary,
+        }
+        if pending is not None:
+            # Internal correlation only. The run service checks ownership and stores
+            # the canonical candidate; it never copies arbitrary tool arguments.
+            outcome["proposal_id"] = pending.proposal_id
+        await emit("tool_end", outcome)
         check_cancelled()
         return trace, pending
 
@@ -360,6 +370,45 @@ class AgentService:
         except (TypeError, ValueError):
             return '{"error":"工具结果格式无法读取。"}'
         limit = min(6000, self.settings.agent_max_context_chars // 4)
+        if trace.status == "success" and trace.tool_name in {
+            "propose_task_change", "propose_plan", "propose_plan_change",
+        }:
+            try:
+                candidate = PendingAction.model_validate(trace.result)
+            except ValueError:
+                candidate = None
+            expected_kind = "task" if trace.tool_name == "propose_task_change" else "plan"
+            if (candidate is not None and candidate.kind == expected_kind
+                    and candidate.status == "pending"):
+                receipt = {
+                    "receipt_type": "prepared_action",
+                    "proposal_id": candidate.proposal_id,
+                    "kind": candidate.kind,
+                    "action": candidate.action,
+                    "status": candidate.status,
+                    "title": candidate.title[:160],
+                    "requires_user_confirmation": True,
+                    "applied": False,
+                    "conflict_count": len(candidate.conflicts),
+                    "warning_count": len(candidate.warnings),
+                    "course_review_count": len(candidate.course_reviews),
+                    "notice": ("这是候选的简明回执，尚未执行。完整安排、警告与冲突请核对确认卡片；"
+                               "本回执不包含完整清单。"),
+                }
+                if len(candidate.title) > 160:
+                    receipt["title_truncated"] = True
+                milestones = candidate.payload.get("milestones")
+                if candidate.kind == "plan" and isinstance(milestones, list) and all(
+                    isinstance(item, dict) and isinstance(item.get("tasks"), list)
+                    for item in milestones
+                ):
+                    receipt["milestone_count"] = len(milestones)
+                    receipt["planned_task_count"] = sum(len(item["tasks"]) for item in milestones)
+                elif candidate.kind == "task" and candidate.action == "create":
+                    receipt["planned_task_count"] = 1
+                compact = self._runtime_json(receipt)
+                if len(compact) <= limit:
+                    return compact
         if len(content) <= limit:
             return content
         # Do not silently turn a partial JSON object into an apparently complete result.
@@ -423,7 +472,7 @@ class AgentService:
         frozen_history: list[HistoryMessage] | None = None,
     ) -> AgentReply:
         if len(message) > self.settings.agent_max_context_chars:
-            raise AgentBudgetExceeded("本轮输入已达到上限，请缩小查询范围后再试。")
+            raise AgentBudgetExceeded("本轮输入已达到上限，请缩小查询范围后再试。", reason="input")
         runtime_tools = build_tools(
             self.store,
             self.allowed_tools_for_user(user_id),
@@ -467,7 +516,9 @@ class AgentService:
                 except ValueError:
                     pass
             if len(answer) > self.settings.agent_max_output_chars:
-                raise AgentBudgetExceeded("本轮输出已达到上限，请缩小请求范围后再试。")
+                raise AgentBudgetExceeded(
+                    "本轮输出已达到上限，请缩小请求范围后再试。", reason="output"
+                )
             await emit("answer_delta", {"text": answer})
             check_cancelled()
             return AgentReply(message=answer, tool_traces=[route_trace])
@@ -526,7 +577,7 @@ class AgentService:
                             buffered_chars += len(text)
                             if output_count > self.settings.agent_max_output_chars:
                                 raise AgentBudgetExceeded(
-                                    "本轮输出已达到上限，请缩小请求范围后再试。"
+                                    "本轮输出已达到上限，请缩小请求范围后再试。", reason="output"
                                 )
                         for part in getattr(delta, "tool_calls", None) or []:
                             if not isinstance(part.index, int) or not 0 <= part.index < 50:
@@ -552,7 +603,8 @@ class AgentService:
                                     buffered_chars += len(value)
                         if buffered_chars > self.settings.agent_max_context_chars:
                             raise AgentBudgetExceeded(
-                                "本轮模型响应已达到上限，请缩小请求范围后再试。"
+                                "本轮模型响应已达到上限，请缩小请求范围后再试。",
+                                reason="provider_response",
                             )
                         if text:
                             answer += text
@@ -563,7 +615,9 @@ class AgentService:
                     await stream.close()
                 check_cancelled()
                 if finish == "length":
-                    raise AgentBudgetExceeded("模型输出已达到单次上限，请缩小请求范围后再试。")
+                    raise AgentBudgetExceeded(
+                        "模型输出已达到单次上限，请缩小请求范围后再试。", reason="provider_output"
+                    )
                 if finish not in {"stop", "tool_calls"} or (finish == "tool_calls") != bool(calls):
                     raise RuntimeError("模型流式响应未完整结束，请稍后重试。")
                 if not calls:
@@ -573,7 +627,9 @@ class AgentService:
                     return AgentReply(message=answer, tool_traces=traces, pending_actions=pending)
                 batch = [calls[index] for index in sorted(calls)]
                 if tool_count + len(batch) > self.settings.agent_max_tool_calls:
-                    raise AgentBudgetExceeded("本轮工具调用已达到上限，请缩小任务范围后再试。")
+                    raise AgentBudgetExceeded(
+                        "本轮工具调用已达到上限，请缩小任务范围后再试。", reason="tool_calls"
+                    )
                 for call in batch:
                     call_id = call["id"]
                     if (
@@ -618,7 +674,9 @@ class AgentService:
                             "content": self._runtime_tool_content(trace),
                         }
                     )
-            raise AgentBudgetExceeded("本轮模型调用已达到上限，请缩小任务范围后再试。")
+            raise AgentBudgetExceeded(
+                "本轮模型调用已达到上限，请缩小任务范围后再试。", reason="model_calls"
+            )
         finally:
             await client.close()
 

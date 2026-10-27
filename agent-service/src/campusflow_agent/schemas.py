@@ -228,6 +228,9 @@ class RunSnapshot(BaseModel):
     seq: int = 0
     partial_answer: str = ""
     tool_progress: list[RunToolProgress] = Field(default_factory=list)
+    # Preparation snapshots are not execution receipts. Clients must query each
+    # proposal's current state before offering confirmation, including after recovery.
+    prepared_actions: list[PendingAction] = Field(default_factory=list, max_length=50)
     model_calls: int = 0
     tool_calls: int = 0
     result: ChatResponse | None = None

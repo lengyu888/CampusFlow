@@ -30,6 +30,7 @@ from .schemas import (
     AgentRunRequest,
     ChatRequest,
     ChatResponse,
+    PendingAction,
     RunEvent,
     RunEventsPage,
     RunSnapshot,
@@ -41,6 +42,43 @@ from .store import CampusStore
 from .tool_presentation import present_tool_trace
 
 ACTIVE = {"queued", "running"}
+
+# Public failures are chosen from a fixed vocabulary, never from provider or
+# exception text (which may contain private context or credentials).
+BUDGET_FAILURES = {
+    "input": (
+        "RUN_INPUT_LIMIT",
+        "本次输入超过运行上限，未继续执行。请精简输入后再试。",
+    ),
+    "context": (
+        "RUN_CONTEXT_LIMIT",
+        "对话与资料总量达到本轮上限，已保留片段。请缩小范围或新建对话。",
+    ),
+    "output": (
+        "RUN_OUTPUT_LIMIT",
+        "本轮回答总量达到上限，已保留片段与工具记录。请先核对已有提案，再分步提问。",
+    ),
+    "model_calls": (
+        "RUN_MODEL_CALL_LIMIT",
+        "本轮模型调用次数达到上限，已保留片段与工具记录。请先核对已有提案，再分步安排。",
+    ),
+    "tool_calls": (
+        "RUN_TOOL_CALL_LIMIT",
+        "本轮工具调用次数达到上限，已保留片段与工具记录。请先核对已有提案，再缩小任务范围。",
+    ),
+    "provider_output": (
+        "MODEL_OUTPUT_LIMIT",
+        "模型单次输出达到上限，回答尚未完成。已保留片段；请先核对已有提案，再缩小计划范围。",
+    ),
+    "provider_response": (
+        "MODEL_RESPONSE_LIMIT",
+        "模型响应超过本轮可处理范围，回答尚未完成。已保留片段；请先核对已有提案，再分步提问。",
+    ),
+}
+DEFAULT_BUDGET_FAILURE = (
+    "RUN_BUDGET_EXCEEDED",
+    "已达到本轮调用或内容预算，保留已有片段，未继续启动步骤。",
+)
 
 
 class RunError(RuntimeError):
@@ -311,6 +349,35 @@ class RunService:
             if lease is None or lease["owner"] != self.owner or lease["expires_at"] <= time.time():
                 raise asyncio.CancelledError
 
+    def _prepared_action(self, user_id: str, data: dict[str, Any]) -> PendingAction | None:
+        """Resolve only an internal successful proposal-tool event, never provider text."""
+        name, proposal_id = data.get("tool_name"), data.get("proposal_id")
+        if name not in {"propose_task_change", "propose_plan", "propose_plan_change"} or (
+            data.get("state") != "success" or not isinstance(proposal_id, str)
+            or not 0 < len(proposal_id) <= 128
+        ):
+            return None
+        try:
+            action = self.store.get_proposal(proposal_id, user_id)
+            if action is None:
+                return None
+            # Revalidate stored data, rather than accepting a mutable model instance.
+            action = PendingAction.model_validate(action.model_dump())
+        except (ValueError, TypeError):
+            return None
+        if (action.proposal_id != proposal_id or action.status != "pending"
+                or action.contract_version != 2 or action.state_version is None
+                or action.created_at is None or action.expires_at is None):
+            return None
+        if (
+            (name == "propose_task_change" and action.kind != "task")
+            or (name == "propose_plan" and (action.kind != "plan" or action.action != "create"))
+            or (name == "propose_plan_change"
+                and (action.kind != "plan" or action.action == "create"))
+        ):
+            return None
+        return action
+
     async def _emit(self, user_id: str, run_id: str, kind: str, data: dict[str, Any]) -> None:
         self._check_cancelled(user_id, run_id)
         with self.store._lock, self.connection:
@@ -324,7 +391,7 @@ class RunService:
             elif kind == "answer_delta":
                 text = str(data.get("text", ""))
                 if len(snapshot.partial_answer) + len(text) > self.settings.agent_max_output_chars:
-                    raise AgentBudgetExceeded("回答长度达到本轮上限。")
+                    raise AgentBudgetExceeded("回答长度达到本轮上限。", reason="output")
                 snapshot.partial_answer += text
                 safe = {"text": text}
             elif kind in {"tool_start", "tool_end"}:
@@ -343,6 +410,16 @@ class RunService:
                     (i for i, item in enumerate(snapshot.tool_progress) if item.call_id == call_id),
                     None,
                 )
+                # A matching start belongs to this exact run. Do not associate a
+                # preview from a read tool, another call or an unmatched end event.
+                if (kind == "tool_end" and found is not None
+                        and snapshot.tool_progress[found].state == "running"
+                        and snapshot.tool_progress[found].tool_name == progress.tool_name):
+                    action = self._prepared_action(user_id, data)
+                    if action is not None and all(
+                        item.proposal_id != action.proposal_id for item in snapshot.prepared_actions
+                    ) and len(snapshot.prepared_actions) < self.settings.agent_max_tool_calls:
+                        snapshot.prepared_actions.append(action)
                 if found is None:
                     snapshot.tool_progress.append(progress)
                 else:
@@ -460,13 +537,19 @@ class RunService:
                 code="RUN_TIMEOUT",
                 message="已达到本轮总时长上限，保留已有片段，未自动重试。",
             )
-        except AgentBudgetExceeded:
+        except AgentBudgetExceeded as exc:
+            reason = getattr(exc, "reason", "unspecified")
+            code, message = (
+                BUDGET_FAILURES.get(reason, DEFAULT_BUDGET_FAILURE)
+                if isinstance(reason, str)
+                else DEFAULT_BUDGET_FAILURE
+            )
             self._finish(
                 user_id,
                 run_id,
                 "budget_exceeded",
-                code="RUN_BUDGET_EXCEEDED",
-                message="已达到本轮调用或内容预算，保留已有片段，未继续启动步骤。",
+                code=code,
+                message=message,
             )
         except (AgentConfigurationError, SessionError) as exc:
             self._finish(user_id, run_id, "failed", code=exc.code, message=exc.detail)

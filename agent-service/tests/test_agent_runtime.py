@@ -132,7 +132,7 @@ async def test_visible_delta_arrives_before_stream_end_and_never_writes_history(
     assert events[:2] == [("model_start", {"count": 1}), ("answer_reset", {})]
     assert service.store.get_history("student-001", "session") == []
     assert client.closed and client.streams[0].closed
-    assert client.requests[0]["max_tokens"] == 4096
+    assert client.requests[0]["max_tokens"] == 16384
 
 
 async def test_fragmented_tool_call_runs_real_tool_and_preserves_private_wire_context(monkeypatch):
@@ -651,7 +651,7 @@ async def test_real_sdk_sse_parser_and_outbound_wire_format_with_offline_transpo
     reply, events = await run(service)
     assert reply.message == "真实 SDK 解析的增量"
     assert next(data["text"] for kind, data in events if kind == "answer_delta") == reply.message
-    assert requests[0]["max_tokens"] == 4096
+    assert requests[0]["max_tokens"] == 16384
     assert "max_completion_tokens" not in requests[0]
     assert requests[0]["thinking"] == {"type": "enabled"}
     assert http.is_closed

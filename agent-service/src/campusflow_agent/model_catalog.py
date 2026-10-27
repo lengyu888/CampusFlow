@@ -188,17 +188,29 @@ class ModelCatalog:
             )
         return ModelCatalogResponse(models=models, default_model=self.settings.model_default_id)
 
-    def completion_options(self, model_id: str) -> dict:
+    def completion_options(self, model_id: str, *, thinking_enabled: bool | None = None) -> dict:
         route = self.require_capabilities(model_id)
         options: dict = {
             "model": route.api_model,
             route.token_limit_parameter: self.settings.agent_max_tokens,
         }
         if route.protocol == "deepseek":
-            options["reasoning_effort"] = self.settings.deepseek_reasoning_effort
+            thinking = (self.settings.deepseek_thinking_enabled if thinking_enabled is None
+                        else thinking_enabled)
+            if thinking:
+                # Preserve an explicitly configured generic cap for existing deployments,
+                # unless the operator opts into a separate thinking-mode limit.
+                explicit = self.settings.model_fields_set
+                options[route.token_limit_parameter] = (
+                    self.settings.agent_max_tokens
+                    if "agent_max_tokens" in explicit
+                    and "deepseek_thinking_max_tokens" not in explicit
+                    else self.settings.deepseek_thinking_max_tokens
+                )
+                options["reasoning_effort"] = self.settings.deepseek_reasoning_effort
             options["extra_body"] = {
                 "thinking": {
-                    "type": "enabled" if self.settings.deepseek_thinking_enabled else "disabled"
+                    "type": "enabled" if thinking else "disabled"
                 }
             }
         # Standard OpenAI-compatible routes get no DeepSeek extensions, including reasoning_content.

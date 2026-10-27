@@ -175,6 +175,49 @@ async def test_failure_is_safe_and_partial_is_not_full_history(scene, failure, s
     await service.shutdown()
 
 
+@pytest.mark.parametrize(
+    "reason,code",
+    [
+        ("input", "RUN_INPUT_LIMIT"),
+        ("context", "RUN_CONTEXT_LIMIT"),
+        ("output", "RUN_OUTPUT_LIMIT"),
+        ("model_calls", "RUN_MODEL_CALL_LIMIT"),
+        ("tool_calls", "RUN_TOOL_CALL_LIMIT"),
+        ("provider_output", "MODEL_OUTPUT_LIMIT"),
+        ("provider_response", "MODEL_RESPONSE_LIMIT"),
+        ("unexpected-private-provider-value", "RUN_BUDGET_EXCEEDED"),
+    ],
+)
+async def test_budget_reason_is_safe_and_failed_tool_progress_survives_restart(scene, reason, code):
+    service, store, runtime = scene
+    failure = AgentBudgetExceeded("private-test-provider-value")
+    # Set the field explicitly so this check also drives the pre-fix exception API.
+    failure.reason = reason
+    runtime.proceed, runtime.failure = True, failure
+    run = service.start("u", request(), "private-test-provider-value")
+    final = await settle(service, run.run_id)
+
+    assert final.status == "budget_exceeded" and final.error_code == code
+    assert final.result is None and final.partial_answer == "部分回答"
+    assert final.model_calls == 1 and final.tool_calls == 1
+    assert len(final.tool_progress) == 1
+    assert final.tool_progress[0].tool_name == "get_schedule"
+    assert final.tool_progress[0].state == "success"
+    assert store.get_history("u", "session") == []
+    events = service.events("u", run.run_id, 0)
+    assert [event.kind for event in events.events][-2:] == ["tool_end", "status"]
+    assert "private-test-provider-value" not in final.model_dump_json()
+    assert "private-test-provider-value" not in events.model_dump_json()
+    assert "unexpected-private-provider-value" not in final.model_dump_json()
+
+    await service.shutdown()
+    restored = RunService(CampusStore(store.database_path), Runtime(), service.settings)
+    assert restored.get("u", run.run_id) == final
+    assert restored.events("u", run.run_id, 0) == events
+    assert restored.store.get_history("u", "session") == []
+    await restored.shutdown()
+
+
 @pytest.mark.parametrize("stage", ["before_tool_start", "tool_wait"])
 async def test_whole_run_deadline_stops_wait_and_no_more_steps(scene, monkeypatch, stage):
     service, store, runtime = scene

@@ -24,6 +24,13 @@ MEMORY_MARKER = "\n\n会话学习约束资料：\n"
 class AgentBudgetExceeded(RuntimeError):
     """A safe runtime limit that never contains provider or user diagnostics."""
 
+    def __init__(self, message: str, *, reason: str = "unspecified") -> None:
+        super().__init__(message)
+        self.reason = reason if reason in (
+            "input", "context", "output", "model_calls", "tool_calls",
+            "provider_output", "provider_response",
+        ) else "unspecified"
+
 
 @dataclass(frozen=True)
 class Constraint:
@@ -318,7 +325,7 @@ def bounded_context(system: dict, history: list[list[dict]], turn: list[dict],
 
     size = len(encoded({"messages": [system, *turn], "tools": tools}))
     if size > limit:
-        raise AgentBudgetExceeded("本轮上下文已达到上限，请缩小查询范围后再试。")
+        raise AgentBudgetExceeded("本轮上下文已达到上限，请缩小查询范围后再试。", reason="context")
     first = len(history)
     for index in range(len(history) - 1, -1, -1):
         extra = sum(len(encoded(item)) + 1 for item in history[index])
