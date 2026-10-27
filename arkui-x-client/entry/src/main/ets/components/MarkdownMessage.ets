@@ -109,9 +109,9 @@ export struct MarkdownMessage {
       return 22;
     }
     if (level === 2) {
-      return 19;
+      return 20;
     }
-    return level === 3 ? 17 : 15;
+    return level === 3 ? 18 : 17;
   }
 
   @Builder
@@ -156,12 +156,12 @@ export struct MarkdownMessage {
   private code(block: RenderBlock) {
     Column({ space: 5 }) {
       if (block.source.marker.length > 0) {
-        Text(block.source.marker).fontSize(10).fontColor(this.palette.secondary).width('100%')
+        Text(block.source.marker).fontSize(12).fontColor(this.palette.secondary).width('100%')
       }
       Scroll() {
         Column() {
           ForEach(block.codeLines, (line: string) => {
-            Text(line.length === 0 ? ' ' : line).fontSize(12).lineHeight(20)
+            Text(line.length === 0 ? ' ' : line).fontSize(13).lineHeight(21)
               .fontFamily('monospace').fontColor(this.palette.ink).maxLines(1).width('100%').copyOption(CopyOptions.InApp)
           }, (line: string, index: number) => `${index}-${line}`)
         }.width(block.codeWidth).alignItems(HorizontalAlign.Start)
@@ -177,15 +177,15 @@ export struct MarkdownMessage {
         } else if (block.source.kind === 'list') {
           Row({ space: 8 }) {
             Text(block.source.marker === '-' || block.source.marker === '*' || block.source.marker === '+'
-              ? '•' : block.source.marker).fontSize(14).lineHeight(22).fontColor(this.palette.secondary)
+              ? '•' : block.source.marker).fontSize(this.palette.bodySize).lineHeight(25).fontColor(this.palette.secondary)
             Column() {
-              this.inlineText(block.source.inlines, 14, false, TextAlign.Start)
+              this.inlineText(block.source.inlines, this.palette.bodySize, false, TextAlign.Start)
             }.layoutWeight(1)
           }.width('100%').alignItems(VerticalAlign.Top)
             .padding({ left: Math.min(block.source.level, 6) * 12 })
         } else if (block.source.kind === 'quote') {
           Column() {
-            this.inlineText(block.source.inlines, 14, false, TextAlign.Start)
+            this.inlineText(block.source.inlines, this.palette.bodySize, false, TextAlign.Start)
           }.width('100%').padding({ left: 12, right: 8, top: 6, bottom: 6 })
             .border({ width: { left: 3 }, color: this.palette.outline }).backgroundColor(this.palette.field)
         } else if (block.source.kind === 'table') {
@@ -195,7 +195,7 @@ export struct MarkdownMessage {
         } else if (block.source.kind === 'divider') {
           Divider().color(this.palette.line).margin({ top: 3, bottom: 3 })
         } else {
-          this.inlineText(block.source.inlines, 14, false, TextAlign.Start)
+          this.inlineText(block.source.inlines, this.palette.bodySize, false, TextAlign.Start)
         }
       }, (block: RenderBlock) => block.id)
     }.width('100%').alignItems(HorizontalAlign.Start)

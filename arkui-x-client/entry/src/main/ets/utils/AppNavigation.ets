@@ -48,7 +48,7 @@ export function selectRoot(state: AppNavigationState, root: number, reset: boole
 export function openSecondary(state: AppNavigationState, route: number): AppNavigationState {
   const next = copyNavigation(state);
   // Route numbers are the established Skills/Profile/History/Route/Services/Timetable pages.
-  if (![3, 4, 5, 6, 7, 9].includes(route) || currentRoute(state) === route) { return next; }
+  if (![3, 4, 5, 6, 7, 9, 10].includes(route) || currentRoute(state) === route) { return next; }
   next.stacks = next.stacks.map((stack: NavigationStack): NavigationStack =>
     stack.root === next.root ? { root: stack.root, routes: stack.routes.concat(route) } : stack);
   return next;

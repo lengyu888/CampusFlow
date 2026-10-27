@@ -1,5 +1,5 @@
 import './helpers/theme-fixture.mjs';
-import { conversationDependencies } from './helpers/conversation-fixture.mjs';
+import { conversationDependencies, assistantDraftKey } from './helpers/conversation-fixture.mjs';
 import { reliability } from './helpers/course-review-fixture.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -29,6 +29,123 @@ const proposal = id => ({ proposal_id: id, action: 'create', kind: 'task', title
 const deferred = () => { let resolve, reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; };
 const settle = async () => { for (let i = 0; i < 8; i++) await Promise.resolve(); };
 
+test('conversation confirmation from a long reply scrolls into view without switching, sending or replacing drafts', async () => {
+  for (const entry of ['new', 'run', 'draft']) {
+    const { page, calls, saves, drafts } = await harness();
+    const scrolls = [];
+    page.chatScroller = { scrollTo: value => scrolls.push(value), scrollEdge: () => { throw Error('confirmation must not follow the old reply bottom'); } };
+    page.appendMessage('assistant', '较长的既有回复'.repeat(500));
+    page.prompt = '保留当前未发送草稿';
+    page.scrollForNewMessage = true; page.restoreOptionsOffset = -1;
+    page.contentHeight = 2500; page.followLatest = true;
+    const session = page.sessionId;
+    const key = assistantDraftKey('other-session');
+    if (entry === 'draft') {
+      drafts.store.stage(drafts.lease, key, { text: '另一段未发送草稿', sessionId: 'other-session', anchorDate: '2026-10-26', timezone: 'Asia/Shanghai' });
+    }
+    const record = drafts.store.read(drafts.lease, key);
+    if (entry === 'new') page.requestConversation();
+    else if (entry === 'run') page.requestRunConversation('other-session', oldId);
+    else page.requestDraftConversation(record);
+    assert.equal(page.switchConfirmOpen, true, entry);
+    assert.equal(page.restoreOptionsOffset, 0, entry);
+    assert.equal(page.scrollForNewMessage, false, entry);
+    page.chatContentChanged(2800);
+    assert.deepEqual(scrolls, [{ xOffset: 0, yOffset: 0, animation: false }], entry);
+    assert.equal(page.restoreOptionsOffset, -1);
+    assert.equal(page.sessionId, session);
+    assert.equal(page.prompt, '保留当前未发送草稿');
+    assert.deepEqual(drafts.store.read(drafts.lease, key), record);
+    assert.deepEqual(calls, [], 'requesting confirmation cannot POST or query a different conversation');
+    assert.deepEqual(saves, []);
+  }
+});
+
+test('recent runs replace model options at the top and closing the list never submits or changes the draft', async () => {
+  const { page, calls } = await harness({ recentAgentRuns: async () => ({ items: [] }) });
+  page.prompt = '保留未发送的草稿'; page.optionsExpanded = true; page.scrollForNewMessage = true;
+  await page.toggleRunRecords();
+  assert.equal(page.runRecordsExpanded, true);
+  assert.equal(page.optionsExpanded, false);
+  assert.equal(page.restoreOptionsOffset, 0);
+  assert.equal(page.scrollForNewMessage, false);
+  await page.toggleRunRecords();
+  assert.equal(page.runRecordsExpanded, false);
+  assert.equal(page.prompt, '保留未发送的草稿');
+  assert.deepEqual(calls.map(call => call.name), ['recentAgentRuns']);
+});
+
+test('recovered runs name their own untitled conversation without renaming another conversation', async () => {
+  const { page } = await harness();
+  const request = { run_id: oldId, session_id: page.sessionId, message: '结合课程安排一周复习', model: 'deepseek-v4-pro' };
+  page.sessionTitle = '新对话';
+  page.runChanged({ ...page.runState, runId: oldId, snapshot: runSnapshot(request, null, { status: 'running' }) });
+  assert.equal(page.sessionTitle, request.message);
+  page.sessionTitle = '本人设置的标题';
+  page.runChanged({ ...page.runState, snapshot: runSnapshot({ ...request, message: '其他问题' }, null, { status: 'running' }) });
+  assert.equal(page.sessionTitle, '本人设置的标题');
+  page.sessionTitle = '新对话';
+  page.runChanged({ ...page.runState, snapshot: runSnapshot({ ...request, session_id: 'different-conversation' }, null, { status: 'running' }) });
+  assert.equal(page.sessionTitle, '新对话');
+});
+
+test('an incomplete run keeps the actual tool outcomes and failure identity without claiming success or replaying', async () => {
+  let request;
+  const tools = [
+    { call_id: 'schedule-read', tool_name: 'get_schedule', label: '读取课表', state: 'success', summary: '已读取课程' },
+    { call_id: 'plan-read', tool_name: 'get_planning', label: '读取待办', state: 'error', summary: '暂未读到最新任务' }
+  ];
+  const { page, calls, saves } = await harness({ startAgentRun: async value => {
+    request = value;
+    return runSnapshot(value, null, { status: 'budget_exceeded', seq: 6, partial_answer: '已收到的回答片段',
+      model_calls: 3, tool_calls: 2, tool_progress: tools, error_code: 'RUN_BUDGET_EXCEEDED', error_message: '本轮未完成' });
+  } });
+  page.prompt = '结合近期课程安排复习'; await page.send();
+  const answer = page.messages.find(message => message.id === `run-${request.run_id}-assistant`);
+  assert.deepEqual(answer.tools.map(({ label, state, summary }) => ({ label, state, summary })),
+    tools.map(({ label, state, summary }) => ({ label, state, summary })));
+  assert.equal(answer.incomplete, true);
+  assert.deepEqual(page.pendingActions, []);
+  assert.equal(page.messages.find(message => message.role === 'feedback').failureCode, 'RUN_BUDGET_EXCEEDED');
+  assert.equal(calls.filter(call => call.name === 'startAgentRun').length, 1);
+  assert.deepEqual(saves, [], 'incomplete runs do not become committed chat history');
+});
+
+test('failure is presented with its partial reply once while standalone errors remain reachable', async () => {
+  const { page } = await harness({ startAgentRun: async request => runSnapshot(request, null, {
+    status: 'budget_exceeded', seq: 4, partial_answer: '仅收到这一段', error_code: 'RUN_BUDGET_EXCEEDED', error_message: '尚未完成'
+  }) });
+  page.prompt = '原问题'; await page.send();
+  const feedbackMessage = page.messages.find(message => message.role === 'feedback');
+  const reply = page.messages.find(message => message.role === 'assistant' && message.id !== 'welcome');
+  assert.ok(feedbackMessage, 'the original failure remains in state');
+  assert.ok(!page.visibleMessages().some(message => message.id === feedbackMessage.id));
+  assert.deepEqual(page.failuresForReply(reply).map(message => message.id), [feedbackMessage.id]);
+  const standalone = page.appendMessage('feedback', '独立提示');
+  assert.ok(page.visibleMessages().some(message => message.id === standalone));
+  const before = page.messages.length;
+  page.visibleMessages(); page.failuresForReply(reply);
+  assert.equal(page.messages.length, before, 'presentation cannot delete message state');
+});
+
+test('failure recovery exposes a long draft for editing and never replaces text written meanwhile', async () => {
+  const text = '结合我的近期课程，帮我制定一周复习计划，分解为里程碑和待办，先生成提案。';
+  const { page } = await harness({ startAgentRun: async request => runSnapshot(request, null, {
+    status: 'failed', error_code: 'RUN_FAILED', error_message: '本次未完成'
+  }) });
+  page.prompt = text; page.suggestionNotice = '建议已填入，请检查后手动发送。'; await page.send();
+  assert.equal(page.prompt, text);
+  assert.equal(page.composerExpanded, true);
+  assert.equal(page.suggestionNotice, '');
+  const failure = page.messages.find(message => message.role === 'feedback');
+  assert.ok(page.visibleMessages().some(message => message.id === failure.id), 'a failure with no partial reply stays visible');
+  assert.ok(page.visibleMessages().every(message => message.role !== 'assistant'), 'empty placeholder is not a reply');
+  page.prompt = '保留这段新草稿'; page.restoreFailedInput(failure); assert.equal(page.prompt, '保留这段新草稿');
+  page.prompt = ''; page.composerExpanded = false; page.restoreFailedInput(failure);
+  assert.equal(page.prompt, text); assert.equal(page.composerExpanded, true);
+  page.voiceActive = false; page.prompt = ''; page.restoreFailedInput(failure); assert.equal(page.prompt, '');
+});
+
 async function harness(handlers = {}) {
   const calls = [], saves = [];
   class Api {
@@ -38,6 +155,7 @@ async function harness(handlers = {}) {
     agentRunEvents(...args) { return this.invoke('agentRunEvents', args); }
     cancelAgentRun(...args) { return this.invoke('cancelAgentRun', args); }
     recentAgentRuns(...args) { return this.invoke('recentAgentRuns', args); }
+    actionStatus(...args) { return this.invoke('actionStatus', args); }
     history(...args) { return this.invoke('history', args); }
   }
   const drafts = await makeDraftFixture();
@@ -48,7 +166,7 @@ async function harness(handlers = {}) {
   page.historyScope = 'account-a';
   page.draftLease = drafts.lease;
   page.draftLeaseChanged();
-  return { page, calls, saves };
+  return { page, calls, saves, drafts };
 }
 
 test('actual snapshots replace partial text after model reset and bind final proposals to the same run bubble', async () => {
@@ -224,4 +342,109 @@ test('a definitive model failure restores an empty draft, keeps only real fragme
   assert.equal(page.loading, false); assert.equal(page.prompt, '保留问题'); assert.equal(page.runState.snapshot.status, 'failed');
   assert.match(page.runState.message, /密钥|Key|凭据/);
   assert.doesNotMatch(JSON.stringify(page.messages), /private-secret-provider-detail/); assert.equal(saves.length, 0);
+});
+
+function preparedPlan(extra = {}) {
+  const task = { candidate_id: 'candidate-prepared', allow_during_course: false, title: '复习课程',
+    start_at: '2028-10-20T14:00:00+08:00', end_at: '2028-10-20T15:00:00+08:00', reminder_minutes: 15, location: '图书馆' };
+  return { proposal_id: 'prepared-plan-a', contract_version: 2, action: 'create', kind: 'plan', title: '一周复习计划',
+    start_at: null, end_at: null, reminder_minutes: null, reason: null, conflicts: [], warnings: [], status: 'pending',
+    created_at: new Date().toISOString(), expires_at: new Date(Date.now() + 900000).toISOString(),
+    target_task_id: null, target_plan_id: null, before_task: null, before_plan: null, receipt: null,
+    payload: { summary: '按近期课程复习', target_date: '2028-10-26', milestones: [{ title: '基础复习', due_at: null, tasks: [task] }] },
+    course_policy_version: 1, state_version: { timetable: 1, planning: 1 },
+    course_reviews: [{ candidate_id: task.candidate_id, task_id: null, allow_during_course: false, state: 'none',
+      review_digest: 'a'.repeat(64), candidate_digest: 'b'.repeat(64), requires_acknowledgement: false, revoke_only: false,
+      school: '测试学校', campus: '测试校区', timezone: 'Asia/Shanghai', timetable_version: 1, planning_version: 1,
+      task_version: null, overlaps: [] }], ...extra };
+}
+
+test('three successful tools followed by failed context recover only the canonical proposal with no resend, confirmation or history', async () => {
+  const proposal = preparedPlan(); let request, next;
+  assert.equal(reliability.canConfirmAction(proposal), true);
+  const tools = ['get_schedule', 'get_planning', 'propose_plan'].map((tool_name, index) => ({
+    call_id: `prepared-tool-${index}`, tool_name, label: tool_name, state: 'success', summary: '已完成' }));
+  const { page, calls, saves } = await harness({ startAgentRun: async value => {
+    request = value; return runSnapshot(value, null, { status: 'running', seq: 1 });
+  }, agentRunEvents: async () => ({ run_id: request.run_id, events: [], snapshot: next }),
+  actionStatus: async id => { assert.equal(id, proposal.proposal_id); return structuredClone(proposal); } });
+  page.prompt = '结合近期课程制定一周复习计划'; await page.send();
+  next = runSnapshot(request, null, { status: 'budget_exceeded', seq: 9, partial_answer: '', tool_calls: 3,
+    tool_progress: tools, prepared_actions: [proposal], error_code: 'RUN_CONTEXT_LIMIT', error_message: '回复未完成' });
+  await page.runInteraction.pollEvents(); await settle();
+  assert.equal(page.runState.snapshot.status, 'budget_exceeded');
+  assert.equal(page.runState.snapshot.result, null);
+  assert.equal(calls.filter(call => call.name === 'actionStatus').length, 1);
+  assert.deepEqual(page.pendingActions.map(action => action.proposal_id), [proposal.proposal_id]);
+  const reply = page.visibleMessages().find(message => message.id === `run-${request.run_id}-assistant`);
+  assert.ok(reply, 'a canonical proposal keeps its assistant anchor even without partial text');
+  assert.equal(reply.incomplete, true);
+  assert.deepEqual(page.actionsForMessage(reply.id).map(action => action.proposal_id), [proposal.proposal_id]);
+  assert.equal(page.failuresForReply(reply).length, 1);
+  assert.equal(calls.filter(call => call.name === 'startAgentRun').length, 1);
+  assert.equal(calls.filter(call => call.name === 'history').length, 0);
+  assert.equal(saves.length, 0);
+  assert.equal(page.prompt, request.message);
+});
+
+test('failed preparation with no partial text or tool display still exposes the verified card, not an empty success', async () => {
+  const proposal = preparedPlan(); let request;
+  const { page, calls } = await harness({ startAgentRun: async value => {
+    request = value; return runSnapshot(value, null, { status: 'failed', partial_answer: '', prepared_actions: [proposal],
+      error_code: 'RUN_CONTEXT_LIMIT', error_message: '未完成' });
+  }, actionStatus: async () => structuredClone(proposal) });
+  page.prompt = '制定计划'; await page.send(); await settle();
+  const reply = page.visibleMessages().find(message => message.id === `run-${request.run_id}-assistant`);
+  assert.ok(reply); assert.equal(reply.content, ''); assert.equal(reply.incomplete, true);
+  assert.equal(page.actionsForMessage(reply.id).length, 1);
+  assert.equal(page.visibleMessages().filter(message => message.role === 'feedback').length, 0, 'failure stays with the recovered card');
+  assert.ok(calls.every(call => ['startAgentRun', 'actionStatus'].includes(call.name)));
+});
+
+test('prepared candidates never reactivate confirmed, cancelled, expired or altered canonical proposals', async () => {
+  for (const mutate of [value => ({ ...value, status: 'confirmed' }), value => ({ ...value, status: 'cancelled' }),
+    value => ({ ...value, title: '另一份方案' }), value => ({ ...value, expires_at: '2000-01-01T00:00:00Z' })]) {
+    const proposal = preparedPlan();
+    const { page, calls, saves } = await harness({ startAgentRun: async request => runSnapshot(request, null, {
+      status: 'failed', prepared_actions: [proposal], error_code: 'RUN_CONTEXT_LIMIT', error_message: '未完成' }),
+    actionStatus: async () => mutate(structuredClone(proposal)) });
+    page.prompt = '制定计划'; await page.send(); await settle();
+    assert.deepEqual(page.pendingActions, []); assert.equal(saves.length, 0);
+    assert.ok(calls.every(call => ['startAgentRun', 'actionStatus'].includes(call.name)));
+  }
+});
+
+test('late prepared-proposal reads cannot attach cards after account, session, foreground or run identity changes', async () => {
+  for (const change of [page => page.userId = 'another-account', page => page.sessionId = 'another-session',
+    page => page.voiceActive = false, page => page.conversationRevision++, page => page.runState = { ...page.runState, runId: 'another-run', snapshot: null }]) {
+    const proposal = preparedPlan(), d = deferred();
+    const { page, calls } = await harness({ startAgentRun: async request => runSnapshot(request, null, {
+      status: 'failed', prepared_actions: [proposal], error_code: 'RUN_CONTEXT_LIMIT', error_message: '未完成' }),
+    actionStatus: () => d.promise });
+    page.prompt = '制定计划'; await page.send(); await settle();
+    assert.equal(calls.filter(call => call.name === 'actionStatus').length, 1);
+    change(page); d.resolve(proposal); await settle(); assert.deepEqual(page.pendingActions, []);
+  }
+});
+
+test('cross-session prepared snapshots are never read into the current conversation', async () => {
+  const { page, calls } = await harness();
+  page.runChanged({ ...page.runState, phase: 'terminal', runId: oldId,
+    snapshot: runSnapshot({ run_id: oldId, session_id: 'other-session', model: 'model', message: '其他请求' }, null,
+      { status: 'failed', prepared_actions: [preparedPlan()], error_code: 'RUN_CONTEXT_LIMIT', error_message: '未完成' }) });
+  await settle(); assert.deepEqual(page.pendingActions, []); assert.deepEqual(calls, []);
+});
+
+test('refreshing a recovered prepared card cannot leave it executable after the canonical proposal was cancelled', async () => {
+  const proposal = preparedPlan(); let request, canonical = structuredClone(proposal);
+  const { page, calls, saves } = await harness({ startAgentRun: async value => {
+    request = value; return runSnapshot(value, null, { status: 'failed', prepared_actions: [proposal], error_code: 'RUN_CONTEXT_LIMIT', error_message: '未完成' });
+  }, actionStatus: async () => structuredClone(canonical),
+  agentRun: async () => runSnapshot(request, null, { status: 'failed', prepared_actions: [proposal], error_code: 'RUN_CONTEXT_LIMIT', error_message: '未完成' }) });
+  page.prompt = '制定计划'; await page.send(); await settle();
+  assert.equal(page.pendingActions[0].status, 'pending');
+  canonical.status = 'cancelled'; await page.refreshRun(); await settle();
+  assert.equal(page.pendingActions[0].status, 'cancelled');
+  assert.equal(reliability.canConfirmAction(page.pendingActions[0]), false);
+  assert.equal(calls.filter(call => call.name === 'startAgentRun').length, 1); assert.equal(saves.length, 0);
 });

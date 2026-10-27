@@ -4,6 +4,7 @@ import { AppTheme } from '../theme/AppTheme';
 import { ThemePalette, themePalette } from '../theme/ThemePalette';
 import { FeedbackPanel } from '../components/FeedbackPanel';
 import { CampusFlowRequestError } from '../utils/AgentFeedback';
+import { InfoDisclosure } from '../components/InfoDisclosure';
 
 @Component
 export struct LoginPage {
@@ -100,10 +101,10 @@ export struct LoginPage {
 
   build() {
     Scroll() {
-      Column({ space: 22 }) {
+      Column({ space: 24 }) {
         Column({ space: 8 }) {
           Text('行简').fontSize(this.palette.pageTitle).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
-          Text('登录后，把课表和待办安排在一起。').fontSize(this.palette.bodySize).fontColor(this.palette.quiet)
+          Text('安排今天，专心完成。').fontSize(this.palette.bodySize).fontColor(this.palette.quiet)
         }.width('100%').alignItems(HorizontalAlign.Start)
 
         Column({ space: 16 }) {
@@ -116,11 +117,11 @@ export struct LoginPage {
           this.inputField('邮箱', 'name@example.com', this.email, (value) => this.email = value, InputType.Email)
           this.inputField('密码', '至少 8 位', this.password, (value) => this.password = value, InputType.Password)
           if (this.registerMode) {
-            Text('先创建账号，再确认校园与课表。手动维护课表和待办不需要模型密钥。')
+            Text('先确认校园与课表，再安排每天的待办。模型密钥可以稍后添加。')
               .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
             Button(this.showModelConfig ? '收起模型配置（可选）' : '现在配置模型（可选）')
-              .width('100%').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
-              .fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft)
+              .width('100%').constraintSize({ minHeight: 44 }).fontSize(this.palette.bodySize)
+              .fontColor(this.palette.accent).backgroundColor(Color.Transparent)
               .enabled(!this.loading).onClick(() => this.showModelConfig = !this.showModelConfig)
             if (this.showModelConfig) {
               this.inputField('DeepSeek API Key（可选）', 'sk-…（服务端加密保存）', this.apiKey,
@@ -131,8 +132,7 @@ export struct LoginPage {
               Text('已填写模型密钥，将随注册保存；展开可修改或清空。')
                 .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
             }
-            Text('也可留空，登录后从个人设置 → 模型配置中补充。助手对话与图片识别需要可用的模型配置。')
-              .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
+            InfoDisclosure({ title: '模型配置有什么用？', message: '手动维护课表、待办和专注不需要模型密钥。助手对话与图片识别需要可用的模型配置，可在我的 → 模型连接中添加。密钥只发送到当前配置的行简服务端并加密保存。' })
           }
           if (this.errorText.length > 0) {
             FeedbackPanel({ kind: 'error', title: '暂未完成', message: this.errorText })
@@ -187,8 +187,10 @@ export struct LoginPage {
               .onClick(() => this.confirmCleanup = true)
           }
         }
-        Text('已有模型配置会继续保留；未配置也可以登录，之后再从个人设置补充。')
-          .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).textAlign(TextAlign.Center)
+        if (!this.registerMode) {
+          Text('登录后沿用账号配置，无需重复填写模型密钥。')
+            .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%').textAlign(TextAlign.Center)
+        }
       }
       .width('100%')
       .alignItems(HorizontalAlign.Start).justifyContent(FlexAlign.Start)

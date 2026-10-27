@@ -40,7 +40,7 @@ export struct FeedbackPanel {
   }
 
   build() {
-    Column({ space: 10 }) {
+    Column({ space: 8 }) {
       Row({ space: 10 }) {
         if (this.kind === 'loading') {
           LoadingProgress().width(22).height(22).color(this.palette.accent)
@@ -55,9 +55,11 @@ export struct FeedbackPanel {
           .width('100%').wordBreak(WordBreak.BREAK_WORD)
       }
       if (this.actionLabel.length > 0) {
-        Button(this.busy ? '处理中…' : this.actionLabel).width('100%').constraintSize({ minHeight: 48 })
-          .fontSize(this.palette.bodySize).fontColor(this.busy ? this.palette.disabledContent :
-            (this.kind === 'error' ? this.palette.danger : this.palette.accent))
+        Button({ type: ButtonType.Normal }) {
+          Text(this.busy ? '处理中…' : this.actionLabel).fontSize(this.palette.bodySize)
+            .fontColor(this.busy ? this.palette.disabledContent : (this.kind === 'error' ? this.palette.danger : this.palette.accent))
+            .width('100%').textAlign(TextAlign.Center).wordBreak(WordBreak.BREAK_WORD)
+        }.width('100%').constraintSize({ minHeight: 44 }).padding({ left: 12, right: 12, top: 8, bottom: 8 })
           .backgroundColor(this.busy ? this.palette.disabledSurface :
             (this.kind === 'error' || this.kind === 'warning' || this.kind === 'unknown' ? this.palette.surface : this.palette.accentSoft))
           .borderRadius(this.palette.controlRadius).enabled(!this.busy).onClick(() => this.onAction())

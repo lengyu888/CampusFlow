@@ -33,3 +33,16 @@ test('failed actual driver replacement leaves old file intact; clear removes fil
   f.setFailure(false);await store.clear();assert.equal(store.valid(lease),false);assert.deepEqual(await fs.readdir(f.directory),[]);
  }finally{await f.cleanup();}
 });
+test('empty-shell scope migration uses actual atomic replacement and failed rename keeps old scope usable',async()=>{
+ const f=await driverFixture();try{
+  const store=new FocusStore(f.driver);await store.initialize();const old=await store.activate('old-scope',uuid(1));
+  const file=path.join(f.directory,'campusflow-local-focus-v1.json'),before=await fs.readFile(file,'utf8');
+  f.setFailure(true);await assert.rejects(store.activate('new-scope',uuid(44)));
+  assert.equal(await fs.readFile(file,'utf8'),before);assert.equal(store.valid(old),true);assert.equal(store.snapshot(old).scope,'old-scope');
+  assert.deepEqual(await fs.readdir(f.directory),['campusflow-local-focus-v1.json']);
+  f.setFailure(false);const current=await store.activate('new-scope',uuid(44));
+  assert.equal(store.valid(old),false);assert.equal(store.valid(current),true);assert.equal(store.snapshot(current).deviceId,uuid(44));
+  const cold=new FocusStore(f.driver);await cold.initialize();const restored=await cold.activate('new-scope',uuid(55));
+  assert.deepEqual(cold.snapshot(restored),store.snapshot(current));assert.deepEqual(await fs.readdir(f.directory),['campusflow-local-focus-v1.json']);
+ }finally{await f.cleanup();}
+});

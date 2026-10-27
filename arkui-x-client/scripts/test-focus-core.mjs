@@ -31,10 +31,65 @@ test('operation owner, record, state, revision and accepted fragment identities 
 });
 test('store rejects corrupt/unknown document and scope switch without overwriting original',async()=>{
  for(const raw of ['{broken',JSON.stringify({schemaVersion:2})]){const driver=new FocusMemoryDriver();driver.text=raw;const store=new FocusStore(driver);await assert.rejects(store.initialize());assert.equal(driver.text,raw);}
- const f=await focusFixture();const original=f.driver.text;await assert.rejects(f.store.activate('other',uuid(44)));assert.equal(f.driver.text,original);
+ const f=await focusFixture();await f.controller.start('task-a',null,'offline');const original=f.driver.text;await assert.rejects(f.store.activate('other',uuid(44)));assert.equal(f.driver.text,original);
+});
+test('validated empty focus shells can change scope with a new device and permanently invalidate old leases',async()=>{
+ const driver=new FocusMemoryDriver(),store=new FocusStore(driver);await store.initialize();
+ const old=await store.activate('old-scope',uuid(1));const original=store.snapshot(old);
+ const current=await store.activate('new-scope',uuid(44));
+ assert.equal(store.valid(old),false);assert.equal(store.valid(current),true);
+ assert.deepEqual(store.snapshot(current),{...original,scope:'new-scope',deviceId:uuid(44),revision:original.revision+1});
+ const back=await store.activate('old-scope',uuid(55));
+ assert.equal(store.valid(old),false,'switching back cannot revive an old lease');
+ assert.equal(store.valid(current),false);assert.equal(store.snapshot(back).deviceId,uuid(55));
+});
+test('failed empty-shell write retains the old document and lease until a durable migration succeeds',async()=>{
+ const driver=new FocusMemoryDriver(),store=new FocusStore(driver);await store.initialize();
+ const old=await store.activate('old-scope',uuid(1)),before=driver.text;
+ driver.failWrite=true;await assert.rejects(store.activate('new-scope',uuid(44)));
+ assert.equal(driver.text,before);assert.equal(store.valid(old),true);assert.equal(store.snapshot(old).scope,'old-scope');
+ driver.failWrite=false;const current=await store.activate('new-scope',uuid(44));
+ assert.equal(store.valid(old),false);assert.equal(store.valid(current),true);
+});
+test('concurrent scope activation has one durable winner and cannot return a lease for overwritten data',async()=>{
+ const driver=new FocusMemoryDriver(),store=new FocusStore(driver);await store.initialize();
+ const old=await store.activate('old-scope',uuid(1)),started=deferred(),release=deferred();
+ driver.beforeWrite=async()=>{started.resolve();await release.promise;};
+ const first=store.activate('first-scope',uuid(44));await started.promise;
+ const second=store.activate('second-scope',uuid(55));release.resolve();
+ const result=await Promise.allSettled([first,second]);
+ assert.equal(result[0].status,'fulfilled');assert.equal(result[1].status,'rejected');
+ assert.equal(store.valid(result[0].value),true);assert.equal(store.valid(old),false);
+ assert.equal(store.snapshot(result[0].value).scope,'first-scope');assert.equal(JSON.parse(driver.text).scope,'first-scope');
+});
+test('old queued commits cannot overwrite an empty-shell scope transition',async()=>{
+ const driver=new FocusMemoryDriver(),store=new FocusStore(driver);await store.initialize();
+ const old=await store.activate('old-scope',uuid(1)),candidate=store.snapshot(old);candidate.revision++;
+ const started=deferred(),release=deferred();driver.beforeWrite=async()=>{started.resolve();await release.promise;};
+ const activation=store.activate('new-scope',uuid(44));await started.promise;
+ const commit=store.commit(old,candidate.revision-1,candidate);release.resolve();
+ const result=await Promise.allSettled([activation,commit]);
+ assert.equal(result[0].status,'fulfilled');assert.equal(result[1].status,'rejected');
+ assert.equal(store.valid(result[0].value),true);assert.equal(JSON.parse(driver.text).scope,'new-scope');
+});
+test('first activation is serialized too and invalid replacement device IDs cannot mutate an empty shell',async()=>{
+ const driver=new FocusMemoryDriver(),store=new FocusStore(driver);await store.initialize();
+ const started=deferred(),release=deferred();driver.beforeWrite=async()=>{started.resolve();await release.promise;};
+ const first=store.activate('first-scope',uuid(1));await started.promise;const second=store.activate('second-scope',uuid(44));release.resolve();
+ const result=await Promise.allSettled([first,second]);assert.equal(result[0].status,'fulfilled');assert.equal(result[1].status,'rejected');
+ const lease=result[0].value,before=driver.text;assert.equal(store.valid(lease),true);
+ for(const id of ['', 'invalid-device']){await assert.rejects(store.activate('next-scope',id));assert.equal(driver.text,before);assert.equal(store.valid(lease),true);}
+});
+test('nonempty ended records remain protected even with zero elapsed time and no queued operations',async()=>{
+ const f=await focusFixture();await f.controller.start('task-a',null,'offline');await f.controller.end();
+ const lease=await f.store.activate('https://example.test|account-a',uuid(1)),doc=f.store.snapshot(lease);
+ doc.operations=[];doc.revision++;await f.store.commit(lease,doc.revision-1,doc);
+ assert.equal(doc.records.length,1);assert.equal(doc.records[0].localState,'ended');assert.equal(doc.records[0].baseElapsedMs,0);
+ const before=f.driver.text;await assert.rejects(f.store.activate('new-owner',uuid(44)));
+ assert.equal(f.driver.text,before);assert.equal(f.store.valid(lease),true);
 });
 test('controller reports owner mismatch without leaking identity and a retry never overwrites the retained file',async()=>{
- const driver=new FocusMemoryDriver(),old=await focusFixture({driver,scope:'private-old-owner'}),original=driver.text;old.controller.dispose();
+ const driver=new FocusMemoryDriver(),old=await focusFixture({driver,scope:'private-old-owner'});await old.controller.start('task-a',null,'offline');const original=driver.text;old.controller.dispose();
  const current=await focusFixture({driver,scope:'current-owner',firstId:100});
  assert.equal(current.state().phase,'error');assert.equal(current.state().errorCode,'FOCUS_SCOPE_MISMATCH');assert.match(current.state().message,/另一账号或服务地址/);
  assert.doesNotMatch(current.state().message,/private-old-owner|current-owner/);await current.controller.configure('current-owner','account-a',current.api);

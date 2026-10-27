@@ -2,13 +2,14 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { stripTypeScriptTypes } from 'node:module';
 import { test } from 'node:test';
+import { reliability } from './helpers/course-review-fixture.mjs';
 const read = name => readFileSync(new URL(`../entry/src/main/ets/utils/${name}.ets`, import.meta.url), 'utf8');
 const noImports = source => source.replace(/^import \{[\s\S]*?\} from '[^']+';\r?\n/gm, '').replace(/^import [^\n]+;\r?\n/gm, '');
 const feedback = await import(`data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(noImports(read('AgentFeedback')))).toString('base64')}`);
 const { CampusFlowRequestError, localRequestFailure } = feedback;
 const actual = noImports(read('AgentRun')).replace(/^export /gm, '');
-const { AgentRunController, validRunSnapshot, isRunTerminal } = new Function('CampusFlowRequestError', 'localRequestFailure', stripTypeScriptTypes(actual) +
-  '\nreturn { AgentRunController, validRunSnapshot, isRunTerminal };')(CampusFlowRequestError, localRequestFailure);
+const { AgentRunController, validRunSnapshot, isRunTerminal } = new Function('CampusFlowRequestError', 'localRequestFailure', 'validActionPreview', stripTypeScriptTypes(actual) +
+  '\nreturn { AgentRunController, validRunSnapshot, isRunTerminal };')(CampusFlowRequestError, localRequestFailure, reliability.validActionPreview);
 const firstId = '11111111-1111-4111-8111-111111111111';
 const secondId = '22222222-2222-4222-8222-222222222222';
 const when = '2026-10-18T08:00:00+08:00';
@@ -117,6 +118,18 @@ test('failure, timeout, budget stop, cancellation and interruption retain partia
     await f.controller.start('session-a', 'deepseek-flash', '安排复习'); assert.equal(f.controller.snapshot().phase, 'terminal');
     assert.equal(f.controller.snapshot().snapshot.partial_answer, '未完成文字'); assert.equal(f.completed.length, 0);
     assert.equal(f.controller.blocksNewRun(), false); assert.equal(f.clock.jobs.size, 0);
+  }
+});
+
+test('prepared proposal snapshots are optional for old servers but malformed or repeated candidates are rejected', () => {
+  const proposal = { proposal_id: 'prepared-a', action: 'create', kind: 'task', title: '复习', start_at: null,
+    end_at: null, reminder_minutes: null, reason: null, payload: {}, conflicts: [], status: 'pending' };
+  assert.equal(validRunSnapshot(run({ status: 'failed' })), true);
+  assert.equal(validRunSnapshot(run({ status: 'failed', prepared_actions: [] })), true);
+  assert.equal(validRunSnapshot(run({ status: 'failed', prepared_actions: [proposal] })), true);
+  for (const prepared_actions of [null, {}, [null], ['prepared-a'], [proposal, proposal],
+    [{ ...proposal, status: 'execute-now' }], Array.from({ length: 51 }, (_, index) => ({ ...proposal, proposal_id: `p-${index}` }))]) {
+    assert.equal(validRunSnapshot(run({ status: 'failed', prepared_actions })), false);
   }
 });
 
@@ -229,6 +242,7 @@ test('deleted run stops polling and replay for both unknown create and previousl
 
 test('terminal error codes use known safe messages and never render provider error text', async () => {
   for (const code of ['RUN_TIMEOUT', 'RUN_BUDGET_EXCEEDED', 'RUN_INTERRUPTED', 'RUN_CANCELLED', 'RUN_FAILED',
+    'RUN_INPUT_LIMIT', 'RUN_CONTEXT_LIMIT', 'RUN_OUTPUT_LIMIT', 'RUN_MODEL_CALL_LIMIT', 'RUN_TOOL_CALL_LIMIT', 'MODEL_OUTPUT_LIMIT', 'MODEL_RESPONSE_LIMIT',
     'MODEL_AUTH_INVALID', 'MODEL_KEY_REQUIRED', 'MODEL_UNAVAILABLE', 'MODEL_RATE_LIMITED', 'MODEL_REQUEST_REJECTED', 'REQUEST_TIMEOUT']) {
     const f = fixture({ start: () => run({ status: 'failed', error_code: code, error_message: 'private-provider-token' }) });
     await f.controller.start('session-a', 'deepseek-flash', '安排复习');

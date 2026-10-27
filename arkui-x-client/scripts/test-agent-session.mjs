@@ -36,7 +36,7 @@ const dependencies = { ...helper, ...catalogModule.exports, ...reliability, ...c
     SCROLL_BAR: 4, SCROLL_BAR_FLING: 5, SCROLLER: 6, SCROLLER_ANIMATION: 7 },
   AppTheme: {}, shanghaiDate };
 const welcomeExpression = source.match(/if \((!this\.hasConversation\(\))\) \{/)?.[1];
-const messagesExpression = source.match(/ForEach\((this\.messages\.filter\(.+\)), \(message: ConversationEntry\) => \{/)?.[1];
+const messagesExpression = source.match(/ForEach\((this\.visibleMessages\(\)), \(message: ConversationEntry\) => \{/)?.[1];
 assert.ok(welcomeExpression && messagesExpression, 'Find the actual welcome and message visibility branches.');
 const isWelcome = new Function(`return (${welcomeExpression});`);
 const visibleMessages = new Function(transpile(`return (${messagesExpression});`).outputText);

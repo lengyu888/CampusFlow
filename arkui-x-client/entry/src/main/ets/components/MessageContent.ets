@@ -24,23 +24,22 @@ export struct MessageContent {
   }
 
   build() {
-    Column({ space: 12 }) {
+    Column({ space: 4 }) {
       if (this.isUser || this.showOriginal) {
-        Text(this.content).fontSize(16).fontColor(this.isUser ? this.palette.onAccent : this.palette.ink)
+        Text(this.content).fontSize(this.palette.bodySize).lineHeight(25)
+          .fontColor(this.isUser ? this.palette.onAccent : this.palette.ink)
           .width('100%').wordBreak(WordBreak.BREAK_WORD).copyOption(CopyOptions.InApp)
       } else {
         MarkdownMessage({ content: this.content })
       }
       if (this.hasFormatting) {
-        if (this.showOriginal) {
-          Text('长按上方原文可复制完整回答').fontSize(12).fontColor(this.palette.secondary).width('100%')
-        }
         Button({ type: ButtonType.Normal }) {
-          Text(this.showOriginal ? '返回排版' : '查看完整原文').fontSize(12).fontColor(this.palette.accent)
-            .width('100%').textAlign(TextAlign.Start)
+          Text(this.showOriginal ? '查看排版' : '查看原文').fontSize(this.palette.metaSize).fontColor(this.palette.accent)
+            .textAlign(TextAlign.Start)
         }.backgroundColor(Color.Transparent)
-          .constraintSize({ minHeight: 48 }).padding({ top: 10, bottom: 10, left: 0, right: 0 })
-          .width('100%').onClick(() => this.showOriginal = !this.showOriginal)
+          .constraintSize({ minHeight: 44, minWidth: 72 }).padding({ top: 6, bottom: 6, left: 0, right: 12 })
+          .accessibilityText(this.showOriginal ? '查看排版；当前原文可长按复制完整内容' : '查看原文，可长按复制完整内容')
+          .onClick(() => this.showOriginal = !this.showOriginal)
       }
     }.width('100%').alignItems(HorizontalAlign.Start)
   }

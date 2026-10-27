@@ -33,6 +33,7 @@ export struct ProfilePage {
   onOpenPlan: () => void = () => {};
   onOpenTimetable: () => void = () => {};
   onOpenHistory: () => void = () => {};
+  onOpenGuide: () => void = () => {};
   onInnerNavigationChanged: (active: boolean) => void = () => {};
   @Watch('backRequested') @Prop backRevision: number = 0;
   @Prop reminderState: ReminderState = { phase: 'disabled', message: '本机系统提醒尚未启用。', scheduled: 0, skipped: 0, limited: false, enabled: false };
@@ -559,19 +560,16 @@ export struct ProfilePage {
   @Builder
   private hduHelpDataView() {
     Column() {
-      Row({ space: 12 }) {
-        Button() {
+      Row({ space: 8 }) {
+        Button({ type: ButtonType.Normal }) {
           AppIcon({ name: 'back', iconSize: 22, color: this.palette.accent })
-        }.width(48).constraintSize({ minHeight: 48 })
-          .backgroundColor(this.palette.surface).borderRadius(22)
-          .onClick(() => this.closeHduHelpData())
-        Column({ space: 3 }) {
-          Text('我的校园档案').fontSize(23).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
-          Text('由 HDUHelp 同步，助手可按需调用').fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
-        }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-        Button('刷新').constraintSize({ minHeight: 48 }).fontSize(this.palette.metaSize).fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft)
-          .borderRadius(14).onClick(() => this.openHduHelpData())
-      }.width('100%').padding({ left: 18, right: 18, top: 18, bottom: 12 })
+        }.width(44).constraintSize({ minHeight: 44 })
+          .backgroundColor(Color.Transparent).borderRadius(this.palette.controlRadius)
+          .accessibilityText('返回校园数据连接').onClick(() => this.closeHduHelpData())
+        Text('校园档案').fontSize(22).fontWeight(FontWeight.Bold).fontColor(this.palette.ink).layoutWeight(1)
+        Button('刷新').constraintSize({ minHeight: 44 }).fontSize(this.palette.bodySize).fontColor(this.palette.accent)
+          .backgroundColor(Color.Transparent).enabled(!this.hduHelpDataLoading).onClick(() => this.openHduHelpData())
+      }.width('100%').padding({ left: 12, right: 16, top: 8, bottom: 8 })
 
       Scroll() {
         Column({ space: 14 }) {
@@ -585,11 +583,8 @@ export struct ProfilePage {
             if (this.hduHelpSections.length === 0) {
               FeedbackPanel({ kind: 'info', title: '暂无可展示的校园档案', message: '可返回连接设置，检查 HDUHelp 授权与同步状态。' })
             }
-            Column({ space: 7 }) {
-              Text('已连接的数据').fontSize(this.palette.metaSize).fontWeight(FontWeight.Bold).fontColor(this.palette.accent).width('100%')
-              Text(`${this.hduHelpSections.length} 个信息分区`).fontSize(20).fontWeight(FontWeight.Bold)
-                .fontColor(this.palette.ink).width('100%')
-            }.width('100%').padding(this.palette.cardInset).backgroundColor(this.palette.accentSoft).borderRadius(18)
+            Text(`账户、学籍与成绩 · 已同步 ${this.hduHelpSections.length} 个分区`)
+              .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
 
             ForEach(this.hduHelpSections, (section: HDUHelpDisplaySection) => {
               Column({ space: 10 }) {
@@ -607,7 +602,7 @@ export struct ProfilePage {
                 ForEach(section.items, (item: HDUHelpDisplayItem) => {
                   this.dataItem(item)
                 }, (item: HDUHelpDisplayItem) => `${section.resource}-${item.label}`)
-              }.width('100%').padding(17).backgroundColor(this.palette.surface).borderRadius(18)
+              }.width('100%').padding(this.palette.cardInset).backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
             }, (section: HDUHelpDisplaySection) => section.resource)
 
             if (this.hduHelpSyncErrors.length > 0) {
@@ -681,19 +676,34 @@ export struct ProfilePage {
 
   @Builder
   private SettingsHome() {
-    Column({ space: 20 }) {
+    Column({ space: 12 }) {
+      Text('资料与校园').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%').padding({ left: 16, top: 8 })
       Column() {
         this.groupHeader('account', '账号与校园', () => this.accountDirty() ? '有未保存修改' : '昵称、学校与学期', true)
         this.settingSeparator()
         this.groupHeader('connections', '校园数据连接', () => !this.hduHelpLoaded ? '连接状态待核对' : this.hduHelp.configured ? 'HDUHelp 已连接' : 'HDUHelp 与课表订阅', true)
       }.width('100%').backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius).clip(true)
+      Text('使用与偏好').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%').padding({ left: 16, top: 8 })
       Column() {
+        Button({ type: ButtonType.Normal }) {
+          Row({ space: 12 }) {
+            Stack() {
+              AppIcon({ name: 'info', iconSize: 19, color: this.palette.accent })
+            }.width(30).height(30).backgroundColor(this.palette.accentSoft).borderRadius(8)
+            Text('使用指南').fontSize(this.palette.bodySize).fontColor(this.palette.ink).layoutWeight(1).textAlign(TextAlign.Start)
+            AppIcon({ name: 'chevron', iconSize: 16, color: this.palette.muted })
+          }.width('100%')
+        }.width('100%').constraintSize({ minHeight: 58 }).padding({ left: 16, right: 16, top: 11, bottom: 11 })
+          .backgroundColor(this.palette.surface).accessibilityText('使用指南，了解安排、执行和回顾的完整流程')
+          .onClick(() => { if (this.active && this.pageActive) { this.onOpenGuide(); } })
+        this.settingSeparator()
         this.groupHeader('learning', '学习偏好', () => '单次时长、休息与每日安排目标', true)
         this.settingSeparator()
         this.groupHeader('appearance', '外观与动效', () => this.palette.name, true)
         this.settingSeparator()
         this.groupHeader('reminders', '语音与提醒', () => '语音使用方式与本机系统通知', true)
       }.width('100%').backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius).clip(true)
+      Text('连接与数据').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%').padding({ left: 16, top: 8 })
       Column() {
         this.groupHeader('model', '模型连接', () => this.newApiKey.length > 0 ? '有新密钥尚未保存' : `当前密钥 ${this.user.api_key_hint ?? '未配置'}`, true)
         this.settingSeparator()
@@ -755,10 +765,12 @@ export struct ProfilePage {
           this.SettingsHome()
           }
           if (this.section.length > 0) {
-            Row({ space: 10 }) {
-              Button('返回').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize).fontColor(this.palette.accent)
-                .backgroundColor(Color.Transparent).onClick(() => this.sectionBack())
-              Text(this.sectionTitle()).fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Medium).fontColor(this.palette.ink).layoutWeight(1)
+            Row({ space: 8 }) {
+              Button({ type: ButtonType.Normal }) {
+                AppIcon({ name: 'back', iconSize: 22, color: this.palette.accent })
+              }.width(44).constraintSize({ minHeight: 44 }).backgroundColor(Color.Transparent)
+                .accessibilityText('返回我的设置').onClick(() => this.sectionBack())
+              Text(this.sectionTitle()).fontSize(22).fontWeight(FontWeight.Bold).fontColor(this.palette.ink).layoutWeight(1)
             }.width('100%')
           }
           if (this.settingsNeedsCheck) {

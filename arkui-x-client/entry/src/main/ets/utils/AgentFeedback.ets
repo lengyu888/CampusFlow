@@ -123,7 +123,21 @@ function knownErrorMessage(code: string): string {
     case 'RUN_TIMEOUT':
       return '已达到本轮总时长上限，已有片段保留，本次未自动重试。';
     case 'RUN_BUDGET_EXCEEDED':
-      return '已达到本轮调用或内容预算，已有片段保留，未继续启动步骤。';
+      return '本轮生成已达到限制，回答尚未完成。请先核对已有记录，再缩小范围重试。';
+    case 'RUN_INPUT_LIMIT':
+      return '本次输入过长，请精简问题后再发送，原文字仍保留。';
+    case 'RUN_CONTEXT_LIMIT':
+      return '本轮资料过多，暂时无法继续。请缩小日期范围，或新建对话。';
+    case 'RUN_OUTPUT_LIMIT':
+      return '本轮生成内容达到上限，回答尚未完成。请先核对已有提案，再减少计划天数或任务数量。';
+    case 'RUN_MODEL_CALL_LIMIT':
+      return '本轮处理步骤达到上限，尚未完成。请先核对已有提案，再分步安排。';
+    case 'RUN_TOOL_CALL_LIMIT':
+      return '本轮查询与操作次数达到上限。请先核对已有记录，再减少查询范围。';
+    case 'MODEL_OUTPUT_LIMIT':
+      return '模型单次生成达到长度上限，回答尚未完成。请先核对已有提案，再缩小范围重试。';
+    case 'MODEL_RESPONSE_LIMIT':
+      return '模型响应超过本轮处理上限，回答尚未完成。请先核对已有提案，再分步提问。';
     case 'RUN_INTERRUPTED':
       return '运行服务已中断，已有片段保留，本次未自动重新执行。';
     case 'SESSION_NOT_FOUND':

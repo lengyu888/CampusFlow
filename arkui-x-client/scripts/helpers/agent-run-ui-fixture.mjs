@@ -1,15 +1,16 @@
 import './theme-fixture.mjs';
 import { readFileSync } from 'node:fs';
 import { stripThemeTypeScriptTypes as stripTypeScriptTypes } from './theme-fixture.mjs';
+import { reliability } from './course-review-fixture.mjs';
 
 const source = readFileSync(new URL('../../entry/src/main/ets/utils/AgentRun.ets', import.meta.url), 'utf8')
   .replace(/^import [^\n]+;\r?\n/gm, '').replace(/^export /gm, '');
-const make = new Function('CampusFlowRequestError', 'localRequestFailure', stripTypeScriptTypes(source) + '\nreturn AgentRunController;');
+const make = new Function('CampusFlowRequestError', 'localRequestFailure', 'validActionPreview', stripTypeScriptTypes(source) + '\nreturn AgentRunController;');
 
 // The real controller is used. Only scheduled wall-clock polling is disabled; tests
 // explicitly call refresh/pollEvents when they need the next observed server state.
 export function makeRunController(errorType, localRequestFailure) {
-  const Controller = make(errorType, localRequestFailure);
+  const Controller = make(errorType, localRequestFailure, reliability.validActionPreview);
   return class extends Controller {
     constructor(api, changed, succeeded, makeId) {
       super(api, changed, succeeded, makeId, { setTimeout: () => 1, clearTimeout: () => {} });

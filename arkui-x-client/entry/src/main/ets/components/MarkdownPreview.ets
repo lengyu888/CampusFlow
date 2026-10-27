@@ -1,8 +1,10 @@
 import { ChatBubble } from './ChatBubble';
+import { ThemePalette, themePalette } from '../theme/ThemePalette';
 
 @Preview
 @Component
 struct MarkdownPreview {
+  @StorageLink('campusflowThemePalette') private palette: ThemePalette = themePalette('paper-green');
   private reply: string = '# 校园安排\n\n' +
     '先到 **图书馆**，再去 *自习教室*。带上 `student_id`。\n\n' +
     '> 路线与时间仅用于演示排版，长文本应完整换行。\n\n' +
@@ -19,11 +21,11 @@ struct MarkdownPreview {
   build() {
     Scroll() {
       Column({ space: 14 }) {
-        Text('Markdown 气泡预览').fontSize(20).fontWeight(FontWeight.Bold).fontColor('#171A22').width('100%')
+        Text('Markdown 气泡预览').fontSize(20).fontWeight(FontWeight.Bold).fontColor(this.palette.ink).width('100%')
         ChatBubble({ role: 'user', content: '我输入的 **符号**、`code` 和 | 分隔符应该原样保留。' })
         ChatBubble({ role: 'assistant', content: this.reply })
         ChatBubble({ role: 'assistant', content: '历史气泡：**同一渲染组件**。', uniformCorners: true })
       }.width('100%').padding(16)
-    }.width('100%').height('100%').backgroundColor('#F5F7FB')
+    }.width('100%').height('100%').backgroundColor(this.palette.canvas)
   }
 }

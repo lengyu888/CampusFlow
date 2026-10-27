@@ -242,11 +242,11 @@ export struct HistoryPage {
       Row({ space: 4 }) {
         Button({ type: ButtonType.Normal }) {
           AppIcon({ name: 'back', iconSize: 21, color: this.palette.accent })
-        }.width(48).constraintSize({ minHeight: 48 }).backgroundColor(Color.Transparent).borderRadius(22)
+        }.width(44).constraintSize({ minHeight: 44 }).backgroundColor(Color.Transparent).borderRadius(12)
           .accessibilityText(this.selected === null ? (this.offlineOnly ? '返回登录' : '返回助手') : '返回历史会话')
           .onClick(() => this.goBack())
-        Text(this.selected === null ? '历史会话' : (this.selected as SessionSummary).title)
-          .fontSize(17).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
+        Text(this.selected === null ? '历史会话' : '会话详情')
+          .fontSize(22).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
           .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).layoutWeight(1)
         if (this.selected === null) {
           Button('刷新').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize).fontColor(this.palette.accent)
@@ -256,7 +256,7 @@ export struct HistoryPage {
           Button('刷新').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize).fontColor(this.palette.accent)
             .backgroundColor(Color.Transparent).enabled(!this.loading && !this.deleting).onClick(() => this.retryRead())
         }
-      }.width('100%').constraintSize({ minHeight: 64 }).padding({ left: 7, right: 10 })
+      }.width('100%').constraintSize({ minHeight: 56 }).padding({ left: 8, right: 12 })
         .backgroundColor(this.palette.bg)
 
       if (this.errorText.length > 0) {
@@ -346,7 +346,6 @@ export struct HistoryPage {
                   }
                 }.width('100%').padding({ left: 16, right: 12 })
                   .backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
-                  .border({ width: 1, color: this.palette.line })
               }, (session: SessionSummary) => session.session_id)
             }.width('100%')
           }.width('100%').padding({ left: this.palette.pageInset, right: this.palette.pageInset, top: 8, bottom: 24 })
@@ -355,16 +354,25 @@ export struct HistoryPage {
           .onScroll(() => { if (!this.restoreList) { this.listOffset = this.listScroller.currentOffset().yOffset; } })
       } else {
         Scroll() {
-          Column({ space: 20 }) {
-            InfoDisclosure({ title: '会话信息', message: `${(this.selected as SessionSummary).title}\n${(this.selected as SessionSummary).updated_at.substring(0, 10)}` })
-            if (!this.offlineOnly) {
-              Button('继续此会话').width('100%').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
-                .fontColor(this.palette.onAccent).backgroundColor(this.palette.accent).borderRadius(this.palette.controlRadius)
-                .enabled(this.canContinue()).onClick(() => this.continueSession())
-              InfoDisclosure({ title: '继续会话说明', message: '继续前会核对服务端上下文。历史中的安排仅供阅读，不会恢复为待执行提案。' })
-            }
-            Text('只读文字 · 不能从历史执行提案').fontSize(this.palette.metaSize).fontColor(this.palette.muted).width('100%')
-              .textAlign(TextAlign.Center).margin({ bottom: 4, top: 4 })
+          Column({ space: 16 }) {
+            Column({ space: 8 }) {
+              Text((this.selected as SessionSummary).title).fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium)
+                .fontColor(this.palette.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
+              Row({ space: 8 }) {
+                Text((this.selected as SessionSummary).updated_at.substring(0, 10)).fontSize(this.palette.metaSize)
+                  .fontColor(this.palette.secondary).layoutWeight(1)
+                if (!this.offlineOnly) {
+                  Button('继续此会话').constraintSize({ minHeight: 44 }).fontSize(this.palette.metaSize)
+                    .fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft).borderRadius(10)
+                    .enabled(this.canContinue()).onClick(() => this.continueSession())
+                }
+              }.width('100%')
+              Text('只读文字 · 不能从历史执行提案').fontSize(this.palette.metaSize).fontColor(this.palette.muted).width('100%')
+              if (!this.offlineOnly) {
+                InfoDisclosure({ title: '继续会话说明', message: '继续前会核对服务端上下文。历史中的安排仅供阅读，不会恢复为待执行提案。' })
+              }
+            }.width('100%').alignItems(HorizontalAlign.Start).padding(this.palette.cardInset)
+              .backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
             if (this.messages.length === 0 && !this.loading && this.errorText.length === 0) {
               FeedbackPanel({ kind: 'info', title: '没有可读取的文字', message: '此会话可能已从服务端移除。',
                 actionLabel: '返回会话列表', onAction: () => this.goBack() })

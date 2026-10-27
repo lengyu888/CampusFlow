@@ -125,8 +125,8 @@ export class FocusController {
       if (generation === this.generation && !this.disposed) {
         this.state.phase = 'error';
         this.fail(error as Error, error instanceof FocusScopeError ?
-          '本机保留了另一账号或服务地址的专注缓存。为保护记录，本次未切换、未计时。可返回原账号使用，或在下方明确清除本机缓存后重试；不会自动删除或覆盖。' :
-          '本机专注记录未能安全读取，本次未开始计时。可重试读取；若仍失败，请先保留记录，或在下方明确清理。不会自动覆盖原内容。');
+          '另一账号或服务地址仍有本机记录或待同步操作。请返回原账号处理；也可查看清理提示，自行确认是否清除。原记录已保留，尚未计时。' :
+          '本机记录暂时无法读取，尚未计时。请先重试；清理前请确认记录已同步。原文件已保留。');
       }
     }
   }

@@ -5,6 +5,7 @@ import { ThemePalette, themePalette } from '../theme/ThemePalette';
 import { AppIcon } from '../components/AppIcon';
 import { FeedbackPanel } from '../components/FeedbackPanel';
 import { CampusFlowRequestError } from '../utils/AgentFeedback';
+import { InfoDisclosure } from '../components/InfoDisclosure';
 
 @Component
 export struct SkillsPage {
@@ -92,22 +93,31 @@ export struct SkillsPage {
   private toggleDetails(id: string): void {
     this.expandedIds = this.expandedIds.includes(id) ? this.expandedIds.filter((value: string) => value !== id) : this.expandedIds.concat([id]);
   }
+  private accessLabel(access: string): string {
+    if (access === 'read') { return '读取'; }
+    if (access === 'write') { return '写入'; }
+    if (access === 'read_write') { return '读取与写入'; }
+    return access;
+  }
 
   build() {
     Scroll() {
-      Column({ space: 24 }) {
-        Text('按需要为助手添加能力。')
-          .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
-        Row({ space: 8 }) {
-          Button(this.loaded ? `全部 ${this.skills.length}` : '全部').layoutWeight(1).constraintSize({ minHeight: 48 })
-            .fontSize(this.palette.bodySize).fontColor(!this.installedOnly ? this.palette.onAccent : this.palette.accent)
-            .backgroundColor(!this.installedOnly ? this.palette.accent : this.palette.accentSoft)
+      Column({ space: 16 }) {
+        Column({ space: 4 }) {
+          Text('让助手帮你安排课程、管理待办。')
+            .fontSize(this.palette.bodySize).fontColor(this.palette.ink).width('100%')
+          InfoDisclosure({ title: '什么时候需要安装能力？', message: '手动查看课表、管理待办和记录专注无需安装能力。让助手读取课表或生成任务时，再按用途选择所需能力。安装前会列出数据访问权限；只有你确认后才会启用。安装能力不会自动发送对话或创建任务。' })
+        }.width('100%').alignItems(HorizontalAlign.Start)
+        Row({ space: 4 }) {
+          Button(this.loaded ? `全部 ${this.skills.length}` : '全部').layoutWeight(1).constraintSize({ minHeight: 44 })
+            .fontSize(this.palette.bodySize).fontColor(!this.installedOnly ? this.palette.ink : this.palette.secondary)
+            .backgroundColor(!this.installedOnly ? this.palette.surface : Color.Transparent)
             .borderRadius(this.palette.controlRadius).onClick(() => this.selectFilter(false))
-          Button(this.loaded ? `已安装 ${this.installedCount()}` : '已安装').layoutWeight(1).constraintSize({ minHeight: 48 })
-            .fontSize(this.palette.bodySize).fontColor(this.installedOnly ? this.palette.onAccent : this.palette.accent)
-            .backgroundColor(this.installedOnly ? this.palette.accent : this.palette.accentSoft)
+          Button(this.loaded ? `已安装 ${this.installedCount()}` : '已安装').layoutWeight(1).constraintSize({ minHeight: 44 })
+            .fontSize(this.palette.bodySize).fontColor(this.installedOnly ? this.palette.ink : this.palette.secondary)
+            .backgroundColor(this.installedOnly ? this.palette.surface : Color.Transparent)
             .borderRadius(this.palette.controlRadius).onClick(() => this.selectFilter(true))
-        }.width('100%')
+        }.width('100%').padding(4).backgroundColor(this.palette.line).borderRadius(this.palette.controlRadius)
         if (this.loading) {
           FeedbackPanel({ kind: 'loading', title: '正在读取能力', message: '已有内容仍可查看，读取完成后可操作。', busy: true })
         }
@@ -125,21 +135,26 @@ export struct SkillsPage {
         }
         ForEach(this.visibleSkills(), (skill: SkillSummary) => {
           Column({ space: 12 }) {
-            Row({ space: 12 }) {
-              AppIcon({ name: 'skills', iconSize: 24, color: this.palette.accent })
-              Text(skill.name).fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Medium)
+            Row({ space: 10 }) {
+              Stack() {
+                AppIcon({ name: 'skills', iconSize: 20, color: this.palette.accent })
+              }.width(32).height(32).backgroundColor(this.palette.accentSoft).borderRadius(8)
+              Text(skill.name).fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium)
                 .fontColor(this.palette.ink).layoutWeight(1).wordBreak(WordBreak.BREAK_WORD)
+              Text(!skill.installed ? '未安装' : skill.enabled ? '已启用' : '已停用')
+                .fontSize(this.palette.metaSize).fontColor(skill.installed && skill.enabled ? this.palette.success : this.palette.secondary)
             }.width('100%')
-            Text(`${skill.official ? '官方 · ' : ''}${skill.category} · ${!skill.installed ? '未安装' : skill.enabled ? '已启用' : '已停用'}`)
+            Text(`${skill.official ? '官方 · ' : ''}${skill.category}`)
               .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
             if (!this.expandedIds.includes(skill.skill_id)) {
               Text(skill.description).fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
                 .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
             }
-            Button(this.expandedIds.includes(skill.skill_id) ? '收起详情' : `用途与权限（${skill.permissions.length}）`)
-              .width('100%').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
-              .fontColor(this.palette.accent).backgroundColor(this.palette.field).borderRadius(this.palette.controlRadius)
-              .onClick(() => this.toggleDetails(skill.skill_id))
+            Button(this.expandedIds.includes(skill.skill_id) ? '收起用途与权限' : `用途与权限（${skill.permissions.length}）`)
+              .width('100%').constraintSize({ minHeight: 44 }).fontSize(this.palette.bodySize)
+              .fontColor(this.palette.accent).backgroundColor(Color.Transparent).borderRadius(this.palette.controlRadius)
+              .accessibilityText(`${skill.name}，${this.expandedIds.includes(skill.skill_id) ? '收起' : '查看'}用途与权限`)
+              .onClick(() => this.getUIContext().animateTo({ duration: AppTheme.motion(160), curve: Curve.EaseOut }, () => this.toggleDetails(skill.skill_id)))
             if (this.expandedIds.includes(skill.skill_id)) {
               Text(skill.description).fontSize(this.palette.bodySize).fontColor(this.palette.ink).width('100%')
                 .wordBreak(WordBreak.BREAK_WORD)
@@ -152,7 +167,7 @@ export struct SkillsPage {
               ForEach(skill.permissions, (permission: SkillPermission) => {
                 Column({ space: 4 }) {
                   Text(permission.label).fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium).fontColor(this.palette.ink).width('100%')
-                  Text(`${permission.access} · ${permission.description}`).fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
+                  Text(`${this.accessLabel(permission.access)} · ${permission.description}`).fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
                 }.width('100%').alignItems(HorizontalAlign.Start)
               }, (permission: SkillPermission) => permission.code)
               Button(this.busyId === skill.skill_id ? '正在提交…' : !skill.installed ? '同意以上权限并安装' : skill.enabled ? '停用此能力' : '启用以上权限')
@@ -168,7 +183,6 @@ export struct SkillsPage {
             }
           }.width('100%').padding(this.palette.cardInset).alignItems(HorizontalAlign.Start)
             .backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
-            .border({ width: 1, color: this.palette.line })
         }, (skill: SkillSummary) => `${skill.skill_id}-${skill.installed}-${skill.enabled}`)
       }.width('100%').padding({ left: this.palette.pageInset, right: this.palette.pageInset, top: 16, bottom: 24 })
     }.width('100%').height('100%').backgroundColor(this.palette.canvas).align(Alignment.TopStart)

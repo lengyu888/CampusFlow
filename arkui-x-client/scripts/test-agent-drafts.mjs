@@ -78,7 +78,7 @@ test('typed, suggested, appended and accepted voice input stage through the real
   page.voiceInteraction = { takeTranscript: () => '语音补充' }; page.useVoiceTranscript();
   assert.equal(store.read(lease, key).payload.text, '先写一句\n另一条建议\n语音补充');
   assert.match(source, /\.onChange\(\(value\) => this\.changePrompt\(value\)\)/);
-  assert.match(source, /\.onClick\(\(\) => this\.changePrompt\(restoreDraft/);
+  assert.match(source, /\.onClick\(\(\) => this\.restoreFailedInput\(message\)\)/);
 });
 
 test('legacy main restoration is explicit text only and retains the original Shanghai anchor without changing session or sending', async () => {

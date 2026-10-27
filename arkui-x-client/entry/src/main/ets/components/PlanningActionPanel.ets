@@ -51,7 +51,7 @@ export struct PlanningActionPanel {
       Text(task.title).fontSize(this.palette.bodySize).fontColor(this.palette.ink).fontWeight(FontWeight.Medium)
         .width('100%').wordBreak(WordBreak.BREAK_WORD)
       Text(task.allow_during_course === true ? '可在上课时完成：已开启' : '可在上课时完成：未开启')
-        .fontSize(this.palette.bodySize).fontColor(this.palette.secondary).width('100%')
+        .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
       TaskScheduleDetails({ startAt: task.start_at, endAt: task.end_at, location: task.location, reminderMinutes: task.reminder_minutes })
     }.width('100%').alignItems(HorizontalAlign.Start).padding(16).backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
   }
@@ -65,7 +65,7 @@ export struct PlanningActionPanel {
       Text(plan.summary.length > 0 ? plan.summary : '未设置说明').fontSize(this.palette.bodySize)
         .fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
       Text(plan.target_date === null ? '未设截止日' : `截止日：${plan.target_date}`)
-        .fontSize(this.palette.bodySize).fontColor(this.palette.secondary).width('100%')
+        .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
     }.width('100%').alignItems(HorizontalAlign.Start).padding(16).backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
   }
 
@@ -155,8 +155,8 @@ export struct PlanningActionPanel {
         }.width('100%').alignItems(HorizontalAlign.Start)
       }, (action: PendingAction) => `${action.proposal_id}-${this.state.phase}`)
       if (['resolved', 'cancelled', 'invalidated', 'error', 'idle'].includes(this.state.phase)) {
-        Button('返回继续编辑').width('100%').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
-          .fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft).borderRadius(this.palette.controlRadius).onClick(this.onDismiss)
+        Button('返回继续编辑').width('100%').constraintSize({ minHeight: 44 }).fontSize(this.palette.bodySize)
+          .fontColor(this.palette.accent).backgroundColor(Color.Transparent).borderRadius(this.palette.controlRadius).onClick(this.onDismiss)
       }
     }.width('100%').alignItems(HorizontalAlign.Start)
   }

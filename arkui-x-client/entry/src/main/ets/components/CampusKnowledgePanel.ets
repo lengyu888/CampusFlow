@@ -5,6 +5,7 @@ import { AppTheme } from '../theme/AppTheme';
 import { ThemePalette, themePalette } from '../theme/ThemePalette';
 import { FeedbackPanel } from './FeedbackPanel';
 import { EvidencePanel } from './EvidencePanel';
+import { InfoDisclosure } from './InfoDisclosure';
 
 @Component
 export struct CampusKnowledgePanel {
@@ -21,6 +22,7 @@ export struct CampusKnowledgePanel {
   @State private sourceLoading: string = '';
   @State private message: string = '';
   @State private sourceMessage: string = '';
+  @State private examplesExpanded: boolean = false;
   private alive: boolean = false;
   private revision: number = 0;
   private sourceRevision: number = 0;
@@ -29,7 +31,7 @@ export struct CampusKnowledgePanel {
   aboutToDisappear(): void { this.alive = false; this.invalidate(); }
   private invalidate(): void { this.revision++; this.sourceRevision++; this.loading = false; this.sourceLoading = ''; }
   private activityChanged(): void { if (!this.active) { this.invalidate(); } }
-  private scopeChanged(): void { this.invalidate(); this.query = ''; this.pendingExample = ''; this.result = null; this.source = null; this.message = ''; this.sourceMessage = ''; }
+  private scopeChanged(): void { this.invalidate(); this.query = ''; this.pendingExample = ''; this.result = null; this.source = null; this.message = ''; this.sourceMessage = ''; this.examplesExpanded = false; }
   private current(revision: number, base: string, token: string, scope: string): boolean {
     return this.alive && this.active && revision === this.revision && base === this.baseUrl && token === this.token && scope === this.campusScope;
   }
@@ -88,29 +90,41 @@ export struct CampusKnowledgePanel {
       Text(`原文链接（可长按复制）\n${hit.url}`).fontSize(this.palette.metaSize).fontColor(this.palette.accent)
         .width('100%').wordBreak(WordBreak.BREAK_WORD).copyOption(CopyOptions.LocalDevice)
       EvidencePanel({ evidence: knowledgeEvidence(hit), active: this.active })
-      Button('收起出处').constraintSize({ minHeight: 48 }).fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft).onClick(() => this.closeSource())
+      Button('收起出处').constraintSize({ minHeight: 44 }).fontSize(this.palette.metaSize)
+        .fontColor(this.palette.accent).backgroundColor(Color.Transparent).onClick(() => this.closeSource())
     }.width('100%').alignItems(HorizontalAlign.Start).padding(12).backgroundColor(this.palette.field).borderRadius(12)
   }
   build() {
     Column({ space: 12 }) {
-      Text('校园资料 · 有出处再回答').fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Bold).fontColor(this.palette.ink).width('100%')
-      Text('查阅精选官方办事与使用指南，不查询实时开放、座位、考试或个人数据；无需模型密钥。')
+      Text('查询校园指南').fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Bold).fontColor(this.palette.ink).width('100%')
+      Text('只查询参考资料，不含实时或个人数据；无需模型密钥。')
         .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
-      ForEach(['校外怎么访问图书馆数据库', '校园网络资源使用说明', '如何申请信息公开', '杭电文库如何征集'], (example: string) => {
-        Button(example).width('100%').constraintSize({ minHeight: 48 }).fontSize(this.palette.metaSize).fontColor(this.palette.accent)
-          .backgroundColor(this.palette.accentSoft).enabled(!this.loading && this.active).onClick(() => this.chooseExample(example))
-      }, (example: string) => example)
-      if (this.pendingExample.length > 0) {
-        Text('输入框已有问题，是否改用所选示例？').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
-        Button('保留原问题').constraintSize({ minHeight: 48 }).onClick(() => this.pendingExample = '')
-        Button('使用所选示例').constraintSize({ minHeight: 48 }).onClick(() => this.applyExample())
-      }
-      TextInput({ text: this.query, placeholder: '例如：校外怎么访问图书馆数据库' }).height(48).fontSize(this.palette.bodySize)
-        .backgroundColor(this.palette.field).borderRadius(this.palette.controlRadius).onChange((text: string) => this.query = text)
-        .accessibilityText('输入校园资料问题，最多200字')
+      TextInput({ text: this.query, placeholder: '输入想了解的办事或使用问题' }).constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
+        .fontColor(this.palette.ink).backgroundColor(this.palette.field).borderRadius(this.palette.controlRadius)
+        .onChange((text: string) => this.query = text).accessibilityText('输入校园资料问题，最多200字')
       Button(this.loading ? '查询中…' : '查询官方资料').width('100%').constraintSize({ minHeight: 48 })
         .fontSize(this.palette.bodySize).fontColor(this.palette.onAccent).backgroundColor(this.palette.accent)
-        .enabled(!this.loading && this.active).onClick(() => this.search())
+        .borderRadius(this.palette.controlRadius).enabled(!this.loading && this.active).onClick(() => this.search())
+      Button(this.examplesExpanded ? '收起示例问题' : '不知道怎么问？查看示例').width('100%').constraintSize({ minHeight: 44 })
+        .fontSize(this.palette.metaSize).fontColor(this.palette.accent).backgroundColor(Color.Transparent)
+        .accessibilityText(`示例问题，${this.examplesExpanded ? '已展开' : '已收起'}`)
+        .onClick(() => animateTo({ duration: AppTheme.motion(160) }, () => this.examplesExpanded = !this.examplesExpanded))
+      if (this.examplesExpanded) {
+        ForEach(['校外怎么访问图书馆数据库', '校园网络资源使用说明', '如何申请信息公开', '杭电文库如何征集'], (example: string) => {
+          Button(example).width('100%').constraintSize({ minHeight: 44 }).fontSize(this.palette.metaSize).fontColor(this.palette.accent)
+            .backgroundColor(this.palette.accentSoft).borderRadius(10)
+            .enabled(!this.loading && this.active).onClick(() => this.chooseExample(example))
+        }, (example: string) => example)
+      }
+      if (this.pendingExample.length > 0) {
+        Text('输入框已有问题，是否改用所选示例？').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
+        Button('保留原问题').constraintSize({ minHeight: 44 }).fontSize(this.palette.bodySize)
+          .fontColor(this.palette.accent).backgroundColor(Color.Transparent).onClick(() => this.pendingExample = '')
+        Button('使用所选示例').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
+          .fontColor(this.palette.onAccent).backgroundColor(this.palette.accent).borderRadius(this.palette.controlRadius)
+          .onClick(() => this.applyExample())
+      }
+      InfoDisclosure({ title: '资料覆盖范围', message: '查阅精选官方办事与使用指南，不查询实时开放、座位、考试或个人数据；无需模型密钥。' })
       if (this.message.length > 0) { FeedbackPanel({ kind: 'warning', title: '本次资料查询', message: this.message }) }
       if (this.result !== null) {
         Text(`查询：${this.result.query}`).fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')

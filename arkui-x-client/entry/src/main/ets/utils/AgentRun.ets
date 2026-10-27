@@ -1,5 +1,6 @@
 import { RunSnapshot, RunEvent, RunEventsPage, RunStartRequest } from '../model/ApiModels';
 import { CampusFlowRequestError, localRequestFailure } from './AgentFeedback';
+import { validActionPreview } from './ActionReliability';
 
 export interface AgentRunGateway {
   startAgentRun(request: RunStartRequest): Promise<RunSnapshot>;
@@ -70,6 +71,14 @@ export function validRunSnapshot(value: RunSnapshot): boolean {
   if (value.session_mode !== undefined && value.session_mode !== null && value.session_mode !== 'new' && value.session_mode !== 'continue') { return false; }
   if (value.input_context_revision !== undefined && value.input_context_revision !== null && !contextRevision(value.input_context_revision)) { return false; }
   if ((value.session_mode === 'new' || value.session_mode === 'continue') && !contextRevision(value.input_context_revision)) { return false; }
+  if (value.prepared_actions !== undefined) {
+    if (!Array.isArray(value.prepared_actions) || value.prepared_actions.length > 50) { return false; }
+    const proposals: string[] = [];
+    for (const action of value.prepared_actions) {
+      if (!validActionPreview(action) || proposals.includes(action.proposal_id)) { return false; }
+      proposals.push(action.proposal_id);
+    }
+  }
   const calls: string[] = [];
   for (const tool of value.tool_progress) {
     if (tool === null || typeof tool !== 'object' || Array.isArray(tool) || !text(tool.call_id) || calls.includes(tool.call_id) ||
@@ -232,6 +241,8 @@ export class AgentRunController {
       '本次运行已结束但未完成。已有片段保留，请查看运行状态后决定下一步。';
     if (isRunTerminal(value.status) && value.status !== 'succeeded' && value.error_code !== null &&
       ['RUN_TIMEOUT', 'RUN_BUDGET_EXCEEDED', 'RUN_INTERRUPTED', 'RUN_CANCELLED', 'RUN_FAILED',
+        'RUN_INPUT_LIMIT', 'RUN_CONTEXT_LIMIT', 'RUN_OUTPUT_LIMIT', 'RUN_MODEL_CALL_LIMIT', 'RUN_TOOL_CALL_LIMIT',
+        'MODEL_OUTPUT_LIMIT', 'MODEL_RESPONSE_LIMIT',
         'MODEL_AUTH_INVALID', 'MODEL_KEY_REQUIRED', 'MODEL_UNAVAILABLE', 'MODEL_RATE_LIMITED',
         'MODEL_REQUEST_REJECTED', 'REQUEST_TIMEOUT', 'SESSION_DELETED', 'SESSION_NOT_FOUND',
         'SESSION_CONTEXT_CHANGED', 'SESSION_EXISTS', 'SESSION_MODE_INVALID'].includes(value.error_code)) {

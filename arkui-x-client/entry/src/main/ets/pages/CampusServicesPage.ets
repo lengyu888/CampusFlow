@@ -274,20 +274,16 @@ export struct CampusServicesPage {
   @Builder
   private serviceTab(index: number, label: string) {
     Button({ type: ButtonType.Normal }) {
-      Row({ space: 10 }) {
-        AppIcon({ name: index === 0 ? 'classroom' : index === 1 ? 'bolt' : index === 2 ? 'book' : 'card',
-          iconSize: 21, color: this.activeService === index ? this.palette.accent : this.palette.secondary })
-        Text(label).fontSize(this.palette.bodySize)
-          .fontWeight(this.activeService === index ? FontWeight.Bold : FontWeight.Medium)
-          .fontColor(this.activeService === index ? this.palette.accent : this.palette.ink).maxLines(1)
-      }.width('100%')
+      Text(label).fontSize(this.palette.metaSize)
+        .fontWeight(this.activeService === index ? FontWeight.Bold : FontWeight.Medium)
+        .fontColor(this.activeService === index ? this.palette.accent : this.palette.secondary)
+        .textAlign(TextAlign.Center).width('100%').wordBreak(WordBreak.BREAK_WORD)
     }
       .layoutWeight(1)
-      .constraintSize({ minHeight: 60 })
-      .padding({ left: 12, right: 12 })
-      .backgroundColor(this.activeService === index ? this.palette.accentSoft : this.palette.surface)
-      .border({ width: 1, color: this.activeService === index ? this.palette.accent : this.palette.line })
-      .borderRadius(this.palette.controlRadius)
+      .constraintSize({ minHeight: 44 })
+      .padding({ left: 4, right: 4, top: 6, bottom: 6 })
+      .backgroundColor(this.activeService === index ? this.palette.surface : Color.Transparent)
+      .borderRadius(10)
       .accessibilityText(`${label}${this.activeService === index ? '，已选择' : ''}`)
       .onClick(() => {
         this.getUIContext().animateTo({ duration: AppTheme.motion(180), curve: Curve.EaseOut }, () => {
@@ -344,10 +340,15 @@ export struct CampusServicesPage {
 
         Row({ space: 6 }) {
           ForEach(this.periodLabels, (label: string, index: number) => {
-            Button(label).layoutWeight(1).constraintSize({ minHeight: 48 }).fontSize(this.palette.metaSize)
-              .fontColor(this.selectedPeriod === index ? this.palette.surface : this.palette.secondary)
+            Button({ type: ButtonType.Normal }) {
+              Text(label).width('100%').fontSize(this.palette.metaSize).textAlign(TextAlign.Center)
+                .fontColor(this.selectedPeriod === index ? this.palette.onAccent : this.palette.secondary)
+                .wordBreak(WordBreak.BREAK_WORD)
+            }.layoutWeight(1).constraintSize({ minHeight: 44 })
+              .padding({ left: 4, right: 4, top: 8, bottom: 8 })
               .backgroundColor(this.selectedPeriod === index ? this.palette.accent : this.palette.field)
-              .borderRadius(11)
+              .borderRadius(10)
+              .accessibilityText(`${index === 0 ? '当前时段' : index === 4 ? '第10节及以后' : `第${label}节`}${this.selectedPeriod === index ? '，已选择' : ''}`)
               .onClick(() => {
                 this.getUIContext().animateTo({ duration: AppTheme.motion(160), curve: Curve.EaseOut }, () => {
                   this.choosePeriod(index);
@@ -386,6 +387,8 @@ export struct CampusServicesPage {
             }, (item: ClassroomUsageItem) => `${item.week}-${item.weekday}-${item.section}-${item.course_name}`)
             if (this.usageLimit < this.usageItems.length) {
               Button(`查看更多（还有 ${this.usageItems.length - this.usageLimit} 项）`).constraintSize({ minHeight: 48 })
+                .fontSize(this.palette.metaSize).fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft)
+                .borderRadius(this.palette.controlRadius)
                 .onClick(() => this.usageLimit += 20)
             }
           }
@@ -417,6 +420,8 @@ export struct CampusServicesPage {
         }, (room: ClassroomItem) => room.location_id)
         if (this.classroomLimit < this.classrooms.length) {
           Button(`查看更多（还有 ${this.classrooms.length - this.classroomLimit} 间）`).constraintSize({ minHeight: 48 })
+            .fontSize(this.palette.metaSize).fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft)
+            .borderRadius(this.palette.controlRadius)
             .onClick(() => this.classroomLimit += 20)
         }
       }
@@ -606,7 +611,9 @@ export struct CampusServicesPage {
           Text('尚未连接 HDUHelp').fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
           Text('在数据连接中配置令牌，即可读取图书馆记录。')
             .fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
-          Button('打开数据与连接').constraintSize({ minHeight: 48 }).onClick(() => this.onOpenProfile())
+          Button('打开数据与连接').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
+            .fontColor(this.palette.onAccent).backgroundColor(this.palette.accent).borderRadius(this.palette.controlRadius)
+            .onClick(() => this.onOpenProfile())
         }.width('100%').alignItems(HorizontalAlign.Start).padding(20)
           .backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius).border({ width: 1, color: this.palette.line })
       } else {
@@ -666,26 +673,21 @@ export struct CampusServicesPage {
 
   build() {
     Column() {
-      Row({ space: 12 }) {
-        Button() {
+      Row({ space: 8 }) {
+        Button({ type: ButtonType.Normal }) {
           AppIcon({ name: 'back', iconSize: 22, color: this.palette.accent })
-        }.width(48).constraintSize({ minHeight: 48 }).backgroundColor(this.palette.surface)
-          .borderRadius(22).accessibilityText('返回上一页').onClick(() => this.onBack())
-        Column({ space: 3 }) {
-          Text('校园服务').fontSize(this.palette.pageTitle).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
-          Text('选择一项服务').fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
-        }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-      }.width('100%').padding({ left: 18, right: 18, top: 14, bottom: 12 })
+        }.width(44).constraintSize({ minHeight: 44 }).backgroundColor(Color.Transparent)
+          .borderRadius(12).accessibilityText('返回上一页').onClick(() => this.onBack())
+        Text('校园服务').fontSize(22).fontWeight(FontWeight.Bold).fontColor(this.palette.ink).layoutWeight(1)
+      }.width('100%').constraintSize({ minHeight: 56 }).padding({ left: 8, right: 20, top: 4, bottom: 4 })
 
-      Column({ space: 8 }) {
-        Row({ space: 8 }) {
+      Column() {
+        Row({ space: 3 }) {
           this.serviceTab(0, '空闲教室')
           this.serviceTab(1, '寝室电费')
-        }.width('100%')
-        Row({ space: 8 }) {
           this.serviceTab(2, '图书馆')
           this.serviceTab(3, '校园卡')
-        }.width('100%')
+        }.width('100%').padding(4).backgroundColor(this.palette.field).borderRadius(13)
       }.width('100%').padding({ left: this.palette.pageInset, right: this.palette.pageInset, bottom: 8 })
 
       Scroll(this.scrollers[this.activeService]) {

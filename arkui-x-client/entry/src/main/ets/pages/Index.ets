@@ -13,6 +13,7 @@ import { localFocus } from '../services/LocalFocus';
 import { PlatformFocusClock } from '../services/PlatformFocusClock';
 import { FocusPage } from './FocusPage';
 import { ReviewPage } from './ReviewPage';
+import { UsageGuidePage } from './UsageGuidePage';
 import { ReviewPeriod } from '../model/ReviewModels';
 import { reviewRange } from '../utils/ReviewTime';
 import { TaskStatusPanel, TaskStatusLabel } from '../components/TaskStatusPanel';
@@ -703,6 +704,22 @@ struct Index {
     this.applyNavigation(backNavigation(this.navigation));
   }
 
+  private guideDestination(destination: string): void {
+    if (this.activeTab !== 10 || this.token.length === 0 || !this.voiceForeground) { return; }
+    if (!['today', 'tasks', 'agent', 'profile', 'skills', 'services', 'timetable', 'focus', 'review'].includes(destination)) { return; }
+    // Close the guide frame before following its link, preserving the caller's navigation.
+    this.applyNavigation(backNavigation(this.navigation));
+    if (destination === 'today') { this.applyNavigation(selectRoot(this.navigation, 0, true)); }
+    else if (destination === 'tasks') { this.openPlanList('tasks'); }
+    else if (destination === 'agent') { this.applyNavigation(selectRoot(this.navigation, 1, true)); }
+    else if (destination === 'profile') { this.selectTab(4); }
+    else if (destination === 'skills') { this.selectTab(3); }
+    else if (destination === 'services') { this.selectTab(7); }
+    else if (destination === 'timetable') { this.selectTab(9); }
+    else if (destination === 'focus') { this.openFocus(); }
+    else { this.openReview('day', new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10)); }
+  }
+
   private continueAgentSession(sessionId: string): void {
     if (sessionId.length === 0 || this.token.length === 0 || this.historyDeleteBusy) { return; }
     this.requestedSessionId = sessionId;
@@ -766,7 +783,7 @@ struct Index {
   @Builder
   private pageContent() {
     Stack({ alignContent: Alignment.TopStart }) {
-      HomePage({ onOpenReview: (period: ReviewPeriod, anchor: string) => this.openReview(period, anchor), onOpenFocus: (task: PlanningTask) => this.openFocus(task), onOpenFocusRecords: () => this.openFocus(), statusLockedTaskIds: this.taskStatusState.lockedTaskIds,
+      HomePage({ onOpenGuide: () => this.selectTab(10), onOpenReview: (period: ReviewPeriod, anchor: string) => this.openReview(period, anchor), onOpenFocus: (task: PlanningTask) => this.openFocus(task), onOpenFocusRecords: () => this.openFocus(), statusLockedTaskIds: this.taskStatusState.lockedTaskIds,
         onTaskStatus: (task: PlanningTask) => this.changeTaskStatus(task), onOpenStatus: (id: string) => this.openTaskStatus(id), baseUrl: this.serviceBaseUrl(), token: this.token, user: this.user,
         refreshKey: this.homeRefresh, active: this.activeTab === 0 && !this.quickCaptureOpen && !this.focusPageOpen && !this.reviewPageOpen && !this.taskStatusOpen && this.voiceForeground,
         onOpenCapture: (intent: TaskCaptureIntent) => this.openCapture(intent),
@@ -779,7 +796,7 @@ struct Index {
         onOpenRoute: () => this.selectTab(6),
         onOpenServices: () => this.selectTab(7), onOpenProfile: () => this.selectTab(4) })
         .visibility(this.activeTab === 0 && !this.quickCaptureOpen ? Visibility.Visible : Visibility.Hidden)
-      AgentPage({ statusLockedTaskIds: this.taskStatusState.lockedTaskIds, onOpenStatus: (id: string) => this.openTaskStatus(id), baseUrl: this.serviceBaseUrl(), token: this.token, userId: this.user.user_id,
+      AgentPage({ onOpenGuide: () => this.selectTab(10), statusLockedTaskIds: this.taskStatusState.lockedTaskIds, onOpenStatus: (id: string) => this.openTaskStatus(id), baseUrl: this.serviceBaseUrl(), token: this.token, userId: this.user.user_id,
         requestedSessionId: this.requestedSessionId, resumeRevision: this.sessionResumeRevision, draftLease: this.draftLease, initialPrompt: this.agentPrompt,
         voiceActive: this.activeTab === 1 && !this.focusPageOpen && !this.reviewPageOpen && !this.taskStatusOpen && this.voiceForeground,
         historyScope: this.cacheScope, deletedSessionId: this.deletedSessionId,
@@ -816,11 +833,11 @@ struct Index {
         Column() { SkillsPage({ baseUrl: this.serviceBaseUrl(), token: this.token, active: this.activeTab === 3 && this.voiceForeground }) }.layoutWeight(1).width('100%')
       }.width('100%').height('100%').visibility(this.activeTab === 3 ? Visibility.Visible : Visibility.Hidden)
       Column() {
-        this.SecondaryHeader('个人设置')
+        if (!this.profileInnerActive) { this.SecondaryHeader('个人设置') }
         Column() {
           ProfilePage({ baseUrl: this.serviceBaseUrl(), token: this.token, user: this.user,
             backRevision: this.profileBackRevision, onInnerNavigationChanged: (active) => this.profileInnerActive = active,
-            onOpenHistory: () => this.selectTab(5),
+            onOpenHistory: () => this.selectTab(5), onOpenGuide: () => this.selectTab(10),
             draftNotice: this.draftNotice, draftClearConfirm: this.draftClearConfirm,
             draftCleanupBusy: this.draftCleanupBusy, onClearDrafts: () => this.clearLocalDrafts(),
             onCancelClearDrafts: () => this.draftClearConfirm = false,
@@ -833,6 +850,9 @@ struct Index {
             onOpenAgent: (prompt) => this.openAgentWithPrompt(prompt) })
         }.layoutWeight(1).width('100%')
       }.width('100%').height('100%').visibility(this.activeTab === 4 ? Visibility.Visible : Visibility.Hidden)
+      if (this.activeTab === 10) {
+        UsageGuidePage({ onBack: () => this.goBack(), onOpen: (destination: string) => this.guideDestination(destination) })
+      }
       if (this.activeTab === 5) {
         HistoryPage({ baseUrl: this.serviceBaseUrl(), token: this.token, historyScope: this.cacheScope,
           chatBusy: this.agentChatBusy,
@@ -981,14 +1001,14 @@ struct Index {
           }.padding(16).backgroundColor(this.palette.warningSoft).width('100%')
         }
         if (!this.focusPageOpen && !this.reviewPageOpen && !this.taskStatusOpen && (this.focusState.localRecords.length > 0 || this.focusState.pendingOperations.length > 0 || this.focusState.activeRecord !== null || this.focusCleanupNeeded)) {
-          Button(this.focusState.local?.localState === 'running' ? '专注正在记录 · 打开查看' : '专注记录与待同步内容 · 打开核对')
-            .width('100%').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize).fontColor(this.palette.accent)
-            .backgroundColor(this.palette.accentSoft).onClick(() => this.openFocus())
+          Button(this.focusState.local?.localState === 'running' ? '专注计时中 · 查看' : '专注记录 · 核对同步')
+            .width('100%').constraintSize({ minHeight: 44 }).fontSize(this.palette.metaSize).fontColor(this.palette.accent)
+            .backgroundColor(this.palette.surface).borderRadius(0).onClick(() => this.openFocus())
         }
         if (!this.reviewPageOpen && !this.taskStatusOpen && (this.taskStatusState.items.length > 0 || this.taskStatusState.message.length > 0)) {
           Button(this.taskStatusBarLabel())
-            .width('100%').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize).fontColor(this.palette.accent)
-            .backgroundColor(this.palette.accentSoft).onClick(() => this.openTaskStatus())
+            .width('100%').constraintSize({ minHeight: 44 }).fontSize(this.palette.metaSize).fontColor(this.palette.accent)
+            .backgroundColor(this.palette.surface).borderRadius(0).onClick(() => this.openTaskStatus())
         }
         if (!this.focusPageOpen && !this.reviewPageOpen && !this.taskStatusOpen && !this.quickCaptureOpen && isRootRoute(this.activeTab) && !(this.activeTab === 2 && this.planInnerActive)) {
           Row({ space: 4 }) {

@@ -64,7 +64,7 @@ test('secondary navigation pushes and back pops one frame while preserving the r
 test('duplicate taps do not grow a stack and unsupported routes do not alter navigation', () => {
   const state = openSecondary(createNavigation(), 5);
   assert.deepEqual(openSecondary(state, 5), state);
-  for (const route of [-1, 10, NaN, 0, 1, 2, 8]) assert.deepEqual(openSecondary(state, route), state);
+  for (const route of [-1, 11, NaN, 0, 1, 2, 8]) assert.deepEqual(openSecondary(state, route), state);
   for (const route of [-1, 9, NaN, 3, 4, 5, 6, 7]) assert.deepEqual(selectRoot(state, route, true), state);
 });
 

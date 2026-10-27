@@ -44,7 +44,7 @@ export struct CourseReviewPanel {
             }.width('100%').alignItems(HorizontalAlign.Start)
           }, (overlap: CourseOverlap, index: number) => `${overlap.course_key}-${index}`)
           if (review.requires_acknowledgement && this.action.status === 'pending') {
-            Button(this.checked(review) ? '已选择：仍这样安排（点此取消）' : '仍这样安排').width('100%').constraintSize({ minHeight: 48 })
+            Button(this.checked(review) ? '已选择 · 点按取消' : '确认以上课程重叠').width('100%').constraintSize({ minHeight: 48 })
               .fontSize(this.palette.bodySize).fontColor(this.checked(review) ? this.palette.onAccent : this.palette.accent)
               .backgroundColor(this.checked(review) ? this.palette.accent : this.palette.accentSoft).borderRadius(this.palette.controlRadius)
               .enabled(this.reviewEnabled).onClick(() => this.onToggle(review))

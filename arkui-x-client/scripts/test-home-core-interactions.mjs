@@ -316,7 +316,7 @@ test('page groups retain all rows and never collapse incomplete timed work', () 
   page.overview=overview([task({task_id:'late'}),task({task_id:'unknown',start_at:'2026-10-19T13:00:00+08:00',end_at:null}),task({task_id:'done',status:'completed'})]);
   const groups=page.groups(); assert.equal(groups.overdue[0].taskId,'late'); assert.equal(groups.upcoming[0].taskId,'unknown');
   assert.equal(groups.earlier.length,2); assert.equal(groups.upcoming.length+groups.overdue.length+groups.earlier.length,page.agenda().rows.length);
-  assert.match(source,/TimelineList\(this\.groups\(\)\.overdue\)/); assert.match(source,/if \(this\.earlierExpanded\)/);
+  assert.match(source,/TimelineList\(\(\) => this\.groups\(\)\.overdue\)/); assert.match(source,/if \(this\.earlierExpanded\)/);
 });
 
 test('focus entry uses an exact current task and a bounded honest shortcut list without task mutation',()=>{

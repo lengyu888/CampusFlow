@@ -1294,7 +1294,9 @@ export struct PlanCenterPage {
       }
       if (this.week().unplacedCourses.length > 0) {
         Text('部分课程时间异常，未纳入周时段，请在课表中核对。').fontSize(this.palette.bodySize).fontColor(this.palette.warning).width('100%')
-        Button('打开课表核对').constraintSize({ minHeight: 48 }).onClick(() => this.onOpenTimetable())
+        Button('打开课表核对').constraintSize({ minHeight: 44 }).fontSize(this.palette.bodySize)
+          .fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft).borderRadius(this.palette.controlRadius)
+          .onClick(() => this.onOpenTimetable())
       }
     }.width('100%').alignItems(HorizontalAlign.Start)
   }
@@ -1328,19 +1330,19 @@ export struct PlanCenterPage {
   @Builder
   private TaskCheck(task: PlanningTask) {
     Button({ type: ButtonType.Normal }) {
-      if (task.status === 'completed' || this.statusLockedTaskIds.includes(task.task_id)) {
-        Text(this.statusLockedTaskIds.includes(task.task_id) ? '核对结果' : '恢复未完成').fontSize(this.palette.metaSize).fontColor(this.palette.accent).wordBreak(WordBreak.BREAK_WORD)
+      if (this.statusLockedTaskIds.includes(task.task_id)) {
+        Text('核对结果').fontSize(this.palette.metaSize).fontColor(this.palette.accent).wordBreak(WordBreak.BREAK_WORD)
       } else {
       Stack() {
-        Circle().width(25).height(25)
+        Circle().width(22).height(22)
           .fill(task.status === 'completed' ? this.palette.accent : this.palette.surface)
           .stroke(task.status === 'completed' ? this.palette.accent : this.palette.quiet).strokeWidth(1.5)
         if (task.status === 'completed') {
-          AppIcon({ name: 'check', iconSize: 15, color: this.palette.onAccent })
+          AppIcon({ name: 'check', iconSize: 14, color: this.palette.onAccent })
         }
+      }.width(24).height(24)
       }
-      }
-    }.width(task.status === 'completed' || this.statusLockedTaskIds.includes(task.task_id) ? 88 : 48).constraintSize({ minHeight: 48 }).backgroundColor(Color.Transparent)
+    }.width(this.statusLockedTaskIds.includes(task.task_id) ? 88 : 48).constraintSize({ minHeight: 48 }).backgroundColor(Color.Transparent)
       .enabled(this.statusLockedTaskIds.includes(task.task_id) || !this.writesBlocked()).accessibilityText(this.statusLabel(task))
       .onClick(() => this.toggle(task))
   }
@@ -1545,12 +1547,15 @@ export struct PlanCenterPage {
     Column({ space: 16 }) {
       Text(this.draftMessage).fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
       if (this.draftMessage.includes('尚未保存')) {
-        Button('重试保存输入').constraintSize({ minHeight: 48 }).onClick(() => { this.stageTaskDraft(); this.flushTaskDraft(); })
+        Button('重试保存输入').constraintSize({ minHeight: 44 }).fontSize(this.palette.bodySize)
+          .fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft).borderRadius(this.palette.controlRadius)
+          .onClick(() => { this.stageTaskDraft(); this.flushTaskDraft(); })
       }
       if (this.pendingCaptureIntent !== null) {
         Text(`首页建议 ${this.pendingCaptureIntent.date} ${this.pendingCaptureIntent.time}，留 ${this.pendingCaptureIntent.durationMinutes ?? 0} 分钟。已有输入已保留。`)
           .fontSize(this.palette.bodySize).fontColor(this.palette.secondary).width('100%')
-        Button('使用这个时段，保留标题').constraintSize({ minHeight: 48 }).enabled(!this.writesBlocked())
+        Button('使用这个时段，保留标题').constraintSize({ minHeight: 44 }).fontSize(this.palette.bodySize)
+          .fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft).borderRadius(this.palette.controlRadius).enabled(!this.writesBlocked())
           .onClick(() => this.applyCaptureSuggestion())
       }
       if (this.draftAnchorDate.length > 0 && this.draftAnchorDate !== this.relativeDate(0)) {
@@ -1573,8 +1578,8 @@ export struct PlanCenterPage {
         ForEach(this.captureIssues, (issue: QuickCaptureIssue) => {
           Text(issue.message).fontSize(this.palette.bodySize).fontColor(this.palette.warning).width('100%').wordBreak(WordBreak.BREAK_WORD)
         }, (issue: QuickCaptureIssue, index: number) => `${index}-${issue.code}`)
-        Button('交给助手进一步核对').constraintSize({ minHeight: 48 }).fontColor(this.palette.accent)
-          .backgroundColor(this.palette.accentSoft).onClick(() => this.captureToAssistant())
+        Button('交给助手进一步核对').constraintSize({ minHeight: 44 }).fontSize(this.palette.bodySize).fontColor(this.palette.accent)
+          .backgroundColor(this.palette.accentSoft).borderRadius(this.palette.controlRadius).onClick(() => this.captureToAssistant())
       }
       this.EditField('日期 · 可留空', this.draftTaskDate, 'YYYY-MM-DD，留空即无日期', (value: string) => {
         this.draftTaskDate = value; this.draftDateChoice = value.length === 0 ? 'none' : 'capture'; this.stageTaskDraft();
@@ -1779,8 +1784,8 @@ export struct PlanCenterPage {
       if (this.filteredTasks().length > 20) {
         Text(`第 ${this.currentQueryPage() + 1} / ${Math.ceil(this.filteredTasks().length / 20)} 页`).fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
         Row({ space: 8 }) {
-          Button('上一页').layoutWeight(1).constraintSize({ minHeight: 48 }).enabled(this.currentQueryPage() > 0).onClick(() => this.moveQueryPage(-1))
-          Button('下一页').layoutWeight(1).constraintSize({ minHeight: 48 }).enabled((this.currentQueryPage() + 1) * 20 < this.filteredTasks().length).onClick(() => this.moveQueryPage(1))
+          Button('上一页').layoutWeight(1).constraintSize({ minHeight: 44 }).fontSize(this.palette.bodySize).fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft).borderRadius(this.palette.controlRadius).enabled(this.currentQueryPage() > 0).onClick(() => this.moveQueryPage(-1))
+          Button('下一页').layoutWeight(1).constraintSize({ minHeight: 44 }).fontSize(this.palette.bodySize).fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft).borderRadius(this.palette.controlRadius).enabled((this.currentQueryPage() + 1) * 20 < this.filteredTasks().length).onClick(() => this.moveQueryPage(1))
         }.width('100%')
       }
     }.width('100%').alignItems(HorizontalAlign.Start)
@@ -1858,7 +1863,7 @@ export struct PlanCenterPage {
         .borderRadius(this.palette.controlRadius).onClick(() => this.onOpenAgent(this.reviewPrompt()))
       if (!this.captureOnly) {
       Row({ space: 12 }) {
-        Button('本周回看').constraintSize({ minHeight: 48 }).layoutWeight(1).fontSize(this.palette.bodySize)
+        Button('本周回顾').constraintSize({ minHeight: 48 }).layoutWeight(1).fontSize(this.palette.bodySize)
           .fontColor(this.palette.accent).backgroundColor(this.palette.surface).enabled(!this.mutationBusy)
           .onClick(() => this.reviewRequested())
         Button('课表维护').constraintSize({ minHeight: 48 }).layoutWeight(1).fontSize(this.palette.bodySize)
@@ -1867,6 +1872,40 @@ export struct PlanCenterPage {
       }
       if (this.sourcesComplete()) { this.SourceStatus() }
     }.width('100%').padding({ left: this.palette.pageInset, right: this.palette.pageInset, top: 12, bottom: 24 })
+  }
+
+  @Builder
+  private TaskDetailSummary(task: PlanningTask) {
+    Column({ space: 16 }) {
+      Text(task.title).fontSize(24).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
+        .width('100%').wordBreak(WordBreak.BREAK_WORD)
+      Row({ space: 8 }) {
+        Text(task.status === 'completed' ? '已完成' : this.taskOverdue(task) ? '已逾期' : '待完成')
+          .fontSize(this.palette.metaSize).fontWeight(FontWeight.Medium)
+          .fontColor(task.status === 'completed' ? this.palette.success : this.taskOverdue(task) ? this.palette.danger : this.palette.accent)
+          .padding({ left: 10, right: 10, top: 5, bottom: 5 })
+          .backgroundColor(task.status === 'completed' ? this.palette.successSoft : this.taskOverdue(task) ? this.palette.dangerSoft : this.palette.accentSoft)
+          .borderRadius(8)
+        if (task.plan_id !== null) {
+          Text('计划内任务').fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
+        }
+      }.width('100%')
+      Divider().color(this.palette.line)
+      if (this.scheduleTypesValid(task)) {
+        TaskScheduleDetails({ startAt: task.start_at, endAt: task.end_at,
+          location: task.location, reminderMinutes: task.reminder_minutes })
+      } else {
+        Text('时间格式异常，请编辑后重新安排。').fontSize(this.palette.metaSize).fontColor(this.palette.danger).width('100%')
+      }
+      Button(this.statusLockedTaskIds.includes(task.task_id) ? '核对完成结果' : task.status === 'completed' ? '恢复为未完成' : '标记完成')
+        .width('100%').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
+        .fontColor(task.status === 'completed' ? this.palette.accent : this.palette.onAccent)
+        .backgroundColor(task.status === 'completed' ? this.palette.accentSoft : this.palette.accent)
+        .borderRadius(this.palette.controlRadius)
+        .enabled(this.statusLockedTaskIds.includes(task.task_id) || !this.writesBlocked())
+        .accessibilityText(this.statusLabel(task)).onClick(() => this.toggle(task))
+    }.width('100%').alignItems(HorizontalAlign.Start).padding(this.palette.cardInset)
+      .backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
   }
 
   @Builder
@@ -1910,7 +1949,7 @@ export struct PlanCenterPage {
       } else if (frame.kind === 'task') {
         ForEach(this.tasksForId(frame.id), (task: PlanningTask) => {
           Column({ space: 12 }) {
-            this.PlanTask(task)
+            this.TaskDetailSummary(task)
             if (this.overlapLabel(task).length > 0) {
               Text(this.overlapLabel(task)).fontSize(this.palette.bodySize).fontColor(this.palette.warning).width('100%')
               ForEach(task.course_overlap?.overlaps ?? [], (overlap: CourseOverlap) => {
@@ -1918,22 +1957,31 @@ export struct PlanCenterPage {
                   .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
               }, (overlap: CourseOverlap) => overlap.course_key)
             }
-            if (task.plan_id !== null) {
-              Text('属于已确认计划；完成状态会同步到目标进度。').fontSize(this.palette.metaSize)
-                .fontColor(this.palette.quiet).width('100%')
-              Button('查看所属计划').width('100%').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
-                .fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft).borderRadius(this.palette.controlRadius)
-                .onClick(() => this.openDetails('plan', task.plan_id ?? ''))
+            if (task.status !== 'completed') {
+              Column({ space: 8 }) {
+                Text('需要专心做一会儿？').fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium).fontColor(this.palette.ink).width('100%')
+                Text('可选计时；结束后再确认任务是否完成。').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
+                Button('开始专注').width('100%').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
+                  .fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft).borderRadius(this.palette.controlRadius)
+                  .enabled(this.active).onClick(() => this.focusRequested(task))
+              }.width('100%').alignItems(HorizontalAlign.Start).padding(this.palette.cardInset)
+                .backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
             }
-            Button('为这项任务开始专注记录').width('100%').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
-              .fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft).borderRadius(this.palette.controlRadius)
-              .enabled(this.active).onClick(() => this.focusRequested(task))
-            Button('编辑任务与时间').width('100%').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
-              .fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft).borderRadius(this.palette.controlRadius)
-              .enabled(!this.writesBlocked()).onClick(() => this.beginTaskEdit(task))
-            Button('预览删除任务').width('100%').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
-              .fontColor(this.palette.danger).backgroundColor(this.palette.dangerSoft).borderRadius(this.palette.controlRadius)
-              .enabled(!this.writesBlocked()).onClick(() => this.requestDelete(task))
+            Column({ space: 0 }) {
+              if (task.plan_id !== null) {
+                Button('查看所属计划').width('100%').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
+                  .fontColor(this.palette.accent).backgroundColor(Color.Transparent).borderRadius(0)
+                  .onClick(() => this.openDetails('plan', task.plan_id ?? ''))
+                Divider().color(this.palette.line)
+              }
+              Button('编辑任务与时间').width('100%').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
+                .fontColor(this.palette.accent).backgroundColor(Color.Transparent).borderRadius(0)
+                .enabled(!this.writesBlocked()).onClick(() => this.beginTaskEdit(task))
+              Divider().color(this.palette.line)
+              Button('删除任务…').width('100%').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
+                .fontColor(this.palette.danger).backgroundColor(Color.Transparent).borderRadius(0)
+                .enabled(!this.writesBlocked()).onClick(() => this.requestDelete(task))
+            }.width('100%').backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius).clip(true)
           }.width('100%')
         }, (task: PlanningTask) => `${task.task_id}-${this.planningRevision}`)
       } else if (frame.kind === 'plan') {
@@ -1976,12 +2024,12 @@ export struct PlanCenterPage {
         if (this.detailKind.length > 0) {
           Button({ type: ButtonType.Circle }) {
             AppIcon({ name: 'back', iconSize: 22, color: this.palette.accent })
-          }.width(48).height(48).backgroundColor(this.palette.surface)
+          }.width(44).height(44).backgroundColor(Color.Transparent)
             .accessibilityText(this.backLabel())
             .onClick(() => this.closeDetails())
         }
         Column({ space: 4 }) {
-          Text(this.detailKind.length > 0 ? this.detailTitle() : '计划').fontSize(this.palette.pageTitle)
+          Text(this.detailKind.length > 0 ? this.detailTitle() : '计划').fontSize(this.detailKind.length > 0 ? 22 : this.palette.pageTitle)
             .fontWeight(FontWeight.Bold).fontColor(this.palette.ink).width('100%')
         }.layoutWeight(1).alignItems(HorizontalAlign.Start)
         if (this.detailKind.length === 0) {
@@ -2015,9 +2063,13 @@ export struct PlanCenterPage {
           Text('有一份未提交的待办草稿').fontSize(this.palette.bodySize).fontColor(this.palette.ink).width('100%')
           Text('恢复只填回输入；原日期保留，核对后再保存。').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
           Row({ space: 8 }) {
-            Button('恢复草稿').constraintSize({ minHeight: 48 }).onClick(() => this.restoreTaskDraft())
-            Button('丢弃这份草稿').constraintSize({ minHeight: 48 }).enabled(!this.draftStorageBusy).onClick(() => this.discardTaskDraft())
-          }
+            Button('恢复草稿').layoutWeight(1).constraintSize({ minHeight: 44 }).fontSize(this.palette.bodySize)
+              .fontColor(this.palette.onAccent).backgroundColor(this.palette.accent).borderRadius(this.palette.controlRadius)
+              .onClick(() => this.restoreTaskDraft())
+            Button('丢弃这份草稿').layoutWeight(1).constraintSize({ minHeight: 44 }).fontSize(this.palette.bodySize)
+              .fontColor(this.palette.danger).backgroundColor(this.palette.dangerSoft).borderRadius(this.palette.controlRadius)
+              .enabled(!this.draftStorageBusy).onClick(() => this.discardTaskDraft())
+          }.width('100%')
         }.width('100%').padding(this.palette.pageInset).backgroundColor(this.palette.accentSoft)
       }
       ForEach(this.pendingProposals, (operation: DraftOperation) => {

@@ -85,6 +85,7 @@ export struct AgentPage {
   onPlanningChanged: () => void = () => {};
   @Prop statusLockedTaskIds: string[] = [];
   onOpenStatus: (taskId: string) => void = () => {};
+  onOpenGuide: () => void = () => {};
   onOpenProfile: () => void = () => {};
   onChatBusyChange: (busy: boolean) => void = () => {};
   @State private prompt: string = '';
@@ -191,6 +192,7 @@ export struct AgentPage {
   private liveRecoveredRunIds: string[] = [];
   private cachedRunRequests: string[] = [];
   private displayedRunFailures: string[] = [];
+  private preparedRunChecks: string[] = [];
   private historySaveGenerations: HistorySaveGeneration[] = [];
   private nextHistorySaveRevision: number = 0;
   private deletedRunSessionIds: string[] = [];
@@ -246,7 +248,8 @@ export struct AgentPage {
     const unfinished = this.prompt.trim().length > 0 || this.recoverableDraft !== null || this.capturePending() ||
       this.loading || this.attentionActions().length > 0 || this.decisionId.length > 0 || this.decisionOperations.length > 0 || this.adjustingProposalId.length > 0;
     this.switchConfirmOpen = unfinished;
-    if (!unfinished) { this.switchConversation(); }
+    if (unfinished) { this.scrollForNewMessage = false; this.restoreOptionsOffset = 0; }
+    else { this.switchConversation(); }
   }
 
   private async switchConversation(): Promise<void> {
@@ -1091,6 +1094,7 @@ export struct AgentPage {
     if (this.userId.length > 0 && this.sessionMode === 'continue' && this.contextRevision.length === 0) {
       this.sessionNotice = '请先刷新当前会话上下文，再明确发送。'; await this.refreshSessionContext(); return;
     }
+    this.suggestionNotice = '';
     if (this.sessionTitle.length === 0) { this.sessionTitle = text; }
     if (this.userId.length > 0) {
       await this.runController().start(this.sessionId, this.model, text, this.sessionMode, this.sessionMode === 'continue' ? this.contextRevision : null);
@@ -1160,9 +1164,14 @@ export struct AgentPage {
     if (this.loading !== busy) { this.loading = busy; this.onChatBusyChange(busy); }
     const run = state.snapshot;
     if (run !== null) {
+      if (run.session_id === this.sessionId && (this.sessionTitle.length === 0 || this.sessionTitle === '新对话')) {
+        this.sessionTitle = run.message;
+      }
       this.upsertRunMessage(run.run_id, 'user', run.message);
       this.upsertRunMessage(run.run_id, 'assistant', run.status === 'succeeded' ? run.result?.message ?? '' : run.partial_answer,
-        run.status === 'succeeded' ? displayToolTraces(run.result?.tool_traces) : [], run.status !== 'succeeded');
+        run.status === 'succeeded' ? displayToolTraces(run.result?.tool_traces) :
+          run.tool_progress.map((tool: RunToolProgress): ToolDisplaySummary => ({ label: tool.label, state: tool.state, summary: tool.summary })),
+        run.status !== 'succeeded');
     } else if (state.request !== null) {
       this.upsertRunMessage(state.request.run_id, 'user', state.request.message);
     }
@@ -1171,14 +1180,68 @@ export struct AgentPage {
     const original = state.request?.message ?? run?.message ?? '';
     if (stopped && state.runId.length > 0 && !this.displayedRunFailures.includes(state.runId)) {
       this.displayedRunFailures = this.displayedRunFailures.concat([state.runId]);
-      if (!this.restoredRunIds.includes(state.runId) && this.prompt.length === 0) { this.changePrompt(restoreDraft(this.prompt, original), true); }
+      if (!this.restoredRunIds.includes(state.runId) && this.prompt.length === 0) {
+        this.changePrompt(restoreDraft(this.prompt, original), true);
+        this.composerExpanded = this.inputLength(this.prompt) > 24 || this.prompt.includes('\n');
+      }
       const messageId = this.appendMessage('feedback', state.message.length > 0 ? state.message : '这次运行未完成，已收到的片段保留供核对。',
-        [], this.restoredRunIds.includes(state.runId) ? '' : original, 'RUN_STATE');
+        [], this.restoredRunIds.includes(state.runId) ? '' : original, state.errorCode || run?.error_code || 'RUN_STATE');
       this.messages = this.messages.map((item: ConversationEntry) => item.id === messageId ? {
         id: item.id, role: item.role, content: item.content, tools: item.tools, failedPrompt: item.failedPrompt,
         failureCode: item.failureCode, runId: state.runId, sessionId: state.snapshot?.session_id ?? state.request?.session_id ?? ''
       } : item);
     }
+    if (stopped && run !== null && (run.prepared_actions?.length ?? 0) > 0) {
+      this.readPreparedProposals(run, `run-${run.run_id}-assistant`);
+    }
+  }
+
+  private preparedReadCurrent(run: RunSnapshot, revision: number, base: string, token: string, owner: string, scope: string): boolean {
+    return this.pageActive && this.voiceActive && !this.deletionBusy && revision === this.conversationRevision &&
+      this.baseUrl === base && this.token === token && this.userId === owner && this.historyScope === scope &&
+      this.sessionId === run.session_id && this.runState.runId === run.run_id &&
+      this.runState.snapshot?.run_id === run.run_id && this.runState.snapshot?.session_id === run.session_id &&
+      this.runState.snapshot?.seq === run.seq && this.runState.snapshot?.status === run.status;
+  }
+
+  private async readPreparedProposals(run: RunSnapshot, messageId: string): Promise<void> {
+    const revision = this.conversationRevision;
+    const base = this.baseUrl; const token = this.token; const owner = this.userId; const scope = this.historyScope;
+    const key = `${revision}:${run.run_id}:${run.seq}`;
+    if (!Array.isArray(run.prepared_actions) || run.prepared_actions.length === 0 || run.prepared_actions.length > 50 ||
+      this.preparedRunChecks.includes(key) || !this.preparedReadCurrent(run, revision, base, token, owner, scope)) { return; }
+    const previews = JSON.parse(JSON.stringify(run.prepared_actions)) as PendingAction[];
+    if (!previews.every((preview: PendingAction) => validActionPreview(preview))) { return; }
+    this.preparedRunChecks = this.preparedRunChecks.concat([key]);
+    const api = new CampusFlowApi(base, token);
+    try {
+      for (const preview of previews) {
+        if (!this.preparedReadCurrent(run, revision, base, token, owner, scope)) { return; }
+        // A run snapshot is evidence that a proposal was prepared, never authority to execute it.
+        if (preview.status !== 'pending' || this.invalidatedProposalIds.includes(preview.proposal_id)) { continue; }
+        try {
+          const current = await api.actionStatus(preview.proposal_id);
+          if (!this.preparedReadCurrent(run, revision, base, token, owner, scope)) { return; }
+          const existing = this.pendingActions.find((action: PendingAction) => action.proposal_id === preview.proposal_id);
+          if (!sameActionCandidate(preview, current) || !validReliableAction(current)) { continue; }
+          if (current.status !== 'pending' || decisionDisposition(current) !== 'ready') {
+            // A later GET may retire an already shown card, but never revives a terminal candidate.
+            if (existing !== undefined) { this.replaceAction(current); }
+            continue;
+          }
+          if ((existing !== undefined && existing.status !== 'pending') || this.invalidatedProposalIds.includes(current.proposal_id)) { continue; }
+          this.pendingActions = mergeActions(this.pendingActions, [current]);
+          this.linkProposals(messageId, [current]); this.actionsRevision++;
+        } catch {
+          // Keep the original failed run and draft. An unverified candidate never becomes a card.
+        }
+      }
+    } finally { this.preparedRunChecks = this.preparedRunChecks.filter((value: string) => value !== key); }
+  }
+
+  private hasPreparedReply(runId: string | undefined): boolean {
+    return typeof runId === 'string' && this.actionsForMessage(`run-${runId}-assistant`).length > 0 &&
+      this.messages.some((message: ConversationEntry) => message.id === `run-${runId}-assistant` && message.incomplete === true);
   }
 
   private runSucceeded(run: RunSnapshot): void {
@@ -1241,8 +1304,13 @@ export struct AgentPage {
   }
 
   private async toggleRunRecords(): Promise<void> {
+    this.scrollForNewMessage = false;
     this.runRecordsExpanded = !this.runRecordsExpanded;
-    if (this.runRecordsExpanded) { await this.runController().loadRecent(); }
+    if (this.runRecordsExpanded) {
+      this.optionsExpanded = false;
+      this.restoreOptionsOffset = 0;
+      await this.runController().loadRecent();
+    }
   }
 
   private async recoverRun(runId: string): Promise<void> {
@@ -1559,6 +1627,7 @@ export struct AgentPage {
   private requestRunConversation(sessionId: string, runId: string): void {
     if (!this.pageActive || !this.voiceActive || this.sessionLoading) { return; }
     this.switchTarget = sessionId; this.switchRunId = runId; this.switchDraftId = ''; this.switchConfirmOpen = true;
+    this.scrollForNewMessage = false; this.restoreOptionsOffset = 0;
   }
 
   private proposalBlockMessage(action: PendingAction): string {
@@ -1769,6 +1838,7 @@ export struct AgentPage {
 
   private toolStateLabel(state: string): string {
     switch (state) {
+      case 'running': return '读取中';
       case 'success': return '已返回';
       case 'empty': return '暂无数据';
       case 'error': return '调用失败';
@@ -1799,12 +1869,35 @@ export struct AgentPage {
     return this.messages.some((message: ConversationEntry) => message.id !== 'welcome');
   }
 
+  private visibleMessages(): ConversationEntry[] {
+    return this.messages.filter((item: ConversationEntry) => {
+      if (item.id === 'welcome') { return false; }
+      if (item.role === 'assistant' && item.incomplete === true && item.content.length === 0 && item.tools.length === 0 &&
+        this.actionsForMessage(item.id).length === 0) { return false; }
+      if (item.role !== 'feedback' || !item.runId) { return true; }
+      return !this.messages.some((reply: ConversationEntry) => reply.role === 'assistant' && reply.runId === item.runId &&
+        (reply.content.length > 0 || reply.tools.length > 0 || this.actionsForMessage(reply.id).length > 0));
+    });
+  }
+
+  private failuresForReply(message: ConversationEntry): ConversationEntry[] {
+    if (message.role !== 'assistant' || !message.runId) { return []; }
+    return this.messages.filter((item: ConversationEntry) => item.role === 'feedback' && item.runId === message.runId);
+  }
+
+  private restoreFailedInput(message: ConversationEntry): void {
+    if (!this.voiceActive || this.loading || this.prompt.length > 0 || message.failedPrompt.length === 0) { return; }
+    this.changePrompt(restoreDraft(this.prompt, message.failedPrompt), true);
+    this.composerExpanded = this.inputLength(this.prompt) > 24 || this.prompt.includes('\n');
+  }
+
   private requestDraftConversation(record: DraftRecord): void {
     if (!this.pageActive || !this.voiceActive || this.sessionLoading || this.draftLease === null || !localDrafts.valid(this.draftLease)) { return; }
     const current = localDrafts.read(this.draftLease, { kind: record.kind, ownerId: record.ownerId });
     if (current === undefined || current.localRevision !== record.localRevision) { return; }
     const value = current.payload as AssistantDraft;
     this.switchTarget = value.sessionId; this.switchDraftId = value.sessionId; this.switchRunId = ''; this.switchConfirmOpen = true;
+    this.scrollForNewMessage = false; this.restoreOptionsOffset = 0;
   }
 
   @Builder
@@ -1973,11 +2066,9 @@ export struct AgentPage {
   @Builder
   private ToolResults(message: ConversationEntry) {
     Column({ space: 8 }) {
-      if (message.tools.length === 0) {
-        Text('本轮未提供工具记录').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
-      } else {
+      if (message.tools.length > 0) {
         Button({ type: ButtonType.Normal }) {
-          Text(`本轮工具记录 · ${message.tools.length} 项 · ${this.collapsedToolIds.includes(message.id) ? '展开' : '收起'}`)
+          Text(`读取与操作记录 · ${message.tools.length} 项 · ${this.collapsedToolIds.includes(message.id) ? '展开' : '收起'}`)
             .fontSize(this.palette.metaSize).fontColor(this.palette.accent).width('100%').textAlign(TextAlign.Start)
         }.width('100%').constraintSize({ minHeight: 48 }).padding(0).backgroundColor(Color.Transparent)
           .onClick(() => this.toggleToolResults(message.id))
@@ -2001,14 +2092,22 @@ export struct AgentPage {
   @Builder
   private RequestFailure(message: ConversationEntry) {
     Column({ space: 8 }) {
-      Text('请求未完成').fontSize(this.palette.bodySize).fontWeight(FontWeight.Bold).fontColor(this.palette.danger).width('100%')
-      Text(message.content).fontSize(this.palette.metaSize).fontColor(this.palette.ink).width('100%')
-      Text('原输入已保留在对话中，可复制或恢复后手动发送。若请求曾到达服务端，请先查看历史和已有提案。')
-        .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
-      Button(this.inputLength(this.prompt) > 0 ? '输入框已有草稿' : '恢复本次输入')
-        .constraintSize({ minHeight: 48 }).fontSize(this.palette.metaSize).fontColor(this.palette.accent)
-        .backgroundColor(this.palette.accentSoft).enabled(!this.loading && this.inputLength(this.prompt) === 0)
-        .onClick(() => this.changePrompt(restoreDraft(this.prompt, message.failedPrompt), true))
+      Row({ space: 8 }) {
+        AppIcon({ name: 'warning', iconSize: 18, color: this.palette.warning })
+        Text(this.hasPreparedReply(message.runId) ? '方案已生成，回复未完成' : '本轮未完成')
+          .fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium).fontColor(this.palette.ink).layoutWeight(1)
+      }.width('100%')
+      Text(this.hasPreparedReply(message.runId) ? '已有方案已核对，文字汇总未完成。请在下方查看方案的当前状态。' : message.content)
+        .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+      if (this.hasPreparedReply(message.runId)) {
+        Text('先核对下方已有方案，无需重发原问题。').fontSize(this.palette.metaSize).fontColor(this.palette.accent).width('100%')
+      } else if (message.failedPrompt.length > 0 && this.prompt.length === 0) {
+        Button('恢复原问题').constraintSize({ minHeight: 44 }).fontSize(this.palette.metaSize).fontColor(this.palette.accent)
+          .backgroundColor(Color.Transparent).padding(0).enabled(!this.loading).onClick(() => this.restoreFailedInput(message))
+      }
+      InfoDisclosure({ title: '如何继续？', message: this.hasPreparedReply(message.runId) ?
+        '方案已通过原提案状态查询核对，但这次回复没有完整完成。请先查看方案、时间与冲突，再决定是否确认。原问题仍保留，不会自动重发或确认；已完成、取消或失效的候选不会重新开放。' :
+        '原问题和已收到的片段保留在对话中，下方草稿不会被覆盖。先核对已有计划、提案和运行记录；需要重试时编辑问题后手动发送，不会自动重新执行。' })
       if (message.failureCode === 'LOGIN_REQUIRED' || message.failureCode === 'MODEL_AUTH_INVALID' ||
         message.failureCode === 'MODEL_KEY_REQUIRED') {
         Text(message.failureCode === 'LOGIN_REQUIRED' ? '重新登录前，请先复制要保留的输入。' : '可在个人设置检查模型 API Key。')
@@ -2016,8 +2115,8 @@ export struct AgentPage {
         Button('前往个人设置').constraintSize({ minHeight: 48 }).fontSize(this.palette.metaSize)
           .fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft).onClick(() => this.onOpenProfile())
       }
-    }.width('100%').padding(14).alignItems(HorizontalAlign.Start)
-      .backgroundColor(this.palette.surface).borderRadius(16)
+    }.width('100%').padding(12).alignItems(HorizontalAlign.Start)
+      .backgroundColor(this.palette.warningSoft).borderRadius(this.palette.controlRadius)
   }
 
   private proposalTaskCount(action: PendingAction): number {
@@ -2228,10 +2327,19 @@ export struct AgentPage {
       if (this.modelCatalog !== null) {
         ForEach(this.modelCatalog.models, (option: ModelOption) => {
           Column({ space: 4 }) {
-            Button(`${option.label}${this.model === option.id ? ' · 已选' : ''}${this.modelCatalog?.default_model === option.id ? ' · 服务推荐' : ''}`).width('100%')
-              .constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
-              .fontColor(this.model === option.id ? this.palette.onAccent : this.palette.accent)
-              .backgroundColor(this.model === option.id ? this.palette.accent : this.palette.accentSoft)
+            Button({ type: ButtonType.Normal }) {
+              Row({ space: 8 }) {
+                Text(option.label).fontSize(17).fontColor(this.palette.ink).layoutWeight(1)
+                  .textAlign(TextAlign.Start).wordBreak(WordBreak.BREAK_WORD)
+                if (this.model === option.id) {
+                  AppIcon({ name: 'check', iconSize: 18, color: this.palette.accent })
+                } else if (this.modelCatalog?.default_model === option.id) {
+                  Text('推荐').fontSize(13).fontColor(this.palette.quiet)
+                }
+              }.width('100%')
+            }.width('100%').constraintSize({ minHeight: 48 }).padding({ left: 14, right: 14, top: 12, bottom: 12 })
+              .accessibilityText(`${option.label}${this.model === option.id ? '，已选' : ''}${this.modelCatalog?.default_model === option.id ? '，服务推荐' : ''}`)
+              .backgroundColor(this.model === option.id ? this.palette.accentSoft : this.palette.field)
               .borderRadius(this.palette.controlRadius).enabled(!this.loading && this.decisionId.length === 0 && !this.deletionBusy && modelUnavailableReason(option).length === 0)
               .onClick(() => this.selectModel(option.id))
             InfoDisclosure({ title: `${option.provider} · 能力说明`,
@@ -2358,8 +2466,12 @@ export struct AgentPage {
   @Builder
   private RunRecords() {
     Column({ space: 12 }) {
-      Text('最近运行 · 仅联网查看').fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Medium).fontColor(this.palette.ink).width('100%')
-      Text('最多显示最近 20 次。恢复只查询原运行，不重新发送问题；重启后的中断运行需你明确发起新请求。')
+      Row({ space: 8 }) {
+        Text('最近运行').fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Medium).fontColor(this.palette.ink).layoutWeight(1)
+        Button('收起').constraintSize({ minHeight: 44 }).padding({ left: 12, right: 0 }).fontSize(15)
+          .fontColor(this.palette.accent).backgroundColor(Color.Transparent).onClick(() => this.toggleRunRecords())
+      }.width('100%')
+      Text('最近 20 次 · 联网查看 · 恢复不会重发问题')
         .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
       if (this.runState.listMessage.length > 0) {
         Text(this.runState.listMessage).fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
@@ -2417,12 +2529,14 @@ export struct AgentPage {
                 .onClick(() => this.speakReply(message))
             }.width('100%')
           }
-          if (message.incomplete === true) {
-            Text('已收到的回答片段 · 尚未形成完整结果').fontSize(this.palette.metaSize)
-              .fontColor(this.palette.warning).width('100%')
+          if (message.incomplete === true && message.content.length > 0) {
+            Text(this.loading && this.runState.runId === message.runId ? '正在生成…' : '未完成的回答片段')
+              .fontSize(this.palette.metaSize).fontColor(this.palette.warning).width('100%')
           }
-          MessageContent({ content: message.content, isUser: message.role === 'user' })
-          if (message.role === 'assistant') { this.ToolResults(message) }
+          if (message.content.length > 0) { MessageContent({ content: message.content, isUser: message.role === 'user' }) }
+          if (message.role === 'assistant' && message.tools.length > 0) { this.ToolResults(message) }
+          ForEach(this.failuresForReply(message), (failure: ConversationEntry) => { this.RequestFailure(failure) },
+            (failure: ConversationEntry) => failure.id)
         }.alignItems(HorizontalAlign.Start)
           .padding(message.role === 'user' ? 14 : 0)
           .width(message.role === 'user' ? '90%' : '100%')
@@ -2646,11 +2760,14 @@ export struct AgentPage {
             Column({ space: 12 }) {
               Text('今天想安排什么？').fontSize(28).fontWeight(FontWeight.Bold)
                 .fontColor(this.palette.ink).width('100%')
-              Text('查课表、拆解目标，安排好每一天。')
+              Text('描述目标 → 核对方案 → 确认加入计划')
                 .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
             }.width('100%').alignItems(HorizontalAlign.Start).padding({ top: 28, bottom: 4 })
+            Button('使用助手与配置指南').constraintSize({ minHeight: 44 }).fontSize(this.palette.metaSize)
+              .fontColor(this.palette.accent).backgroundColor(Color.Transparent).padding(0)
+              .onClick(() => { if (this.voiceActive) { this.onOpenGuide(); } })
             Column() {
-              this.suggestion('安排一段专注时间', '结合课程，找到今天的空闲', 'calendar',
+              this.suggestion('安排一次复习', '结合课程，先生成待确认方案', 'calendar',
                 '根据我今天的课程和待办，找一段合适的空闲时间安排复习，先生成待确认的提案。')
               Divider().color(this.palette.line).strokeWidth(1).margin({ left: 48 })
               this.suggestion('制定一周复习计划', '分解目标，循序渐进', 'book',
@@ -2660,7 +2777,7 @@ export struct AgentPage {
                 '查看我已同步的校园信息，结合最近的课表，提醒我接下来需要关注的事项。')
             }.width('100%').backgroundColor(this.palette.field).borderRadius(this.palette.cardRadius).clip(true)
           }
-          ForEach(this.messages.filter((item: ConversationEntry) => item.id !== 'welcome'), (message: ConversationEntry) => {
+          ForEach(this.visibleMessages(), (message: ConversationEntry) => {
             Column({ space: 16 }) {
               this.ConversationMessage(message)
               ForEach(this.actionsForMessage(message.id), (action: PendingAction) => {
@@ -2748,13 +2865,14 @@ export struct AgentPage {
         Row({ space: 2 }) {
           TextArea({ text: this.prompt, placeholder: '描述你的目标或安排…' })
             .layoutWeight(1).fontSize(this.palette.bodySize)
-            .height(this.composerExpanded ? Math.max(72, Math.min(144, this.availableHeight * 0.24)) : 44)
+            .height(this.composerExpanded ? 120 : 44).lineHeight('24fp')
+            .maxLines(this.composerExpanded ? 4 : 1)
             .accessibilityText('输入目标或安排').enabled(!this.sessionLoading)
             .fontColor(this.palette.ink).placeholderColor(this.palette.muted)
             .backgroundColor(Color.Transparent).borderRadius(20)
-            .padding({ left: 12, right: 4, top: 10, bottom: 8 })
+            .padding({ left: 12, right: 4, top: this.composerExpanded ? 12 : 10, bottom: this.composerExpanded ? 12 : 10 })
             .onChange((value) => this.changePrompt(value))
-          if (this.composerExpanded || this.prompt.includes('\n') || this.inputLength(this.prompt) > 80) {
+          if (this.composerExpanded || this.prompt.length > 0) {
             Button({ type: ButtonType.Normal }) {
               AppIcon({ name: this.composerExpanded ? 'collapse' : 'expand', iconSize: 19, color: this.palette.quiet })
             }.width(44).height(44).backgroundColor(Color.Transparent).borderRadius(22)

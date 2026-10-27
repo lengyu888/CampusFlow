@@ -209,14 +209,18 @@ export struct TimetableEntryEditor {
         this.repeatWeeks === 1 ? '默认仅添加一次，不自动生成整学期。' : `将生成 ${this.repeatWeeks} 个具体日期；单双周和节假日请逐条核对。`)
         .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
       if (this.notice.length > 0) { Text(this.notice).fontSize(this.palette.metaSize).fontColor(this.palette.warning).width('100%') }
-      if (!this.editing && this.showRepeat) {
-        Button('加入并继续').width('100%').constraintSize({ minHeight: 50 }).fontSize(this.palette.bodySize)
-          .fontColor(this.palette.onAccent).backgroundColor(this.palette.accent).enabled(this.active && !this.busy).onClick(() => this.onSave(true))
-      }
-      Button(this.saveLabel.length > 0 ? this.saveLabel : this.editing ? '保存这次修改' : '加入并收起')
-        .width('100%').constraintSize({ minHeight: 50 }).fontSize(this.palette.bodySize).fontColor(this.palette.accent)
-        .backgroundColor(this.palette.accentSoft).enabled(this.active && !this.busy).onClick(() => this.onSave(false))
-      Button('取消本次编辑').width('100%').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
+      Row({ space: 8 }) {
+        if (!this.editing && this.showRepeat) {
+          Button('加入并继续').layoutWeight(1).constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
+            .fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft).borderRadius(this.palette.controlRadius)
+            .enabled(this.active && !this.busy).onClick(() => this.onSave(true))
+        }
+        Button(this.saveLabel.length > 0 ? this.saveLabel : this.editing ? '保存这次修改' : '加入并收起')
+          .layoutWeight(1).constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize).fontColor(this.palette.onAccent)
+          .backgroundColor(this.palette.accent).borderRadius(this.palette.controlRadius)
+          .enabled(this.active && !this.busy).onClick(() => this.onSave(false))
+      }.width('100%')
+      Button('取消本次编辑').width('100%').constraintSize({ minHeight: 44 }).fontSize(this.palette.bodySize)
         .fontColor(this.palette.quiet).backgroundColor(Color.Transparent).enabled(this.active && !this.busy).onClick(() => this.onCancel())
     }.width('100%').alignItems(HorizontalAlign.Start).padding(this.palette.cardInset)
       .backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius).onAreaChange(() => this.locateError())

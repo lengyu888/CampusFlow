@@ -5,6 +5,7 @@ import { formatPlanDateTime, formatPlanTimeRange } from '../utils/PlanPresentati
 import { AppTheme } from '../theme/AppTheme';
 import { ThemePalette, themePalette } from '../theme/ThemePalette';
 import { AppIcon } from './AppIcon';
+import { InfoDisclosure } from './InfoDisclosure';
 
 @Component
 export struct PlanningConflictsPanel {
@@ -366,8 +367,9 @@ export struct PlanningConflictsPanel {
     Column({ space: 12 }) {
       Text('课表与任务核对').fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Bold)
         .fontColor(this.palette.ink).width('100%')
-      Text('这里只扫描未结束、时段完整的未完成任务；规则改期需你确认，不自动移动已接受的课内安排。以下时间均为北京时间。')
+      Text('核对课程与未完成任务，确认后才改期。')
         .fontSize(13).lineHeight(21).fontColor(this.palette.secondary).width('100%')
+      InfoDisclosure({ title: '核对范围与改期规则', message: '这里只扫描未结束、时段完整的未完成任务；规则改期需你确认，不自动移动已接受的课内安排。以下时间均为北京时间。' })
       if (this.state.report !== null) {
         Text(this.summaryTitle())
           .fontSize(16).fontWeight(FontWeight.Medium).fontColor(this.overlapCount('conflicts') + this.overlapCount('reviews') > 0 ?
@@ -384,8 +386,8 @@ export struct PlanningConflictsPanel {
         }
         if (this.detailCount() > 0) {
           Button(this.detailsExpanded ? '收起核对详情' : '展开全部核对详情').width('100%')
-            .constraintSize({ minHeight: 48 }).fontSize(14).fontColor(this.palette.accent)
-            .backgroundColor(this.palette.accentSoft).borderRadius(this.palette.controlRadius)
+            .constraintSize({ minHeight: 44 }).fontSize(this.palette.bodySize).fontColor(this.palette.accent)
+            .backgroundColor(Color.Transparent).borderRadius(this.palette.controlRadius)
             .onClick(() => this.detailsExpanded = !this.detailsExpanded)
           if (this.detailsExpanded) { this.ConflictDetails() }
         }
@@ -410,12 +412,12 @@ export struct PlanningConflictsPanel {
           .enabled(this.active).onClick(() => this.replanner().checkResult())
       }
       if (!this.needsResultCheck()) {
-        Button('重新核对当前课表').width('100%').constraintSize({ minHeight: 48 }).fontSize(14)
-          .fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft).borderRadius(this.palette.controlRadius)
+        Button('重新核对当前课表').width('100%').constraintSize({ minHeight: 44 }).fontSize(this.palette.bodySize)
+          .fontColor(this.palette.accent).backgroundColor(Color.Transparent).borderRadius(this.palette.controlRadius)
           .enabled(this.active && !this.busy()).onClick(() => this.replanner().refresh())
         if ((this.state.report?.conflicts.length ?? 0) > 0 && this.state.phase !== 'review') {
           Button(this.state.phase === 'stale' || this.state.phase === 'error' ? '重新生成改期预览' : '按课表寻找空档，生成预览')
-            .width('100%').constraintSize({ minHeight: 48 }).fontSize(15).fontColor(this.palette.surface)
+            .width('100%').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize).fontColor(this.palette.surface)
             .backgroundColor(this.palette.accent).borderRadius(this.palette.controlRadius)
             .enabled(this.active && !this.writeBlocked && !this.busy()).onClick(() => this.previewRequested())
         }

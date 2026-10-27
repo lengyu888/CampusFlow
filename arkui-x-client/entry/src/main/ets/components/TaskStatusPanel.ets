@@ -2,6 +2,8 @@ import { CourseAcknowledgement, CourseOverlap, TaskStatusPreview, TaskStatusRece
 import { TaskStatusItem, TaskStatusState } from '../utils/TaskStatusController';
 import { formatPlanDateTime } from '../utils/PlanPresentation';
 import { TaskScheduleDetails } from './TaskScheduleDetails';
+import { AppIcon } from './AppIcon';
+import { InfoDisclosure } from './InfoDisclosure';
 import { AppTheme } from '../theme/AppTheme';
 import { ThemePalette, themePalette } from '../theme/ThemePalette';
 
@@ -90,8 +92,7 @@ export struct TaskStatusPanel {
       Text(`生效时间：${formatPlanDateTime(receipt.applied_at)}`).fontSize(this.palette.bodySize).fontColor(this.palette.ink).width('100%')
       Text(`状态：${receipt.before_status === 'completed' ? '已完成' : '未完成'} → ${receipt.after_status === 'completed' ? '已完成' : '未完成'}`)
         .fontSize(this.palette.bodySize).fontColor(this.palette.ink).width('100%')
-      Text('这是该次操作的回执，当前任务可能已有后续修改；请打开任务查看最新内容。恢复不会删除专注记录，也不会还原旧标题、时间或地点。')
-        .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+      InfoDisclosure({ title: '这份记录说明什么？', message: '这是该次操作的回执，当前任务可能已有后续修改；请打开任务查看最新内容。恢复不会删除专注记录，也不会还原旧标题、时间或地点。' })
     }.width('100%').padding(16).alignItems(HorizontalAlign.Start).backgroundColor(this.palette.successSoft).borderRadius(this.palette.cardRadius)
   }
 
@@ -144,11 +145,12 @@ export struct TaskStatusPanel {
   }
 
   build() {
-    Column({ space: 8 }) {
-      Row({ space: 12 }) {
-        Button('返回').constraintSize({ minHeight: 48, minWidth: 64 }).fontColor(this.palette.accent).backgroundColor(Color.Transparent).onClick(() => this.onClose())
-        Text('完成与恢复记录').fontSize(this.palette.sectionTitle).fontColor(this.palette.ink).layoutWeight(1).wordBreak(WordBreak.BREAK_WORD)
-      }.width('100%')
+    Column() {
+      Row({ space: 8 }) {
+        Button({ type: ButtonType.Normal }) { AppIcon({ name: 'back', iconSize: 22, color: this.palette.accent }) }
+          .width(44).height(44).backgroundColor(Color.Transparent).accessibilityText('返回上一页').onClick(() => this.onClose())
+        Text('完成记录').fontSize(22).fontWeight(FontWeight.Medium).fontColor(this.palette.ink).layoutWeight(1).wordBreak(WordBreak.BREAK_WORD)
+      }.width('100%').padding({ left: 8, right: 20, top: 6, bottom: 6 }).backgroundColor(this.palette.surface)
       Scroll() {
         Column({ space: 16 }) {
           Text('关闭此页不会取消已提交的操作。待核对记录会保留；只限制对应任务，其他任务仍可使用。').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
@@ -197,8 +199,8 @@ export struct TaskStatusPanel {
               }
             }.width('100%').alignItems(HorizontalAlign.Start)
           }, (item: TaskStatusItem) => `${item.operationId}-${item.phase}-${item.operation?.state ?? ''}`)
-        }.width('100%').alignItems(HorizontalAlign.Start)
-      }.width('100%').layoutWeight(1)
-    }.width('100%').height('100%').padding({ left: 20, right: 20, bottom: 16 }).backgroundColor(this.palette.bg)
+        }.width('100%').alignItems(HorizontalAlign.Start).padding({ left: 20, right: 20, top: 16, bottom: 32 })
+      }.width('100%').layoutWeight(1).align(Alignment.TopStart).scrollBar(BarState.Off)
+    }.width('100%').height('100%').backgroundColor(this.palette.bg)
   }
 }

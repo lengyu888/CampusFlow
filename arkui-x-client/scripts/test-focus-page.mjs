@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { stripThemeTypeScriptTypes as stripTypeScriptTypes } from './helpers/theme-fixture.mjs';
 import { test } from 'node:test';
 import { focusEntryFixture } from './helpers/focus-entry-fixture.mjs';
-import { emptyFocusState, FocusApi, focusRecord, uuid, deferred, tick, FocusMemoryDriver } from './helpers/focus-fixture.mjs';
+import { emptyFocusState, FocusApi, focusRecord, focusFixture, uuid, deferred, tick, FocusMemoryDriver } from './helpers/focus-fixture.mjs';
 import { TaskStatusController, draftFixture, statusTask, completeOperation, statusNow } from './helpers/task-status-fixture.mjs';
 const read=p=>readFileSync(new URL(`../entry/src/main/ets/${p}.ets`,import.meta.url),'utf8');
 const clean=s=>s.replace(/^import [^\n]+;\r?\n/gm,'');
@@ -51,13 +51,40 @@ test('unreadable local storage cannot offer a start action or pretend the clock 
  assert.equal(p.showClockNotice(),false);p.state.phase='ready';assert.equal(p.showClockNotice(),true);
  const source=read('pages/FocusPage');assert.match(source,/Button\('重试读取本机记录'\)/);assert.match(source,/onRetryStorage\(\)/);
 });
+test('blocked storage replaces the disabled start form with recovery, and clearing still requires confirmation',()=>{
+ const p=panel({...emptyFocusState(),phase:'error',errorCode:'FOCUS_SCOPE_MISMATCH'}),calls=[];
+ p.onClearLocal=()=>calls.push('clear');p.onStart=()=>calls.push('start');
+ assert.equal(p.showStartCard(),false);p.startExpanded=true;assert.equal(p.showStartCard(),false);
+ p.startRequested();p.askClear();assert.equal(p.confirmation,'clear');assert.deepEqual(calls,[]);
+ p.active=false;p.confirmAction();assert.deepEqual(calls,[]);
+ p.active=true;p.confirmAction();assert.deepEqual(calls,['clear']);
+ p.state.phase='loading';assert.equal(p.showStartCard(),false);
+ p.state.phase='ready';assert.equal(p.showStartCard(),true);
+});
 test('root local-storage retry keeps the displayed task and page open and never clears another owner',async()=>{
- const driver=new FocusMemoryDriver(),old=focusEntryFixture(driver);await old.ready;await old.store.activate('old-synthetic-owner',uuid(1));const original=driver.text;
+ const driver=new FocusMemoryDriver(),old=await focusFixture({driver,scope:'old-synthetic-owner'});
+ await old.controller.start('retained-task',null,'offline');const original=driver.text;old.controller.dispose();
  const f=await entry({driver});try{
   f.page.openFocus(f.task);assert.equal(f.page.focusState.phase,'error');assert.equal(f.page.focusState.errorCode,'FOCUS_SCOPE_MISMATCH');
   await f.page.retryFocusStorage();assert.equal(driver.text,original);assert.equal(f.page.focusPageOpen,true);assert.equal(f.page.focusEntryTaskId,f.task.task_id);
   assert.equal(f.page.focusState.phase,'error');assert.equal(f.remote.calls.some(c=>c[0]==='post'),false);
  }finally{f.page.aboutToDisappear();}
+});
+test('opening focus after an empty foreign cache binds this account without deleting or starting a timer',async()=>{
+ const driver=new FocusMemoryDriver(),old=focusEntryFixture(driver);await old.ready;
+ await old.store.activate('old-empty-owner',uuid(1));const f=await entry({driver});
+ try {
+  f.page.openFocus(f.task);assert.equal(f.page.focusState.phase,'ready');assert.equal(f.page.focusEntryTaskId,f.task.task_id);
+  const doc=JSON.parse(driver.text);assert.equal(doc.scope,history.historyScope('https://example.test','account-a'));
+  assert.notEqual(doc.deviceId,uuid(1));assert.deepEqual(doc.records,[]);assert.deepEqual(doc.operations,[]);
+  assert.equal(f.remote.calls.some(call=>call[0]==='post'),false);
+  await f.page.focusManager.start(f.task.task_id,null,'online');assert.equal(f.page.focusState.local.localState,'running');
+  await f.scheduler.step(f.clock,5000);await f.page.focusManager.pause();assert.equal(f.page.focusState.local.localState,'paused');
+  await f.page.focusManager.resume();await f.scheduler.step(f.clock,3000);await f.page.focusManager.end();
+  assert.equal(f.page.focusState.record.state,'ended');assert.equal(f.page.focusState.record.confirmed_elapsed_ms,8000);
+  assert.deepEqual(f.page.focusState.pendingOperations,[]);
+  assert.equal(f.calls.some(call=>call[0]==='task-status'),false);
+ } finally {f.page.aboutToDisappear();}
 });
 test('goal reached is only a label at exact/over target; duration is forward elapsed and no end/completion callback fires',()=>{
  const p=panel(),calls=[];p.onEnd=()=>calls.push('end');p.onCompleteTask=()=>calls.push('complete');

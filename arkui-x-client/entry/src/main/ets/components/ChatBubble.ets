@@ -12,7 +12,7 @@ export struct ChatBubble {
     Row() {
       if (this.role === 'user') {
         Blank()
-        Text(this.content).fontSize(14).fontColor(this.palette.onAccent).lineHeight(22).copyOption(CopyOptions.InApp)
+        Text(this.content).fontSize(this.palette.bodySize).fontColor(this.palette.onAccent).lineHeight(25).copyOption(CopyOptions.InApp)
           .padding(15).constraintSize({ maxWidth: '86%' }).backgroundColor(this.palette.accent)
           .borderRadius(this.uniformCorners ? { topLeft: 18, topRight: 18, bottomLeft: 18, bottomRight: 18 }
             : { topLeft: 18, topRight: 5, bottomLeft: 18, bottomRight: 18 })

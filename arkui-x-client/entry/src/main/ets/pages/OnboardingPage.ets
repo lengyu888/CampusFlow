@@ -13,8 +13,8 @@ import { TimetableImportPanel } from '../components/TimetableImportPanel';
 import { AppTheme } from '../theme/AppTheme';
 import { ThemePalette, themePalette } from '../theme/ThemePalette';
 import { AppIcon } from '../components/AppIcon';
-import { AppIllustration } from '../components/AppIllustration';
 import { FeedbackPanel } from '../components/FeedbackPanel';
+import { InfoDisclosure } from '../components/InfoDisclosure';
 
 interface CourseRow {
   index: number;
@@ -893,11 +893,11 @@ export struct OnboardingPage {
               Blank()
               Text(`${this.step + 1} / 3`).fontSize(this.palette.bodySize).fontColor(this.palette.quiet)
             }.width('100%')
-            Text(this.step === 0 ? '校园与学期' : (this.step === 1 ? '添加真实课程' : '核对完整课表'))
-              .fontSize(this.palette.pageTitle).fontWeight(FontWeight.Bold).fontColor(this.palette.ink).width('100%')
+            Text(this.step === 0 ? '校园与学期' : (this.step === 1 ? '添加课程' : '确认课表'))
+              .fontSize(22).fontWeight(FontWeight.Bold).fontColor(this.palette.ink).width('100%')
             Text(this.step === 0 ? '课表用来避开上课时间，校园地点用来辅助安排。' :
               (this.step === 1 ? '手动录入和订阅导入都可以；确认前均为草稿。' : '保存眼前这份课表，之后助手才能据此安排学习。'))
-              .fontSize(this.palette.bodySize).lineHeight(24).fontColor(this.palette.quiet).width('100%')
+              .fontSize(this.palette.metaSize).lineHeight(21).fontColor(this.palette.quiet).width('100%')
             Row({ space: 6 }) {
               ForEach([0, 1, 2], (step: number) => {
                 Row().height(4).layoutWeight(1).borderRadius(2)
@@ -908,9 +908,6 @@ export struct OnboardingPage {
 
           this.DraftRecovery()
           if (this.step === 0) {
-            Row() {
-              AppIllustration({ source: $r('app.media.xj_onboarding'), imageWidth: 188, imageHeight: 140 })
-            }.width('100%').justifyContent(FlexAlign.Center)
             Column({ space: 16 }) {
               Text('当前支持的校园').fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
               Text(this.school).fontSize(20).fontWeight(FontWeight.Bold).fontColor(this.palette.ink).width('100%')
@@ -919,25 +916,26 @@ export struct OnboardingPage {
               Divider().color(this.palette.line)
               this.FormField('学期 *', '例如：2026-2027 第一学期', this.semester, '',
                 (value: string) => this.updateSemester(value))
-              Text('没有 HDUHelp 订阅链接也可以继续，下一步先录入一门真实课程即可。模型、语音与提醒可以开始使用后再设置。')
-                .fontSize(this.palette.bodySize).lineHeight(22).fontColor(this.palette.quiet).width('100%')
+              Text('下一步可订阅导入，也可手动录入一门课程。')
+                .fontSize(this.palette.metaSize).lineHeight(21).fontColor(this.palette.quiet).width('100%')
+              InfoDisclosure({ title: '首次配置需要什么？', message: '当前首次配置需确认校园、学期和至少一门真实课程。无需一次录完整个学期，之后可从校园 → 课表维护继续添加。模型连接、语音、提醒和 HDUHelp 数据授权均可稍后设置。' })
             }.width('100%').alignItems(HorizontalAlign.Start).padding(this.palette.cardInset)
               .backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
           } else if (this.step === 1) {
-            Row({ space: 8 }) {
-              Button('手动录入').layoutWeight(1).constraintSize({ minHeight: 50 }).fontSize(this.palette.bodySize)
-                .fontColor(this.source === 'manual' ? this.palette.onAccent : this.palette.quiet)
-                .backgroundColor(this.source === 'manual' ? this.palette.accent : this.palette.surface)
+            Row({ space: 4 }) {
+              Button('手动录入').layoutWeight(1).constraintSize({ minHeight: 44 }).fontSize(this.palette.bodySize)
+                .fontColor(this.source === 'manual' ? this.palette.ink : this.palette.quiet)
+                .backgroundColor(this.source === 'manual' ? this.palette.surface : Color.Transparent)
                 .borderRadius(this.palette.controlRadius).enabled(!this.loading && this.editable())
                 .accessibilityText(`手动录入${this.source === 'manual' ? '，已选择' : ''}`)
                 .onClick(() => this.selectSource('manual'))
-              Button('订阅导入').layoutWeight(1).constraintSize({ minHeight: 50 }).fontSize(this.palette.bodySize)
-                .fontColor(this.source === 'subscription' ? this.palette.onAccent : this.palette.quiet)
-                .backgroundColor(this.source === 'subscription' ? this.palette.accent : this.palette.surface)
+              Button('订阅导入').layoutWeight(1).constraintSize({ minHeight: 44 }).fontSize(this.palette.bodySize)
+                .fontColor(this.source === 'subscription' ? this.palette.ink : this.palette.quiet)
+                .backgroundColor(this.source === 'subscription' ? this.palette.surface : Color.Transparent)
                 .borderRadius(this.palette.controlRadius).enabled(!this.loading && this.editable())
                 .accessibilityText(`订阅导入${this.source === 'subscription' ? '，已选择' : ''}`)
                 .onClick(() => this.selectSource('subscription'))
-            }.width('100%')
+            }.width('100%').padding(4).backgroundColor(this.palette.line).borderRadius(this.palette.controlRadius)
             if (this.source === 'manual') {
               if (this.editorOpen) { this.Editor() }
               else {

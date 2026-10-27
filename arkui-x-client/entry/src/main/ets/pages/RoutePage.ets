@@ -314,16 +314,13 @@ export struct RoutePage {
 
   build() {
     Column() {
-      Row({ space: 12 }) {
-        Button() {
+      Row({ space: 8 }) {
+        Button({ type: ButtonType.Normal }) {
           AppIcon({ name: 'back', iconSize: 22, color: this.palette.accent })
-        }.width(48).height(48).backgroundColor(this.palette.surface).borderRadius(22)
+        }.width(44).height(44).backgroundColor(Color.Transparent).borderRadius(12)
           .accessibilityText('返回上一页').onClick(() => this.onBack())
-        Column({ space: 3 }) {
-          Text('校园导航').fontSize(this.palette.pageTitle).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
-          Text('查看校园路线示意与步行估算').fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
-        }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-      }.width('100%').padding({ left: 18, right: 18, top: 12, bottom: 12 })
+        Text('校园导航').fontSize(22).fontWeight(FontWeight.Bold).fontColor(this.palette.ink).layoutWeight(1)
+      }.width('100%').constraintSize({ minHeight: 56 }).padding({ left: 8, right: 20, top: 4, bottom: 4 })
 
       Scroll(this.scroller) {
         Column({ space: 16 }) {
@@ -345,7 +342,7 @@ export struct RoutePage {
                 actionLabel: '重新读取', onAction: () => this.loadPlaces() })
             } else {
               Column({ space: 6 }) {
-                Text('起点 · 请自行选择，不使用当前位置').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
+                Text('起点').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
                 Select(this.options()).selected(this.originIndex)
                   .value(this.places[this.originIndex]?.name ?? '请选择起点')
                   .fontColor(this.palette.ink).backgroundColor(this.palette.field)
@@ -357,8 +354,8 @@ export struct RoutePage {
                   })
               }.width('100%').alignItems(HorizontalAlign.Start)
 
-              Button('交换起终点').constraintSize({ minHeight: 48 }).fontSize(this.palette.metaSize).fontColor(this.palette.accent)
-                .backgroundColor(this.palette.accentSoft).borderRadius(12).enabled(this.originIndex >= 0 && this.destinationIndex >= 0).onClick(() => {
+              Button('交换起终点').constraintSize({ minHeight: 44 }).fontSize(this.palette.metaSize).fontColor(this.palette.accent)
+                .backgroundColor(Color.Transparent).borderRadius(12).enabled(this.originIndex >= 0 && this.destinationIndex >= 0).onClick(() => {
                   this.getUIContext().animateTo({ duration: AppTheme.motion(200), curve: Curve.EaseOut }, () => this.swap());
                 })
 
@@ -375,9 +372,11 @@ export struct RoutePage {
                   })
               }.width('100%').alignItems(HorizontalAlign.Start)
 
+              Text('手动选择起点，不读取当前位置。').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
+
               Button(this.routeLoading ? '正在生成示意路线…' : '生成路线图').width('100%').constraintSize({ minHeight: 48 })
-                .fontSize(this.palette.metaSize).fontWeight(FontWeight.Bold).fontColor(this.palette.onAccent)
-                .backgroundColor(this.palette.accent).borderRadius(15).enabled(!this.routeLoading)
+                .fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium).fontColor(this.palette.onAccent)
+                .backgroundColor(this.palette.accent).borderRadius(this.palette.controlRadius).enabled(!this.routeLoading)
                 .onClick(() => this.createRoute())
             }
 
@@ -389,7 +388,7 @@ export struct RoutePage {
               FeedbackPanel({ kind: 'error', title: '路线尚未生成', message: this.errorText,
                 actionLabel: '重试生成路线', busy: this.routeLoading, onAction: () => this.createRoute() })
             }
-          }.width('100%').padding(18).backgroundColor(this.palette.surface).borderRadius(18)
+          }.width('100%').padding(this.palette.cardInset).backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
 
           if (this.route !== null) {
             RouteMap({ route: this.route as CampusRoute })
@@ -404,7 +403,7 @@ export struct RoutePage {
               Text('选择两个地点').fontSize(17).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
               Text('路线按已有校园地图生成，步行时间为估算；请以现场道路与通行情况为准。')
                 .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).textAlign(TextAlign.Center)
-            }.width('100%').padding(24).backgroundColor(this.palette.accentSoft).borderRadius(18)
+            }.width('100%').padding(20).backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
           }
         }.width('100%').alignItems(HorizontalAlign.Start).justifyContent(FlexAlign.Start)
           .padding({ left: 18, right: 18, top: 4, bottom: 32 })

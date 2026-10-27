@@ -105,19 +105,28 @@ export class FocusStore {
   async activate(scope: string, deviceId: string = ''): Promise<FocusLease> {
     if (!this.initialized || this.blocked || scope.trim().length === 0 || scope.length > 1024) { throw invalid(); }
     const generation = this.generation;
+    let activatedGeneration = generation;
     await this.enqueue(async () => {
       if (generation !== this.generation || this.blocked) { throw invalid(); }
-      if (this.document.scope !== '' && this.document.scope !== scope) { throw new FocusScopeError(); }
-      if (this.document.scope === '') {
+      if (this.document.scope !== scope) {
+        // Only a fully validated empty shell can move accounts. Even zero-time
+        // ended records or pending operations still belong to the original scope.
+        const current = cloneFocusDocument(this.document);
+        if (current.records.length > 0 || current.operations.length > 0) { throw new FocusScopeError(); }
         if (!focusUuid(deviceId)) { throw invalid(); }
-        const next: FocusDocument = { schemaVersion: 1, scope: scope, revision: 1, deviceId: deviceId, records: [], operations: [] };
+        const next = cloneFocusDocument({ schemaVersion: 1, scope: scope, revision: current.revision + 1,
+          deviceId: deviceId, records: [], operations: [] });
         await this.driver.write(JSON.stringify(next));
         if (generation !== this.generation || this.blocked) { throw invalid(); }
         this.document = next;
+        // Advance only after the durable replacement; a failed write preserves
+        // the old document and lease. Queued activations/commits cannot cross it.
+        this.generation++;
+        activatedGeneration = this.generation;
       }
     });
-    if (generation !== this.generation || this.blocked) { throw invalid(); }
-    return { scope: scope, generation: generation };
+    if (activatedGeneration !== this.generation || this.blocked) { throw invalid(); }
+    return { scope: scope, generation: activatedGeneration };
   }
   valid(lease: FocusLease): boolean { return this.initialized && !this.blocked && lease.scope === this.document.scope && lease.generation === this.generation; }
   snapshot(lease: FocusLease): FocusDocument { if (!this.valid(lease)) { throw invalid(); } return cloneFocusDocument(this.document); }
