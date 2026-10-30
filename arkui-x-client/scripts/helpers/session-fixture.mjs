@@ -13,6 +13,7 @@ export const sessionHelpers = { ...persistence, ...coordinator };
 // logic and only replace the Asset/filesystem boundary; no user vault is read.
 globalThis.normalizeServiceBaseUrl = persistence.normalizeServiceBaseUrl;
 globalThis.SessionStorageError = persistence.SessionStorageError;
+globalThis.SessionSourceChangedError = persistence.SessionSourceChangedError;
 globalThis.SessionCoordinator = coordinator.SessionCoordinator;
 globalThis.localSession = { async read() { return null; }, async save() {}, async clear() {} };
 globalThis.initializeLocalSession = async () => {};

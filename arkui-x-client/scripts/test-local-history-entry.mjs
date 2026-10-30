@@ -72,6 +72,145 @@ function savedLogin(page, options = {}) {
   return calls;
 }
 
+const localService = 'http://127.0.0.1:8000';
+const publicService = 'http://203.0.113.20:8000';
+const loginSource = readFileSync(new URL('../entry/src/main/ets/pages/LoginPage.ets', import.meta.url), 'utf8');
+const loginController = loginSource.slice(0, loginSource.indexOf('\n  @Builder'))
+  .replace(/^import .*;\r?\n/gm, '').replace(/^@Component\r?\n/m, '')
+  .replace(/@(Prop|State)\s+|@(Watch|StorageLink)\('[^']+'\)\s*/g, '')
+  .replace('export struct LoginPage', 'class LoginPage') + '\n}';
+
+function rootLoginCallback(page, name) {
+  // Execute the real callback supplied by Index.build(), including its argument
+  // binding. The native scheduler is the only missing boundary: tests explicitly
+  // deliver or delay the parent's Prop value instead of assuming synchronous UI.
+  const expression = source.match(new RegExp(`${name}: ([^\\r\\n]+)`))[1].replace(/,\s*$/, '');
+  return new Function(stripTypeScriptTypes(`const callback = ${expression};\n`) + '\nreturn callback;').call(page);
+}
+
+function loginWithRoot(root, { configureSession = true } = {}) {
+  const response = deferred(), requests = [], persistence = [];
+  class Api {
+    constructor(base) { this.base = base; }
+    async login() { requests.push(['login', this.base]); return response.promise; }
+    async register() { requests.push(['register', this.base]); return response.promise; }
+  }
+  class RequestError extends Error {}
+  const LoginPage = new Function('CampusFlowApi', 'CampusFlowRequestError',
+    stripTypeScriptTypes(loginController) + '\nreturn LoginPage;')(Api, RequestError);
+  const child = new LoginPage();
+  child.baseUrl = root.baseUrl; child.email = restoredUser.email; child.password = 'synthetic-password';
+  child.onBaseUrlChange = rootLoginCallback(root, 'onBaseUrlChange');
+  child.onAuthenticationStarted = rootLoginCallback(root, 'onAuthenticationStarted');
+  child.onAuthenticated = rootLoginCallback(root, 'onAuthenticated');
+  if (configureSession) {
+    savedLogin(root, { vault: { read: async () => null,
+      async clear() { persistence.push(['clear']); }, async save(value) { persistence.push(['save', value]); } } });
+  }
+  return { child, response, requests, persistence };
+}
+
+test('delayed child Prop echo cannot reject a successful login while the authoritative root keeps the public service', async () => {
+  const { page, calls } = setup(); page.baseUrl = publicService;
+  const f = loginWithRoot(page); const pending = f.child.submit();
+  f.child.baseUrl = localService;
+  f.response.resolve({ user: restoredUser, access_token: savedSession.accessToken, token_type: 'bearer' });
+  await pending;
+  assert.deepEqual(f.requests, [['login', publicService]]);
+  assert.equal(page.baseUrl, publicService);
+  assert.equal(page.token, savedSession.accessToken);
+  assert.equal(page.authBaseUrl, publicService);
+  assert.equal(f.child.errorText, '');
+  assert.ok(calls.some(call => call[0] === 'activate'));
+  assert.equal(f.persistence.find(call => call[0] === 'save')[1].baseUrl, publicService);
+});
+
+test('a real root service change during HTTP rejects the old login before persistence, cache activation or token publication', async () => {
+  const { page, calls } = setup(); page.baseUrl = publicService;
+  const f = loginWithRoot(page); const pending = f.child.submit();
+  const nextService = 'https://different-service.invalid';
+  page.changeLoginBase(nextService);
+  f.response.resolve({ user: restoredUser, access_token: savedSession.accessToken, token_type: 'bearer' });
+  await pending;
+  assert.deepEqual(f.requests, [['login', publicService]]);
+  assert.equal(page.baseUrl, nextService); assert.equal(page.token, ''); assert.equal(page.authBaseUrl, '');
+  assert.deepEqual(f.persistence, []); assert.deepEqual(calls, []);
+  assert.match(f.child.errorText, /来源|地址.*变|服务.*变/);
+  assert.equal(f.child.loading, false); assert.equal(f.child.password, 'synthetic-password');
+});
+
+test('visible service edit updates the request source immediately even before a parent Prop update is delivered', async () => {
+  const { page } = setup(); page.baseUrl = localService;
+  const f = loginWithRoot(page);
+  f.child.changeServiceBase(publicService);
+  assert.equal(page.baseUrl, publicService);
+  assert.equal(f.child.baseUrl, publicService, 'the input handler must not wait for a native parent rebuild');
+  const pending = f.child.submit();
+  f.response.resolve({ user: restoredUser, access_token: savedSession.accessToken, token_type: 'bearer' });
+  await pending;
+  assert.deepEqual(f.requests, [['login', publicService]]);
+  assert.equal(page.token, savedSession.accessToken); assert.equal(page.authBaseUrl, publicService);
+});
+
+test('root preflight rejects a stale child source before HTTP and always releases the login busy state', async () => {
+  const { page, calls } = setup(); page.baseUrl = publicService;
+  const f = loginWithRoot(page); f.child.baseUrl = localService;
+  const pending = f.child.submit();
+  await statusTick();
+  // Resolve the fake boundary even when a regression incorrectly starts HTTP,
+  // so that zero-request failures report an assertion instead of hanging.
+  f.response.resolve({ user: restoredUser, access_token: savedSession.accessToken, token_type: 'bearer' });
+  await pending;
+  assert.deepEqual(f.requests, []); assert.deepEqual(f.persistence, []); assert.deepEqual(calls, []);
+  assert.equal(page.baseUrl, publicService); assert.equal(page.token, '');
+  assert.match(f.child.errorText, /来源|地址.*变|服务.*变/);
+  assert.equal(f.child.loading, false);
+});
+
+test('a source change while secure persistence is pending still blocks cache activation and token publication', async () => {
+  const { page, calls } = setup(); page.baseUrl = publicService;
+  const f = loginWithRoot(page); const saving = deferred();
+  savedLogin(page, { vault: { read: async () => null, save: () => saving.promise } });
+  const pending = f.child.submit();
+  f.response.resolve({ user: restoredUser, access_token: savedSession.accessToken, token_type: 'bearer' });
+  await statusTick();
+  page.changeLoginBase('https://different-service.invalid');
+  saving.resolve(); await pending;
+  assert.equal(page.token, ''); assert.equal(page.authBaseUrl, '');
+  assert.deepEqual(calls, []);
+  assert.equal(page.baseUrl, 'https://different-service.invalid');
+  assert.equal(f.child.loading, false);
+});
+
+test('an old input echo delivered during login cannot retarget the authoritative root or its HTTP response', async () => {
+  const { page } = setup(); page.baseUrl = publicService;
+  const f = loginWithRoot(page); const pending = f.child.submit();
+  f.child.changeServiceBase(localService);
+  assert.equal(page.baseUrl, publicService); assert.equal(f.child.baseUrl, publicService);
+  f.response.resolve({ user: restoredUser, access_token: savedSession.accessToken, token_type: 'bearer' });
+  await pending;
+  assert.deepEqual(f.requests, [['login', publicService]]);
+  assert.equal(page.token, savedSession.accessToken); assert.equal(page.authBaseUrl, publicService);
+});
+
+test('a late old-service restore cannot replace a manual login at the newly edited public service', async () => {
+  const { page } = setup(); const oldVerification = deferred();
+  const restoreCalls = savedLogin(page, { verify: () => oldVerification.promise });
+  const restore = page.restoreSavedLogin(); await statusTick();
+  page.changeLoginBase(publicService);
+  const f = loginWithRoot(page, { configureSession: false });
+  const pending = f.child.submit();
+  const manualToken = 'synthetic-manual-public-token';
+  f.response.resolve({ user: restoredUser, access_token: manualToken, token_type: 'bearer' });
+  await pending;
+  assert.equal(page.token, manualToken);
+  oldVerification.resolve(restoredUser); await restore;
+  assert.equal(page.baseUrl, publicService); assert.equal(page.authBaseUrl, publicService);
+  assert.equal(page.token, manualToken); assert.equal(page.sessionRestoring, false);
+  assert.deepEqual(f.requests, [['login', publicService]]);
+  assert.deepEqual(restoreCalls, [['probe', savedSession.baseUrl, ''], ['verify', savedSession.baseUrl, savedSession.accessToken]]);
+});
+
 test('actual root restores a saved custom-port session only after original-service user validation', async () => {
   const { page } = setup(); const calls = savedLogin(page);
   await page.restoreSavedLogin();
@@ -104,7 +243,7 @@ test('actual root exposes retry without opening private pages or clearing data w
 
 test('manual callback from a different service cannot activate caches or publish the response token', async () => {
   const { page, calls } = setup(); page.baseUrl = 'http://127.0.0.1:8000';
-  await assert.rejects(page.authenticated({ user: restoredUser, access_token: savedSession.accessToken }, savedSession.baseUrl, true), /来源/);
+  await assert.rejects(page.authenticated({ user: restoredUser, access_token: savedSession.accessToken }, savedSession.baseUrl, true), sessionHelpers.SessionSourceChangedError);
   assert.equal(page.token, ''); assert.deepEqual(calls, []);
 });
 

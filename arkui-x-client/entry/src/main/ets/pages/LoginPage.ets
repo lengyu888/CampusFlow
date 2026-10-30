@@ -6,7 +6,7 @@ import { FeedbackPanel } from '../components/FeedbackPanel';
 import { CampusFlowRequestError } from '../utils/AgentFeedback';
 import { InfoDisclosure } from '../components/InfoDisclosure';
 import { ConnectionCheckPanel } from '../components/ConnectionCheckPanel';
-import { normalizeServiceBaseUrl } from '../utils/SessionPersistence';
+import { normalizeServiceBaseUrl, SessionSourceChangedError } from '../utils/SessionPersistence';
 
 @Component
 export struct LoginPage {
@@ -21,7 +21,7 @@ export struct LoginPage {
   @Prop restoreNotice: string = '';
   @Prop canRetryRestore: boolean = false;
   onRetryRestore: () => void = () => {};
-  onAuthenticationStarted: () => void = () => {};
+  onAuthenticationStarted: (requestBase: string) => void = () => {};
   onAuthenticated: (auth: AuthResponse, requestBase: string, remember: boolean) => Promise<void> = async () => {};
   onOpenLocalHistory: () => void = () => {};
   onBaseUrlChange: (baseUrl: string) => void = () => {};
@@ -43,12 +43,21 @@ export struct LoginPage {
   aboutToDisappear(): void { this.pageActive = false; this.requestRevision++; }
 
   private failure(error: Error): string {
+    if (error instanceof SessionSourceChangedError) { return error.message; }
     if (error instanceof CampusFlowRequestError) {
       if (error.statusCode === 401 || error.statusCode === 403) { return '邮箱、密码或权限未通过校验，请检查后重试。'; }
       if (error.statusCode === 409) { return '此邮箱已注册，请切换到登录。'; }
       if (error.statusCode === 422) { return '填写内容未通过校验，请检查邮箱、密码和必填项。'; }
     }
     return '连接未完成，请检查服务地址和网络后重试。输入内容已保留。';
+  }
+
+  private changeServiceBase(value: string): void {
+    if (!this.pageActive || this.loading || this.restoreBusy) { return; }
+    // Keep the visible editor and request source synchronous, before the next
+    // parent-to-child Prop delivery. Disabled controls may still echo old text.
+    this.baseUrl = value;
+    this.onBaseUrlChange(value);
   }
 
   private async clearLocalHistory(): Promise<void> {
@@ -76,17 +85,16 @@ export struct LoginPage {
     this.loading = true;
     this.errorText = '';
     const remember = this.rememberLogin;
-    this.onAuthenticationStarted();
     try {
+      this.onAuthenticationStarted(requestBase);
       const api = new CampusFlowApi(requestBase);
       const auth = this.registerMode
         ? await api.register(this.email, this.password, this.displayName,
           this.apiKey.trim().length > 0 ? this.apiKey : undefined)
         : await api.login(this.email, this.password);
       if (!this.pageActive || revision !== this.requestRevision) { return; }
-      if (normalizeServiceBaseUrl(this.baseUrl) !== requestBase) {
-        this.errorText = '服务地址已变化，本次未登录。请核对后重试。'; return;
-      }
+      // The root checks its authoritative source before and after secure save.
+      // A delayed @Prop echo here must not reject an otherwise unchanged source.
       await this.onAuthenticated(auth, requestBase, remember);
     } catch (error) {
       if (this.pageActive && revision === this.requestRevision) { this.errorText = this.failure(error); }
@@ -96,11 +104,11 @@ export struct LoginPage {
   }
 
   @Builder
-  private inputField(label: string, hint: string, value: string, onChange: (value: string) => void,
+  private inputField(label: string, hint: string, readValue: () => string, onChange: (value: string) => void,
     inputType: InputType = InputType.Normal) {
     Column({ space: 7 }) {
       Text(label).fontSize(this.palette.bodySize).fontColor(this.palette.secondary).fontWeight(FontWeight.Medium).width('100%')
-      TextInput({ placeholder: hint, text: value })
+      TextInput({ placeholder: hint, text: readValue() })
         .type(inputType)
         .constraintSize({ minHeight: 52 })
         .fontSize(this.palette.bodySize)
@@ -126,12 +134,12 @@ export struct LoginPage {
           Text(this.registerMode ? '创建账号' : '登录账号')
             .fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Bold).fontColor(this.palette.ink).width('100%')
           if (this.registerMode) {
-            this.inputField('昵称', '你的称呼', this.displayName, (value) => this.displayName = value)
+            this.inputField('昵称', '你的称呼', () => this.displayName, (value) => this.displayName = value)
           }
-          this.inputField('服务地址', 'http://局域网IP:8000', this.baseUrl, (value) => this.onBaseUrlChange(value))
+          this.inputField('服务地址', 'http://局域网IP:8000', () => this.baseUrl, (value) => this.changeServiceBase(value))
           ConnectionCheckPanel({ baseUrl: this.baseUrl, active: !this.loading && !this.restoreBusy })
-          this.inputField('邮箱', 'name@example.com', this.email, (value) => this.email = value, InputType.Email)
-          this.inputField('密码', '至少 8 位', this.password, (value) => this.password = value, InputType.Password)
+          this.inputField('邮箱', 'name@example.com', () => this.email, (value) => this.email = value, InputType.Email)
+          this.inputField('密码', '至少 8 位', () => this.password, (value) => this.password = value, InputType.Password)
           Row({ space: 10 }) {
             Checkbox({ name: 'rememberLogin' }).select(this.rememberLogin)
               .selectedColor(this.palette.accent).enabled(!this.loading && !this.restoreBusy)
@@ -159,7 +167,7 @@ export struct LoginPage {
               .fontColor(this.palette.accent).backgroundColor(Color.Transparent)
               .enabled(!this.loading).onClick(() => this.showModelConfig = !this.showModelConfig)
             if (this.showModelConfig) {
-              this.inputField('DeepSeek API Key（可选）', 'sk-…（服务端加密保存）', this.apiKey,
+              this.inputField('DeepSeek API Key（可选）', 'sk-…（服务端加密保存）', () => this.apiKey,
                 (value) => this.apiKey = value, InputType.Password)
               Text('填写后会随注册保存；只做输入校验，不会在注册时调用模型。')
                 .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')

@@ -5,7 +5,7 @@ import common from '@ohos.app.ability.common';
 import { AuthResponse, UserProfile, PlanningTask, TaskStatusOperation, CourseAcknowledgement } from '../model/ApiModels';
 import { CampusFlowApi } from '../services/CampusFlowApi';
 import { localSession } from '../services/LocalSession';
-import { normalizeServiceBaseUrl, SessionStorageError } from '../utils/SessionPersistence';
+import { normalizeServiceBaseUrl, SessionStorageError, SessionSourceChangedError } from '../utils/SessionPersistence';
 import { SessionCoordinator } from '../utils/SessionCoordinator';
 import { localDrafts } from '../services/LocalDrafts';
 import { DraftLease } from '../utils/DraftStore';
@@ -172,6 +172,14 @@ struct Index {
   private beginManualLogin(): void {
     this.sessionCoordinator?.cancel(); this.authRevision++;
     this.sessionRestoring = false; this.sessionRestoreNotice = ''; this.sessionRetryAllowed = false;
+  }
+
+  private startManualLogin(requestBase: string): void {
+    const base = normalizeServiceBaseUrl(requestBase);
+    if (!this.pageActive || base === null || normalizeServiceBaseUrl(this.baseUrl) !== base) {
+      throw new SessionSourceChangedError();
+    }
+    this.beginManualLogin();
   }
 
   private changeLoginBase(value: string): void {
@@ -571,7 +579,7 @@ struct Index {
   private async authenticated(auth: AuthResponse, requestBase: string = this.baseUrl, remember: boolean = false, restored: boolean = false): Promise<void> {
     const base = normalizeServiceBaseUrl(requestBase);
     if (!this.pageActive || base === null || normalizeServiceBaseUrl(this.baseUrl) !== base) {
-      throw new Error('登录来源已变化，请核对服务地址后重试。');
+      throw new SessionSourceChangedError();
     }
     const revision = ++this.authRevision;
     if (!restored) {
@@ -1060,7 +1068,7 @@ struct Index {
       LoginPage({
         restoreBusy: this.sessionRestoring, restoreNotice: this.sessionRestoreNotice,
         canRetryRestore: this.sessionRetryAllowed, onRetryRestore: () => this.restoreSavedLogin(),
-        onAuthenticationStarted: () => this.beginManualLogin(),
+        onAuthenticationStarted: (requestBase) => this.startManualLogin(requestBase),
         baseUrl: this.baseUrl,
         localHistoryCount: this.localHistoryCount, localDisplayName: this.localDisplayName,
         cacheNotice: this.cacheNotice,

@@ -27,6 +27,10 @@ export interface SessionBarrierDriver {
   writeEnabled(enabled: boolean): Promise<void>;
 }
 
+export class SessionSourceChangedError extends Error {
+  constructor() { super('服务地址已变化，本次未登录。请核对后重试。'); }
+}
+
 export class SessionStorageError extends Error {
   code: string;
   constructor(code: string = 'SESSION_UNAVAILABLE') {
