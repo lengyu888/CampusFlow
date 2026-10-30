@@ -217,6 +217,21 @@ class RunToolProgress(BaseModel):
     summary: str = ""
 
 
+class RunPhaseDiagnostic(BaseModel):
+    """Fixed-vocabulary counters only; never provider text, arguments or credentials."""
+
+    phase: Literal["refreshing", "reading", "planning", "proposal", "finished"]
+    elapsed_ms: int = Field(default=0, ge=0, le=3600000)
+    context_chars: int = Field(default=0, ge=0, le=200000)
+    system_chars: int = Field(default=0, ge=0, le=200000)
+    schema_chars: int = Field(default=0, ge=0, le=200000)
+    data_chars: int = Field(default=0, ge=0, le=200000)
+    reasoning_chars: int = Field(default=0, ge=0, le=200000)
+    answer_chars: int = Field(default=0, ge=0, le=200000)
+    argument_chars: int = Field(default=0, ge=0, le=200000)
+    requested_calls: int = Field(default=0, ge=0, le=50)
+
+
 class RunSnapshot(BaseModel):
     run_id: str
     session_id: str
@@ -233,6 +248,8 @@ class RunSnapshot(BaseModel):
     prepared_actions: list[PendingAction] = Field(default_factory=list, max_length=50)
     model_calls: int = 0
     tool_calls: int = 0
+    phase: Literal["refreshing", "reading", "planning", "proposal", "finished"] | None = None
+    diagnostics: list[RunPhaseDiagnostic] = Field(default_factory=list, max_length=16)
     result: ChatResponse | None = None
     error_code: str | None = None
     error_message: str | None = None

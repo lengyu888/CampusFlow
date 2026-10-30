@@ -17,6 +17,10 @@ from .config import Settings
 class HDUHelpError(RuntimeError):
     """Raised when HDUHelp rejects a request or returns an invalid response."""
 
+    def __init__(self, message: str, *, code: str = "HDUHELP_UNAVAILABLE"):
+        super().__init__(message)
+        self.code = code
+
 
 @dataclass(frozen=True)
 class OAuthStart:
@@ -81,6 +85,12 @@ class HDUHelpService:
         self.scopes = [item.strip() for item in settings.hduhelp_scopes.split(",") if item.strip()]
         self.timeout = settings.hduhelp_timeout_seconds
         self._http_client = http_client
+        self._owns_http_client = http_client is None
+
+    async def aclose(self) -> None:
+        if self._owns_http_client and self._http_client is not None:
+            await self._http_client.aclose()
+            self._http_client = None
 
     @property
     def configured(self) -> bool:
@@ -212,19 +222,19 @@ class HDUHelpService:
 
     async def _request_json(self, method: str, path: str, **kwargs: Any) -> dict[str, Any]:
         try:
-            if self._http_client is not None:
-                response = await self._http_client.request(
-                    method,
-                    f"{self.base_url}{path}",
-                    **kwargs,
+            if self._http_client is None:
+                self._http_client = httpx.AsyncClient(
+                    timeout=httpx.Timeout(self.timeout, connect=min(2, self.timeout)),
+                    limits=httpx.Limits(max_connections=20, max_keepalive_connections=10),
                 )
-            else:
-                async with httpx.AsyncClient(timeout=self.timeout) as client:
-                    response = await client.request(method, f"{self.base_url}{path}", **kwargs)
+            response = await self._http_client.request(method, f"{self.base_url}{path}", **kwargs)
             response.raise_for_status()
             payload = response.json()
         except httpx.HTTPStatusError as exc:
-            raise HDUHelpError(f"HDUHelp API 返回 HTTP {exc.response.status_code}。") from exc
+            status = exc.response.status_code
+            code = {401: "HDUHELP_AUTH_INVALID", 403: "HDUHELP_FORBIDDEN"}.get(
+                status, "HDUHELP_UNAVAILABLE")
+            raise HDUHelpError(f"HDUHelp API 返回 HTTP {status}。", code=code) from exc
         except (httpx.HTTPError, ValueError) as exc:
             raise HDUHelpError("无法连接或解析 HDUHelp API。") from exc
         if not isinstance(payload, dict):

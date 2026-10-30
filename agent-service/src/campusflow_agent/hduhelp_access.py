@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -21,8 +22,13 @@ class HDUHelpAccess:
         self.account_store = account_store
         self.credential_vault = credential_vault
         self.service = service
+        self._token_locks: dict[str, asyncio.Lock] = {}
 
     async def active_token(self, user_id: str) -> str:
+        async with self._token_locks.setdefault(user_id, asyncio.Lock()):
+            return await self._active_token(user_id)
+
+    async def _active_token(self, user_id: str) -> str:
         connection = self.account_store.get_hduhelp_connection_secret(user_id)
         if connection is None:
             raise HDUHelpError("尚未连接 HDUHelp，请先在“我的”中配置个人访问令牌。")
@@ -44,7 +50,7 @@ class HDUHelpAccess:
 
         encrypted_refresh = connection.get("refresh_token_encrypted")
         if not encrypted_refresh:
-            raise HDUHelpError("HDUHelp 授权已过期，请重新连接。")
+            raise HDUHelpError("HDUHelp 授权已过期，请重新连接。", code="HDUHELP_AUTH_INVALID")
         try:
             refresh_token = self.credential_vault.decrypt(encrypted_refresh)
             tokens = await self.service.refresh(refresh_token)
@@ -66,11 +72,19 @@ class HDUHelpAccess:
                 token_type=tokens.token_type,
                 scopes=tokens.scopes,
                 expires_at=tokens.expires_at,
+                expected_credential=(
+                    connection["access_token_encrypted"], connection["connected_at"]),
             )
             return tokens.access_token
+        except KeyError as exc:
+            raise HDUHelpError("校园连接已变化，请重新核对连接。") from exc
         except (HDUHelpError, ValueError, json.JSONDecodeError) as exc:
-            self.account_store.set_hduhelp_error(user_id, str(exc))
-            raise HDUHelpError(str(exc)) from exc
+            current = self.account_store.get_hduhelp_connection_secret(user_id)
+            if current is not None and (
+                current["access_token_encrypted"] == connection["access_token_encrypted"]
+            ):
+                self.account_store.set_hduhelp_error(user_id, str(exc))
+            raise HDUHelpError(str(exc), code=getattr(exc, "code", "HDUHELP_UNAVAILABLE")) from exc
 
     async def get(
         self,

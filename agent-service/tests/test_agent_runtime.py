@@ -611,7 +611,7 @@ def test_runtime_client_factory_disables_retries_and_does_not_rename_token_param
     service = AgentService(Settings(_env_file=None), CampusStore())
     service._build_runtime_client(api_key="synthetic-key", model_name="deepseek-flash")
     assert seen["max_retries"] == 0
-    assert seen["timeout"] == 90
+    assert seen["timeout"] == 180
     with pytest.raises(AgentConfigurationError):
         service._build_runtime_client(api_key="", model_name="deepseek-flash")
     with pytest.raises(AgentConfigurationError):

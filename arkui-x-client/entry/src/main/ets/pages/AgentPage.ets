@@ -1288,7 +1288,14 @@ export struct AgentPage {
   private runStatusLabel(run: RunSnapshot): string {
     switch (run.status) {
       case 'queued': return '等待开始';
-      case 'running': return '正在运行';
+      case 'running':
+        switch (run.phase) {
+          case 'refreshing': return '正在更新校园资料';
+          case 'reading': return '正在读取资料';
+          case 'planning': return '正在分析';
+          case 'proposal': return '正在生成提案';
+          default: return '正在运行';
+        }
       case 'succeeded': return '已完成';
       case 'cancelled': return '已取消';
       case 'timed_out': return '运行超时';
@@ -2791,7 +2798,8 @@ export struct AgentPage {
           if (this.loading) {
             Row({ space: 10 }) {
               LoadingProgress().width(20).height(20).color(this.palette.accent)
-              Text('正在处理请求…').fontSize(this.palette.metaSize).fontColor(this.palette.quiet)
+              Text(this.runState.snapshot !== null ? this.runStatusLabel(this.runState.snapshot) : '正在提交请求…')
+                .fontSize(this.palette.metaSize).fontColor(this.palette.quiet)
             }.width('100%')
           }
           if (this.promptSuggestions.length > 0) { this.SuggestedPrompt() }

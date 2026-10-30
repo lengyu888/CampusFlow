@@ -29,6 +29,17 @@ const proposal = id => ({ proposal_id: id, action: 'create', kind: 'task', title
 const deferred = () => { let resolve, reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; };
 const settle = async () => { for (let i = 0; i < 8; i++) await Promise.resolve(); };
 
+test('running refresh phase is visible while terminal statuses retain their meaning', async () => {
+  const { page } = await harness();
+  const labels = { refreshing: '正在更新校园资料', reading: '正在读取资料', planning: '正在分析', proposal: '正在生成提案' };
+  for (const [phase, label] of Object.entries(labels)) {
+    assert.equal(page.runStatusLabel({ status: 'running', phase }), label);
+  }
+  assert.equal(page.runStatusLabel({ status: 'succeeded', phase: 'refreshing' }), '已完成');
+  assert.equal(page.runStatusLabel({ status: 'cancelled', phase: 'refreshing' }), '已取消');
+  assert.equal(page.runStatusLabel({ status: 'running' }), '正在运行');
+});
+
 test('conversation confirmation from a long reply scrolls into view without switching, sending or replacing drafts', async () => {
   for (const entry of ['new', 'run', 'draft']) {
     const { page, calls, saves, drafts } = await harness();

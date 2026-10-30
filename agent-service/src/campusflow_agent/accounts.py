@@ -687,8 +687,11 @@ class AccountStore:
         token_type: str,
         scopes: list[str],
         expires_at: datetime,
+        expected_credential: tuple[str, str] | None = None,
     ) -> None:
         with self._lock, self._connection:
+            condition = (" AND access_token_encrypted=? AND connected_at=?"
+                         if expected_credential is not None else "")
             cursor = self._connection.execute(
                 """
                 UPDATE hduhelp_connections
@@ -696,7 +699,7 @@ class AccountStore:
                     token_type = ?, scopes_json = ?, expires_at = ?,
                     updated_at = ?, last_error = NULL
                 WHERE user_id = ?
-                """,
+                """ + condition,
                 (
                     access_token_encrypted,
                     refresh_token_encrypted,
@@ -705,6 +708,7 @@ class AccountStore:
                     expires_at.isoformat(),
                     datetime.now(UTC).isoformat(),
                     user_id,
+                    *(expected_credential or ()),
                 ),
             )
         if cursor.rowcount != 1:
@@ -747,6 +751,53 @@ class AccountStore:
                 ),
             )
         return now
+
+    def save_hduhelp_refresh(
+        self, *, user_id: str, resource: str, encrypted_payload: str | None,
+        error: str | None, expected_credential: tuple[str, str], expected_snapshot: dict | None,
+    ) -> bool:
+        """Compare-and-save one resource; never revive a disconnected or replaced connection."""
+        now = datetime.now(UTC).isoformat()
+        with self._lock, self._connection:
+            # sqlite3's context manager starts a transaction only at the first DML.
+            # Lock before SELECT so another connection cannot change the credential
+            # between checking it and writing the corresponding resource.
+            if not self._connection.in_transaction:
+                self._connection.execute("BEGIN IMMEDIATE")
+            row = self._connection.execute(
+                "SELECT access_token_encrypted,connected_at,sync_errors_json "
+                "FROM hduhelp_connections "
+                "WHERE user_id=?", (user_id,),
+            ).fetchone()
+            if row is None or (row[0], row[1]) != expected_credential:
+                return False
+            current = self.get_hduhelp_resource(user_id, resource)
+            if current != expected_snapshot:
+                return False  # Another refresh/manual sync has already replaced this version.
+            try:
+                errors = json.loads(row[2] or "{}")
+            except (ValueError, TypeError):
+                errors = {}
+            if not isinstance(errors, dict):
+                errors = {}
+            if error:
+                errors[resource] = error
+            else:
+                errors.pop(resource, None)
+            if encrypted_payload is not None:
+                self._connection.execute(
+                    "INSERT INTO hduhelp_resource_cache(user_id,resource,payload_json,synced_at) "
+                    "VALUES(?,?,?,?) ON CONFLICT(user_id,resource) DO UPDATE SET "
+                    "payload_json=excluded.payload_json,synced_at=excluded.synced_at",
+                    (user_id, resource, encrypted_payload, now),
+                )
+            self._connection.execute(
+                "UPDATE hduhelp_connections SET sync_errors_json=?,last_error=?,updated_at=?,"
+                "last_synced_at=CASE WHEN ? THEN ? ELSE last_synced_at END WHERE user_id=?",
+                (json.dumps(errors, ensure_ascii=False), "; ".join(errors.values()) or None, now,
+                 encrypted_payload is not None, now, user_id),
+            )
+        return True
 
     def set_hduhelp_error(self, user_id: str, message: str) -> None:
         with self._lock, self._connection:

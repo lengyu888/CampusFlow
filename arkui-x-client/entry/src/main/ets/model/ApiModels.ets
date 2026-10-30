@@ -289,6 +289,7 @@ export interface RunToolProgress {
 }
 
 export interface RunSnapshot {
+  phase?: string | null;
   // Server-owned proposals prepared before an incomplete response; never an execution receipt.
   prepared_actions?: PendingAction[];
   session_mode?: string | null;

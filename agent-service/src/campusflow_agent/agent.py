@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 from collections.abc import Awaitable, Callable
@@ -26,10 +27,13 @@ from .conversation_context import (
 )
 from .evidence import campus_supported, data_evidence
 from .hduhelp_access import HDUHelpAccess
+from .hduhelp_refresh import CURRENT_HDU_TURN, RefreshCoordinator, snapshot_resources
 from .key_vault import ApiKeyVault
 from .learning_preferences import LearningPreferenceStore
 from .model_catalog import AgentConfigurationError as AgentConfigurationError
 from .model_catalog import ModelCatalog
+from .planning_workflow import planning_window, run_staged_plan
+from .run_budget import CURRENT_RUN_BUDGET, RunBudget
 from .runtime_read_context import READ_TOOLS, project_read_context, read_result_content
 from .schemas import CampusRoute, HistoryMessage, PendingAction, ToolTrace
 from .skills import SkillStore
@@ -132,6 +136,12 @@ class AgentService:
         self.credential_vault = credential_vault
         self.hduhelp_access = hduhelp_access
         self.weather_service = weather_service
+        self.campus_refresh = (
+            RefreshCoordinator(settings, account_store, credential_vault, hduhelp_access)
+            if settings.agent_hduhelp_auto_refresh_enabled and account_store is not None
+            and credential_vault is not None and isinstance(hduhelp_access, HDUHelpAccess)
+            else None
+        )
 
     @staticmethod
     def _build_system_prompt(now: datetime | None = None) -> str:
@@ -199,6 +209,7 @@ class AgentService:
             runtime_tools = build_tools(
                 self.store, self.allowed_tools_for_user(user_id), self.account_store,
                 self.credential_vault, self.hduhelp_access, self.weather_service,
+                None, self.campus_refresh,
             )
         return create_agent(
             model=model,
@@ -267,9 +278,11 @@ class AgentService:
         )
 
     async def _open_runtime_stream(
-        self, client: Any, model_name: str, messages: list[dict], tools: list[dict]
+        self, client: Any, model_name: str, messages: list[dict], tools: list[dict],
+        *, thinking_enabled: bool | None = None,
     ) -> Any:
-        options = self.model_catalog.completion_options(model_name)
+        options = self.model_catalog.completion_options(
+            model_name, thinking_enabled=thinking_enabled)
         options.update(messages=self.model_catalog.wire_messages(model_name, messages), stream=True)
         if tools:
             options["tools"] = tools
@@ -324,7 +337,12 @@ class AgentService:
                 "args": arguments,
             }
             if getattr(tool, "coroutine", None) is not None:
-                result = await tool.ainvoke(invocation)
+                budget = CURRENT_RUN_BUDGET.get()
+                if budget is None:
+                    result = await tool.ainvoke(invocation)
+                else:
+                    async with asyncio.timeout(max(.001, budget.work_remaining)):
+                        result = await tool.ainvoke(invocation)
             else:
                 # Local SQLite/read tools are short synchronous operations. Running them in
                 # an executor would let a cancelled await leave a writing thread behind.
@@ -372,6 +390,25 @@ class AgentService:
         await emit("tool_end", outcome)
         check_cancelled()
         return trace, pending
+
+    async def _prefetch_hduhelp(self, calls: list[dict], tool_map: dict, *, budget=None) -> None:
+        turn = CURRENT_HDU_TURN.get()
+        if turn is None:
+            return
+        resources = []
+        for call in calls:
+            function = call.get("function", {})
+            adapter = tool_map.get(function.get("name"))
+            if adapter is None:
+                continue
+            try:
+                args = json.loads(function.get("arguments", "{}"))
+                adapter.get_input_schema().model_validate(args)
+                resources.extend(snapshot_resources(adapter.name, args))
+            except (ValueError, TypeError):
+                continue
+        if resources:
+            await turn.ensure(resources, budget=budget)
 
     def _runtime_tool_content(self, trace: ToolTrace) -> str:
         """Bound only model context; keep the actual proposal/result intact in the reply."""
@@ -458,6 +495,11 @@ class AgentService:
         """
         check_cancelled()
         token = CURRENT_USER_ID.set(user_id)
+        budget_token = CURRENT_RUN_BUDGET.set(CURRENT_RUN_BUDGET.get() or RunBudget(
+            self.settings.agent_timeout_seconds,
+            self.settings.agent_final_response_reserve_seconds))
+        turn = self.campus_refresh.turn(user_id, emit) if self.campus_refresh else None
+        refresh_token = CURRENT_HDU_TURN.set(turn)
         try:
             return await self._run_bounded(
                 user_id=user_id,
@@ -470,7 +512,13 @@ class AgentService:
                 frozen_history=frozen_history,
             )
         finally:
-            CURRENT_USER_ID.reset(token)
+            try:
+                if turn is not None:
+                    await turn.close()
+            finally:
+                CURRENT_HDU_TURN.reset(refresh_token)
+                CURRENT_RUN_BUDGET.reset(budget_token)
+                CURRENT_USER_ID.reset(token)
 
     async def _run_bounded(
         self,
@@ -493,8 +541,17 @@ class AgentService:
             self.credential_vault,
             self.hduhelp_access,
             self.weather_service,
+            None,
+            self.campus_refresh,
         )
         tool_map = {tool.name: tool for tool in runtime_tools}
+        window = planning_window(message) if self.settings.agent_staged_planning_enabled else None
+        if window is not None:
+            return await run_staged_plan(
+                self, window=window, tools=runtime_tools, user_id=user_id, session_id=session_id,
+                api_key=api_key, model_name=model_name, message=message, emit=emit,
+                check_cancelled=check_cancelled, frozen_history=frozen_history,
+            )
         route_request = self._extract_route_request(message)
         if route_request is not None and "plan_campus_route" in tool_map:
             call_id = f"direct-route-{uuid4().hex}"
@@ -549,6 +606,25 @@ class AgentService:
         turn: list[dict] = [{"role": "user", "content": message}]
         traces: list[ToolTrace] = []
         pending: list[PendingAction] = []
+        budget = CURRENT_RUN_BUDGET.get()
+
+        async def finish_with_receipts() -> AgentReply:
+            check_cancelled()
+            text = "本轮已停止继续查询，保留已核验的记录。"
+            if pending:
+                text += f"已生成 {len(pending)} 份待确认提案，尚未写入正式规划，请核对确认卡片。"
+                if any(item.conflicts for item in pending):
+                    text += "存在冲突，需调整后再确认。"
+            else:
+                text += "尚未获得完整答复，请核对已有记录；未核实部分不能当作当前事实。"
+            for item in traces:
+                if item.display:
+                    text += "\n" + item.display.label + "：" + item.display.summary
+            if output_count + len(text) > self.settings.agent_max_output_chars:
+                raise AgentBudgetExceeded("本轮输出已达到上限。", reason="output")
+            await emit("answer_reset", {})
+            await emit("answer_delta", {"text": text})
+            return AgentReply(message=text, tool_traces=traces, pending_actions=pending)
 
         def current_context() -> list[dict]:
             remaining = self.settings.agent_max_tool_calls - tool_count
@@ -600,11 +676,17 @@ class AgentService:
         try:
             for model_count in range(1, self.settings.agent_max_model_calls + 1):
                 check_cancelled()
+                if budget.work_remaining <= 0:
+                    if not can_summarize_reads():
+                        return await finish_with_receipts()
+                    final_summary_requested = True
                 final_summary = (
                     final_summary_requested
                     or tool_count >= self.settings.agent_max_tool_calls and can_summarize_reads()
                 )
                 if final_summary:
+                    if budget.final_remaining <= 0:
+                        return await finish_with_receipts()
                     context = summary_context()
                 else:
                     try:
@@ -617,74 +699,90 @@ class AgentService:
                 await emit("model_start", {"count": model_count})
                 await emit("answer_reset", {})
                 check_cancelled()
-                stream = await self._open_runtime_stream(
-                    client, model_name, context, [] if final_summary else schemas
-                )
-                answer = ""
-                reasoning = ""
-                calls: dict[int, dict] = {}
-                finish = None
-                buffered_chars = 0
                 try:
-                    async for chunk in stream:
-                        check_cancelled()
-                        choices = chunk.choices
-                        if not choices:
-                            continue  # Optional usage-only terminal chunk.
-                        choice = choices[0]
-                        if choice.index != 0 or finish is not None:
-                            raise RuntimeError("模型流式响应不完整，请稍后重试。")
-                        delta = choice.delta
-                        text = getattr(delta, "content", None)
-                        private = getattr(delta, "reasoning_content", None)
-                        if text is not None and not isinstance(text, str):
-                            raise RuntimeError("模型流式响应格式无法读取，请稍后重试。")
-                        if private is not None and not isinstance(private, str):
-                            raise RuntimeError("模型流式响应格式无法读取，请稍后重试。")
-                        if private:
-                            reasoning += private
-                            buffered_chars += len(private)
-                        if text:
-                            output_count += len(text)
-                            buffered_chars += len(text)
-                            if output_count > self.settings.agent_max_output_chars:
-                                raise AgentBudgetExceeded(
-                                    "本轮输出已达到上限，请缩小请求范围后再试。", reason="output"
-                                )
-                        for part in getattr(delta, "tool_calls", None) or []:
-                            if not isinstance(part.index, int) or not 0 <= part.index < 50:
-                                raise RuntimeError("模型工具请求格式无法读取，请重试。")
-                            call = calls.setdefault(
-                                part.index,
-                                {
-                                    "id": "",
-                                    "type": "function",
-                                    "function": {"name": "", "arguments": ""},
-                                },
-                            )
-                            for key, value in (
-                                ("id", part.id),
-                                ("name", part.function.name if part.function else None),
-                                ("arguments", part.function.arguments if part.function else None),
-                            ):
-                                if value is not None:
-                                    if not isinstance(value, str):
+                    time_left = budget.final_remaining if final_summary else budget.work_remaining
+                    model_timeout = asyncio.timeout(max(.001, time_left))
+                    async with model_timeout:
+                        stream = await self._open_runtime_stream(
+                            client, model_name, context, [] if final_summary else schemas,
+                            thinking_enabled=False if final_summary else None,
+                        )
+                        answer = ""
+                        reasoning = ""
+                        calls: dict[int, dict] = {}
+                        finish = None
+                        buffered_chars = 0
+                        try:
+                            async for chunk in stream:
+                                check_cancelled()
+                                choices = chunk.choices
+                                if not choices:
+                                    continue  # Optional usage-only terminal chunk.
+                                choice = choices[0]
+                                if choice.index != 0 or finish is not None:
+                                    raise RuntimeError("模型流式响应不完整，请稍后重试。")
+                                delta = choice.delta
+                                text = getattr(delta, "content", None)
+                                private = getattr(delta, "reasoning_content", None)
+                                if text is not None and not isinstance(text, str):
+                                    raise RuntimeError("模型流式响应格式无法读取，请稍后重试。")
+                                if private is not None and not isinstance(private, str):
+                                    raise RuntimeError("模型流式响应格式无法读取，请稍后重试。")
+                                if private:
+                                    reasoning += private
+                                    buffered_chars += len(private)
+                                if text:
+                                    output_count += len(text)
+                                    buffered_chars += len(text)
+                                    if output_count > self.settings.agent_max_output_chars:
+                                        raise AgentBudgetExceeded(
+                                            "本轮输出已达到上限，请缩小请求范围后再试。",
+                                            reason="output",
+                                        )
+                                for part in getattr(delta, "tool_calls", None) or []:
+                                    if not isinstance(part.index, int) or not 0 <= part.index < 50:
                                         raise RuntimeError("模型工具请求格式无法读取，请重试。")
-                                    target = call if key == "id" else call["function"]
-                                    target[key] += value
-                                    buffered_chars += len(value)
-                        if buffered_chars > self.settings.agent_max_context_chars:
-                            raise AgentBudgetExceeded(
-                                "本轮模型响应已达到上限，请缩小请求范围后再试。",
-                                reason="provider_response",
-                            )
-                        if text:
-                            answer += text
-                            await emit("answer_delta", {"text": text})
-                        if choice.finish_reason is not None:
-                            finish = choice.finish_reason
-                finally:
-                    await stream.close()
+                                    call = calls.setdefault(
+                                        part.index,
+                                        {
+                                            "id": "",
+                                            "type": "function",
+                                            "function": {"name": "", "arguments": ""},
+                                        },
+                                    )
+                                    for key, value in (
+                                        ("id", part.id),
+                                        ("name", part.function.name if part.function else None),
+                                        ("arguments", part.function.arguments
+                                         if part.function else None),
+                                    ):
+                                        if value is not None:
+                                            if not isinstance(value, str):
+                                                raise RuntimeError(
+                                                    "模型工具请求格式无法读取，请重试。")
+                                            target = call if key == "id" else call["function"]
+                                            target[key] += value
+                                            buffered_chars += len(value)
+                                if buffered_chars > self.settings.agent_max_context_chars:
+                                    raise AgentBudgetExceeded(
+                                        "本轮模型响应已达到上限，请缩小请求范围后再试。",
+                                        reason="provider_response",
+                                    )
+                                if text:
+                                    answer += text
+                                    await emit("answer_delta", {"text": text})
+                                if choice.finish_reason is not None:
+                                    finish = choice.finish_reason
+                        finally:
+                            await stream.close()
+                except TimeoutError:
+                    if not model_timeout.expired() or budget.reserve == 0:
+                        raise
+                    if (not final_summary and can_summarize_reads()
+                            and model_count < self.settings.agent_max_model_calls):
+                        final_summary_requested = True
+                        continue
+                    return await finish_with_receipts()
                 check_cancelled()
                 if finish == "length":
                     raise AgentBudgetExceeded(
@@ -740,10 +838,15 @@ class AgentService:
                 turn.append(assistant)
                 # Include generated arguments/private protocol context before any side effect.
                 current_context()
+                if budget.work_remaining <= 0:
+                    return await finish_with_receipts()
+                await self._prefetch_hduhelp(batch, tool_map)
                 for call in batch:
                     # The previous tool result consumes context too. Do not start another
                     # side effect if the current exchange already exceeds the input budget.
                     current_context()
+                    if budget.work_remaining <= 0:
+                        return await finish_with_receipts()
                     tool_count += 1
                     trace, proposal = await self._runtime_tool(
                         call=call,
@@ -799,6 +902,7 @@ class AgentService:
         runtime_tools = build_tools(
             self.store, self.allowed_tools_for_user(user_id), self.account_store,
             self.credential_vault, self.hduhelp_access, self.weather_service,
+            None, self.campus_refresh,
         )
         system = {"role": "system", "content": self._build_user_system_prompt(user_id)
                   + memory_prompt(project_constraints(history, message))}
@@ -820,10 +924,22 @@ class AgentService:
             for item in selected
         ]
         token = CURRENT_USER_ID.set(user_id)
+        turn = self.campus_refresh.turn(user_id) if self.campus_refresh else None
+        refresh_token = CURRENT_HDU_TURN.set(turn)
+        budget = CURRENT_RUN_BUDGET.get() or RunBudget(
+            self.settings.agent_timeout_seconds, self.settings.agent_final_response_reserve_seconds)
+        budget_token = CURRENT_RUN_BUDGET.set(budget)
         try:
-            result = await graph.ainvoke(
-                {"messages": conversation},
-            )
+            try:
+                graph_timeout = asyncio.timeout(max(.001, budget.work_remaining))
+                async with graph_timeout:
+                    result = await graph.ainvoke({"messages": conversation})
+            except TimeoutError:
+                if not graph_timeout.expired() or budget.reserve == 0:
+                    raise
+                result = {"messages": [*conversation, AIMessage(content=(
+                    "本轮已停止继续查询，尚未获得完整答复。请核对已有记录和提案；"
+                    "未核实的资料不能作为当前事实。"))]}
         except BaseException:
             if persist_history:
                 # 收尾自己创建的 pending 会话，并保留原异常给调用方处理。
@@ -836,7 +952,13 @@ class AgentService:
                 )
             raise
         finally:
-            CURRENT_USER_ID.reset(token)
+            try:
+                if turn is not None:
+                    await turn.close()
+            finally:
+                CURRENT_HDU_TURN.reset(refresh_token)
+                CURRENT_RUN_BUDGET.reset(budget_token)
+                CURRENT_USER_ID.reset(token)
 
         new_messages = self._messages_for_latest_turn(result.get("messages", []), message)
         answer = self._last_answer(new_messages)

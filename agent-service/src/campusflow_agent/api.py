@@ -289,8 +289,12 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
-        yield
-        await run_service.shutdown()
+        try:
+            yield
+        finally:
+            await run_service.shutdown()
+            if isinstance(hduhelp_service, HDUHelpService):
+                await hduhelp_service.aclose()
 
     app = FastAPI(
         title="CampusFlow Agent API",
