@@ -9,6 +9,7 @@ from typing import Any
 from pydantic import ValidationError
 
 from .evidence import data_evidence, safe_source_url
+from .hduhelp_query import SnapshotQuery, precise_page_size
 from .knowledge import (
     CAMPUS,
     SCHOOL,
@@ -276,6 +277,73 @@ def _list_summary(name: str, result: Any, label: str) -> ToolDisplaySummary:
     return ToolDisplaySummary(label=label, state="success", summary=summary[name])
 
 
+def _precise_snapshot_summary(name: str, result: dict, label: str) -> ToolDisplaySummary:
+    metadata = result.get("query")
+    if not isinstance(metadata, dict) or not isinstance(metadata.get("filters"), dict):
+        return _unverified(label)
+    if metadata.get("scope") != "synced_snapshot" or metadata.get("upstream_complete") is not None:
+        return _unverified(label)
+    try:
+        query = SnapshotQuery(resource=metadata.get("resource"), limit=metadata.get("limit"),
+                              offset=metadata.get("offset"), **metadata["filters"])
+        query.validate(_SNAPSHOT_FIELDS[name])
+    except (ValueError, TypeError):
+        return _unverified(label)
+    snapshot = result.get(query.resource)
+    if not isinstance(snapshot, dict) or snapshot.get("resource") != query.resource:
+        return _unverified(label)
+    status = metadata.get("status")
+    if status == "unavailable" and snapshot.get("needs_sync") is True:
+        return ToolDisplaySummary(label=label, state="unavailable",
+                                  summary="暂无可用的已同步资料，请先连接并同步。")
+    if status == "unsupported" and snapshot.get("data") is None:
+        return ToolDisplaySummary(label=label, state="unverified",
+                                  summary="资料字段或结构不支持本次精确筛选，未返回未经筛选的明细。")
+    source_count = metadata.get("source_items")
+    total = metadata.get("matched_total")
+    returned = metadata.get("returned")
+    unknown = metadata.get("unfilterable_count")
+    missing = metadata.get("missing_fields")
+    if (status not in {"ready", "empty", "partial"}
+            or snapshot.get("needs_sync") is not False
+            or not _timestamp(snapshot.get("synced_at"))
+            or any(type(value) is not int or value < 0
+                   for value in (source_count, total, returned, unknown))
+            or total + unknown > source_count
+            or returned > min(query.limit, max(0, total - query.offset))
+            or precise_page_size(query.resource, snapshot.get("data")) != returned
+            or metadata.get("filter_complete") is not (unknown == 0)
+            or not isinstance(missing, dict)
+            or bool(missing) != bool(unknown)
+            or any(key not in {"semester", "date", "keyword"}
+                   or type(value) is not int or not 1 <= value <= unknown
+                   for key, value in missing.items())):
+        return _unverified(label)
+    more = query.offset + returned < total
+    size_limited = metadata.get("page_limited_by_size")
+    if (type(size_limited) is not bool
+            or (size_limited and (not returned or not more or returned >= query.limit))
+            or (not size_limited and returned != min(query.limit, max(0, total - query.offset)))
+            or metadata.get("has_more") is not more
+            or metadata.get("next_offset") != (query.offset + returned if more else None)
+            or (status == "partial") != bool(unknown)
+            or (status == "ready" and not returned)
+            or (status == "empty" and returned)):
+        return _unverified(label)
+    if unknown:
+        return ToolDisplaySummary(label=label, state="unverified", summary=(
+            f"已读取快照本页 {returned} 条；另有 {unknown} 条无法筛选，结果不完整。"
+        ))
+    if not returned:
+        return ToolDisplaySummary(label=label, state="empty", summary=(
+            f"已同步快照本页无记录，已知匹配 {total} 条；不代表上游没有记录。"
+        ))
+    return ToolDisplaySummary(label=label, state="success", summary=(
+        f"已读取快照本页 {returned} 条，已知匹配 {total} 条"
+        + ("，可继续分页" if more else "") + "；不代表上游全部历史。"
+    ))
+
+
 def _snapshot_summary(name: str, result: dict, label: str) -> ToolDisplaySummary:
     if result.get("connected") is False:
         return ToolDisplaySummary(
@@ -284,6 +352,8 @@ def _snapshot_summary(name: str, result: dict, label: str) -> ToolDisplaySummary
     fields = _SNAPSHOT_FIELDS[name]
     if result.get("connected") is not True or not any(key in result for key in fields):
         return _unverified(label)
+    if "query" in result:
+        return _precise_snapshot_summary(name, result, label)
     count = 0
     for key in fields:
         snapshot = result.get(key)

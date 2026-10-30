@@ -20,6 +20,12 @@ from .campus_services import (
 from .evidence import campus_supported, data_evidence, hdu_evidence
 from .hduhelp import HDUHelpError
 from .hduhelp_access import HDUHelpAccess
+from .hduhelp_query import (
+    ACADEMIC_RESOURCES,
+    CAMPUS_LIFE_RESOURCES,
+    SnapshotQuery,
+    select_snapshot,
+)
 from .key_vault import ApiKeyVault
 from .knowledge import KnowledgeService
 from .schemas import PlanEditRequest, PlanningActionRequest
@@ -167,6 +173,33 @@ def build_tools(
             **snapshots,
             "evidence": [item for value in snapshots.values() for item in value["evidence"]],
         }
+
+    def hduhelp_selection(
+        allowed: tuple[str, ...], resource: str | None, semester: str | None,
+        start_date: str | None, end_date: str | None, keyword: str | None,
+        limit: int, offset: int,
+    ) -> dict:
+        if resource is None:
+            if any(value is not None for value in (semester, start_date, end_date, keyword)) or (
+                limit != 10 or offset != 0
+            ):
+                raise ValueError("resource is required when filtering or paginating")
+            return hduhelp_group(list(allowed))
+        query = SnapshotQuery(resource, semester, start_date, end_date, keyword, limit, offset)
+        query.validate(allowed)
+        connected = bool(hduhelp_store is not None and credential_vault is not None and
+                         hduhelp_store.get_hduhelp_status(CURRENT_USER_ID.get())["configured"])
+        if connected:
+            snapshot, metadata = select_snapshot(hduhelp_resource(resource), query)
+        else:
+            snapshot = {"resource": resource, "data": None, "synced_at": None,
+                        "needs_sync": True, "evidence": missing_source(
+                            f"hduhelp:{resource}", "HDUHelp 已同步资料",
+                            "尚未连接授权资料，请先连接并同步。"
+                        )}
+            metadata = query.metadata()
+        return {"connected": connected, "query": metadata, resource: snapshot,
+                "evidence": snapshot["evidence"]}
 
     @tool
     def get_schedule(
@@ -355,26 +388,36 @@ def build_tools(
         return hduhelp_group(["identity", "person"])
 
     @tool
-    def get_hduhelp_academics() -> dict:
-        """读取当前用户已同步的 HDUHelp 本人成绩、GPA 和考试安排。"""
-        return hduhelp_group(["grades", "exams"])
+    def get_hduhelp_academics(
+        resource: str | None = None, semester: str | None = None,
+        start_date: str | None = None, end_date: str | None = None, keyword: str | None = None,
+        limit: Annotated[int, Field(strict=True, ge=1, le=20)] = 10,
+        offset: Annotated[int, Field(strict=True, ge=0, le=100000)] = 0,
+    ) -> dict:
+        """查已同步成绩/GPA或考试；优先指定 resource=grades/exams，按需分页。
+
+        semester 精确匹配原文，日期范围两端均填 YYYY-MM-DD；keyword 匹配已知名称字段。
+        query 描述快照范围、未能筛选记录与后续页，不等于上游全量。无参数兼容旧整组查询。
+        """
+        return hduhelp_selection(ACADEMIC_RESOURCES, resource, semester, start_date, end_date,
+                                keyword, limit, offset)
 
     @tool
-    def get_hduhelp_campus_life() -> dict:
-        """读取当前用户已同步的校园卡、图书馆、长跑与提醒订阅信息。"""
-        return hduhelp_group(
-            [
-                "card_balance",
-                "library_bookings",
-                "library_attendance",
-                "library_reading",
-                "library_seat_reservations",
-                "sunrun_overview",
-                "sunrun_group",
-                "sunrun_detail",
-                "subscriptions",
-            ]
-        )
+    def get_hduhelp_campus_life(
+        resource: str | None = None, semester: str | None = None,
+        start_date: str | None = None, end_date: str | None = None, keyword: str | None = None,
+        limit: Annotated[int, Field(strict=True, ge=1, le=20)] = 10,
+        offset: Annotated[int, Field(strict=True, ge=0, le=100000)] = 0,
+    ) -> dict:
+        """查已同步校园生活；优先指定一项 resource 并按需分页。
+
+        resource: card_balance/library_bookings/library_attendance/library_reading/
+        library_seat_reservations/sunrun_overview/sunrun_group/sunrun_detail/subscriptions。
+        筛选与分页同学业工具；摘要通常不能按日期/学期过滤，须检查 query 状态与缺失说明。
+        无参数兼容旧整组查询，不访问上游，也不代表上游全部历史。
+        """
+        return hduhelp_selection(CAMPUS_LIFE_RESOURCES, resource, semester, start_date, end_date,
+                                keyword, limit, offset)
 
     @tool
     async def get_unused_classrooms(

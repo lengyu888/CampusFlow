@@ -94,7 +94,18 @@ class SizedClient(Client):
                 "reasoning_content": "",
             }
             before = encoded_size([*kwargs["messages"], assistant], kwargs["tools"])
-            target = 24001 if self.overflow else 23100
+            target = 23100
+            if self.overflow:
+                # Read results are now deliberately compressible. Make the
+                # mandatory protocol itself exceed the cap even if every read
+                # result is replaced by an empty string, rather than testing a
+                # one-character overflow that a legitimate excerpt can resolve.
+                empty_reads = [
+                    {**message, "content": ""} if message.get("role") == "tool" else message
+                    for message in kwargs["messages"]
+                ]
+                mandatory = encoded_size([*empty_reads, assistant], kwargs["tools"])
+                target = before + 24001 - mandatory
             assert target > before, "the fixture must leave actual protocol reasoning space"
             self.private = "R" * (target - before)
             self.streams[1] = Stream(

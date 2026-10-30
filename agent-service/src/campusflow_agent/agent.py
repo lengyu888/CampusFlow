@@ -30,6 +30,7 @@ from .key_vault import ApiKeyVault
 from .learning_preferences import LearningPreferenceStore
 from .model_catalog import AgentConfigurationError as AgentConfigurationError
 from .model_catalog import ModelCatalog
+from .runtime_read_context import READ_TOOLS, project_read_context, read_result_content
 from .schemas import CampusRoute, HistoryMessage, PendingAction, ToolTrace
 from .skills import SkillStore
 from .store import CampusStore
@@ -58,6 +59,12 @@ SYSTEM_PROMPT = """你是 CampusFlow 大学规划与执行 Agent，服务高校�
     回复中概括预计时间与途经点，客户端会根据工具结果绘制路线图。
 13. 用户询问本人学籍、成绩、GPA、考试、校园卡余额或图书馆预约时，调用对应的
     HDUHelp 工具；只使用当前账户已授权、已同步的数据，不推断缺失字段。
+    学业和校园生活查询优先指定具体 resource，并按需要使用学期、日期或关键词筛选；
+    读取 query 的范围与完整性信息；仅当任务确需完整明细时按 next_offset 续读，不把一页当作全部。
+    用户要概览或近期提醒时，优先核对近期课程、考试/预约、余额等相关摘要，不逐页扫描历史资料。
+    filter_complete 为 false 或 status 为 partial/unsupported 时说明筛选缺口；
+    计数仅指已同步快照，不代表上游全量。
+    整体 GPA 不能当作所筛学期 GPA，按 summary_scope 明确区分。
 14. 用户询问空闲教室、某教室占用情况或寝室电费时，调用对应的 HDUHelp 实时工具；
     未指定日期或节次时使用系统当前教学周和当前时段，不要求用户重复提供当前日期。
 15. 修改或删除前先 get_planning 核对准确 task_id/plan_id；多个同名项必须澄清，不能按标题猜测。
@@ -66,6 +73,9 @@ SYSTEM_PROMPT = """你是 CampusFlow 大学规划与执行 Agent，服务高校�
 16. 数据以工具 evidence 为准，回答必须说明影响决策的来源和时效限制。
     stale/missing/error/unverified 不能作为当前事实；demo 仅为演示。用户课表不是学校实时教务数据。
     课表或通知数据源缺失时，不得把空结果说成“没有课程/公告”。需要同步的校园资料须请用户更新。
+    工具结果含 context_excerpt 时只是上下文节选；按其完整性和重查提示回答，
+    不能将省略内容当作不存在。足以回答时直接汇总并说明范围；缺少关键数据才缩小范围补查，
+    不重复相同参数期待获得更多节选内容。
 17. 静态校园地图、开放时段与路线仅供参考；open_now 为 null 表示未知，不是关闭。
     路线步行时间、距离、几何为估算，不含实时路况；天气仅是所标城市级预报，不是校内实测。
 18. 查询校园办事规则或服务说明时使用 search_campus_knowledge。
@@ -370,6 +380,9 @@ class AgentService:
         except (TypeError, ValueError):
             return '{"error":"工具结果格式无法读取。"}'
         limit = min(6000, self.settings.agent_max_context_chars // 4)
+        read_content = read_result_content(trace, limit)
+        if read_content is not None:
+            return read_content
         if trace.status == "success" and trace.tool_name in {
             "propose_task_change", "propose_plan", "propose_plan_change",
         }:
@@ -536,18 +549,77 @@ class AgentService:
         turn: list[dict] = [{"role": "user", "content": message}]
         traces: list[ToolTrace] = []
         pending: list[PendingAction] = []
+
+        def current_context() -> list[dict]:
+            remaining = self.settings.agent_max_tool_calls - tool_count
+            current_system = {
+                **system,
+                "content": f"本轮剩余工具调用额度：{remaining} 次。"
+                + "后续整批调用总数不得超过剩余额度；不要为概览穷举无关资料，"
+                "优先完成有依据的答复。\n\n" + system["content"],
+            }
+            projected = project_read_context(
+                current_system, turn, schemas, self.settings.agent_max_context_chars, traces
+            )
+            return self._runtime_context(current_system, history, projected, schemas)
+
+        def can_summarize_reads() -> bool:
+            if not traces or any(
+                trace.status != "success" or trace.tool_name not in READ_TOOLS for trace in traces
+            ):
+                return False
+            requested = [call["id"] for item in turn if item.get("role") == "assistant"
+                         for call in item.get("tool_calls", [])]
+            completed = [item["tool_call_id"] for item in turn if item.get("role") == "tool"]
+            return len(requested) == len(completed) and set(requested) == set(completed)
+
+        def summary_context() -> list[dict]:
+            summary_system = {
+                **system,
+                "content": (
+                    "资料读取阶段已结束。本次只能基于已有工具资料给出最终答复，不再调用任何工具；"
+                    "说明重要来源、时效与未读取范围，不把省略当作不存在，也不声称已执行或保存操作。"
+                    "如资料不足，给出能确认的部分和具体缺项，不承诺继续查询。\n\n"
+                    + system["content"]
+                ),
+            }
+            # DeepSeek ignores historical reasoning when tools is absent. Keep the
+            # original turn intact; this final-only wire view cannot resume tools.
+            summary_turn = [{key: value for key, value in item.items()
+                             if key != "reasoning_content"} for item in turn]
+            projected = project_read_context(
+                summary_system, summary_turn, [], self.settings.agent_max_context_chars, traces
+            )
+            return self._runtime_context(summary_system, history, projected, [])
+
         used_call_ids: set[str] = set()
         tool_count = 0
         output_count = 0
+        final_summary_requested = False
         client = self._build_runtime_client(api_key=api_key, model_name=model_name)
         try:
             for model_count in range(1, self.settings.agent_max_model_calls + 1):
                 check_cancelled()
-                context = self._runtime_context(system, history, turn, schemas)
+                final_summary = (
+                    final_summary_requested
+                    or tool_count >= self.settings.agent_max_tool_calls and can_summarize_reads()
+                )
+                if final_summary:
+                    context = summary_context()
+                else:
+                    try:
+                        context = current_context()
+                    except AgentBudgetExceeded as error:
+                        if error.reason != "context" or not can_summarize_reads():
+                            raise
+                        final_summary = True
+                        context = summary_context()
                 await emit("model_start", {"count": model_count})
                 await emit("answer_reset", {})
                 check_cancelled()
-                stream = await self._open_runtime_stream(client, model_name, context, schemas)
+                stream = await self._open_runtime_stream(
+                    client, model_name, context, [] if final_summary else schemas
+                )
                 answer = ""
                 reasoning = ""
                 calls: dict[int, dict] = {}
@@ -620,16 +692,14 @@ class AgentService:
                     )
                 if finish not in {"stop", "tool_calls"} or (finish == "tool_calls") != bool(calls):
                     raise RuntimeError("模型流式响应未完整结束，请稍后重试。")
+                if final_summary and calls:
+                    raise RuntimeError("模型在汇总阶段返回额外工具请求，本次未执行。")
                 if not calls:
                     if not answer.strip():
                         raise RuntimeError("Agent 未返回可展示的文本，请稍后重试。")
                     check_cancelled()
                     return AgentReply(message=answer, tool_traces=traces, pending_actions=pending)
                 batch = [calls[index] for index in sorted(calls)]
-                if tool_count + len(batch) > self.settings.agent_max_tool_calls:
-                    raise AgentBudgetExceeded(
-                        "本轮工具调用已达到上限，请缩小任务范围后再试。", reason="tool_calls"
-                    )
                 for call in batch:
                     call_id = call["id"]
                     if (
@@ -639,6 +709,27 @@ class AgentService:
                     ):
                         raise RuntimeError("模型工具请求标识无效，请重试。")
                     used_call_ids.add(call_id)
+                if tool_count + len(batch) > self.settings.agent_max_tool_calls:
+                    read_batch = all(
+                        call["function"]["name"] in READ_TOOLS
+                        and call["function"]["name"] in tool_map for call in batch
+                    )
+                    try:
+                        arguments = [json.loads(call["function"]["arguments"]) for call in batch]
+                        self._runtime_json(arguments)
+                        valid_arguments = all(isinstance(item, dict) for item in arguments)
+                        read_batch = read_batch and valid_arguments
+                    except (TypeError, ValueError):
+                        read_batch = False
+                    if read_batch and can_summarize_reads():
+                        # The provider's extra reads were never executed or added
+                        # to the transcript. Summarize only completed receipts on
+                        # the next existing iteration; never fabricate tool replies.
+                        final_summary_requested = True
+                        continue
+                    raise AgentBudgetExceeded(
+                        "本轮工具调用已达到上限，请缩小任务范围后再试。", reason="tool_calls"
+                    )
                 assistant: dict[str, Any] = {
                     "role": "assistant",
                     "content": answer or None,
@@ -648,11 +739,11 @@ class AgentService:
                     assistant["reasoning_content"] = reasoning
                 turn.append(assistant)
                 # Include generated arguments/private protocol context before any side effect.
-                self._runtime_context(system, history, turn, schemas)
+                current_context()
                 for call in batch:
                     # The previous tool result consumes context too. Do not start another
                     # side effect if the current exchange already exceeds the input budget.
-                    self._runtime_context(system, history, turn, schemas)
+                    current_context()
                     tool_count += 1
                     trace, proposal = await self._runtime_tool(
                         call=call,
