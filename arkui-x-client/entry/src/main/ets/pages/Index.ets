@@ -4,6 +4,9 @@ import { KeyboardAvoidMode } from '@ohos.arkui.UIContext';
 import common from '@ohos.app.ability.common';
 import { AuthResponse, UserProfile, PlanningTask, TaskStatusOperation, CourseAcknowledgement } from '../model/ApiModels';
 import { CampusFlowApi } from '../services/CampusFlowApi';
+import { localSession } from '../services/LocalSession';
+import { normalizeServiceBaseUrl, SessionStorageError } from '../utils/SessionPersistence';
+import { SessionCoordinator } from '../utils/SessionCoordinator';
 import { localDrafts } from '../services/LocalDrafts';
 import { DraftLease } from '../utils/DraftStore';
 import { TaskStatusController, TaskStatusState, TaskStatusItem } from '../utils/TaskStatusController';
@@ -53,6 +56,13 @@ struct Index {
   private reminders: ReminderCoordinator | null = null;
   private pageActive: boolean = true;
   @State private token: string = '';
+  @State private sessionRestoring: boolean = false;
+  @State private sessionRestoreNotice: string = '';
+  @State private sessionRetryAllowed: boolean = false;
+  @State private loginPersistenceNotice: string = '';
+  @State private sessionLogoutBusy: boolean = false;
+  private sessionCoordinator: SessionCoordinator | null = null;
+  private sessionRestoreStarted: boolean = false;
   @State private cacheScope: string = '';
   @State private localHistoryCount: number = 0;
   @State private localDisplayName: string = '';
@@ -135,11 +145,13 @@ struct Index {
     this.draftCleanupNeeded = this.draftNotice.length > 0;
     this.focusNotice = AppStorage.get<string>('localFocusError') ?? '';
     this.focusCleanupNeeded = this.focusNotice.length > 0;
+    if (!this.sessionRestoreStarted) { this.sessionRestoreStarted = true; this.restoreSavedLogin(); }
   }
 
   aboutToDisappear(): void {
     this.flushDrafts();
     this.pageActive = false;
+    this.sessionCoordinator?.cancel();
     this.authRevision++;
     this.resetTaskStatuses();
     this.resetFocus();
@@ -149,6 +161,41 @@ struct Index {
   }
 
   private serviceBaseUrl(): string { return this.token.length > 0 && this.authBaseUrl.length > 0 ? this.authBaseUrl : this.baseUrl; }
+
+  private sessionManager(): SessionCoordinator {
+    if (this.sessionCoordinator === null) {
+      this.sessionCoordinator = new SessionCoordinator(localSession, (base: string, token: string) => new CampusFlowApi(base, token));
+    }
+    return this.sessionCoordinator;
+  }
+
+  private beginManualLogin(): void {
+    this.sessionCoordinator?.cancel(); this.authRevision++;
+    this.sessionRestoring = false; this.sessionRestoreNotice = ''; this.sessionRetryAllowed = false;
+  }
+
+  private changeLoginBase(value: string): void {
+    // Native TextInput may echo its initial value while the vault read is in
+    // flight. Only an actual edit invalidates the pending service-bound restore.
+    if (value === this.baseUrl) { return; }
+    this.beginManualLogin(); this.baseUrl = value;
+  }
+
+  private async restoreSavedLogin(): Promise<void> {
+    if (!this.pageActive || this.token.length > 0 || this.sessionRestoring) { return; }
+    const revision = ++this.authRevision;
+    this.sessionRestoring = true; this.sessionRestoreNotice = ''; this.sessionRetryAllowed = false;
+    const restored = await this.sessionManager().restore();
+    if (!this.pageActive || revision !== this.authRevision || this.token.length > 0) { return; }
+    this.sessionRestoring = false;
+    this.sessionRestoreNotice = restored.message;
+    this.sessionRetryAllowed = ['offline', 'unavailable'].includes(restored.phase);
+    if (restored.baseUrl.length > 0) { this.baseUrl = restored.baseUrl; }
+    if (restored.phase === 'ready' && restored.auth !== null) {
+      this.loginPersistenceNotice = restored.message;
+      await this.authenticated(restored.auth, restored.baseUrl, true, true);
+    }
+  }
 
   private resetReview(): void { this.reviewPageOpen = false; this.reviewAnchor = ''; this.reviewBackRevision++; }
 
@@ -521,14 +568,29 @@ struct Index {
     this.localHistoryCount = info.count;
   }
 
-  private async authenticated(auth: AuthResponse): Promise<void> {
+  private async authenticated(auth: AuthResponse, requestBase: string = this.baseUrl, remember: boolean = false, restored: boolean = false): Promise<void> {
+    const base = normalizeServiceBaseUrl(requestBase);
+    if (!this.pageActive || base === null || normalizeServiceBaseUrl(this.baseUrl) !== base) {
+      throw new Error('登录来源已变化，请核对服务地址后重试。');
+    }
     const revision = ++this.authRevision;
+    if (!restored) {
+      let notice = '';
+      try { notice = await this.sessionManager().remember(base, auth, remember); }
+      catch (error) {
+        if (!this.pageActive || revision !== this.authRevision) { return; }
+        throw new Error('安全登录存储尚未就绪，请重试。');
+      }
+      if (!this.pageActive || revision !== this.authRevision || normalizeServiceBaseUrl(this.baseUrl) !== base) { return; }
+      this.loginPersistenceNotice = notice;
+    }
     this.resetTaskStatuses();
     this.resetFocus();
     this.resetReview();
     this.offlineHistory = false;
     this.cacheNotice = '';
-    this.authBaseUrl = this.baseUrl;
+    this.authBaseUrl = base;
+    this.baseUrl = base;
     this.draftLease = null;
     this.draftCleanupBusy = false;
     this.draftClearConfirm = false;
@@ -579,11 +641,31 @@ struct Index {
   }
 
   private async logout(): Promise<void> {
+    if (this.sessionLogoutBusy) { return; }
     const revision = ++this.authRevision;
+    const api = new CampusFlowApi(this.authBaseUrl || this.baseUrl, this.token);
+    this.resetTaskStatuses(); this.resetFocus(); this.resetReview();
+    this.sessionLogoutBusy = true;
+    try { await this.sessionManager().clear(); }
+    catch (error) {
+      if (!(error instanceof SessionStorageError) || error.code !== 'SESSION_REMOVAL_PENDING') {
+        if (revision === this.authRevision) {
+          this.loginPersistenceNotice = '退出尚未完成：安全登录存储未能停用，请重试。';
+          this.sessionLogoutBusy = false;
+          this.configureTaskStatuses(); this.configureFocus(); this.reminderAccountChanged();
+        }
+        return;
+      }
+    }
+    this.sessionLogoutBusy = false;
+    if (!this.pageActive || revision !== this.authRevision) {
+      try { await api.logout(); } catch { /* Only the original session may be revoked. */ }
+      return;
+    }
+    this.sessionRetryAllowed = false; this.sessionRestoreNotice = ''; this.loginPersistenceNotice = '';
     this.resetTaskStatuses();
     this.resetFocus();
     this.resetReview();
-    const api = new CampusFlowApi(this.authBaseUrl || this.baseUrl, this.token);
     this.authBaseUrl = '';
     this.draftLease = null;
     this.draftClearConfirm = false;
@@ -836,6 +918,7 @@ struct Index {
         if (!this.profileInnerActive) { this.SecondaryHeader('个人设置') }
         Column() {
           ProfilePage({ baseUrl: this.serviceBaseUrl(), token: this.token, user: this.user,
+            loginPersistenceNotice: this.loginPersistenceNotice, logoutBusy: this.sessionLogoutBusy,
             backRevision: this.profileBackRevision, onInnerNavigationChanged: (active) => this.profileInnerActive = active,
             onOpenHistory: () => this.selectTab(5), onOpenGuide: () => this.selectTab(10),
             draftNotice: this.draftNotice, draftClearConfirm: this.draftClearConfirm,
@@ -948,7 +1031,11 @@ struct Index {
   }
 
   build() {
-    if (this.token.length === 0 && this.offlineHistory) {
+    if (this.sessionLogoutBusy) {
+      Column() {
+        FeedbackPanel({ kind: 'loading', title: '正在退出登录', message: '正在停用本机登录恢复，请稍候。' })
+      }.width('100%').height('100%').padding(24).backgroundColor(this.palette.bg)
+    } else if (this.token.length === 0 && this.offlineHistory) {
       HistoryPage({ baseUrl: '', token: '', historyScope: this.cacheScope, offlineOnly: true,
         onBack: () => { this.offlineHistory = false; this.refreshLocalHistory(); } })
     } else if (this.token.length === 0) {
@@ -971,13 +1058,16 @@ struct Index {
       }
       Column() {
       LoginPage({
+        restoreBusy: this.sessionRestoring, restoreNotice: this.sessionRestoreNotice,
+        canRetryRestore: this.sessionRetryAllowed, onRetryRestore: () => this.restoreSavedLogin(),
+        onAuthenticationStarted: () => this.beginManualLogin(),
         baseUrl: this.baseUrl,
         localHistoryCount: this.localHistoryCount, localDisplayName: this.localDisplayName,
         cacheNotice: this.cacheNotice,
         cleanupNeeded: this.cleanupNeeded, onClearLocalHistory: () => this.clearLocalHistory(),
         onOpenLocalHistory: () => this.offlineHistory = true,
-        onBaseUrlChange: (value) => this.baseUrl = value,
-        onAuthenticated: (auth) => this.authenticated(auth)
+        onBaseUrlChange: (value) => this.changeLoginBase(value),
+        onAuthenticated: (auth, requestBase, remember) => this.authenticated(auth, requestBase, remember)
       })
       }.layoutWeight(1).width('100%')
       }.width('100%').height('100%')

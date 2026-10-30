@@ -5,6 +5,8 @@ import { ThemePalette, themePalette } from '../theme/ThemePalette';
 import { FeedbackPanel } from '../components/FeedbackPanel';
 import { CampusFlowRequestError } from '../utils/AgentFeedback';
 import { InfoDisclosure } from '../components/InfoDisclosure';
+import { ConnectionCheckPanel } from '../components/ConnectionCheckPanel';
+import { normalizeServiceBaseUrl } from '../utils/SessionPersistence';
 
 @Component
 export struct LoginPage {
@@ -15,7 +17,12 @@ export struct LoginPage {
   @Prop cacheNotice: string = '';
   @Prop cleanupNeeded: boolean = false;
   onClearLocalHistory: () => Promise<void> = async () => {};
-  onAuthenticated: (auth: AuthResponse) => Promise<void> = async () => {};
+  @Prop restoreBusy: boolean = false;
+  @Prop restoreNotice: string = '';
+  @Prop canRetryRestore: boolean = false;
+  onRetryRestore: () => void = () => {};
+  onAuthenticationStarted: () => void = () => {};
+  onAuthenticated: (auth: AuthResponse, requestBase: string, remember: boolean) => Promise<void> = async () => {};
   onOpenLocalHistory: () => void = () => {};
   onBaseUrlChange: (baseUrl: string) => void = () => {};
   @State private registerMode: boolean = false;
@@ -27,6 +34,7 @@ export struct LoginPage {
   @State private loading: boolean = false;
   @State private errorText: string = '';
   @State private confirmCleanup: boolean = false;
+  @State private rememberLogin: boolean = true;
 
   private pageActive: boolean = true;
   private requestRevision: number = 0;
@@ -53,7 +61,9 @@ export struct LoginPage {
   }
 
   private async submit(): Promise<void> {
-    if (!this.pageActive || this.loading) { return; }
+    if (!this.pageActive || this.loading || this.restoreBusy) { return; }
+    const requestBase = normalizeServiceBaseUrl(this.baseUrl);
+    if (requestBase === null) { this.errorText = '服务地址格式不正确，请检查地址与端口。'; return; }
     if (this.email.length < 5 || this.password.length < 8) {
       this.errorText = '请输入有效邮箱，密码至少 8 位。';
       return;
@@ -65,14 +75,19 @@ export struct LoginPage {
     const revision = ++this.requestRevision;
     this.loading = true;
     this.errorText = '';
+    const remember = this.rememberLogin;
+    this.onAuthenticationStarted();
     try {
-      const api = new CampusFlowApi(this.baseUrl);
+      const api = new CampusFlowApi(requestBase);
       const auth = this.registerMode
         ? await api.register(this.email, this.password, this.displayName,
           this.apiKey.trim().length > 0 ? this.apiKey : undefined)
         : await api.login(this.email, this.password);
       if (!this.pageActive || revision !== this.requestRevision) { return; }
-      await this.onAuthenticated(auth);
+      if (normalizeServiceBaseUrl(this.baseUrl) !== requestBase) {
+        this.errorText = '服务地址已变化，本次未登录。请核对后重试。'; return;
+      }
+      await this.onAuthenticated(auth, requestBase, remember);
     } catch (error) {
       if (this.pageActive && revision === this.requestRevision) { this.errorText = this.failure(error); }
     } finally {
@@ -92,7 +107,7 @@ export struct LoginPage {
         .backgroundColor(this.palette.field)
         .borderRadius(this.palette.controlRadius)
         .padding({ left: 16, right: 16 })
-        .enabled(!this.loading)
+        .enabled(!this.loading && !this.restoreBusy)
         .onChange(onChange)
     }
     .width('100%')
@@ -114,8 +129,28 @@ export struct LoginPage {
             this.inputField('昵称', '你的称呼', this.displayName, (value) => this.displayName = value)
           }
           this.inputField('服务地址', 'http://局域网IP:8000', this.baseUrl, (value) => this.onBaseUrlChange(value))
+          ConnectionCheckPanel({ baseUrl: this.baseUrl, active: !this.loading && !this.restoreBusy })
           this.inputField('邮箱', 'name@example.com', this.email, (value) => this.email = value, InputType.Email)
           this.inputField('密码', '至少 8 位', this.password, (value) => this.password = value, InputType.Password)
+          Row({ space: 10 }) {
+            Checkbox({ name: 'rememberLogin' }).select(this.rememberLogin)
+              .selectedColor(this.palette.accent).enabled(!this.loading && !this.restoreBusy)
+              .onChange((value: boolean) => this.rememberLogin = value)
+            Column({ space: 3 }) {
+              Text('保持登录').fontSize(this.palette.bodySize).fontColor(this.palette.ink).width('100%')
+              Text('使用系统安全存储，不保存密码').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
+            }.layoutWeight(1)
+          }.width('100%').constraintSize({ minHeight: 48 })
+          if (this.restoreBusy) {
+            FeedbackPanel({ kind: 'loading', title: '正在恢复登录', message: '正在原服务核验账号，请稍候。' })
+          } else if (this.restoreNotice.length > 0) {
+            FeedbackPanel({ kind: 'info', title: '登录状态', message: this.restoreNotice })
+            if (this.canRetryRestore) {
+              Button('重试恢复登录').width('100%').constraintSize({ minHeight: 48 })
+                .fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft).enabled(!this.loading)
+                .onClick(() => this.onRetryRestore())
+            }
+          }
           if (this.registerMode) {
             Text('先确认校园与课表，再安排每天的待办。模型密钥可以稍后添加。')
               .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
@@ -140,12 +175,12 @@ export struct LoginPage {
           Button(this.loading ? '连接中…' : (this.registerMode ? '注册并继续' : '登录'))
             .width('100%').constraintSize({ minHeight: 52 }).fontSize(this.palette.bodySize).fontWeight(FontWeight.Bold)
             .fontColor(this.palette.onAccent).backgroundColor(this.palette.accent).borderRadius(this.palette.controlRadius)
-            .enabled(!this.loading)
+            .enabled(!this.loading && !this.restoreBusy)
             .onClick(() => this.submit())
           Button(this.registerMode ? '已有账号，直接登录' : '第一次使用？创建账号')
             .width('100%').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize).fontColor(this.palette.accent)
             .backgroundColor(Color.Transparent)
-            .enabled(!this.loading)
+            .enabled(!this.loading && !this.restoreBusy)
             .onClick(() => {
               this.getUIContext().animateTo({ duration: AppTheme.motion(200), curve: Curve.EaseOut }, () => {
                 this.registerMode = !this.registerMode;

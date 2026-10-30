@@ -61,9 +61,9 @@ test('service changes require explicit cleanup while retaining the old authentic
  await f.page.confirmAccountExit();assert.equal(f.page.token,'');assert.equal(f.page.baseUrl,'https://other.test');
  assert.equal(f.calls.some(c=>c[0]==='planning'&&c[1]==='https://other.test'),false);
 });
-test('logout closes auth immediately, still clears cache/revokes token, and failed OS cleanup is explicit and retryable',async()=>{
+test('logout gates the page until saved sign-in is disabled, then clears cache/revokes token despite OS cleanup failure',async()=>{
  const pending=deferred();const f=setup({cleanup:()=>pending.promise});await f.page.authenticated(auth('a'));f.calls.length=0;
- const logout=f.page.logout();assert.equal(f.page.token,'');assert.equal(f.calls[0][0],'cleanup');
+ const logout=f.page.logout();assert.equal(f.page.sessionLogoutBusy,true);await statusTick();assert.equal(f.page.token,'');assert.equal(f.calls[0][0],'cleanup');
  pending.reject(Error('OS private error'));await logout;
  assert.match(f.page.reminderCleanupNotice,/旧提醒可能仍出现/);assert.doesNotMatch(f.page.reminderCleanupNotice,/private/);
  assert.ok(f.calls.some(c=>c[0]==='clear-cache'));assert.ok(f.calls.some(c=>c[0]==='revoke'&&c[1]==='token-a'));
@@ -71,7 +71,7 @@ test('logout closes auth immediately, still clears cache/revokes token, and fail
 });
 test('late old logout failure never overwrites a new account notice or login; repeated cleanup failure remains visible',async()=>{
  const pending=deferred();const f=setup({cleanup:()=>pending.promise,disable:async()=>{throw Error('failed');}});
- await f.page.authenticated(auth('a'));const logout=f.page.logout();await f.page.authenticated(auth('b'));
+ await f.page.authenticated(auth('a'));const logout=f.page.logout();await statusTick();await f.page.authenticated(auth('b'));
  pending.reject(Error('failed'));await logout;assert.equal(f.page.token,'token-b');assert.equal(f.page.reminderCleanupNotice,'');
  await f.page.disableReminders();assert.match(f.page.reminderCleanupNotice,/旧提醒可能仍出现/);assert.equal(f.page.reminderCleanupBusy,false);
 });

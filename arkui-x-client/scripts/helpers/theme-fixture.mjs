@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { stripTypeScriptTypes } from 'node:module';
+import './session-fixture.mjs';
 
 // Preserve each existing harness's compiler behavior, erasing only the newly introduced
 // native decorator that cannot be parsed as JavaScript by Node's type-only stripper.

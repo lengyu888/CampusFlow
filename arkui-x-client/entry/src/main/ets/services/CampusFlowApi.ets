@@ -1,5 +1,6 @@
 import http from '@ohos.net.http';
 import { ReviewPeriod, ReviewSnapshot, ReviewGateway } from '../model/ReviewModels';
+import { SessionVerificationPort } from '../utils/SessionCoordinator';
 import { validFocusRequest } from '../utils/FocusValidation';
 import { FocusRequest, FocusOperation, FocusActive, FocusDetail, FocusList, FocusGateway } from '../model/FocusModels';
 import { AgentRunGateway } from '../utils/AgentRun';
@@ -8,6 +9,8 @@ import { ReplanGateway } from '../utils/PlanningReplan';
 import { TimetableGateway } from '../utils/TimetableMaintenance';
 import { TaskStatusGateway } from '../utils/TaskStatusController';
 import { PreferenceGateway } from '../utils/LearningPreferences';
+import { ConnectionProbe, classifyHealthProbe } from '../utils/ConnectionCheck';
+import { normalizeServiceBaseUrl } from '../utils/SessionPersistence';
 import {
   CourseAcknowledgement,
   CoursePermissionChoice,
@@ -80,9 +83,11 @@ interface ApiErrorPayload {
   message?: string;
 }
 
+interface ProbeTransportError { code?: number; }
+
 const PATCH_METHOD: http.RequestMethod = 'PATCH' as http.RequestMethod;
 
-export class CampusFlowApi implements ReviewGateway, FocusGateway, AgentRunGateway, PlanningActionGateway,
+export class CampusFlowApi implements SessionVerificationPort, ReviewGateway, FocusGateway, AgentRunGateway, PlanningActionGateway,
   ReplanGateway, TimetableGateway, TaskStatusGateway, PreferenceGateway {
   private baseUrl: string;
   private accessToken: string;
@@ -90,6 +95,42 @@ export class CampusFlowApi implements ReviewGateway, FocusGateway, AgentRunGatew
   constructor(baseUrl: string, accessToken: string = '') {
     this.baseUrl = baseUrl.replace(/\/$/, '');
     this.accessToken = accessToken;
+  }
+
+  // A separate, short and unauthenticated probe: never reuse the business-request
+  // headers, redirect policy or 90-second Agent timeout for connection diagnosis.
+  async probeHealth(): Promise<ConnectionProbe> {
+    const base = normalizeServiceBaseUrl(this.baseUrl);
+    if (base === null) { return { kind: 'invalid_url', statusCode: 0, elapsedMs: 0 }; }
+    const started = Date.now(); const client = http.createHttp();
+    try {
+      const response = await client.request(`${base}/health`, { method: http.RequestMethod.GET,
+        header: { 'Accept': 'application/json' }, expectDataType: http.HttpDataType.STRING,
+        connectTimeout: 5000, readTimeout: 5000, usingCache: false, maxLimit: 16384, maxRedirects: 0 });
+      return classifyHealthProbe(response.responseCode, typeof response.result === 'string' ? response.result : '', Date.now() - started);
+    } catch (error) {
+      const code = (error as ProbeTransportError)?.code;
+      return { kind: code === 2300047 ? 'wrong_service' : 'network_unreachable', statusCode: 0, elapsedMs: Math.max(0, Date.now() - started) };
+    } finally { client.destroy(); }
+  }
+
+  async verifySession(): Promise<UserProfile> {
+    const base = normalizeServiceBaseUrl(this.baseUrl);
+    if (base === null) { throw new CampusFlowRequestError(0, 'INVALID_SERVICE_URL', '服务地址格式不正确，请重新核对。'); }
+    if (this.accessToken.length === 0) { throw requestFailure(401, ''); }
+    const client = http.createHttp();
+    try {
+      let response: http.HttpResponse;
+      try {
+        response = await client.request(`${base}/api/v1/me`, { method: http.RequestMethod.GET,
+          header: { 'Accept': 'application/json', 'Authorization': `Bearer ${this.accessToken}` },
+          expectDataType: http.HttpDataType.STRING, connectTimeout: 5000, readTimeout: 5000,
+          usingCache: false, maxLimit: 65536, maxRedirects: 0 });
+      } catch { throw localRequestFailure('NETWORK_ERROR'); }
+      if (response.responseCode < 200 || response.responseCode >= 300) { throw requestFailure(response.responseCode, ''); }
+      try { return JSON.parse(response.result as string) as UserProfile; }
+      catch { throw localRequestFailure('INVALID_RESPONSE', response.responseCode); }
+    } finally { client.destroy(); }
   }
 
   async models(): Promise<ModelCatalog> { return this.request('/api/v1/models', http.RequestMethod.GET); }
@@ -159,8 +200,10 @@ export class CampusFlowApi implements ReviewGateway, FocusGateway, AgentRunGatew
           header: headers,
           extraData: body,
           expectDataType: http.HttpDataType.STRING,
-          connectTimeout: 12000,
-          readTimeout: 90000
+          connectTimeout: path.startsWith('/api/v1/auth/') ? 5000 : 12000,
+          readTimeout: path.startsWith('/api/v1/auth/') ? 10000 : 90000,
+          usingCache: false,
+          maxRedirects: 0
         });
       } catch {
         throw localRequestFailure('NETWORK_ERROR');

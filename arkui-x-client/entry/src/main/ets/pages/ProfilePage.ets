@@ -17,6 +17,7 @@ import { CampusFlowRequestError } from '../utils/AgentFeedback';
 import { LearningPreferencesPanel } from '../components/LearningPreferencesPanel';
 import { ReminderState } from '../utils/ReminderCoordinator';
 import { InfoDisclosure } from '../components/InfoDisclosure';
+import { ConnectionCheckPanel } from '../components/ConnectionCheckPanel';
 
 @Component
 export struct ProfilePage {
@@ -28,6 +29,8 @@ export struct ProfilePage {
   @Prop @Watch('activeChanged') active: boolean = true;
   onUserChanged: (user: UserProfile) => void = () => {};
   onLogout: () => void = () => {};
+  @Prop loginPersistenceNotice: string = '';
+  @Prop logoutBusy: boolean = false;
   onOpenAgent: (prompt: string) => void = () => {};
   onTimetableChanged: () => void = () => {};
   onOpenPlan: () => void = () => {};
@@ -1004,6 +1007,11 @@ export struct ProfilePage {
                 .backgroundColor(this.palette.dangerSoft).enabled(!this.draftCleanupBusy).onClick(() => this.onClearDrafts())
               Text('当前服务地址').fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
               Text(this.baseUrl).fontSize(this.palette.bodySize).fontColor(this.palette.ink).width('100%').wordBreak(WordBreak.BREAK_ALL)
+              ConnectionCheckPanel({ baseUrl: this.baseUrl, active: this.active })
+              if (this.loginPersistenceNotice.length > 0) {
+                Text(this.loginPersistenceNotice).fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
+                  .width('100%').wordBreak(WordBreak.BREAK_WORD)
+              }
             }.width('100%').padding(this.palette.cardInset).backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
               .border({ width: 1, color: this.palette.line })
           }
@@ -1045,9 +1053,9 @@ export struct ProfilePage {
         }
 
           if (this.section === 'data') {
-          Button('退出登录').width('100%').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
+          Button(this.logoutBusy ? '正在退出…' : '退出登录').width('100%').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
             .fontColor(this.palette.danger).backgroundColor(this.palette.dangerSoft).borderRadius(this.palette.controlRadius)
-            .onClick(() => this.onLogout())
+            .enabled(!this.logoutBusy).onClick(() => this.onLogout())
           }
         }.width('100%').alignItems(HorizontalAlign.Start)
           .padding({ left: this.palette.pageInset, right: this.palette.pageInset, top: 16, bottom: 24 })

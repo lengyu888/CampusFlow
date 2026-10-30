@@ -117,6 +117,11 @@ python -m uvicorn campusflow_agent.main:app --host 0.0.0.0 --port 8000
 环境后重新执行 `python -m pip install -e ".[dev]"`。如果提示端口 8000 已被占用，先访问
 `http://127.0.0.1:8000/health` 核对是否为 CampusFlow；也可能是其他进程。不要重复启动或盲目终止占用进程。
 
+HarmonyOS 登录页支持系统安全存储的“保持登录”与匿名“检查连接”；重开后仍须由原服务验证同一账号，
+不会仅凭缓存进入账户。网络故障与登录过期分别提示，详情见 [客户端说明](arkui-x-client/README.md)。
+Agent 可按资源、学期、日期与分页读取已同步 HDUHelp 资料，避免整组资料占用上下文；参数和完整性边界见
+[后端说明](agent-service/README.md#hduhelp-按资源精确查询)。
+
 ### 3. 启动 HarmonyOS Phone 客户端
 
 先保持后端运行，再打开新的 PowerShell：

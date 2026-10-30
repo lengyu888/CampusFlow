@@ -140,9 +140,9 @@ test('unknown focus submit remains exact-ID query and crossing tabs never create
  f.page.closeFocus();f.page.selectTab(2);f.page.openFocus();await f.page.focusManager.check(original.operationId);assert.equal(f.remote.calls.filter(c=>c[0]==='post').length,1);assert.equal(f.page.focusState.pendingOperations[0].operationId,original.operationId);assert.equal(f.page.focusState.pendingOperations[0].canRetry,true);
  }finally{f.page.aboutToDisappear();}
 });
-test('logout warns for local unsynced focus, closes auth immediately on confirmation, and cleanup failure remains retryable',async()=>{
+test('logout warns for unsynced focus, disables persistent recovery before closing auth, and cleanup failure remains retryable',async()=>{
  const f=await entry();try{await f.page.focusManager.start('task-a',null,'offline');f.page.requestLogout();assert.equal(f.page.pendingLogoutConfirm,true);assert.equal(f.page.token,'token-a');
- f.driver.failRemove=true;const leaving=f.page.confirmAccountExit();assert.equal(f.page.token,'');await leaving;assert.equal(f.page.focusCleanupNeeded,true);assert.match(f.page.focusNotice,/尚未清理/);
+ f.driver.failRemove=true;const leaving=f.page.confirmAccountExit();assert.equal(f.page.sessionLogoutBusy,true);await tick();assert.equal(f.page.token,'');await leaving;assert.equal(f.page.focusCleanupNeeded,true);assert.match(f.page.focusNotice,/尚未清理/);
  f.driver.failRemove=false;await f.page.clearLocalFocus();assert.equal(f.page.focusClearConfirm,true);await f.page.clearLocalFocus();assert.equal(f.page.focusCleanupNeeded,false);assert.equal(f.driver.text,undefined);
  }finally{f.page.aboutToDisappear();}
 });

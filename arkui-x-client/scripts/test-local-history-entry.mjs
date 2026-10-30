@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { stripThemeTypeScriptTypes as stripTypeScriptTypes } from './helpers/theme-fixture.mjs';
 import { test } from 'node:test';
+import { sessionHelpers } from './helpers/session-fixture.mjs';
 
 const draftSource = readFileSync(new URL('../entry/src/main/ets/utils/DraftStore.ets', import.meta.url), 'utf8')
   .replace(/^import \{[\s\S]*?\} from '(?:\.\.\/model\/ApiModels|\.\/OnboardingTimetable)';\r?\n/gm, '');
@@ -57,6 +58,76 @@ function setup(overrides = {}, draftOverrides = {}) {
   return { page, calls, store, drafts, draftDriver, draftReady };
 }
 
+const restoredUser = { user_id: 'a', display_name: '测试', email: 'user@example.invalid', role: 'user',
+  school: null, campus: null, semester: null, onboarding_complete: true, api_key_configured: false, api_key_hint: null };
+const savedSession = { schemaVersion: 1, userId: 'a', baseUrl: 'http://127.0.0.1:8001',
+  accessToken: 'synthetic-persisted-token', savedAt: 1 };
+function savedLogin(page, options = {}) {
+  const calls = [];
+  const vault = { read: async () => savedSession, save: async () => {}, clear: async () => {}, ...options.vault };
+  page.sessionCoordinator = new sessionHelpers.SessionCoordinator(vault, (base, token) => ({
+    async probeHealth() { calls.push(['probe', base, token]); return options.probe ?? { kind: 'online', statusCode: 200, elapsedMs: 1 }; },
+    async verifySession() { calls.push(['verify', base, token]); return options.verify ? options.verify() : restoredUser; }
+  }));
+  return calls;
+}
+
+test('actual root restores a saved custom-port session only after original-service user validation', async () => {
+  const { page } = setup(); const calls = savedLogin(page);
+  await page.restoreSavedLogin();
+  assert.equal(page.token, savedSession.accessToken); assert.equal(page.authBaseUrl, savedSession.baseUrl);
+  assert.equal(page.baseUrl, savedSession.baseUrl); assert.equal(page.sessionRestoring, false);
+  assert.deepEqual(calls, [['probe', savedSession.baseUrl, ''], ['verify', savedSession.baseUrl, savedSession.accessToken]]);
+});
+
+test('actual root ignores a pending saved login after editing service, preserving the new target', async () => {
+  const wait = deferred(); const { page } = setup(); savedLogin(page, { verify: () => wait.promise });
+  const restore = page.restoreSavedLogin(); await statusTick();
+  page.changeLoginBase('http://127.0.0.1:8002'); wait.resolve(restoredUser); await restore;
+  assert.equal(page.token, ''); assert.equal(page.baseUrl, 'http://127.0.0.1:8002'); assert.equal(page.sessionRestoring, false);
+});
+
+test('native input initialization echoing the unchanged service must not cancel a saved-session restore', async () => {
+  const wait = deferred(); const { page } = setup(); savedLogin(page, { verify: () => wait.promise });
+  const restore = page.restoreSavedLogin(); await statusTick();
+  const initial = page.baseUrl; page.changeLoginBase(initial);
+  wait.resolve(restoredUser); await restore;
+  assert.equal(page.token, savedSession.accessToken);
+  assert.equal(page.baseUrl, savedSession.baseUrl);
+});
+
+test('actual root exposes retry without opening private pages or clearing data when original service is offline', async () => {
+  const { page, calls } = setup(); savedLogin(page, { probe: { kind: 'network_unreachable', statusCode: 0, elapsedMs: 1 } });
+  await page.restoreSavedLogin(); assert.equal(page.token, ''); assert.equal(page.sessionRetryAllowed, true);
+  assert.match(page.sessionRestoreNotice, /仍保留/); assert.deepEqual(calls, []);
+});
+
+test('manual callback from a different service cannot activate caches or publish the response token', async () => {
+  const { page, calls } = setup(); page.baseUrl = 'http://127.0.0.1:8000';
+  await assert.rejects(page.authenticated({ user: restoredUser, access_token: savedSession.accessToken }, savedSession.baseUrl, true), /来源/);
+  assert.equal(page.token, ''); assert.deepEqual(calls, []);
+});
+
+test('failed durable logout preserves the account and restores task, focus and reminder controllers', async () => {
+  const { page, calls } = setup(); await page.authenticated(auth());
+  const beforeStatus = page.taskStatuses, beforeFocus = page.focusManager; let reminderConfigurations = 0;
+  page.reminders.configure = () => { reminderConfigurations++; };
+  savedLogin(page, { vault: { async clear() { throw new sessionHelpers.SessionStorageError(); } } });
+  await page.logout();
+  assert.equal(page.token, 'a-token'); assert.equal(page.sessionLogoutBusy, false);
+  assert.notEqual(page.taskStatuses, null); assert.notEqual(page.focusManager, null);
+  assert.notEqual(page.taskStatuses, beforeStatus); assert.notEqual(page.focusManager, beforeFocus);
+  assert.equal(reminderConfigurations, 1); assert.match(page.loginPersistenceNotice, /退出尚未完成/);
+  assert.equal(calls.some(call => call[0] === 'logout'), false);
+});
+
+test('physical asset removal failure after durable veto still closes the root and revokes the original server session', async () => {
+  const { page, calls } = setup(); await page.authenticated(auth());
+  savedLogin(page, { vault: { async clear() { throw new sessionHelpers.SessionStorageError('SESSION_REMOVAL_PENDING'); } } });
+  await page.logout(); assert.equal(page.token, ''); assert.equal(page.sessionLogoutBusy, false);
+  assert.ok(calls.some(call => call[0] === 'logout' && call[1] === 'a-token'));
+});
+
 test('login awaits account-scoped cache activation before showing authenticated pages', async () => {
   const pending = deferred();
   const { page } = setup({ activate: () => pending.promise });
@@ -80,12 +151,14 @@ test('cache failure does not prevent online login or expose the previous account
   assert.match(page.cacheNotice, /暂不可用/);
 });
 
-test('logout immediately closes online/offline access before slow clearing and remote revocation', async () => {
+test('logout gates access while disabling persistent sign-in, then closes auth before slow cache clearing', async () => {
   const clearing = deferred();
   const { page, calls } = setup({ clear: () => clearing.promise });
   page.token = 'old-token'; page.cacheScope = 'old-scope'; page.localHistoryCount = 2;
   page.offlineHistory = true; page.agentChatBusy = true;
   const signingOut = page.logout();
+  assert.equal(page.sessionLogoutBusy, true);
+  await statusTick();
   assert.equal(page.token, '');
   assert.equal(page.cacheScope, '');
   assert.equal(page.localHistoryCount, 0);
@@ -115,6 +188,7 @@ test('a new login while old logout finishes keeps the new token and still revoke
   const { page, calls } = setup({ clear: () => clearing.promise });
   page.token = 'old-token';
   const logout = page.logout();
+  await statusTick();
   await page.authenticated(auth('b'));
   clearing.resolve();
   await logout;
@@ -258,6 +332,8 @@ test('logout invalidates draft lease synchronously and cleanup failure remains v
   const lease = h.page.draftLease;
   h.drafts.stage(lease, draftKey, draftText()); await h.drafts.flush(lease);
   const logout = h.page.logout();
+  assert.equal(h.page.sessionLogoutBusy, true);
+  await statusTick();
   assert.equal(h.page.token, ''); assert.equal(h.page.draftLease, null);
   assert.equal(h.drafts.valid(lease), false);
   assert.throws(() => h.drafts.stage(lease, draftKey, draftText('迟到输入')));
