@@ -85,6 +85,33 @@ def _json(value) -> str:
     return json.dumps(value, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
 
 
+def _compact_receipt(
+    window: PlanWindow,
+    milestone_count: int,
+    task_count: int,
+    *,
+    includes_past: bool,
+    conflicts: bool = True,
+    warnings: bool = True,
+) -> str:
+    receipt = (
+        f"已生成 {window.start} 至 {window.end} 的计划提案"
+        f"（{milestone_count} 个里程碑、{task_count} 项任务），尚未写入正式规划。"
+        "请核对卡片后确认。"
+    )
+    if conflicts:
+        receipt += "存在冲突，需调整后再确认。"
+    if warnings:
+        receipt += "存在提醒，请核对卡片。"
+    receipt += (
+        "\n依据为本地课表与待办，非实时教务数据；"
+        "补充校园资料和详细提醒未完整展开，缺失或节选不能作为当前事实。"
+    )
+    if includes_past:
+        receipt += "所选范围包含过去日期，仅供回顾，不能补发历史提醒。"
+    return receipt
+
+
 def _facts(trace: ToolTrace) -> dict:
     """Keep ALL essential rows. Capacity failure must not imply an empty calendar."""
     result = trace.result
@@ -180,7 +207,7 @@ def _valid_candidate(tool, calls: list[dict], window: PlanWindow) -> bool:
         return False
 
 
-async def _response(stream, settings, check_cancelled) -> tuple[list[dict], dict]:
+async def _response(stream, settings, check_cancelled, charge_answer) -> tuple[list[dict], dict]:
     """Validate a whole streamed response before invoking any proposed operation."""
     calls: dict[int, dict] = {}
     sizes = {"reasoning_chars": 0, "answer_chars": 0, "argument_chars": 0}
@@ -203,6 +230,8 @@ async def _response(stream, settings, check_cancelled) -> tuple[list[dict], dict
                             raise RuntimeError("模型流式响应格式无效。")
                         sizes[metric] += len(value)
                         buffered += len(value)
+                        if field == "content":
+                            charge_answer(len(value))
                 if sizes["answer_chars"] > settings.agent_max_output_chars:
                     raise AgentBudgetExceeded("本轮输出达到上限。", reason="output")
                 for part in getattr(delta, "tool_calls", None) or []:
@@ -261,6 +290,13 @@ async def run_staged_plan(
     tool_count = 0
     last_read_id = ""
     tool_map = {tool.name: tool for tool in tools}
+    total_answer_chars = 0
+
+    def charge_answer(count):
+        nonlocal total_answer_chars
+        total_answer_chars += count
+        if total_answer_chars > settings.agent_max_output_chars:
+            raise AgentBudgetExceeded("本轮输出达到上限。", reason="output")
 
     async def phase(name, **metrics):
         await emit(
@@ -270,8 +306,7 @@ async def run_staged_plan(
 
     async def finish(text, actions=None):
         check_cancelled()
-        if len(text) > settings.agent_max_output_chars:
-            raise AgentBudgetExceeded("本轮输出达到上限。", reason="output")
+        charge_answer(len(text))
         await emit("answer_reset", {})
         await emit("answer_delta", {"text": text})
         return AgentReply(message=text, tool_traces=traces, pending_actions=actions or [])
@@ -437,7 +472,6 @@ async def run_staged_plan(
     }
     await phase("planning", **sizes)
     client = service._build_runtime_client(api_key=api_key, model_name=model_name)
-    total_answer_chars = 0
     try:
         for attempt in range(1, min(2, settings.agent_max_model_calls) + 1):
             check_cancelled()
@@ -460,16 +494,15 @@ async def run_staged_plan(
                 candidate_timeout = asyncio.timeout(max(0.001, limit))
                 async with candidate_timeout:
                     stream = await client.chat.completions.create(**options)
-                    calls, response_sizes = await _response(stream, settings, check_cancelled)
+                    calls, response_sizes = await _response(
+                        stream, settings, check_cancelled, charge_answer,
+                    )
             except TimeoutError:
                 if (not candidate_timeout.expired() or run_budget is None
                         or run_budget.reserve == 0):
                     raise
                 return await finish("本轮已停止继续查询，资料读取结果已保留；"
                                     "学习计划候选尚未生成，本次未写入正式规划。")
-            total_answer_chars += response_sizes["answer_chars"]
-            if total_answer_chars > settings.agent_max_output_chars:
-                raise AgentBudgetExceeded("本轮输出达到上限。", reason="output")
             await phase("planning", **sizes, **response_sizes, requested_calls=len(calls))
             if not _valid_candidate(tool_map["propose_plan"], calls, window):
                 if attempt == min(2, settings.agent_max_model_calls):
@@ -492,6 +525,17 @@ async def run_staged_plan(
                     settings.agent_max_context_chars,
                 )
                 continue
+            candidate = json.loads(calls[0]["function"]["arguments"])
+            milestone_count = len(candidate["milestones"])
+            task_count = sum(len(m["tasks"]) for m in candidate["milestones"])
+            includes_past = window.start < datetime.now(ZONE).date()
+
+            # Reserve the longest necessary variant before creating a proposal.
+            reserved_receipt = _compact_receipt(
+                window, milestone_count, task_count, includes_past=includes_past,
+            )
+            if total_answer_chars + len(reserved_receipt) > settings.agent_max_output_chars:
+                raise AgentBudgetExceeded("本轮剩余输出不足以保留提案回执。", reason="output")
             check_cancelled()
             if run_budget is not None and run_budget.work_remaining <= 0:
                 return await finish("本轮已停止继续查询，候选尚未形成可确认提案；"
@@ -530,8 +574,13 @@ async def run_staged_plan(
                     text += "\n" + item.display.label + "：" + item.display.summary
             for line in campus_overview(traces[2:-1]):
                 text += "\n" + line
-            if window.start < datetime.now(ZONE).date():
+            if includes_past:
                 text += "\n所选范围包含过去日期，过去时段仅供回顾，不能补发历史提醒。"
+            if total_answer_chars + len(text) > settings.agent_max_output_chars:
+                text = _compact_receipt(
+                    window, milestone_count, task_count, includes_past=includes_past,
+                    conflicts=bool(pending.conflicts), warnings=bool(pending.warnings),
+                )
             await phase("finished", **sizes)
             return await finish(text, [pending])
         return await finish(

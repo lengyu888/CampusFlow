@@ -30,6 +30,11 @@ from .hduhelp_access import HDUHelpAccess
 from .hduhelp_refresh import CURRENT_HDU_TURN, RefreshCoordinator, snapshot_resources
 from .key_vault import ApiKeyVault
 from .learning_preferences import LearningPreferenceStore
+from .legacy_receipts import (
+    CURRENT_LEGACY_RECEIPTS,
+    LegacyReceiptMiddleware,
+    receipt_messages,
+)
 from .model_catalog import AgentConfigurationError as AgentConfigurationError
 from .model_catalog import ModelCatalog
 from .planning_workflow import planning_window, run_staged_plan
@@ -216,7 +221,8 @@ class AgentService:
             tools=runtime_tools,
             system_prompt=(self._build_user_system_prompt(user_id)
                            if system_prompt is None else system_prompt),
-            middleware=[ContextBudgetMiddleware(self.settings.agent_max_context_chars)],
+            middleware=[ContextBudgetMiddleware(self.settings.agent_max_context_chars),
+                        LegacyReceiptMiddleware()],
         )
 
     def allowed_tools_for_user(self, user_id: str) -> set[str] | None:
@@ -929,6 +935,8 @@ class AgentService:
         budget = CURRENT_RUN_BUDGET.get() or RunBudget(
             self.settings.agent_timeout_seconds, self.settings.agent_final_response_reserve_seconds)
         budget_token = CURRENT_RUN_BUDGET.set(budget)
+        receipts = []
+        receipt_token = CURRENT_LEGACY_RECEIPTS.set(receipts)
         try:
             try:
                 graph_timeout = asyncio.timeout(max(.001, budget.work_remaining))
@@ -937,9 +945,11 @@ class AgentService:
             except TimeoutError:
                 if not graph_timeout.expired() or budget.reserve == 0:
                     raise
-                result = {"messages": [*conversation, AIMessage(content=(
-                    "本轮已停止继续查询，尚未获得完整答复。请核对已有记录和提案；"
-                    "未核实的资料不能作为当前事实。"))]}
+                result = {"messages": [
+                    *conversation, *receipt_messages(receipts), AIMessage(content=(
+                        "本轮已停止继续查询，尚未获得完整答复。请核对已有记录和提案；"
+                        "未核实的资料不能作为当前事实。")),
+                ]}
         except BaseException:
             if persist_history:
                 # 收尾自己创建的 pending 会话，并保留原异常给调用方处理。
@@ -957,6 +967,7 @@ class AgentService:
                     await turn.close()
             finally:
                 CURRENT_HDU_TURN.reset(refresh_token)
+                CURRENT_LEGACY_RECEIPTS.reset(receipt_token)
                 CURRENT_RUN_BUDGET.reset(budget_token)
                 CURRENT_USER_ID.reset(token)
 
