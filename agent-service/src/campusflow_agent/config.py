@@ -25,12 +25,21 @@ class Settings(BaseSettings):
     deepseek_base_url: str = "https://api.deepseek.com"
     deepseek_reasoning_effort: Literal["low", "high", "max"] = "high"
     deepseek_thinking_enabled: bool = True
-    agent_timeout_seconds: float = Field(default=90.0, gt=0, le=600, allow_inf_nan=False)
+    agent_timeout_seconds: float = Field(default=180.0, gt=0, le=600, allow_inf_nan=False)
+    agent_final_response_reserve_seconds: float = Field(
+        default=45, ge=0, le=120, allow_inf_nan=False)
     agent_max_model_calls: int = Field(default=6, ge=1, le=20)
     agent_max_tool_calls: int = Field(default=10, ge=1, le=50)
     agent_max_context_chars: int = Field(default=24000, ge=4000, le=200000)
     agent_max_output_chars: int = Field(default=16000, ge=256, le=64000)
     agent_max_tokens: int = Field(default=4096, ge=256, le=16384)
+    # Instant operational rollback: false preserves the original conversational runtime.
+    agent_staged_planning_enabled: bool = True
+    agent_hduhelp_auto_refresh_enabled: bool = True
+    hduhelp_refresh_concurrency: int = Field(default=3, ge=1, le=8)
+    hduhelp_refresh_request_seconds: float = Field(default=20, gt=0, le=60, allow_inf_nan=False)
+    hduhelp_refresh_queue_seconds: float = Field(default=30, gt=0, le=180, allow_inf_nan=False)
+    hduhelp_refresh_total_seconds: float = Field(default=60, gt=0, le=180, allow_inf_nan=False)
     # Thinking and the final answer share the provider token limit. Keep a bounded
     # reserve for DeepSeek thinking requests; ordinary/legacy requests remain 4K.
     deepseek_thinking_max_tokens: int = Field(default=16384, ge=256, le=16384)

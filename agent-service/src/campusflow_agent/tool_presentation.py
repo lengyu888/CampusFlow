@@ -641,6 +641,22 @@ def present_tool_trace(
     elif states == {"error"}:
         display.state = "error"
         display.summary = "本次数据源查询失败，未获得可用的当前结果。"
+        if trace.tool_name in _SNAPSHOT_FIELDS and isinstance(trace.result, dict):
+            failures = {
+                "timeout": "本轮校园资料更新超时，未使用旧缓存。可稍后重试。",
+                "auth_invalid": "HDUHelp 令牌已失效，请重新连接。",
+                "forbidden": "该项校园资料缺少访问权限，请核对 HDUHelp 授权。",
+                "connection_changed": "校园连接已变化，请重新核对连接后查询。",
+                "failed": "本轮校园资料更新失败，未使用旧缓存。可稍后重试。",
+            }
+            for key in _SNAPSHOT_FIELDS[trace.tool_name]:
+                snapshot = trace.result.get(key)
+                if (isinstance(snapshot, dict) and snapshot.get("needs_sync") is True
+                        and snapshot.get("data") is None):
+                    reason = snapshot.get("refresh_state")
+                    if reason in failures:
+                        display.summary = failures[reason]
+                        break
     elif states == {"missing"}:
         display.state = "unavailable"
         display.summary = "数据源尚未配置或接入，不能据空结果推断没有记录。"

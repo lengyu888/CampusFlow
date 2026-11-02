@@ -26,6 +26,7 @@ from .hduhelp_query import (
     SnapshotQuery,
     select_snapshot,
 )
+from .hduhelp_refresh import CURRENT_HDU_TURN, snapshot_resources
 from .key_vault import ApiKeyVault
 from .knowledge import KnowledgeService
 from .schemas import PlanEditRequest, PlanningActionRequest
@@ -78,6 +79,7 @@ def build_tools(
     hduhelp_access: HDUHelpAccess | None = None,
     weather_service: WeatherService | None = None,
     knowledge_service: KnowledgeService | None = None,
+    refresh_coordinator=None,
 ) -> list[BaseTool]:
     knowledge = knowledge_service or KnowledgeService()
     def profile():
@@ -119,6 +121,9 @@ def build_tools(
         }
 
     def hduhelp_resource(name: str) -> dict:
+        turn = CURRENT_HDU_TURN.get()
+        if turn is not None:
+            return turn.snapshot(CURRENT_USER_ID.get(), name)
         snapshot = (
             hduhelp_store.get_hduhelp_resource(CURRENT_USER_ID.get(), name)
             if hduhelp_store is not None and credential_vault is not None
@@ -384,7 +389,7 @@ def build_tools(
 
     @tool
     def get_hduhelp_profile() -> dict:
-        """读取当前用户已授权并同步的 HDUHelp 本人身份与学籍信息。"""
+        """读取当前用户已授权的 HDUHelp 身份与学籍；对话按配置自动更新。"""
         return hduhelp_group(["identity", "person"])
 
     @tool
@@ -394,7 +399,7 @@ def build_tools(
         limit: Annotated[int, Field(strict=True, ge=1, le=20)] = 10,
         offset: Annotated[int, Field(strict=True, ge=0, le=100000)] = 0,
     ) -> dict:
-        """查已同步成绩/GPA或考试；优先指定 resource=grades/exams，按需分页。
+        """查成绩/GPA或考试；对话按配置更新，优先指定 resource=grades/exams。
 
         semester 精确匹配原文，日期范围两端均填 YYYY-MM-DD；keyword 匹配已知名称字段。
         query 描述快照范围、未能筛选记录与后续页，不等于上游全量。无参数兼容旧整组查询。
@@ -409,12 +414,12 @@ def build_tools(
         limit: Annotated[int, Field(strict=True, ge=1, le=20)] = 10,
         offset: Annotated[int, Field(strict=True, ge=0, le=100000)] = 0,
     ) -> dict:
-        """查已同步校园生活；优先指定一项 resource 并按需分页。
+        """查校园生活；对话按配置更新，优先指定一项 resource 并按需分页。
 
         resource: card_balance/library_bookings/library_attendance/library_reading/
         library_seat_reservations/sunrun_overview/sunrun_group/sunrun_detail/subscriptions。
         筛选与分页同学业工具；摘要通常不能按日期/学期过滤，须检查 query 状态与缺失说明。
-        无参数兼容旧整组查询，不访问上游，也不代表上游全部历史。
+        无参数兼容整组查询；本轮分页复用固定快照，不代表上游全部历史。
         """
         return hduhelp_selection(CAMPUS_LIFE_RESOURCES, resource, semester, start_date, end_date,
                                 keyword, limit, offset)
@@ -722,6 +727,21 @@ def build_tools(
         propose_plan,
         propose_plan_change,
     ]
+    if refresh_coordinator is not None:
+        for adapter in available:
+            if adapter.name not in {"get_hduhelp_profile", "get_hduhelp_academics",
+                                     "get_hduhelp_campus_life"}:
+                continue
+
+            def wrap(original, name):
+                async def refreshed(**kwargs):
+                    turn = CURRENT_HDU_TURN.get()
+                    if turn is not None:
+                        await turn.ensure(snapshot_resources(name, kwargs))
+                    return original(**kwargs)
+                return refreshed
+
+            adapter.coroutine = wrap(adapter.func, adapter.name)
     if allowed_tool_names is None:
         return available
     return [item for item in available if item.name in allowed_tool_names]

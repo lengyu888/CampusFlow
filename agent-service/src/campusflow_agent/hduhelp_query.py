@@ -218,7 +218,10 @@ def select_snapshot(snapshot: dict, query: SnapshotQuery) -> tuple[dict, dict]:
     """Preserve the resource envelope and evidence; filter before stable-source-order paging."""
     metadata = query.metadata()
     if snapshot.get("needs_sync") is not False or not isinstance(snapshot.get("data"), dict | list):
-        metadata["notes"].append("尚无可用的新鲜授权资料，请先连接并同步；不能据此推断无记录。")
+        metadata["notes"].append(
+            "本轮自动更新未完成，原因见来源说明；未使用旧缓存，不能据此推断无记录。"
+            if snapshot.get("refresh_state") else
+            "尚无可用的新鲜授权资料，请先连接并同步；不能据此推断无记录。")
         return snapshot, metadata
     data = snapshot["data"]
     if query.resource == "grades" and isinstance(data, dict) and "gpa" in data:

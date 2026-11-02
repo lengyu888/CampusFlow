@@ -26,6 +26,7 @@ from openai import (
 from .agent import AgentBudgetExceeded, AgentConfigurationError, AgentService
 from .config import Settings
 from .model_catalog import ModelCatalog
+from .run_budget import CURRENT_RUN_BUDGET, RunBudget
 from .schemas import (
     AgentRunRequest,
     ChatRequest,
@@ -33,6 +34,7 @@ from .schemas import (
     PendingAction,
     RunEvent,
     RunEventsPage,
+    RunPhaseDiagnostic,
     RunSnapshot,
     RunToolProgress,
     SessionContext,
@@ -385,9 +387,15 @@ class RunService:
             safe: dict[str, Any] = {}
             if kind == "model_start":
                 snapshot.model_calls = int(data["count"])
+                snapshot.phase = "planning"
                 safe = {"count": snapshot.model_calls}
             elif kind == "answer_reset":
                 snapshot.partial_answer = ""
+            elif kind == "phase":
+                diagnostic = RunPhaseDiagnostic.model_validate(data)
+                snapshot.phase = diagnostic.phase
+                snapshot.diagnostics = [*snapshot.diagnostics[-15:], diagnostic]
+                safe = diagnostic.model_dump()
             elif kind == "answer_delta":
                 text = str(data.get("text", ""))
                 if len(snapshot.partial_answer) + len(text) > self.settings.agent_max_output_chars:
@@ -426,6 +434,10 @@ class RunService:
                     snapshot.tool_progress[found] = progress
                 if kind == "tool_start":
                     snapshot.tool_calls = int(data["count"])
+                    if progress.tool_name in {
+                        "propose_plan", "propose_task_change", "propose_plan_change",
+                    }:
+                        snapshot.phase = "proposal"
                 safe = progress.model_dump() | {"count": snapshot.tool_calls}
             else:
                 raise ValueError("Unsupported runtime event")
@@ -498,17 +510,23 @@ class RunService:
                 )
                 snapshot.status = "running"
                 self._event(snapshot, "status", {"status": "running"})
-            async with asyncio.timeout(self.settings.agent_timeout_seconds):
-                reply = await self.agent.run(
-                    user_id=user_id,
-                    session_id=snapshot.session_id,
-                    api_key=api_key,
-                    model_name=snapshot.model,
-                    message=snapshot.message,
-                    frozen_history=context.messages,
-                    emit=lambda kind, data: self._emit(user_id, run_id, kind, data),
-                    check_cancelled=lambda: self._check_cancelled(user_id, run_id),
-                )
+            budget_token = CURRENT_RUN_BUDGET.set(RunBudget(
+                self.settings.agent_timeout_seconds,
+                self.settings.agent_final_response_reserve_seconds))
+            try:
+                async with asyncio.timeout(self.settings.agent_timeout_seconds):
+                    reply = await self.agent.run(
+                        user_id=user_id,
+                        session_id=snapshot.session_id,
+                        api_key=api_key,
+                        model_name=snapshot.model,
+                        message=snapshot.message,
+                        frozen_history=context.messages,
+                        emit=lambda kind, data: self._emit(user_id, run_id, kind, data),
+                        check_cancelled=lambda: self._check_cancelled(user_id, run_id),
+                    )
+            finally:
+                CURRENT_RUN_BUDGET.reset(budget_token)
             self._check_cancelled(user_id, run_id)
             for trace in reply.tool_traces:
                 trace.display = present_tool_trace(trace, reply.pending_actions)
