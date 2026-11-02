@@ -1,7 +1,9 @@
 """Behavioral regressions for work/final time and active refresh accounting."""
 
 import asyncio
+from types import SimpleNamespace
 
+import pytest
 from test_agent_runtime import Client, Stream, chunk, run, setup, tool_turn
 from test_hduhelp_turn_refresh import scene
 
@@ -273,10 +275,14 @@ async def test_local_receipts_do_not_bypass_cumulative_output_budget(monkeypatch
     assert failure.value.reason == "output"
 
 
-def test_default_budget_reserves_local_persistence_margin():
-    from campusflow_agent.run_budget import RunBudget
+@pytest.mark.parametrize("started", [0.0, 121.176535943, 939.8623816, 134217600.1234567])
+def test_default_budget_reserves_local_persistence_margin(monkeypatch, started):
+    from campusflow_agent import run_budget
 
-    budget = RunBudget(180, 45)
+    # Include both failing CI clock readings without changing any other module's clock.
+    monkeypatch.setattr(run_budget, "time", SimpleNamespace(monotonic=lambda: started))
+    budget = run_budget.RunBudget(180, 45)
     assert budget.reserve == 45 and budget.finish_margin == 2
-    assert budget.work_deadline - budget.started == 135
+    # Absolute clock arithmetic can round across a floating-point precision boundary.
+    assert budget.work_deadline - budget.started == pytest.approx(135, rel=0, abs=1e-6)
     assert 0 < budget.final_remaining <= 45
