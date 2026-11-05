@@ -33,6 +33,7 @@ import { ProfilePage } from './ProfilePage';
 import { RoutePage } from './RoutePage';
 import { SkillsPage } from './SkillsPage';
 import { AppIcon } from '../components/AppIcon';
+import { AppPageHeader } from '../components/AppPageHeader';
 import { AppTheme } from '../theme/AppTheme';
 import { ThemePalette, themePalette } from '../theme/ThemePalette';
 import { TimetablePage } from './TimetablePage';
@@ -1006,15 +1007,7 @@ struct Index {
 
   @Builder
   private SecondaryHeader(title: string) {
-    Row({ space: 8 }) {
-      Button({ type: ButtonType.Normal }) {
-        AppIcon({ name: 'back', iconSize: 22, color: this.palette.accent })
-      }.width(48).height(48).backgroundColor(Color.Transparent).borderRadius(this.palette.controlRadius)
-        .accessibilityText('返回上一页').onClick(() => this.goBack())
-      Text(title).fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Medium).fontColor(this.palette.ink)
-        .layoutWeight(1).wordBreak(WordBreak.BREAK_WORD)
-    }.width('100%').padding({ left: 8, right: 20, top: 4, bottom: 4 }).backgroundColor(this.palette.surface)
-      .border({ width: { bottom: 1 }, color: this.palette.line })
+    AppPageHeader({ title: title, onBack: () => this.goBack() })
   }
 
   @Builder

@@ -15,6 +15,9 @@ import { CampusFlowApi } from '../services/CampusFlowApi';
 import { AppTheme } from '../theme/AppTheme';
 import { ThemePalette, themePalette } from '../theme/ThemePalette';
 import { AppIcon } from '../components/AppIcon';
+import { AppPageHeader } from '../components/AppPageHeader';
+import { AppSectionHeader } from '../components/AppSectionHeader';
+import { AppActionRow } from '../components/AppActionRow';
 import { FeedbackPanel } from '../components/FeedbackPanel';
 import { EvidencePanel } from '../components/EvidencePanel';
 import { InfoDisclosure } from '../components/InfoDisclosure';
@@ -294,36 +297,30 @@ export struct CampusServicesPage {
 
   @Builder
   private classroomCard(room: ClassroomItem) {
-    Row({ space: 12 }) {
-      Column({ space: 2 }) {
-        Text(room.location_name).fontSize(this.palette.bodySize).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
-        Text(room.building_name).fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
-      }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-      Column({ space: 4 }) {
-        Text(room.self_study ? '自习标记' : '空闲记录').fontSize(this.palette.metaSize).fontWeight(FontWeight.Bold)
-          .fontColor(room.self_study ? this.palette.success : this.palette.accent)
-        Text(room.capacity > 0 ? `${room.capacity} 座` : '容量未知').fontSize(this.palette.metaSize).fontColor(this.palette.muted)
-      }.alignItems(HorizontalAlign.End)
-      AppIcon({ name: 'chevron', iconSize: 18, color: this.palette.muted })
-    }
-    .width('100%')
-    .padding(16)
-    .backgroundColor(this.palette.surface)
-    .borderRadius(this.palette.cardRadius).border({ width: 1, color: this.palette.line })
-    .onClick(() => this.loadUsage(room))
+    Button({ type: ButtonType.Normal }) {
+      Row({ space: 12 }) {
+        Column({ space: 2 }) {
+          Text(room.location_name).fontSize(this.palette.bodySize).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
+          Text(room.building_name).fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
+        }.alignItems(HorizontalAlign.Start).layoutWeight(1)
+        Column({ space: 4 }) {
+          Text(room.self_study ? '自习标记' : '空闲记录').fontSize(this.palette.metaSize).fontWeight(FontWeight.Bold)
+            .fontColor(room.self_study ? this.palette.success : this.palette.accent)
+          Text(room.capacity > 0 ? `${room.capacity} 座` : '容量未知').fontSize(this.palette.metaSize).fontColor(this.palette.muted)
+        }.alignItems(HorizontalAlign.End)
+        AppIcon({ name: 'chevron', iconSize: 18, color: this.palette.muted })
+      }.width('100%').padding({ left: 16, right: 16, top: 14, bottom: 14 })
+    }.width('100%').constraintSize({ minHeight: 64 }).padding(0)
+      .backgroundColor(Color.Transparent).borderRadius(0)
+      .accessibilityText(`${room.location_name}，${room.building_name}，${room.self_study ? '自习标记' : '空闲记录'}，查看占用安排`)
+      .onClick(() => this.loadUsage(room))
   }
 
   @Builder
   private classroomView() {
     Column({ space: 14 }) {
       Column({ space: 12 }) {
-        Row() {
-          Column({ space: 3 }) {
-            Text('查找空闲教室').fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
-          }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-          Button('刷新').constraintSize({ minHeight: 48 }).fontSize(this.palette.metaSize).fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft)
-            .borderRadius(12).onClick(() => this.loadClassrooms())
-        }.width('100%')
+        AppSectionHeader({ title: '查找空闲教室', actionLabel: '刷新', onAction: () => this.loadClassrooms() })
 
         Select(this.buildingLabels.map((label: string) => new CampusServiceOption(label)))
           .selected(this.selectedBuilding)
@@ -415,9 +412,12 @@ export struct CampusServicesPage {
       } else if (this.classrooms.length === 0) {
         FeedbackPanel({ kind: 'empty', title: '本次未返回教室记录', message: '先核对来源状态；也可换教学楼或节次查询。' })
       } else {
-        ForEach(this.classrooms.slice(0, this.classroomLimit), (room: ClassroomItem) => {
-          this.classroomCard(room)
-        }, (room: ClassroomItem) => room.location_id)
+        Column() {
+          ForEach(this.classrooms.slice(0, this.classroomLimit), (room: ClassroomItem, index: number) => {
+            if (index > 0) { Divider().color(this.palette.line).strokeWidth(0.5).margin({ left: 16, right: 16 }) }
+            this.classroomCard(room)
+          }, (room: ClassroomItem) => room.location_id)
+        }.width('100%').backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius).clip(true)
         if (this.classroomLimit < this.classrooms.length) {
           Button(`查看更多（还有 ${this.classrooms.length - this.classroomLimit} 间）`).constraintSize({ minHeight: 48 })
             .fontSize(this.palette.metaSize).fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft)
@@ -505,8 +505,7 @@ export struct CampusServicesPage {
           .fontWeight(item.emphasis ? FontWeight.Bold : FontWeight.Medium)
           .fontColor(item.emphasis ? this.palette.accent : this.palette.ink)
           .width('100%').wordBreak(WordBreak.BREAK_WORD)
-      }.width('100%').alignItems(HorizontalAlign.Start)
-        .padding(11).backgroundColor(this.palette.field).borderRadius(13)
+      }.width('100%').alignItems(HorizontalAlign.Start).padding({ top: 4, bottom: 4 })
     } else {
       Row() {
         Text(item.label).fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
@@ -564,43 +563,29 @@ export struct CampusServicesPage {
       }, (item: HDUHelpDisplayItem) => `${section.resource}-${item.label}`)
       EvidencePanel({ evidence: section.evidence ?? [], active: this.active })
     }.width('100%').padding(this.palette.cardInset).backgroundColor(this.palette.surface)
-      .borderRadius(this.palette.cardRadius).border({ width: 1, color: this.palette.line })
+      .borderRadius(this.palette.cardRadius)
   }
 
   @Builder
   private agentPromptBlock(prompts: HDUHelpSuggestedPrompt[], subtitle: string) {
     if (prompts.length > 0) {
-      Column({ space: 10 }) {
-        Text('继续问助手').fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Bold).fontColor(this.palette.ink).width('100%')
-        Text(subtitle).fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
-        ForEach(prompts, (suggestion: HDUHelpSuggestedPrompt) => {
-          Button() {
-            Row({ space: 10 }) {
-              Text(suggestion.title).fontSize(this.palette.bodySize).fontColor(this.palette.accent)
-                .layoutWeight(1).wordBreak(WordBreak.BREAK_WORD)
-              AppIcon({ name: 'chevron', iconSize: 16, color: this.palette.accent })
-            }.width('100%')
-          }.width('100%').constraintSize({ minHeight: 48 }).padding({ left: 14, right: 14 })
-            .backgroundColor(this.palette.accentSoft).borderRadius(12)
-            .onClick(() => this.onOpenAgent(suggestion.prompt))
-        }, (suggestion: HDUHelpSuggestedPrompt) => suggestion.prompt_id)
-      }.width('100%').padding(this.palette.cardInset).backgroundColor(this.palette.surface)
-        .borderRadius(this.palette.cardRadius).border({ width: 1, color: this.palette.line })
+      Column({ space: 8 }) {
+        AppSectionHeader({ title: '继续问助手', subtitle: subtitle })
+        Column() {
+          ForEach(prompts, (suggestion: HDUHelpSuggestedPrompt, index: number) => {
+            AppActionRow({ title: suggestion.title, icon: 'assistant', divider: index < prompts.length - 1,
+              onAction: () => this.onOpenAgent(suggestion.prompt) })
+          }, (suggestion: HDUHelpSuggestedPrompt) => suggestion.prompt_id)
+        }.width('100%').backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius).clip(true)
+      }.width('100%').alignItems(HorizontalAlign.Start)
     }
   }
 
   @Builder
   private libraryView() {
     Column({ space: this.palette.sectionGap }) {
-      Row() {
-        Column({ space: 4 }) {
-          Text('图书馆记录').fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
-          Text('到馆、借阅与座位使用记录').fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
-        }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-        Button('刷新').constraintSize({ minHeight: 48 }).fontSize(this.palette.metaSize).fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft)
-          .borderRadius(12).onClick(() => this.loadCampusInfo())
-      }.width('100%').padding(this.palette.cardInset).backgroundColor(this.palette.surface)
-        .borderRadius(this.palette.cardRadius).border({ width: 1, color: this.palette.line })
+      AppSectionHeader({ title: '图书馆记录', subtitle: '到馆、借阅与座位记录',
+        actionLabel: '刷新', onAction: () => this.loadCampusInfo() })
 
       if (this.campusInfoLoading) {
         FeedbackPanel({ kind: 'loading', title: '正在读取图书馆数据', message: '正在读取已连接的校园数据。' })
@@ -633,15 +618,8 @@ export struct CampusServicesPage {
   @Builder
   private campusCardView() {
     Column({ space: this.palette.sectionGap }) {
-      Row() {
-        Column({ space: 4 }) {
-          Text('校园卡').fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
-          Text('余额与其他校园生活动态').fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
-        }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-        Button('刷新').constraintSize({ minHeight: 48 }).fontSize(this.palette.metaSize).fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft)
-          .borderRadius(12).onClick(() => this.loadCampusInfo())
-      }.width('100%').padding(this.palette.cardInset).backgroundColor(this.palette.surface)
-        .borderRadius(this.palette.cardRadius).border({ width: 1, color: this.palette.line })
+      AppSectionHeader({ title: '校园卡', subtitle: '余额与校园生活动态',
+        actionLabel: '刷新', onAction: () => this.loadCampusInfo() })
 
       if (this.campusInfoLoading) {
         FeedbackPanel({ kind: 'loading', title: '正在读取校园卡数据', message: '正在读取已连接的校园数据。' })
@@ -673,13 +651,7 @@ export struct CampusServicesPage {
 
   build() {
     Column() {
-      Row({ space: 8 }) {
-        Button({ type: ButtonType.Normal }) {
-          AppIcon({ name: 'back', iconSize: 22, color: this.palette.accent })
-        }.width(44).constraintSize({ minHeight: 44 }).backgroundColor(Color.Transparent)
-          .borderRadius(12).accessibilityText('返回上一页').onClick(() => this.onBack())
-        Text('校园服务').fontSize(22).fontWeight(FontWeight.Bold).fontColor(this.palette.ink).layoutWeight(1)
-      }.width('100%').constraintSize({ minHeight: 56 }).padding({ left: 8, right: 20, top: 4, bottom: 4 })
+      AppPageHeader({ title: '校园服务', onBack: () => this.onBack() })
 
       Column() {
         Row({ space: 3 }) {

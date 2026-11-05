@@ -9,6 +9,7 @@ import { ThemePalette, themePalette } from '../theme/ThemePalette';
 import { AppIcon } from '../components/AppIcon';
 import { FeedbackPanel } from '../components/FeedbackPanel';
 import { InfoDisclosure } from '../components/InfoDisclosure';
+import { AppPageHeader } from '../components/AppPageHeader';
 
 @Component
 export struct HistoryPage {
@@ -239,25 +240,10 @@ export struct HistoryPage {
 
   build() {
     Column() {
-      Row({ space: 4 }) {
-        Button({ type: ButtonType.Normal }) {
-          AppIcon({ name: 'back', iconSize: 21, color: this.palette.accent })
-        }.width(44).constraintSize({ minHeight: 44 }).backgroundColor(Color.Transparent).borderRadius(12)
-          .accessibilityText(this.selected === null ? (this.offlineOnly ? '返回登录' : '返回助手') : '返回历史会话')
-          .onClick(() => this.goBack())
-        Text(this.selected === null ? '历史会话' : '会话详情')
-          .fontSize(22).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
-          .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).layoutWeight(1)
-        if (this.selected === null) {
-          Button('刷新').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize).fontColor(this.palette.accent)
-            .backgroundColor(Color.Transparent).padding({ left: 12, right: 12 })
-            .enabled(!this.loading && !this.deleting).onClick(() => this.reload())
-        } else {
-          Button('刷新').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize).fontColor(this.palette.accent)
-            .backgroundColor(Color.Transparent).enabled(!this.loading && !this.deleting).onClick(() => this.retryRead())
-        }
-      }.width('100%').constraintSize({ minHeight: 56 }).padding({ left: 8, right: 12 })
-        .backgroundColor(this.palette.bg)
+      AppPageHeader({ title: this.selected === null ? '历史会话' : '会话详情',
+        backLabel: this.selected === null ? (this.offlineOnly ? '返回登录' : '返回助手') : '返回历史会话',
+        actionLabel: '刷新', busy: this.loading || this.deleting,
+        onBack: () => this.goBack(), onAction: () => { if (this.selected === null) { this.reload(); } else { this.retryRead(); } } })
 
       if (this.errorText.length > 0) {
         FeedbackPanel({ kind: 'error', title: '历史记录未更新', message: this.errorText,

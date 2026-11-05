@@ -6,6 +6,9 @@ import { ThemePalette, themePalette } from '../theme/ThemePalette';
 import { AppIllustration } from '../components/AppIllustration';
 import { InfoDisclosure } from '../components/InfoDisclosure';
 import { AppIcon } from '../components/AppIcon';
+import { AppPageHeader } from '../components/AppPageHeader';
+import { AppActionRow } from '../components/AppActionRow';
+import { AppSectionHeader } from '../components/AppSectionHeader';
 
 // Only a view. Index owns the account-level clock, durable queue and server gateway.
 @Component
@@ -201,14 +204,19 @@ export struct FocusPage {
   private StartCard() {
     Column({ space: 12 }) {
       Text(this.taskTitle || '先选择一项待办').fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Medium).fontColor(this.palette.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
-      Text('为任务计时，结束后再确认是否完成。').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
+      Text('记录投入时间，完成任务后再标记。').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
       if (this.taskId.trim().length > 0) {
-      Text('目标分钟（可不填）').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
-      TextInput({ text: this.targetText, placeholder: '不设目标，正向计时' }).height(48).fontSize(this.palette.bodySize).backgroundColor(this.palette.field)
-        .onChange((value: string) => { this.targetText = value; this.inputMessage = ''; })
+      Column({ space: 6 }) {
+        Text('目标时长（选填）').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
+        Row({ space: 8 }) {
+          TextInput({ text: this.targetText, placeholder: '不设目标' }).height(48).layoutWeight(1).fontSize(this.palette.bodySize).backgroundColor(this.palette.field)
+            .accessibilityText('目标分钟，可不填写').onChange((value: string) => { this.targetText = value; this.inputMessage = ''; })
+          Text('分钟').fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
+        }.width('100%')
+      }.width('100%').alignItems(HorizontalAlign.Start)
       if (this.inputMessage.length > 0) { Text(this.inputMessage).fontSize(this.palette.bodySize).fontColor(this.palette.danger).width('100%').wordBreak(WordBreak.BREAK_WORD) }
-      Button(this.recordingOptionsLabel()).width('100%').constraintSize({ minHeight: 44 }).fontSize(this.palette.metaSize)
-        .fontColor(this.palette.accent).backgroundColor(Color.Transparent).onClick(() => this.toggleOptions())
+      AppActionRow({ title: '记录方式', detail: this.optionsExpanded ? '收起' : this.offline ? '仅本机' : '联网',
+        onAction: () => this.toggleOptions() })
       if (this.optionsExpanded) {
       Button(this.offline ? '仅本机记录 · 切换为联网' : '联网记录 · 切换为仅本机').width('100%').constraintSize({ minHeight: 48 })
         .fontSize(this.palette.bodySize).backgroundColor(this.palette.accentSoft).fontColor(this.palette.accent).enabled(this.active).onClick(() => this.offline = !this.offline)
@@ -219,8 +227,8 @@ export struct FocusPage {
       Button('开始专注').width('100%').constraintSize({ minHeight: 48 }).fontColor(this.palette.onAccent).backgroundColor(this.palette.accent)
         .fontSize(this.palette.bodySize).borderRadius(this.palette.controlRadius).enabled(this.startAllowed()).onClick(() => this.startRequested())
       } else {
-        Text('在“今日”或“计划”打开任务，点击“开始专注”。也可以直接完成任务，无需计时。')
-          .fontSize(this.palette.bodySize).fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+        Text('从“今日”或“计划”选择任务后开始计时。')
+          .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
         Button('返回选择任务').width('100%').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
           .fontColor(this.palette.onAccent).backgroundColor(this.palette.accent).borderRadius(this.palette.controlRadius).onClick(() => this.onBack())
       }
@@ -336,11 +344,7 @@ export struct FocusPage {
 
   build() {
     Column({ space: 8 }) {
-      Row({ space: 8 }) {
-        Button({ type: ButtonType.Circle }) { AppIcon({ name: 'back', iconSize: 22, color: this.palette.accent }) }
-          .width(44).height(44).backgroundColor(Color.Transparent).accessibilityText('返回上一页').onClick(() => this.onBack())
-        Text('专注').fontSize(22).fontWeight(FontWeight.Bold).fontColor(this.palette.ink).layoutWeight(1)
-      }.width('100%').padding({ top: 8 })
+      AppPageHeader({ title: '专注', onBack: () => this.onBack() })
       Scroll() {
         Column({ space: 16 }) {
           if (this.state.phase === 'loading') { Text('正在读取本机专注记录…').fontSize(this.palette.bodySize).fontColor(this.palette.secondary).width('100%') }
@@ -384,31 +388,29 @@ export struct FocusPage {
             }.width('100%').padding(16).backgroundColor(this.palette.warningSoft).borderRadius(this.palette.cardRadius)
           }
           if (this.otherLocalRecords().length > 0) {
-            Text('其他本机记录').fontSize(this.palette.sectionTitle).fontColor(this.palette.ink).width('100%')
-            ForEach(this.otherLocalRecords(), (local: FocusLocalView) => {
-              Button({ type: ButtonType.Normal }) {
-                Column({ space: 4 }) {
-                  Text(this.localTitle(local)).fontSize(this.palette.bodySize).fontColor(this.palette.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
-                  Text(`${this.duration(local.elapsedMs)} · ${this.localLabel(local)}`).fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
-                }.width('100%').alignItems(HorizontalAlign.Start)
-              }.width('100%').constraintSize({ minHeight: 64 }).padding(12).backgroundColor(this.palette.surface).onClick(() => this.onSelect(local.recordId))
-            }, (local: FocusLocalView) => `${local.recordId}-${local.localState}-${local.saveState}`)
+            AppSectionHeader({ title: '其他本机记录' })
+            Column() {
+              ForEach(this.otherLocalRecords(), (local: FocusLocalView, index: number) => {
+                AppActionRow({ title: this.localTitle(local), subtitle: this.localLabel(local),
+                  detail: this.duration(local.elapsedMs), divider: index < this.otherLocalRecords().length - 1,
+                  onAction: () => this.onSelect(local.recordId) })
+              }, (local: FocusLocalView) => `${local.recordId}-${local.localState}-${local.saveState}`)
+            }.width('100%').backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius).clip(true)
           }
-          Row({ space: 8 }) {
-            Text(this.state.record === null ? '已同步记录' : '其他已同步记录').fontSize(this.palette.sectionTitle).fontColor(this.palette.ink).layoutWeight(1)
-            Button('刷新').constraintSize({ minHeight: 44 }).fontSize(this.palette.bodySize).fontColor(this.palette.accent).backgroundColor(Color.Transparent).enabled(this.active && !this.state.historyLoading).onClick(() => this.onRefresh())
-          }.width('100%')
+          AppSectionHeader({ title: this.state.record === null ? '已同步记录' : '其他已同步记录',
+            actionLabel: this.state.historyLoading ? '读取中…' : '刷新',
+            actionEnabled: this.active && !this.state.historyLoading, onAction: () => this.onRefresh() })
           if (this.state.historyLoading) { Text('正在读取记录…').fontSize(this.palette.bodySize).fontColor(this.palette.secondary) }
           if (this.state.historyError.length > 0) { Text(this.state.historyError).fontSize(this.palette.bodySize).fontColor(this.palette.warning).width('100%').wordBreak(WordBreak.BREAK_WORD) }
           if (!this.state.historyLoading && this.state.historyError.length === 0 && this.state.history.length === 0) { Text('还没有已读取的同步记录。').fontSize(this.palette.bodySize).fontColor(this.palette.secondary).width('100%') }
-          ForEach(this.otherHistoryRecords(), (record: FocusRecord) => {
-            Button({ type: ButtonType.Normal }) {
-              Column({ space: 4 }) {
-                Text(this.recordTitle(record)).fontSize(this.palette.bodySize).fontColor(this.palette.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
-                Text(`${formatPlanDateTime(record.started_at)} · ${this.duration(record.confirmed_elapsed_ms)} · ${this.recordLabel(record)}`).fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
-              }.width('100%').alignItems(HorizontalAlign.Start)
-            }.width('100%').constraintSize({ minHeight: 64 }).padding(12).backgroundColor(this.palette.surface).onClick(() => this.onSelect(record.record_id))
-          }, (record: FocusRecord) => `${record.record_id}-${record.revision}`)
+          Column() {
+            ForEach(this.otherHistoryRecords(), (record: FocusRecord, index: number) => {
+              AppActionRow({ title: this.recordTitle(record),
+                subtitle: `${formatPlanDateTime(record.started_at)}\n${this.recordLabel(record)}`,
+                detail: this.duration(record.confirmed_elapsed_ms), divider: index < this.otherHistoryRecords().length - 1,
+                onAction: () => this.onSelect(record.record_id) })
+            }, (record: FocusRecord) => `${record.record_id}-${record.revision}`)
+          }.width('100%').backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius).clip(true)
           if (this.state.historyHasMore) { Button('加载更多记录').width('100%').constraintSize({ minHeight: 44 }).fontSize(this.palette.bodySize).fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft).borderRadius(this.palette.controlRadius).enabled(this.active && !this.state.historyLoading).onClick(() => this.onLoadMore()) }
 
           InfoDisclosure({ title: '计时与同步说明', message: '只累计可靠计时器确认的片段；切换应用内页面可继续计时，进入后台自动暂停。未确认的区间不补算，网络等待不计入。联网模式确认开始后计时；仅本机模式需主动同步。结束记录不会自动完成任务。' })
@@ -419,6 +421,6 @@ export struct FocusPage {
           }
         }.width('100%').alignItems(HorizontalAlign.Start).padding({ top: 12, bottom: 24 })
       }.width('100%').layoutWeight(1).align(Alignment.TopStart)
-    }.width('100%').height('100%').padding({ left: 20, right: 20, bottom: 16 }).backgroundColor(this.palette.bg)
+    }.width('100%').height('100%').padding({ left: this.palette.pageInset, right: this.palette.pageInset, bottom: 16 }).backgroundColor(this.palette.bg)
   }
 }

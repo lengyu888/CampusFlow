@@ -13,6 +13,7 @@ import { AppTheme } from '../theme/AppTheme';
 import { ThemePalette, themePalette } from '../theme/ThemePalette';
 import { EvidencePanel } from '../components/EvidencePanel';
 import { AppIcon } from '../components/AppIcon';
+import { AppPageHeader } from '../components/AppPageHeader';
 import { FeedbackPanel } from '../components/FeedbackPanel';
 import { InfoDisclosure } from '../components/InfoDisclosure';
 
@@ -691,13 +692,7 @@ export struct TimetablePage {
 
   build() {
     Column() {
-      Row({ space: 8 }) {
-        Button({ type: ButtonType.Normal }) { AppIcon({ name: 'back', iconSize: 22, color: this.palette.accent }) }
-          .width(44).height(44).backgroundColor(Color.Transparent).borderRadius(12)
-          .accessibilityText('返回校园').onClick(() => this.onBack())
-        Text(this.reviewOpen ? '确认课表' : '我的课表').fontSize(22).fontWeight(FontWeight.Bold)
-          .fontColor(this.palette.ink).layoutWeight(1)
-      }.width('100%').constraintSize({ minHeight: 56 }).padding({ left: 8, right: this.palette.pageInset, top: 4, bottom: 4 })
+      AppPageHeader({ title: this.reviewOpen ? '确认课表' : '我的课表', backLabel: '返回校园', onBack: () => this.onBack() })
       Scroll(this.scroller) {
         Column({ space: this.palette.sectionGap }) {
           this.DraftRecovery()

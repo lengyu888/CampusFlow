@@ -6,6 +6,7 @@ import { shanghaiDate } from '../utils/DailyAgenda';
 import { localHistory } from '../services/LocalHistory';
 import { MessageContent } from '../components/MessageContent';
 import { InfoDisclosure } from '../components/InfoDisclosure';
+import { AppActionRow } from '../components/AppActionRow';
 import { AppTheme } from '../theme/AppTheme';
 import { ThemePalette, themePalette } from '../theme/ThemePalette';
 import { EvidencePanel } from '../components/EvidencePanel';
@@ -2250,11 +2251,15 @@ export struct AgentPage {
     Button({ type: ButtonType.Normal }) {
       Row({ space: 12 }) {
         AppIcon({ name: icon, iconSize: 20, color: this.palette.accent })
-        Text(title).fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium).fontColor(this.palette.ink)
-          .layoutWeight(1).textAlign(TextAlign.Start).wordBreak(WordBreak.BREAK_WORD)
+        Column({ space: 3 }) {
+          Text(title).fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium).fontColor(this.palette.ink)
+            .width('100%').textAlign(TextAlign.Start).wordBreak(WordBreak.BREAK_WORD)
+          Text(detail).fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
+            .width('100%').textAlign(TextAlign.Start).wordBreak(WordBreak.BREAK_WORD)
+        }.layoutWeight(1).alignItems(HorizontalAlign.Start)
         AppIcon({ name: 'chevron', iconSize: 16, color: this.palette.quiet })
       }.width('100%')
-    }.width('100%').padding({ left: 16, right: 12, top: 14, bottom: 14 }).constraintSize({ minHeight: 60 })
+    }.width('100%').padding({ left: 16, right: 12, top: 14, bottom: 14 }).constraintSize({ minHeight: 68 })
       .backgroundColor(Color.Transparent).borderRadius(0)
       .accessibilityText(`${title}，${detail}，填入输入框`)
       .onClick(() => this.choosePrompt(prompt))
@@ -2360,23 +2365,20 @@ export struct AgentPage {
       Button('刷新模型列表').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize).fontColor(this.palette.accent)
         .backgroundColor(this.palette.surface).enabled(!this.modelsLoading).onClick(() => this.loadModels())
       InfoDisclosure({ title: '模型使用说明', message: '能力以服务配置为准，配置可用不代表已完成真实评测。切换仅影响后续消息。' })
-      Button(this.runRecordsExpanded ? '收起最近运行' : '最近运行 · 恢复查看').width('100%')
-        .constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize).fontColor(this.palette.accent)
-        .backgroundColor(this.palette.surface).borderRadius(this.palette.controlRadius).onClick(() => this.toggleRunRecords())
-      Button('语音使用说明').width('100%').constraintSize({ minHeight: 48 }).fontColor(this.palette.accent).backgroundColor(this.palette.surface)
-        .onClick(() => { this.explainedSpeechId = ''; this.voiceExplanationOpen = true; })
-      if (this.sessionMode === 'continue') {
-        Button('刷新会话上下文').width('100%').constraintSize({ minHeight: 48 }).fontColor(this.palette.accent).backgroundColor(this.palette.surface)
-          .enabled(!this.loading && !this.sessionLoading).onClick(() => this.refreshSessionContext())
-      }
-      Button('账号与模型设置').width('100%').constraintSize({ minHeight: 48 })
-        .fontSize(this.palette.bodySize).fontColor(this.palette.accent).backgroundColor(this.palette.surface)
-        .borderRadius(this.palette.controlRadius).onClick(() => this.onOpenProfile())
-      Button('校园导航').width('100%').constraintSize({ minHeight: 48 })
-        .fontSize(this.palette.bodySize).fontColor(this.palette.accent).backgroundColor(this.palette.surface)
-        .borderRadius(this.palette.controlRadius).onClick(() => this.onOpenRoute())
+      Column() {
+        AppActionRow({ title: this.runRecordsExpanded ? '收起最近运行' : '最近运行',
+          subtitle: '查看进度与恢复记录', icon: 'history', divider: true, onAction: () => this.toggleRunRecords() })
+        AppActionRow({ title: '语音使用说明', icon: 'microphone', divider: true,
+          onAction: () => { this.explainedSpeechId = ''; this.voiceExplanationOpen = true; } })
+        if (this.sessionMode === 'continue') {
+          AppActionRow({ title: '刷新会话上下文', icon: 'assistant', divider: true,
+            actionEnabled: !this.loading && !this.sessionLoading, onAction: () => this.refreshSessionContext() })
+        }
+        AppActionRow({ title: '账号与模型设置', icon: 'person', divider: true, onAction: () => this.onOpenProfile() })
+        AppActionRow({ title: '校园导航', icon: 'route', onAction: () => this.onOpenRoute() })
+      }.width('100%').backgroundColor(this.palette.surface).borderRadius(this.palette.controlRadius).clip(true)
     }.width('100%').padding(this.palette.cardInset).backgroundColor(this.palette.surface)
-      .borderRadius(this.palette.cardRadius).border({ width: 1, color: this.palette.line }).alignItems(HorizontalAlign.Start)
+      .borderRadius(this.palette.cardRadius).border({ width: 0.5, color: this.palette.line }).alignItems(HorizontalAlign.Start)
   }
 
   @Builder
@@ -2528,7 +2530,7 @@ export struct AgentPage {
                   Text(this.voiceState.speakingMessageId === message.id ? '停止' : '播报')
                     .fontSize(this.palette.metaSize).fontColor(this.palette.accent)
                 }
-              }.constraintSize({ minHeight: 48, minWidth: 72 }).padding(8)
+              }.constraintSize({ minHeight: 44, minWidth: 64 }).padding({ left: 8, right: 0, top: 4, bottom: 4 })
                 .backgroundColor(Color.Transparent).borderRadius(this.palette.controlRadius)
                 .accessibilityText(this.voiceState.speakingMessageId === message.id ? '停止播报这条回答' : '播报这条回答正文')
                 .enabled(message.incomplete !== true && (this.speechPending() && this.voiceState.speakingMessageId === message.id ||
@@ -2714,7 +2716,7 @@ export struct AgentPage {
           Text(this.hasConversation() ? conversationTitle(this.sessionTitle) : '助手')
             .fontSize(20).fontWeight(FontWeight.Bold).fontColor(this.palette.ink).width('100%')
             .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-          Text(this.selectedModelLabel()).fontSize(12).fontColor(this.palette.quiet).width('100%')
+          Text(this.selectedModelLabel()).fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
             .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
         }.alignItems(HorizontalAlign.Start).layoutWeight(1)
         Button({ type: ButtonType.Normal }) {
@@ -2750,7 +2752,7 @@ export struct AgentPage {
       }
 
       Scroll(this.chatScroller) {
-        Column({ space: 24 }) {
+        Column({ space: 20 }) {
           if (this.sessionNotice.length > 0) {
             Text(this.sessionNotice).fontSize(this.palette.bodySize).fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
           }
@@ -2764,25 +2766,24 @@ export struct AgentPage {
           if (this.runRecordsExpanded) { this.RunRecords() }
           if (this.runState.runId.length > 0) { this.RunPanel() }
           if (!this.hasConversation()) {
-            Column({ space: 12 }) {
-              Text('今天想安排什么？').fontSize(28).fontWeight(FontWeight.Bold)
+            Column({ space: 8 }) {
+              Text('今天想安排什么？').fontSize(26).fontWeight(FontWeight.Bold)
                 .fontColor(this.palette.ink).width('100%')
-              Text('描述目标 → 核对方案 → 确认加入计划')
+              Text('查校园信息，或把目标安排进日程。')
                 .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
-            }.width('100%').alignItems(HorizontalAlign.Start).padding({ top: 28, bottom: 4 })
-            Button('使用助手与配置指南').constraintSize({ minHeight: 44 }).fontSize(this.palette.metaSize)
-              .fontColor(this.palette.accent).backgroundColor(Color.Transparent).padding(0)
-              .onClick(() => { if (this.voiceActive) { this.onOpenGuide(); } })
+            }.width('100%').alignItems(HorizontalAlign.Start).padding({ top: 16, bottom: 4 })
             Column() {
               this.suggestion('安排一次复习', '结合课程，先生成待确认方案', 'calendar',
                 '根据我今天的课程和待办，找一段合适的空闲时间安排复习，先生成待确认的提案。')
-              Divider().color(this.palette.line).strokeWidth(1).margin({ left: 48 })
+              Divider().color(this.palette.line).strokeWidth(0.5).margin({ left: 48 })
               this.suggestion('制定一周复习计划', '分解目标，循序渐进', 'book',
                 '结合我的近期课程，帮我制定一周复习计划，分解为里程碑和待办，先生成提案。')
-              Divider().color(this.palette.line).strokeWidth(1).margin({ left: 48 })
+              Divider().color(this.palette.line).strokeWidth(0.5).margin({ left: 48 })
               this.suggestion('看看我的校园安排', '查询已同步的个人校园信息', 'classroom',
                 '查看我已同步的校园信息，结合最近的课表，提醒我接下来需要关注的事项。')
             }.width('100%').backgroundColor(this.palette.field).borderRadius(this.palette.cardRadius).clip(true)
+            AppActionRow({ title: '助手使用指南', subtitle: '先核对方案，确认后才加入计划', icon: 'info',
+              onAction: () => { if (this.voiceActive) { this.onOpenGuide(); } } })
           }
           ForEach(this.visibleMessages(), (message: ConversationEntry) => {
             Column({ space: 16 }) {

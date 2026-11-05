@@ -124,10 +124,10 @@ export struct LoginPage {
 
   build() {
     Scroll() {
-      Column({ space: 24 }) {
+      Column({ space: 20 }) {
         Column({ space: 8 }) {
           Text('行简').fontSize(this.palette.pageTitle).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
-          Text('安排今天，专心完成。').fontSize(this.palette.bodySize).fontColor(this.palette.quiet)
+          Text('安排今天，专心完成。').fontSize(this.palette.metaSize).fontColor(this.palette.quiet)
         }.width('100%').alignItems(HorizontalAlign.Start)
 
         Column({ space: 16 }) {
@@ -197,7 +197,7 @@ export struct LoginPage {
             })
         }
         .width('100%')
-        .padding(this.palette.cardInset)
+        .padding(20)
         .backgroundColor(this.palette.surface)
         .borderRadius(this.palette.cardRadius)
 

@@ -43,10 +43,10 @@ export class AppTheme {
   static readonly pageInset: number = 20;
   static readonly sectionGap: number = 24;
   static readonly cardInset: number = 16;
-  static readonly cardRadius: number = 20;
+  static readonly cardRadius: number = 18;
   static readonly controlRadius: number = 12;
-  static readonly pageTitle: number = 34;
-  static readonly sectionTitle: number = 20;
+  static readonly pageTitle: number = 30;
+  static readonly sectionTitle: number = 18;
   static readonly bodySize: number = 17;
   static readonly metaSize: number = 13;
 

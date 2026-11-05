@@ -22,6 +22,8 @@ import { CampusFlowApi } from '../services/CampusFlowApi';
 import { AppTheme } from '../theme/AppTheme';
 import { ThemePalette, themePalette } from '../theme/ThemePalette';
 import { AppIcon } from '../components/AppIcon';
+import { AppPageHeader } from '../components/AppPageHeader';
+import { AppActionRow } from '../components/AppActionRow';
 import { TaskScheduleDetails } from '../components/TaskScheduleDetails';
 import { PlanningActionController, PlanningActionState, editedPlanningTime, validPlanningDate, planningTimestamp } from '../utils/PlanningAction';
 import { PlanningActionPanel } from '../components/PlanningActionPanel';
@@ -1958,29 +1960,20 @@ export struct PlanCenterPage {
               }, (overlap: CourseOverlap) => overlap.course_key)
             }
             if (task.status !== 'completed') {
-              Column({ space: 8 }) {
-                Text('需要专心做一会儿？').fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium).fontColor(this.palette.ink).width('100%')
-                Text('可选计时；结束后再确认任务是否完成。').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
-                Button('开始专注').width('100%').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
-                  .fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft).borderRadius(this.palette.controlRadius)
-                  .enabled(this.active).onClick(() => this.focusRequested(task))
-              }.width('100%').alignItems(HorizontalAlign.Start).padding(this.palette.cardInset)
-                .backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
+              Column() {
+                AppActionRow({ title: '开始专注', subtitle: '可选计时，结束后再确认完成', icon: 'bolt',
+                  actionEnabled: this.active, onAction: () => this.focusRequested(task) })
+              }.width('100%').backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius).clip(true)
             }
             Column({ space: 0 }) {
               if (task.plan_id !== null) {
-                Button('查看所属计划').width('100%').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
-                  .fontColor(this.palette.accent).backgroundColor(Color.Transparent).borderRadius(0)
-                  .onClick(() => this.openDetails('plan', task.plan_id ?? ''))
-                Divider().color(this.palette.line)
+                AppActionRow({ title: '查看所属计划', icon: 'calendar', divider: true,
+                  onAction: () => this.openDetails('plan', task.plan_id ?? '') })
               }
-              Button('编辑任务与时间').width('100%').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
-                .fontColor(this.palette.accent).backgroundColor(Color.Transparent).borderRadius(0)
-                .enabled(!this.writesBlocked()).onClick(() => this.beginTaskEdit(task))
-              Divider().color(this.palette.line)
-              Button('删除任务…').width('100%').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
-                .fontColor(this.palette.danger).backgroundColor(Color.Transparent).borderRadius(0)
-                .enabled(!this.writesBlocked()).onClick(() => this.requestDelete(task))
+              AppActionRow({ title: '编辑任务与时间', icon: 'calendar', divider: true,
+                actionEnabled: !this.writesBlocked(), onAction: () => this.beginTaskEdit(task) })
+              AppActionRow({ title: '删除任务…', danger: true,
+                actionEnabled: !this.writesBlocked(), onAction: () => this.requestDelete(task) })
             }.width('100%').backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius).clip(true)
           }.width('100%')
         }, (task: PlanningTask) => `${task.task_id}-${this.planningRevision}`)
@@ -2020,26 +2013,22 @@ export struct PlanCenterPage {
 
   build() {
     Column({ space: 12 }) {
+      if (this.detailKind.length > 0) {
+        AppPageHeader({ title: this.detailTitle(), backLabel: this.backLabel(), onBack: () => this.closeDetails() })
+          .padding({ left: 12, right: 10 })
+      } else {
       Row({ space: 8 }) {
-        if (this.detailKind.length > 0) {
-          Button({ type: ButtonType.Circle }) {
-            AppIcon({ name: 'back', iconSize: 22, color: this.palette.accent })
-          }.width(44).height(44).backgroundColor(Color.Transparent)
-            .accessibilityText(this.backLabel())
-            .onClick(() => this.closeDetails())
-        }
         Column({ space: 4 }) {
-          Text(this.detailKind.length > 0 ? this.detailTitle() : '计划').fontSize(this.detailKind.length > 0 ? 22 : this.palette.pageTitle)
+          Text('计划').fontSize(this.palette.pageTitle)
             .fontWeight(FontWeight.Bold).fontColor(this.palette.ink).width('100%')
         }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-        if (this.detailKind.length === 0) {
           Button({ type: ButtonType.Circle }) {
             AppIcon({ name: 'plus', iconSize: 24, color: this.palette.accent })
           }.width(44).height(44).backgroundColor(this.palette.accentSoft)
             .accessibilityText('添加待办')
             .onClick(() => this.openDetails('draft'))
-        }
       }.width('100%').padding({ left: this.palette.pageInset, right: this.palette.pageInset, top: 16 })
+      }
       if (this.errorText.length > 0) {
         Row({ space: 8 }) {
           Text(this.errorText).fontSize(this.palette.metaSize).fontColor(this.palette.danger).layoutWeight(1)

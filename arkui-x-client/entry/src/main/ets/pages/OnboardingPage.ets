@@ -895,8 +895,8 @@ export struct OnboardingPage {
             }.width('100%')
             Text(this.step === 0 ? '校园与学期' : (this.step === 1 ? '添加课程' : '确认课表'))
               .fontSize(22).fontWeight(FontWeight.Bold).fontColor(this.palette.ink).width('100%')
-            Text(this.step === 0 ? '课表用来避开上课时间，校园地点用来辅助安排。' :
-              (this.step === 1 ? '手动录入和订阅导入都可以；确认前均为草稿。' : '保存眼前这份课表，之后助手才能据此安排学习。'))
+            Text(this.step === 0 ? '填写校园，方便安排课程与地点。' :
+              (this.step === 1 ? '手动录入或订阅导入，确认前均为草稿。' : '核对日期、时间和地点后保存。'))
               .fontSize(this.palette.metaSize).lineHeight(21).fontColor(this.palette.quiet).width('100%')
             Row({ space: 6 }) {
               ForEach([0, 1, 2], (step: number) => {

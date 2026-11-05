@@ -1,5 +1,7 @@
 import { UserProfile, WeatherForecast } from '../model/ApiModels';
 import { AppIcon } from '../components/AppIcon';
+import { AppActionRow } from '../components/AppActionRow';
+import { AppSectionHeader } from '../components/AppSectionHeader';
 import { AppTheme } from '../theme/AppTheme';
 import { ThemePalette, themePalette } from '../theme/ThemePalette';
 import { EvidencePanel } from '../components/EvidencePanel';
@@ -158,25 +160,7 @@ export struct CampusPage {
 
   @Builder
   private Entry(icon: string, title: string, description: string, action: () => void) {
-    Button({ type: ButtonType.Normal }) {
-      Row({ space: 12 }) {
-        Stack() {
-          AppIcon({ name: icon, iconSize: 20,
-            color: icon === 'route' ? this.palette.success : icon === 'classroom' ? this.palette.orange : this.palette.accent })
-        }.width(32).height(32)
-          .backgroundColor(icon === 'route' ? this.palette.successSoft : icon === 'classroom' ? this.palette.orangeSoft : this.palette.accentSoft)
-          .borderRadius(8)
-        Column({ space: 3 }) {
-          Text(title).fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium)
-            .fontColor(this.palette.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
-          Text(description).fontSize(this.palette.metaSize).fontColor(this.palette.quiet)
-            .width('100%').wordBreak(WordBreak.BREAK_WORD)
-        }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-        AppIcon({ name: 'chevron', iconSize: 14, color: this.palette.muted })
-      }.width('100%')
-    }.width('100%').constraintSize({ minHeight: 68 }).padding({ left: 16, right: 16, top: 12, bottom: 12 })
-      .backgroundColor(Color.Transparent).borderRadius(0)
-      .accessibilityText(`${title}，${description}`).onClick(action)
+    AppActionRow({ icon: icon, title: title, subtitle: description, onAction: action })
   }
 
   @Builder
@@ -200,46 +184,37 @@ export struct CampusPage {
             .accessibilityText('打开个人设置').onClick(() => this.onOpenProfile())
         }.width('100%')
         Column({ space: 10 }) {
-          Text('校园生活').fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
+          AppSectionHeader({ title: '常用服务' })
           Column() {
-            this.Entry('calendar', '我的课表', '查看课程与导入课表', () => this.onOpenTimetable())
+            this.Entry('calendar', '我的课表', '课程安排与订阅', () => this.onOpenTimetable())
             this.EntryDivider()
-            this.Entry('route', '校园导航', '选择地点，查看路线', () => this.onOpenRoute())
+            this.Entry('route', '校园导航', '选地点，查看路线', () => this.onOpenRoute())
             this.EntryDivider()
             this.Entry('classroom', '校园实时服务', '教室、电费、图书馆与校园卡', () => this.onOpenServices())
           }.width('100%').backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
             .clip(true)
         }.width('100%').alignItems(HorizontalAlign.Start)
-        this.WeatherCard()
-        Button({ type: ButtonType.Normal }) {
-          Row({ space: 12 }) {
-            Stack() { AppIcon({ name: 'book', iconSize: 20, color: this.palette.accent }) }
-              .width(32).height(32).backgroundColor(this.palette.accentSoft).borderRadius(8)
-            Column({ space: 5 }) {
-              Text('校园指南').fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium).fontColor(this.palette.ink).width('100%')
-              Text('图书馆、校园网络等资料').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
-            }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-            AppIcon({ name: 'chevron', iconSize: 14, color: this.palette.muted })
-              .rotate({ angle: this.knowledgeExpanded ? 90 : 0 })
-          }.width('100%')
-        }.width('100%').constraintSize({ minHeight: 68 }).padding(this.palette.cardInset).backgroundColor(this.palette.surface)
-          .borderRadius(this.palette.cardRadius)
-          .accessibilityText(`校园指南，${this.knowledgeExpanded ? '已展开' : '已收起'}`)
-          .onClick(() => animateTo({ duration: AppTheme.motion(160) }, () => this.knowledgeExpanded = !this.knowledgeExpanded))
-        CampusKnowledgePanel({ baseUrl: this.baseUrl, token: this.token, campusScope: this.campusIdentity(), active: this.active && this.knowledgeExpanded })
-          .visibility(this.knowledgeExpanded ? Visibility.Visible : Visibility.None)
         Column({ space: 10 }) {
-          Text('工具与设置').fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
+          AppSectionHeader({ title: '资料与工具' })
           Column() {
+            AppActionRow({ icon: 'book', title: '校园指南', subtitle: '图书馆、校园网络等资料',
+              detail: this.knowledgeExpanded ? '收起' : '展开', chevron: false,
+              onAction: () => animateTo({ duration: AppTheme.motion(160), curve: Curve.EaseInOut }, () => {
+                this.knowledgeExpanded = !this.knowledgeExpanded;
+              }) })
+            CampusKnowledgePanel({ baseUrl: this.baseUrl, token: this.token, campusScope: this.campusIdentity(), active: this.active && this.knowledgeExpanded })
+              .visibility(this.knowledgeExpanded ? Visibility.Visible : Visibility.None)
+            this.EntryDivider()
             this.Entry('skills', '能力管理', '查看用途与权限', () => this.onOpenSkills())
             this.EntryDivider()
             this.Entry('person', '数据与连接', '账号、课表与模型设置', () => this.onOpenProfile())
             this.EntryDivider()
-            this.Entry('assistant', '问问助手', '结合课表安排校园生活',
+            this.Entry('assistant', '问问助手', '结合课表规划',
               () => this.onOpenAgent('根据我的课表，帮我看看今天需要注意的校园安排。请说明信息来源。'))
           }.width('100%').backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
             .clip(true)
         }.width('100%').alignItems(HorizontalAlign.Start)
+        this.WeatherCard()
         InfoDisclosure({ title: '信息来源与使用说明', message: '校园信息以已连接的数据源为准。天气为城市级预报，不读取设备位置；时间安排须预览确认后执行。' })
       }.width('100%').alignItems(HorizontalAlign.Start)
         .padding({ left: this.palette.pageInset, right: this.palette.pageInset, top: 20, bottom: 32 })

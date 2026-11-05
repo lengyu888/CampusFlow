@@ -3,7 +3,8 @@ import { RouteMap } from '../components/RouteMap';
 import { CampusFlowApi } from '../services/CampusFlowApi';
 import { AppTheme } from '../theme/AppTheme';
 import { ThemePalette, themePalette } from '../theme/ThemePalette';
-import { AppIcon } from '../components/AppIcon';
+import { AppPageHeader } from '../components/AppPageHeader';
+import { InfoDisclosure } from '../components/InfoDisclosure';
 import { FeedbackPanel } from '../components/FeedbackPanel';
 import { EvidencePanel } from '../components/EvidencePanel';
 import { openingStatus } from '../utils/EvidencePresentation';
@@ -294,8 +295,7 @@ export struct RoutePage {
           }, (place: CampusDataPlace) => place.place_id)
         }
         EvidencePanel({ evidence: this.visibleCourse.evidence, active: this.active })
-        Text('来源描述整份已保存课表；地图仅指向楼宇，不定位到教室或当前位置。')
-          .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%').wordBreak(WordBreak.BREAK_WORD)
+        InfoDisclosure({ title: '课程地点说明', message: '来源描述整份已保存课表；地图仅指向楼宇，不定位到教室或当前位置。' })
       }.width('100%').alignItems(HorizontalAlign.Start).padding(this.palette.cardInset)
         .backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
     }
@@ -306,7 +306,7 @@ export struct RoutePage {
     Column({ space: 8 }) {
       Text(`${place.name} · ${openingStatus(place)}`).fontSize(this.palette.bodySize).fontColor(this.palette.ink)
         .width('100%').wordBreak(WordBreak.BREAK_WORD)
-      Text(`参考开放时间：${place.open_hours.length > 0 ? place.open_hours : '未提供'}。临时闭馆与现场通行情况请另行核对。`)
+      Text(`参考开放时间：${place.open_hours.length > 0 ? place.open_hours : '未提供'}`)
         .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%').wordBreak(WordBreak.BREAK_WORD)
       EvidencePanel({ evidence: place.evidence ?? [], active: this.active })
     }.width('100%').alignItems(HorizontalAlign.Start)
@@ -314,13 +314,7 @@ export struct RoutePage {
 
   build() {
     Column() {
-      Row({ space: 8 }) {
-        Button({ type: ButtonType.Normal }) {
-          AppIcon({ name: 'back', iconSize: 22, color: this.palette.accent })
-        }.width(44).height(44).backgroundColor(Color.Transparent).borderRadius(12)
-          .accessibilityText('返回上一页').onClick(() => this.onBack())
-        Text('校园导航').fontSize(22).fontWeight(FontWeight.Bold).fontColor(this.palette.ink).layoutWeight(1)
-      }.width('100%').constraintSize({ minHeight: 56 }).padding({ left: 8, right: 20, top: 4, bottom: 4 })
+      AppPageHeader({ title: '校园导航', onBack: () => this.onBack() })
 
       Scroll(this.scroller) {
         Column({ space: 16 }) {
@@ -329,7 +323,11 @@ export struct RoutePage {
             Row() {
               Text('选择路线').fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
               Blank()
-              Text(`${this.places.length} 个地点`).fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
+              Button('交换起终点').constraintSize({ minHeight: 44 }).fontSize(this.palette.metaSize).fontColor(this.palette.accent)
+                .padding({ left: 8, right: 0 }).backgroundColor(Color.Transparent)
+                .enabled(!this.loading && this.originIndex >= 0 && this.destinationIndex >= 0).onClick(() => {
+                  this.getUIContext().animateTo({ duration: AppTheme.motion(200), curve: Curve.EaseOut }, () => this.swap());
+                })
             }.width('100%')
 
             if (this.loading) {
@@ -341,36 +339,31 @@ export struct RoutePage {
               FeedbackPanel({ kind: 'empty', title: '地点数据不足', message: '需要至少两个可用地点才能生成路线。',
                 actionLabel: '重新读取', onAction: () => this.loadPlaces() })
             } else {
-              Column({ space: 6 }) {
-                Text('起点').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
+              Row({ space: 12 }) {
+                Text('起点').fontSize(this.palette.bodySize).fontColor(this.palette.secondary).width(40)
                 Select(this.options()).selected(this.originIndex)
                   .value(this.places[this.originIndex]?.name ?? '请选择起点')
                   .fontColor(this.palette.ink).backgroundColor(this.palette.field)
                   .optionBgColor(this.palette.surface).optionFontColor(this.palette.ink)
                   .selectedOptionBgColor(this.palette.accentSoft).selectedOptionFontColor(this.palette.accent)
-                  .borderRadius(13).width('100%').constraintSize({ minHeight: 48 })
+                  .borderRadius(this.palette.controlRadius).layoutWeight(1).constraintSize({ minHeight: 48 })
                   .onSelect((index: number) => {
                     this.choosePlace(index, true);
                   })
-              }.width('100%').alignItems(HorizontalAlign.Start)
+              }.width('100%')
 
-              Button('交换起终点').constraintSize({ minHeight: 44 }).fontSize(this.palette.metaSize).fontColor(this.palette.accent)
-                .backgroundColor(Color.Transparent).borderRadius(12).enabled(this.originIndex >= 0 && this.destinationIndex >= 0).onClick(() => {
-                  this.getUIContext().animateTo({ duration: AppTheme.motion(200), curve: Curve.EaseOut }, () => this.swap());
-                })
-
-              Column({ space: 6 }) {
-                Text('终点').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
+              Row({ space: 12 }) {
+                Text('终点').fontSize(this.palette.bodySize).fontColor(this.palette.secondary).width(40)
                 Select(this.options()).selected(this.destinationIndex)
                   .value(this.places[this.destinationIndex]?.name ?? '请选择终点')
                   .fontColor(this.palette.ink).backgroundColor(this.palette.field)
                   .optionBgColor(this.palette.surface).optionFontColor(this.palette.ink)
                   .selectedOptionBgColor(this.palette.accentSoft).selectedOptionFontColor(this.palette.accent)
-                  .borderRadius(13).width('100%').constraintSize({ minHeight: 48 })
+                  .borderRadius(this.palette.controlRadius).layoutWeight(1).constraintSize({ minHeight: 48 })
                   .onSelect((index: number) => {
                     this.choosePlace(index, false);
                   })
-              }.width('100%').alignItems(HorizontalAlign.Start)
+              }.width('100%')
 
               Text('手动选择起点，不读取当前位置。').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
 
@@ -392,18 +385,14 @@ export struct RoutePage {
 
           if (this.route !== null) {
             RouteMap({ route: this.route as CampusRoute })
-            Text('路线几何为示意，距离与步行分钟为估算；不含实时定位、道路封闭或通行状态。')
+            Text('示意路线 · 步行时间为估算，请核对现场通行情况。')
               .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%').wordBreak(WordBreak.BREAK_WORD)
+            InfoDisclosure({ title: '路线与开放时间说明', message: '路线几何为示意，距离与步行分钟为估算；不含实时定位、道路封闭或通行状态。开放时间为参考资料，临时闭馆与现场通行情况请另行核对。' })
             EvidencePanel({ evidence: this.route.evidence ?? [], active: this.active })
             this.PlaceEvidence(this.route.origin)
             this.PlaceEvidence(this.route.destination)
           } else if (!this.loading && !this.routeLoading && this.errorText.length === 0 && this.placesError.length === 0 && this.places.length >= 2) {
-            Column({ space: 7 }) {
-              AppIcon({ name: 'route', iconSize: 32, color: this.palette.accent })
-              Text('选择两个地点').fontSize(17).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
-              Text('路线按已有校园地图生成，步行时间为估算；请以现场道路与通行情况为准。')
-                .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).textAlign(TextAlign.Center)
-            }.width('100%').padding(20).backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
+            InfoDisclosure({ title: '地图与路线说明', message: '选择两个不同地点后生成路线。路线按已有校园地图生成，步行时间为估算；请以现场道路与通行情况为准。' })
           }
         }.width('100%').alignItems(HorizontalAlign.Start).justifyContent(FlexAlign.Start)
           .padding({ left: 18, right: 18, top: 4, bottom: 32 })

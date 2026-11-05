@@ -12,6 +12,8 @@ import { CampusFlowApi } from '../services/CampusFlowApi';
 import { AppTheme } from '../theme/AppTheme';
 import { AppThemeId, ThemePalette, themePalette, selectAppTheme } from '../theme/ThemePalette';
 import { AppIcon } from '../components/AppIcon';
+import { AppPageHeader } from '../components/AppPageHeader';
+import { AppActionRow } from '../components/AppActionRow';
 import { FeedbackPanel } from '../components/FeedbackPanel';
 import { CampusFlowRequestError } from '../utils/AgentFeedback';
 import { LearningPreferencesPanel } from '../components/LearningPreferencesPanel';
@@ -648,27 +650,12 @@ export struct ProfilePage {
   @Builder
   private groupHeader(group: string, title: string, summary: () => string, homeRow: boolean = false) {
     if (this.section.length === 0 ? homeRow : this.sectionVisible(group)) {
-      Button({ type: ButtonType.Normal }) {
-        Row({ space: 12 }) {
-          Stack() {
-            AppIcon({ name: group === 'appearance' ? 'skills' : group === 'reminders' ? 'speaker' :
-              group === 'connections' ? 'classroom' : group === 'data' ? 'history' : group === 'learning' ? 'book' : 'person',
-              iconSize: 19, color: this.palette.accent })
-          }.width(30).height(30).backgroundColor(this.palette.accentSoft).borderRadius(8)
-          Column({ space: 3 }) {
-            Text(title).fontSize(this.palette.bodySize).fontColor(this.palette.ink).width('100%')
-              .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-            if (group === 'appearance' || group === 'model' || group === 'connections' || group === 'account' && this.accountDirty()) {
-              Text(summary()).fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
-                .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-            }
-          }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-          AppIcon({ name: 'chevron', iconSize: 16, color: this.palette.muted })
-        }.width('100%')
-      }.width('100%').constraintSize({ minHeight: 58 }).padding({ left: 16, right: 16, top: 11, bottom: 11 })
+      AppActionRow({ title: title,
+        icon: group === 'appearance' ? 'skills' : group === 'reminders' ? 'speaker' : group === 'model' ? 'assistant' :
+          group === 'connections' ? 'classroom' : group === 'data' ? 'history' : group === 'learning' ? 'book' : 'person',
+        subtitle: group === 'appearance' || group === 'model' || group === 'connections' || group === 'account' && this.accountDirty() ? summary() : '',
+        onAction: () => this.toggleGroup(group) })
         .backgroundColor(this.palette.surface).borderRadius(this.section.length === 0 ? 0 : this.palette.cardRadius)
-        .accessibilityText(`打开${title}，${summary()}`)
-        .onClick(() => this.toggleGroup(group))
     }
   }
 
@@ -768,13 +755,7 @@ export struct ProfilePage {
           this.SettingsHome()
           }
           if (this.section.length > 0) {
-            Row({ space: 8 }) {
-              Button({ type: ButtonType.Normal }) {
-                AppIcon({ name: 'back', iconSize: 22, color: this.palette.accent })
-              }.width(44).constraintSize({ minHeight: 44 }).backgroundColor(Color.Transparent)
-                .accessibilityText('返回我的设置').onClick(() => this.sectionBack())
-              Text(this.sectionTitle()).fontSize(22).fontWeight(FontWeight.Bold).fontColor(this.palette.ink).layoutWeight(1)
-            }.width('100%')
+            AppPageHeader({ title: this.sectionTitle(), backLabel: '返回我的设置', onBack: () => this.sectionBack() })
           }
           if (this.settingsNeedsCheck) {
             FeedbackPanel({ kind: 'warning', title: '保存结果待核对', message: '输入草稿仍在。先读取服务端资料，再决定是否重新保存。',
