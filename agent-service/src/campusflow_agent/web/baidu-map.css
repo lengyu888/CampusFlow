@@ -1,0 +1,9 @@
+html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; font: 14px/1.5 system-ui, sans-serif; color: #1d3048; background: #edf3f8; }
+#map { position: relative; width: 100%; height: 100%; }
+.map-route { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 6; pointer-events: none; transform: translateZ(0); }
+.map-route polyline { fill: none; stroke: #2563eb; stroke-width: 6; stroke-opacity: .9; stroke-linecap: round; stroke-linejoin: round; }
+#map-status { position: absolute; z-index: 2; top: 12px; left: 12px; right: 12px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; border: 1px solid #dce5ef; border-radius: 12px; background: rgb(255 255 255 / 96%); box-shadow: 0 3px 16px rgb(24 43 78 / 10%); }
+#map-status[hidden], #map-retry[hidden] { display: none; }
+#map-retry { flex: 0 0 auto; min-width: 64px; min-height: 36px; border: 1px solid #2d64c8; border-radius: 8px; color: #1850ad; background: #fff; cursor: pointer; }
+#map-retry:focus-visible { outline: 3px solid #7aa8ff; outline-offset: 2px; }
+/* SDK branding and map attribution remain visible in the bottom corners. */

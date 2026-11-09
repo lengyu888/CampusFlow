@@ -133,11 +133,13 @@ def test_authorized_context_exposes_read_tools_without_installing_skills() -> No
 
 
 @pytest.mark.asyncio
-async def test_route_intent_uses_tool_without_calling_remote_model() -> None:
+async def test_route_intent_without_map_keys_reports_setup_without_remote_model() -> None:
     store = CampusStore()
     skills = SkillStore()
     skills.install("student-001", "campus-navigator", ["places.read"])
-    service = AgentService(Settings(app_env="test"), store, skills)
+    service = AgentService(
+        Settings(_env_file=None, app_env="test",
+                 baidu_map_browser_ak=None, baidu_map_server_ak=None), store, skills)
     service.account_store = SimpleNamespace(
         get_user=lambda _: SimpleNamespace(school="杭电", campus="下沙"),
         get_context=lambda _: ([], {}),
@@ -153,12 +155,11 @@ async def test_route_intent_uses_tool_without_calling_remote_model() -> None:
         message="我想从六教到菜鸟驿站拿快递，请给我生成地图路线图。",
     )
 
-    assert "步行约 10 分钟" in reply.message
-    assert "北二门/南二门通道" in reply.message
-    assert "当前开放情况未知" in reply.message
-    assert "估算" in reply.message
+    assert "地图服务尚未配置" in reply.message
     assert reply.tool_traces[0].tool_name == "plan_campus_route"
-    assert reply.tool_traces[0].result["path"][-1]["place_id"] == "cainiao-station"
+    assert reply.tool_traces[0].result["available"] is False
+    assert reply.tool_traces[0].result["code"] == "MAP_NOT_CONFIGURED"
+    assert "path" not in reply.tool_traces[0].result
     assert [item.role for item in store.get_history("student-001", "route-session")] == [
         "user",
         "assistant",

@@ -16,6 +16,7 @@ from langchain_openai import ChatOpenAI
 from openai import AsyncOpenAI
 
 from .accounts import AccountStore
+from .baidu_maps import BaiduMapsError
 from .config import Settings
 from .context_middleware import ContextBudgetMiddleware
 from .conversation_context import AgentBudgetExceeded as AgentBudgetExceeded
@@ -38,6 +39,7 @@ from .legacy_receipts import (
 from .model_catalog import AgentConfigurationError as AgentConfigurationError
 from .model_catalog import ModelCatalog
 from .planning_workflow import planning_window, run_staged_plan
+from .route_presentation import route_failure, route_model_receipt
 from .run_budget import CURRENT_RUN_BUDGET, RunBudget
 from .runtime_read_context import READ_TOOLS, project_read_context, read_result_content
 from .schemas import CampusRoute, HistoryMessage, PendingAction, ToolTrace
@@ -85,8 +87,9 @@ SYSTEM_PROMPT = """你是 CampusFlow 大学规划与执行 Agent，服务高校�
     工具结果含 context_excerpt 时只是上下文节选；按其完整性和重查提示回答，
     不能将省略内容当作不存在。足以回答时直接汇总并说明范围；缺少关键数据才缩小范围补查，
     不重复相同参数期待获得更多节选内容。
-17. 静态校园地图、开放时段与路线仅供参考；open_now 为 null 表示未知，不是关闭。
-    路线步行时间、距离、几何为估算，不含实时路况；天气仅是所标城市级预报，不是校内实测。
+17. 校园开放时段仅供参考；open_now 为 null 表示未知，不是关闭。
+    provider=baidu 的路线来自百度道路规划，步行耗时为预计值，不能证明校门开放或现场通行。
+    历史 reference 路线为人工示意，不能作为当前百度结果；天气是城市级预报，不是校内实测。
 18. 查询校园办事规则或服务说明时使用 search_campus_knowledge。
     引用[标题·原文小节]并说明资料核对日期。
     知识条目是来源陈述与静态参考，不证明当前开放、实时名额或个人状态；missing/unsupported 不猜答案。
@@ -356,7 +359,9 @@ class AgentService:
             check_cancelled()
             trace.status = result.status if isinstance(result, ToolMessage) else "success"
             trace.result = self._decode_tool_result(
-                result.content if isinstance(result, ToolMessage) else result
+                result.artifact if isinstance(result, ToolMessage)
+                and name == "plan_campus_route" and isinstance(result.artifact, dict)
+                else result.content if isinstance(result, ToolMessage) else result
             )
             if trace.status == "error":
                 trace.result = {"error": "工具未完成，请检查输入或稍后重试。"}
@@ -418,11 +423,15 @@ class AgentService:
 
     def _runtime_tool_content(self, trace: ToolTrace) -> str:
         """Bound only model context; keep the actual proposal/result intact in the reply."""
+        limit = min(6000, self.settings.agent_max_context_chars // 4)
+        if trace.status == "success" and trace.tool_name == "plan_campus_route":
+            receipt = route_model_receipt(trace.result, min(2400, limit))
+            if receipt is not None:
+                return self._runtime_json(receipt)
         try:
             content = self._runtime_json(trace.result)
         except (TypeError, ValueError):
             return '{"error":"工具结果格式无法读取。"}'
-        limit = min(6000, self.settings.agent_max_context_chars // 4)
         read_content = read_result_content(trace, limit)
         if read_content is not None:
             return read_content
@@ -585,7 +594,8 @@ class AgentService:
                 isinstance(route_trace.result, dict)
                 and route_trace.result.get("available") is False
             ):
-                answer = "当前校区暂无可用的参考路线数据，请先核对学校与校区设置。"
+                answer = route_trace.result.get("message") or (
+                    "当前校区暂无可用的路线数据，请先核对学校与校区设置。")
             if route_trace.status == "success":
                 try:
                     answer = self._route_answer(CampusRoute.model_validate(route_trace.result))
@@ -891,7 +901,9 @@ class AgentService:
         frozen_history: list[HistoryMessage] | None = None,
         persist_history: bool = True,
     ) -> AgentReply:
-        direct_route = self._direct_route_reply(user_id=user_id, message=message)
+        route_deadline = self.store.campus_route_deadline()
+        direct_route = await asyncio.to_thread(
+            self._direct_route_reply, user_id=user_id, message=message, deadline=route_deadline)
         if direct_route is not None:
             if persist_history:
                 self.store.append_history(user_id, session_id, "user", message, model_name)
@@ -991,7 +1003,9 @@ class AgentService:
         destination = match.group("destination").strip()
         return (origin, destination) if origin and destination else None
 
-    def _direct_route_reply(self, *, user_id: str, message: str) -> AgentReply | None:
+    def _direct_route_reply(
+        self, *, user_id: str, message: str, deadline: float | None = None,
+    ) -> AgentReply | None:
         request = self._extract_route_request(message)
         if request is None:
             return None
@@ -1029,7 +1043,19 @@ class AgentService:
                 tool_traces=[trace],
             )
         try:
-            route = self.store.plan_campus_route(origin, destination)
+            route = self.store.plan_campus_route(
+                origin, destination, user_id=user_id, deadline=deadline)
+        except BaiduMapsError as exc:
+            failure = route_failure(exc.code)
+            failure["evidence"] = [data_evidence(
+                "baidu:walking", "百度地图步行规划", "remote", "error",
+                note=failure["message"]).model_dump(mode="json")]
+            trace = ToolTrace(
+                tool_call_id=f"direct-route-{uuid4().hex}", tool_name="plan_campus_route",
+                arguments={"origin": origin, "destination": destination},
+                result=failure, status="success")
+            trace.display = present_tool_trace(trace, [])
+            return AgentReply(message=failure["message"], tool_traces=[trace])
         except KeyError:
             return None
 
@@ -1048,6 +1074,13 @@ class AgentService:
 
     @staticmethod
     def _route_answer(route: CampusRoute) -> str:
+        if route.provider == "baidu":
+            return (
+                f"百度地图步行路线已生成：从{route.origin.name}到{route.destination.name}，"
+                f"预计步行约 {route.total_minutes} 分钟、{route.distance_meters} 米。"
+                "可在校园导航页面查看地图和分段路线。预计耗时不保证校门开放或现场通行；"
+                "目的地开放情况请以现场或官方通知为准。"
+            )
         waypoint_names = [
             point.label
             for point in route.path
@@ -1106,7 +1139,10 @@ class AgentService:
                     calls[trace.tool_call_id] = trace
             elif isinstance(item, ToolMessage):
                 trace = calls.get(item.tool_call_id)
-                result = AgentService._decode_tool_result(item.content)
+                result = AgentService._decode_tool_result(
+                    item.artifact if (item.name or (trace.tool_name if trace else None))
+                    == "plan_campus_route"
+                    and isinstance(item.artifact, dict) else item.content)
                 if trace is None:
                     trace = ToolTrace(
                         tool_call_id=item.tool_call_id,

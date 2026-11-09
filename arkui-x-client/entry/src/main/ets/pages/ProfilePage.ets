@@ -1,5 +1,8 @@
 import {
   AdminUserSummary,
+  BaiduMapCredentialSettings,
+  BaiduMapCredentialStatus,
+  BaiduMapCredentialUpdate,
   HDUHelpConnectionStatus,
   HDUHelpDataResponse,
   HDUHelpDisplayItem,
@@ -25,8 +28,8 @@ import { ConnectionCheckPanel } from '../components/ConnectionCheckPanel';
 export struct ProfilePage {
   @StorageLink('campusflowThemePalette') private palette: ThemePalette = themePalette('paper-green');
   @StorageLink('reduceMotion') private reduceMotion: boolean = false;
-  @Prop baseUrl: string;
-  @Prop token: string;
+  @Prop @Watch('baiduMapAccountChanged') baseUrl: string;
+  @Prop @Watch('baiduMapAccountChanged') token: string;
   @Prop user: UserProfile;
   @Prop @Watch('activeChanged') active: boolean = true;
   onUserChanged: (user: UserProfile) => void = () => {};
@@ -56,6 +59,15 @@ export struct ProfilePage {
   @State private campus: string = '';
   @State private semester: string = '';
   @State private newApiKey: string = '';
+  @State private newBaiduBrowserKey: string = '';
+  @State private newBaiduServerKey: string = '';
+  @State private baiduMapStatus: BaiduMapCredentialSettings | null = null;
+  @State private baiduMapBusy: boolean = false;
+  @State private baiduMapNeedsCheck: boolean = false;
+  @State private baiduMapMessage: string = '';
+  @State private baiduMapError: boolean = false;
+  private baiduMapRevision: number = 0;
+  private baiduMapWritePending: boolean = false;
   @State private scheduleUrl: string = '';
   @State private subscription: ScheduleSubscriptionStatus = {
     configured: false, provider: null, source_host: null, event_count: 0, last_synced_at: null
@@ -134,6 +146,7 @@ export struct ProfilePage {
     if (this.active && this.pageActive) { this.loadStatuses(); }
   }
   private invalidate(): void {
+    this.clearBaiduMapSettings();
     this.pageRevision++;
     this.subscriptionRevision++;
     this.hduReadRevision++;
@@ -149,11 +162,12 @@ export struct ProfilePage {
   private loadStatuses(): void {
     this.loadSubscription();
     this.loadHduHelp();
+    if (this.section === 'baidu-map') { this.loadBaiduMapSettings(); }
     if (this.user.role === 'admin') { this.loadAdminUsers(); }
   }
   private toggleGroup(group: string): void {
     const next = group === 'preferences' ? 'data' : group;
-    if (!['account', 'learning', 'appearance', 'model', 'reminders', 'connections', 'data', 'admin'].includes(next) ||
+    if (!['account', 'learning', 'appearance', 'model', 'baidu-map', 'reminders', 'connections', 'data', 'admin'].includes(next) ||
       next === 'admin' && this.user.role !== 'admin') { return; }
     if (next === 'connections' && this.section !== 'connections') {
       this.connectionsReturnSection = this.section === 'account' ? 'account' : '';
@@ -161,13 +175,16 @@ export struct ProfilePage {
     if (next === 'admin' && this.section !== 'admin') {
       this.adminReturnSection = this.section === 'data' ? 'data' : '';
     }
+    if (this.section === 'baidu-map') { this.clearBaiduMapSettings(); }
     this.section = this.section === next ? '' : next;
+    if (this.section === 'baidu-map') { this.loadBaiduMapSettings(); }
     this.onInnerNavigationChanged(this.section.length > 0 || this.showHduHelpData);
     this.pageScroller.scrollTo({ xOffset: 0, yOffset: 0, animation: false });
   }
   private backRequested(): void { if (this.active && this.pageActive) { this.sectionBack(); } }
   private sectionBack(): void {
     if (this.showHduHelpData) { this.closeHduHelpData(); return; }
+    if (this.section === 'baidu-map') { this.clearBaiduMapSettings(); }
     this.section = this.section === 'connections' ? this.connectionsReturnSection :
       this.section === 'admin' ? this.adminReturnSection : '';
     this.onInnerNavigationChanged(this.section.length > 0);
@@ -182,6 +199,7 @@ export struct ProfilePage {
     if (this.section === 'learning') { return '学习偏好'; }
     if (this.section === 'appearance') { return '外观与动效'; }
     if (this.section === 'model') { return '模型连接'; }
+    if (this.section === 'baidu-map') { return '百度地图'; }
     if (this.section === 'reminders') { return '语音与提醒'; }
     if (this.section === 'connections') { return '校园数据连接'; }
     if (this.section === 'admin') { return '用户管理'; }
@@ -407,6 +425,113 @@ export struct ProfilePage {
     if (!this.current(revision) && this.active) { this.loadHduHelp(); }
   }
 
+  private baiduMapSectionActive(): boolean {
+    return this.pageActive && this.active && this.section === 'baidu-map' && this.token.length > 0;
+  }
+
+  private baiduMapCurrent(revision: number, baseUrl: string, token: string): boolean {
+    return this.baiduMapSectionActive() && revision === this.baiduMapRevision && this.baseUrl === baseUrl && this.token === token;
+  }
+
+  private clearBaiduMapSettings(): void {
+    this.baiduMapRevision++;
+    this.newBaiduBrowserKey = '';
+    this.newBaiduServerKey = '';
+    this.baiduMapStatus = null;
+    this.baiduMapBusy = this.baiduMapWritePending;
+    this.baiduMapNeedsCheck = false;
+    this.baiduMapMessage = '';
+    this.baiduMapError = false;
+  }
+
+  private baiduMapAccountChanged(): void {
+    this.clearBaiduMapSettings();
+    this.loadBaiduMapSettings();
+  }
+
+  private baiduKeyStatus(value: BaiduMapCredentialStatus): string {
+    if (!value.configured) { return '未配置'; }
+    const source = value.source === 'account' ? '个人配置' : '服务端默认';
+    const hint = value.hint ?? '';
+    return /^[•*]{2,8}[A-Za-z0-9_-]{0,4}$/.test(hint) ? `${source} · ${hint}` : source;
+  }
+
+  private validateBaiduMapStatus(status: BaiduMapCredentialSettings): BaiduMapCredentialSettings {
+    if (typeof status?.browser?.configured !== 'boolean' || typeof status?.server?.configured !== 'boolean' ||
+      !['account', 'server', 'none'].includes(status.browser.source) || !['account', 'server', 'none'].includes(status.server.source)) {
+      throw new Error('Invalid map settings response');
+    }
+    return status;
+  }
+
+  private async loadBaiduMapSettings(): Promise<void> {
+    if (!this.baiduMapSectionActive() || this.baiduMapBusy) { return; }
+    const revision = ++this.baiduMapRevision;
+    const baseUrl = this.baseUrl;
+    const token = this.token;
+    this.baiduMapBusy = true;
+    this.baiduMapMessage = '';
+    this.baiduMapError = false;
+    try {
+      const status = this.validateBaiduMapStatus(await new CampusFlowApi(baseUrl, token).baiduMapSettings());
+      if (!this.baiduMapCurrent(revision, baseUrl, token)) { return; }
+      this.baiduMapStatus = status;
+      this.baiduMapNeedsCheck = false;
+    } catch (error) {
+      if (!this.baiduMapCurrent(revision, baseUrl, token)) { return; }
+      this.baiduMapError = true;
+      this.baiduMapMessage = this.safeFailure(error, '地图配置读取');
+    } finally {
+      if (this.baiduMapCurrent(revision, baseUrl, token)) { this.baiduMapBusy = false; }
+    }
+  }
+
+  private async saveBaiduMapSettings(restore: string = ''): Promise<void> {
+    if (!this.baiduMapSectionActive() || this.baiduMapBusy || this.baiduMapNeedsCheck || this.baiduMapStatus === null) { return; }
+    const browserDraft = this.newBaiduBrowserKey;
+    const serverDraft = this.newBaiduServerKey;
+    const payload: BaiduMapCredentialUpdate = {};
+    if (restore === 'browser') {
+      if (this.baiduMapStatus.browser.source !== 'account') { return; }
+      payload.browser_ak = null;
+    } else if (restore === 'server') {
+      if (this.baiduMapStatus.server.source !== 'account') { return; }
+      payload.server_ak = null;
+    } else {
+      if (browserDraft.trim().length > 0) { payload.browser_ak = browserDraft.trim(); }
+      if (serverDraft.trim().length > 0) { payload.server_ak = serverDraft.trim(); }
+      if (payload.browser_ak === undefined && payload.server_ak === undefined) {
+        this.baiduMapMessage = '请先填写要更换的 AK。';
+        this.baiduMapError = true;
+        return;
+      }
+    }
+    const revision = ++this.baiduMapRevision;
+    const baseUrl = this.baseUrl;
+    const token = this.token;
+    this.baiduMapBusy = true;
+    this.baiduMapWritePending = true;
+    this.baiduMapMessage = '';
+    this.baiduMapError = false;
+    try {
+      const status = this.validateBaiduMapStatus(await new CampusFlowApi(baseUrl, token).updateBaiduMapSettings(payload));
+      if (!this.baiduMapCurrent(revision, baseUrl, token)) { return; }
+      this.baiduMapStatus = status;
+      if (typeof payload.browser_ak === 'string' && this.newBaiduBrowserKey === browserDraft) { this.newBaiduBrowserKey = ''; }
+      if (typeof payload.server_ak === 'string' && this.newBaiduServerKey === serverDraft) { this.newBaiduServerKey = ''; }
+      this.baiduMapMessage = '百度地图配置已保存。';
+    } catch (error) {
+      if (!this.baiduMapCurrent(revision, baseUrl, token)) { return; }
+      this.baiduMapNeedsCheck = true;
+      this.baiduMapError = true;
+      this.baiduMapMessage = this.safeFailure(error, '地图配置保存');
+    } finally {
+      this.baiduMapWritePending = false;
+      this.baiduMapBusy = false;
+      if (!this.baiduMapCurrent(revision, baseUrl, token)) { this.loadBaiduMapSettings(); }
+    }
+  }
+
   private async saveProfile(): Promise<void> { await this.saveSettings(false); }
   private async saveModel(): Promise<void> { await this.saveSettings(true); }
   private async saveSettings(modelOnly: boolean): Promise<void> {
@@ -539,6 +664,16 @@ export struct ProfilePage {
   }
 
   @Builder
+  private baiduKeyField(label: string, value: string, onChange: (value: string) => void) {
+    Column({ space: 6 }) {
+      Text(label).fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
+      TextInput({ text: value }).type(InputType.Password).enableAutoFill(false)
+        .constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize).backgroundColor(this.palette.field)
+        .borderRadius(this.palette.controlRadius).enabled(!this.baiduMapBusy).onChange(onChange)
+    }.width('100%').alignItems(HorizontalAlign.Start)
+  }
+
+  @Builder
   private dataItem(item: HDUHelpDisplayItem) {
     if (item.label.length > 12 || item.value.length > 22) {
       Column({ space: 5 }) {
@@ -653,7 +788,8 @@ export struct ProfilePage {
       AppActionRow({ title: title,
         icon: group === 'appearance' ? 'skills' : group === 'reminders' ? 'speaker' : group === 'model' ? 'assistant' :
           group === 'connections' ? 'classroom' : group === 'data' ? 'history' : group === 'learning' ? 'book' : 'person',
-        subtitle: group === 'appearance' || group === 'model' || group === 'connections' || group === 'account' && this.accountDirty() ? summary() : '',
+        subtitle: group === 'appearance' || group === 'model' || group === 'baidu-map' || group === 'connections' ||
+          group === 'account' && this.accountDirty() ? summary() : '',
         onAction: () => this.toggleGroup(group) })
         .backgroundColor(this.palette.surface).borderRadius(this.section.length === 0 ? 0 : this.palette.cardRadius)
     }
@@ -696,6 +832,8 @@ export struct ProfilePage {
       Text('连接与数据').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%').padding({ left: 16, top: 8 })
       Column() {
         this.groupHeader('model', '模型连接', () => this.newApiKey.length > 0 ? '有新密钥尚未保存' : `当前密钥 ${this.user.api_key_hint ?? '未配置'}`, true)
+        this.settingSeparator()
+        this.groupHeader('baidu-map', '百度地图', () => '浏览器端与服务端 AK', true)
         this.settingSeparator()
         this.groupHeader('data', '历史与本机数据', () => '会话记录、草稿与服务地址', true)
         if (this.user.role === 'admin') {
@@ -857,6 +995,41 @@ export struct ProfilePage {
               Button(this.settingsBusy ? '正在保存…' : '保存新密钥').width('100%').constraintSize({ minHeight: 48 })
                 .fontSize(this.palette.bodySize).fontColor(this.palette.onAccent).backgroundColor(this.palette.accent).borderRadius(this.palette.controlRadius)
                 .enabled(!this.settingsBusy && !this.settingsNeedsCheck).onClick(() => this.saveModel())
+            }.width('100%').padding(this.palette.cardInset).backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
+              .border({ width: 1, color: this.palette.line })
+          }
+          if (this.section === 'baidu-map') {
+            Column({ space: 16 }) {
+              if (this.baiduMapStatus !== null) {
+                this.baiduKeyField(`浏览器端 AK（加载地图） · ${this.baiduKeyStatus(this.baiduMapStatus.browser)}`,
+                  this.newBaiduBrowserKey, (value) => this.newBaiduBrowserKey = value)
+                this.baiduKeyField(`服务端 AK（检索和路线） · ${this.baiduKeyStatus(this.baiduMapStatus.server)}`,
+                  this.newBaiduServerKey, (value) => this.newBaiduServerKey = value)
+                Text('留空保留现有配置。密钥由当前行简服务端加密保存。')
+                  .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
+                Button(this.baiduMapBusy ? '正在处理…' : '保存地图密钥').width('100%').constraintSize({ minHeight: 48 })
+                  .fontSize(this.palette.bodySize).fontColor(this.palette.onAccent).backgroundColor(this.palette.accent)
+                  .borderRadius(this.palette.controlRadius).enabled(!this.baiduMapBusy && !this.baiduMapNeedsCheck)
+                  .onClick(() => this.saveBaiduMapSettings())
+                if (this.baiduMapStatus.browser.source === 'account') {
+                  Button('恢复默认浏览器端 AK').width('100%').constraintSize({ minHeight: 44 })
+                    .fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft).borderRadius(this.palette.controlRadius)
+                    .enabled(!this.baiduMapBusy && !this.baiduMapNeedsCheck).onClick(() => this.saveBaiduMapSettings('browser'))
+                }
+                if (this.baiduMapStatus.server.source === 'account') {
+                  Button('恢复默认服务端 AK').width('100%').constraintSize({ minHeight: 44 })
+                    .fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft).borderRadius(this.palette.controlRadius)
+                    .enabled(!this.baiduMapBusy && !this.baiduMapNeedsCheck).onClick(() => this.saveBaiduMapSettings('server'))
+                }
+              }
+              if (this.baiduMapMessage.length > 0) {
+                FeedbackPanel({ kind: this.baiduMapError ? 'error' : 'info', title: '百度地图', message: this.baiduMapMessage })
+              }
+              if (this.baiduMapStatus === null || this.baiduMapNeedsCheck) {
+                Button(this.baiduMapBusy ? '正在读取…' : '刷新地图配置状态').width('100%').constraintSize({ minHeight: 44 })
+                  .fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft).borderRadius(this.palette.controlRadius)
+                  .enabled(!this.baiduMapBusy).onClick(() => this.loadBaiduMapSettings())
+              }
             }.width('100%').padding(this.palette.cardInset).backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
               .border({ width: 1, color: this.palette.line })
           }

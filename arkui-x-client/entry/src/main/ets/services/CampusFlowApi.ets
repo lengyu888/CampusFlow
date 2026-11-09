@@ -17,7 +17,13 @@ import {
   SessionContext,
   AdminUserSummary,
   AuthResponse,
+  BaiduMapConfig,
+  BaiduMapCredentialSettings,
+  BaiduMapCredentialStatus,
+  BaiduMapCredentialUpdate,
   CampusDataSnapshot,
+  CampusPlaceCandidates,
+  CampusPlaceSelection,
   CampusMapSummary,
   CampusRoute,
   ChatResponse,
@@ -187,6 +193,8 @@ export class CampusFlowApi implements SessionVerificationPort, ReviewGateway, Fo
 
   private async request<T>(path: string, method: http.RequestMethod, body: string = ''): Promise<T> {
     const client = http.createHttp();
+    const mapRequest = path.startsWith('/api/v1/campus-data/route?') || path.startsWith('/api/v1/campus-data/places/') ||
+      path === '/api/v1/maps/baidu/config' || path === '/api/v1/me/baidu-maps' || path === '/api/v1/me/baidu-maps/config';
     const headers: RequestHeaders = {
       'Accept': 'application/json',
       'Content-Type': 'application/json',
@@ -200,8 +208,8 @@ export class CampusFlowApi implements SessionVerificationPort, ReviewGateway, Fo
           header: headers,
           extraData: body,
           expectDataType: http.HttpDataType.STRING,
-          connectTimeout: path.startsWith('/api/v1/auth/') ? 5000 : 12000,
-          readTimeout: path.startsWith('/api/v1/auth/') ? 10000 : 90000,
+          connectTimeout: path.startsWith('/api/v1/auth/') || mapRequest ? 5000 : 12000,
+          readTimeout: path.startsWith('/api/v1/auth/') ? 10000 : mapRequest ? 20000 : 90000,
           usingCache: false,
           maxRedirects: 0
         });
@@ -216,7 +224,8 @@ export class CampusFlowApi implements SessionVerificationPort, ReviewGateway, Fo
         if (path === '/api/v1/sessions' || path.startsWith('/api/v1/sessions/') || path === '/api/v1/onboarding' || path.startsWith('/api/v1/onboarding/') || path === '/api/v1/models' || path === '/api/v1/learning-preferences' || path.startsWith('/api/v1/knowledge/') || path === '/api/v1/chat' || path.startsWith('/api/v1/agent-runs') || path.startsWith('/api/v1/actions/') || path.startsWith('/api/v1/planning/') ||
           path.startsWith('/api/v1/focus-records') || path.startsWith('/api/v1/focus-operations/') || path.startsWith('/api/v1/reviews?') ||
           path === '/api/v1/tasks' || path.startsWith('/api/v1/tasks/') || path.startsWith('/api/v1/task-status-operations/') ||
-          path === '/api/v1/me/timetable' || path.startsWith('/api/v1/me/timetable/') || path.startsWith('/api/v1/weather?')) {
+          path === '/api/v1/me/timetable' || path.startsWith('/api/v1/me/timetable/') || path.startsWith('/api/v1/weather?') ||
+          mapRequest) {
           throw requestFailure(response.responseCode, text);
         }
         throw new CampusFlowRequestError(response.responseCode, 'HTTP_ERROR', this.formatError(response.responseCode, text));
@@ -364,6 +373,17 @@ export class CampusFlowApi implements SessionVerificationPort, ReviewGateway, Fo
     return this.request<CampusDataSnapshot>('/api/v1/campus-data', http.RequestMethod.GET);
   }
 
+  async campusPlaceCandidates(placeId: string, page: number = 0, query: string = ''): Promise<CampusPlaceCandidates> {
+    let path = `/api/v1/campus-data/places/${encodeURIComponent(placeId)}/candidates?page=${page}`;
+    if (query.trim().length > 0) { path += `&query=${encodeURIComponent(query.trim())}`; }
+    return this.request<CampusPlaceCandidates>(path, http.RequestMethod.GET);
+  }
+
+  async confirmCampusPlaceSelection(placeId: string, selectionToken: string): Promise<CampusPlaceSelection> {
+    return this.request<CampusPlaceSelection>(`/api/v1/campus-data/places/${encodeURIComponent(placeId)}/selection`,
+      http.RequestMethod.PUT, JSON.stringify({ selection_token: selectionToken }));
+  }
+
   async sessions(): Promise<SessionSummary[]> {
     return this.request<SessionSummary[]>('/api/v1/sessions', http.RequestMethod.GET);
   }
@@ -494,6 +514,43 @@ export class CampusFlowApi implements SessionVerificationPort, ReviewGateway, Fo
 
   async me(): Promise<UserProfile> {
     return this.request<UserProfile>('/api/v1/me', http.RequestMethod.GET);
+  }
+
+  private baiduCredentialStatus(value: BaiduMapCredentialStatus | undefined): BaiduMapCredentialStatus {
+    if (typeof value?.configured !== 'boolean' || !['account', 'server', 'none'].includes(value.source)) {
+      throw localRequestFailure('INVALID_RESPONSE');
+    }
+    const hint = typeof value.hint === 'string' && /^[•*]{2,8}[A-Za-z0-9_-]{0,4}$/.test(value.hint) ? value.hint : null;
+    return { configured: value.configured, source: value.source, hint: hint };
+  }
+
+  private baiduCredentialSettings(value: BaiduMapCredentialSettings): BaiduMapCredentialSettings {
+    return { browser: this.baiduCredentialStatus(value?.browser), server: this.baiduCredentialStatus(value?.server) };
+  }
+
+  async baiduMapSettings(): Promise<BaiduMapCredentialSettings> {
+    const value = await this.request<BaiduMapCredentialSettings>('/api/v1/me/baidu-maps', http.RequestMethod.GET);
+    return this.baiduCredentialSettings(value);
+  }
+
+  async updateBaiduMapSettings(payload: BaiduMapCredentialUpdate): Promise<BaiduMapCredentialSettings> {
+    const changes: BaiduMapCredentialUpdate = { browser_ak: payload.browser_ak, server_ak: payload.server_ak };
+    const value = await this.request<BaiduMapCredentialSettings>('/api/v1/me/baidu-maps', http.RequestMethod.PUT, JSON.stringify(changes));
+    return this.baiduCredentialSettings(value);
+  }
+
+  async baiduMapConfig(): Promise<BaiduMapConfig> {
+    try {
+      return await this.request<BaiduMapConfig>('/api/v1/me/baidu-maps/config', http.RequestMethod.GET);
+    } catch (error) {
+      if (error instanceof CampusFlowRequestError) {
+        if (error.statusCode === 404) {
+          return new CampusFlowApi(this.baseUrl, '').request<BaiduMapConfig>('/api/v1/maps/baidu/config', http.RequestMethod.GET);
+        }
+        throw new CampusFlowRequestError(error.statusCode, error.code, error.message);
+      }
+      throw localRequestFailure('INVALID_RESPONSE');
+    }
   }
 
   async updateSettings(displayName: string, school: string, campus: string, semester: string,

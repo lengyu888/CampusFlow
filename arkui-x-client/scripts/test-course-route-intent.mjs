@@ -40,3 +40,18 @@ test('scope mismatch and explicit another campus do not preselect the same named
     const result = matchCoursePlace(current, data); assert.equal(result.status, 'unsupported'); assert.deepEqual(result.candidateIds, []);
   }
 });
+
+test('renamed full school-prefixed places match while old course aliases and original room text remain intact',()=>{
+ const renamed={...data,places:[
+  place('library','杭州电子科技大学(高教园校区)-图书馆',['图书馆','校图书馆']),
+  place('teaching-7','杭州电子科技大学第七教学科研楼北楼',['第7教研楼（信博楼）','7教','第七教研楼','信博楼','第7教研楼']),
+  place('teaching-3','杭州电子科技大学(下沙校区)-第三教学科研楼',['第3教研楼（信礼楼）','3教','第三教研楼','信礼楼'])]};
+ for(const [text,id,room] of [
+  ['杭州电子科技大学(高教园校区)-图书馆','library',''],
+  ['杭州电子科技大学第七教学科研楼北楼406','teaching-7','406'],
+  ['杭州电子科技大学(下沙校区)-第三教学科研楼301','teaching-3','301'],
+  ['第7教研楼北406','teaching-7','北406'],['7教','teaching-7','']]){
+ const result=matchCoursePlace(intent(text),renamed);assert.equal(result.status,'unique',text);
+ assert.deepEqual(result.candidateIds,[id]);assert.equal(result.originalLocation,text);assert.equal(result.remainingRoomText,room);}
+ assert.equal(matchCoursePlace(intent('青山湖校区7教'),renamed).status,'unsupported');
+});

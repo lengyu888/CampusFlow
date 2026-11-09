@@ -18,6 +18,24 @@ export class CampusFlowRequestError extends Error implements Error {
 
 function knownErrorMessage(code: string): string {
   switch (code) {
+    case 'MAP_NOT_CONFIGURED':
+      return '百度步行路线服务尚未配置，请联系服务维护者配置后重试。';
+    case 'MAP_UPSTREAM_TIMEOUT':
+      return '百度地图查询超时，起终点已保留，请稍后重试。';
+    case 'MAP_UPSTREAM_ERROR':
+      return '百度地图服务暂时不可用，起终点已保留，请稍后重试。';
+    case 'MAP_NO_ROUTE':
+      return '未找到这两个地点间的步行路线，请调整地点或稍后重试。';
+    case 'MAP_PLACE_UNRESOLVED':
+      return '暂时无法确认所选地点的地图位置，请更换地点或联系服务维护者核对。';
+    case 'MAP_PLACE_AMBIGUOUS':
+      return '所选地点存在多个地图候选，请在导航页面检索并确认具体入口。';
+    case 'MAP_PLACE_SELECTION_REQUIRED':
+      return '请先在导航页面检索候选并确认起终点，再规划路线。';
+    case 'MAP_SELECTION_EXPIRED':
+      return '候选地点已过期，请重新检索后确认。';
+    case 'MAP_SELECTION_INVALID':
+      return '候选地点确认已失效，请重新检索后确认。';
     case 'LOGIN_REQUIRED':
       return '请重新登录行简后再试。';
     case 'MODEL_AUTH_INVALID':

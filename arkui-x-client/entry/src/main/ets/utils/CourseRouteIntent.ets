@@ -41,6 +41,22 @@ export function matchCoursePlace(intent: CourseRouteIntent, data: CampusDataSnap
   }
   let location = normalized(intent.course.location);
   if (location.length === 0) { return result; }
+  // The selected campus package owns its full map labels, including Baidu's campus wording.
+  // Match those labels before removing school prefixes from legacy course descriptions.
+  const named = data.places.filter((place: CampusDataPlace) => [place.name, ...place.aliases]
+    .some((name: string) => normalized(name).length > 0 && (location === normalized(name) ||
+      location.startsWith(normalized(name)) && roomSuffix(location.substring(normalized(name).length)))));
+  if (named.length > 0) {
+    result.candidateIds = named.map((place: CampusDataPlace) => place.place_id);
+    result.status = named.length === 1 ? 'unique' : 'ambiguous';
+    if (named.length === 1) {
+      result.matchedLabel = named[0].name;
+      const label = [named[0].name, ...named[0].aliases].map((name: string) => normalized(name))
+        .find((name: string) => name.length > 0 && (location === name || location.startsWith(name) && roomSuffix(location.substring(name.length))));
+      result.remainingRoomText = label === undefined ? '' : location.substring(label.length);
+    }
+    return result;
+  }
   // Per-course campuses are not stored. An explicit different campus must not be ignored.
   if (location.includes('校区') && !location.includes(campus)) { result.status = 'unsupported'; return result; }
   if (location.includes('大学') && !location.includes(school)) { result.status = 'unsupported'; return result; }

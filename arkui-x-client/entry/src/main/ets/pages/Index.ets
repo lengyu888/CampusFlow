@@ -31,6 +31,7 @@ import { OnboardingPage } from './OnboardingPage';
 import { PlanCenterPage } from './PlanCenterPage';
 import { ProfilePage } from './ProfilePage';
 import { RoutePage } from './RoutePage';
+import { campusRouteScope } from '../utils/RouteMapBridge';
 import { SkillsPage } from './SkillsPage';
 import { AppIcon } from '../components/AppIcon';
 import { AppPageHeader } from '../components/AppPageHeader';
@@ -956,7 +957,8 @@ struct Index {
           onBack: () => this.goBack() })
       }
       RoutePage({ baseUrl: this.serviceBaseUrl(), token: this.token,
-        routeScope: this.token.length > 0 ? historyScope(this.baseUrl, this.user.user_id) : '',
+        routeScope: this.token.length > 0 ? campusRouteScope(historyScope(this.serviceBaseUrl(), this.user.user_id), this.user.school, this.user.campus) : '',
+        school: this.user.school ?? '', campus: this.user.campus ?? '',
         routeContextKey: `${this.navigation.root}`, courseIntent: this.currentCourseRoute(), active: this.activeTab === 6 && this.voiceForeground,
         onBack: () => this.goBack() })
         .visibility(this.activeTab === 6 ? Visibility.Visible : Visibility.Hidden)

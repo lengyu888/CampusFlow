@@ -7,10 +7,11 @@ from datetime import UTC, datetime, timedelta
 from datetime import date as date_type
 from typing import TYPE_CHECKING, Annotated
 
-from langchain_core.tools import BaseTool, tool
+from langchain_core.tools import BaseTool, StructuredTool, tool
 from pydantic import BaseModel, Field
 
 from .accounts import AccountStore
+from .baidu_maps import BaiduMapsError
 from .campus_services import (
     building_name,
     classroom_items,
@@ -29,6 +30,7 @@ from .hduhelp_query import (
 from .hduhelp_refresh import CURRENT_HDU_TURN, snapshot_resources
 from .key_vault import ApiKeyVault
 from .knowledge import KnowledgeService
+from .route_presentation import route_failure, route_model_receipt
 from .schemas import PlanEditRequest, PlanningActionRequest
 from .store import CampusStore
 from .timetable_service import TimetableService
@@ -347,9 +349,10 @@ def build_tools(
 
     @tool
     def find_campus_places(query: str, origin: str = "") -> dict:
-        """查询校园地点、开放状态和步行时间，例如图书馆、自习室、快递站。
+        """查询校园地点与参考开放信息，例如图书馆、自习室、快递站。
 
-        origin 可填写出发地点名称或别名；填写后会返回已知地点间的步行分钟数。
+        origin 可填写出发地点名称或别名；需要道路距离和步行耗时时，
+        使用 plan_campus_route 查询百度步行规划，不推断地点列表中缺失的分钟数。
         """
         refresh_saved_context()
         supported = static_campus_available()
@@ -369,23 +372,47 @@ def build_tools(
         unique = {item["source_id"]: item for item in evidence}
         return {"items": items, "evidence": list(unique.values())}
 
-    @tool
-    def plan_campus_route(origin: str, destination: str) -> dict:
-        """生成校园步行路线图数据。
-
-        当用户询问“从哪里到哪里怎么走”、导航、拿快递路线或明确要求地图路线时调用。
-        origin 和 destination 使用校园建筑、校门或生活服务地点名称，可使用简称。
-        """
+    def lookup_campus_route(
+        origin: str, destination: str, *, deadline: float
+    ) -> tuple[dict, dict | None]:
         if not static_campus_available():
             return {
                 "available": False,
+                "message": "当前校区尚未提供校园路线，请核对学校与校区设置。",
                 "evidence": missing_source(
                     "campus:route",
                     "当前校区路线数据",
                     "该校区尚无参考路线，请核对学校与校区设置。",
                 ),
-            }
-        return store.plan_campus_route(origin, destination).model_dump(mode="json")
+            }, None
+        try:
+            route = store.plan_campus_route(
+                origin, destination, user_id=CURRENT_USER_ID.get(), deadline=deadline)
+        except BaiduMapsError as exc:
+            failure = route_failure(exc.code)
+            failure["evidence"] = missing_source(
+                "baidu:walking", "百度地图步行规划", failure["message"], status="error")
+            return failure, None
+        except KeyError:
+            return route_failure("MAP_PLACE_UNRESOLVED"), None
+        data = route.model_dump(mode="json")
+        receipt = route_model_receipt(data)
+        if receipt is None:
+            return route_failure("MAP_UPSTREAM_ERROR"), None
+        return receipt, data
+
+    def plan_campus_route(origin: str, destination: str) -> tuple[dict, dict | None]:
+        """查询百度地图的校园步行路线，返回距离、预计耗时与分段指引。
+
+        当用户询问“从哪里到哪里怎么走”、导航、拿快递路线或明确要求地图路线时调用。
+        origin 和 destination 使用校园建筑、校门或生活服务地点名称，可使用简称。
+        若提示入口待确认，请用户在校园导航页选择并确认具体地点后重试。
+        """
+        return lookup_campus_route(origin, destination, deadline=store.campus_route_deadline())
+
+    async def plan_campus_route_async(origin: str, destination: str) -> tuple[dict, dict | None]:
+        deadline = store.campus_route_deadline()
+        return await asyncio.to_thread(lookup_campus_route, origin, destination, deadline=deadline)
 
     @tool
     def get_hduhelp_profile() -> dict:
@@ -716,7 +743,11 @@ def build_tools(
         search_campus_notices,
         search_campus_knowledge,
         find_campus_places,
-        plan_campus_route,
+        StructuredTool.from_function(
+            func=plan_campus_route,
+            coroutine=plan_campus_route_async,
+            response_format="content_and_artifact",
+        ),
         get_hduhelp_profile,
         get_hduhelp_academics,
         get_hduhelp_campus_life,

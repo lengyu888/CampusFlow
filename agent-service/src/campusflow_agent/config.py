@@ -64,6 +64,15 @@ class Settings(BaseSettings):
     weather_latitude: float | None = Field(default=None, ge=-90, le=90, allow_inf_nan=False)
     weather_longitude: float | None = Field(default=None, ge=-180, le=180, allow_inf_nan=False)
 
+    # Browser AK is public by design; server AK never leaves the route provider.
+    baidu_map_browser_ak: str | None = Field(default=None, repr=False)
+    baidu_map_server_ak: str | None = Field(default=None, repr=False)
+    baidu_map_place_overrides_json: str = Field(default="{}", max_length=32000, repr=False)
+    baidu_map_request_timeout_seconds: float = Field(
+        default=5, gt=0, le=30, allow_inf_nan=False)
+    baidu_map_total_timeout_seconds: float = Field(
+        default=15, gt=0, le=60, allow_inf_nan=False)
+
 
 @lru_cache
 def get_settings() -> Settings:

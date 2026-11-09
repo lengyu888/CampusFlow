@@ -1,9 +1,12 @@
+import json
 from datetime import datetime
 from types import SimpleNamespace
 
+import httpx
 import pytest
 
 from campusflow_agent.action_service import ActionError
+from campusflow_agent.config import Settings
 from campusflow_agent.store import CampusStore
 from campusflow_agent.tools import CURRENT_USER_ID, build_tools
 
@@ -94,6 +97,34 @@ def test_tools_use_confirmed_user_timetable_and_campus_map() -> None:
     assert places["items"][0]["open"] is None
 
 
+def configure_mock_baidu_route(store: CampusStore) -> list[httpx.Request]:
+    requests = []
+
+    def walking(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        assert request.url.path == "/directionlite/v1/walking"
+        return httpx.Response(200, json={"status": 0, "result": {"routes": [{
+            "distance": 220,
+            "duration": 401,
+            "steps": [
+                {"duration": 101, "instruction": "向北步行",
+                 "path": "120.34,30.32;120.3405,30.3205"},
+                {"duration": 300, "instruction": "向东前行",
+                 "path": "120.3405,30.3205;120.341,30.321"},
+            ],
+        }]}})
+
+    # Synthetic BD-09 entrances exercise the Baidu adapter without real campus coordinates.
+    store.configure_baidu_maps(Settings(
+        _env_file=None, baidu_map_browser_ak=None, baidu_map_server_ak="test-route-only",
+        baidu_map_place_overrides_json=json.dumps({
+            "teaching-6": {"lat": 30.32, "lng": 120.34},
+            "cainiao-station": {"lat": 30.321, "lng": 120.341},
+        }),
+    ), transport=httpx.MockTransport(walking))
+    return requests
+
+
 def test_route_tool_returns_map_geometry_and_steps() -> None:
     account = SimpleNamespace(
         get_user=lambda _: SimpleNamespace(
@@ -101,14 +132,25 @@ def test_route_tool_returns_map_geometry_and_steps() -> None:
             campus="下沙校区",
         )
     )
-    tools = {tool.name: tool for tool in build_tools(CampusStore(), hduhelp_store=account)}
-    route = tools["plan_campus_route"].invoke({"origin": "六教", "destination": "菜鸟驿站"})
+    store = CampusStore()
+    requests = configure_mock_baidu_route(store)
+    tools = {tool.name: tool for tool in build_tools(store, hduhelp_store=account)}
+    tool = tools["plan_campus_route"]
+    args = {"origin": "六教", "destination": "菜鸟驿站"}
+    receipt = tool.invoke(args)
+    assert receipt["origin"]["place_id"] == "teaching-6"
+    assert receipt["destination"]["place_id"] == "cainiao-station"
+    assert receipt["provider"] == "baidu"
+    assert receipt["total_minutes"] == 7
+    assert [step["minutes"] for step in receipt["steps"]] == [2, 5]
 
-    assert route["origin"]["place_id"] == "teaching-6"
-    assert route["destination"]["place_id"] == "cainiao-station"
-    assert route["total_minutes"] == 10
-    assert len(route["path"]) >= 7
-    assert [step["minutes"] for step in route["steps"]] == [5, 5]
+    message = tool.invoke({"type": "tool_call", "name": tool.name, "id": "route", "args": args})
+    assert json.loads(message.content) == receipt
+    assert "polyline" not in receipt and "path" not in receipt
+    assert message.artifact["coordinate_system"] == "bd09ll"
+    assert message.artifact["path"] == []
+    assert len(message.artifact["polyline"]) == 3
+    assert len(requests) == 1
 
 
 def test_proposal_requires_confirmation_before_write() -> None:

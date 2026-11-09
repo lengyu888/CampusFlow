@@ -3,16 +3,23 @@ from __future__ import annotations
 import json
 import re
 import sqlite3
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta, timezone
 from pathlib import Path
 from threading import RLock
+from time import monotonic
 from typing import Any
 from uuid import uuid4
 
+from .baidu_maps import BaiduMapsError, BaiduMapsService
 from .campus_data import CampusDataStore
+from .config import Settings
 from .evidence import data_evidence
+from .place_selection import PlaceSelectionTokens
 from .schemas import (
+    CampusPlaceCandidate,
+    CampusPlaceCandidates,
     HistoryMessage,
     PendingAction,
     PlanMilestone,
@@ -40,6 +47,11 @@ class CampusStore:
     _user_schedules: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
     _user_places: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
     _campus_data: CampusDataStore = field(init=False, repr=False)
+    _baidu_maps: BaiduMapsService = field(init=False, repr=False)
+    _baidu_server_key_for: Callable[[str], str | None] | None = field(
+        default=None, init=False, repr=False,
+    )
+    _place_selections: PlaceSelectionTokens = field(init=False, repr=False)
     _connection: sqlite3.Connection | None = field(default=None, init=False, repr=False)
     _action_service: Any = field(default=None, init=False, repr=False)
     _planning_versions: dict[str, int] = field(default_factory=dict, init=False, repr=False)
@@ -69,6 +81,8 @@ class CampusStore:
 
     def __post_init__(self) -> None:
         self._campus_data = CampusDataStore(self.database_path)
+        self._baidu_maps = BaiduMapsService(Settings(_env_file=None, baidu_map_server_ak=None))
+        self._place_selections = PlaceSelectionTokens()
         if not self.database_path:
             return
         if self.database_path != ":memory:":
@@ -296,7 +310,7 @@ class CampusStore:
         official = [
             item.model_dump(mode="json") | {"open": item.open_now}
             for item in (
-                self._campus_data.find_places(query, origin=origin) if include_reference else []
+                self.campus_data_places(query, origin, user_id=user_id) if include_reference else []
             )
         ]
         seen = {item.get("name", "").strip().lower() for item in user_matches}
@@ -305,16 +319,74 @@ class CampusStore:
         ]
 
     def campus_data_snapshot(self, user_id: str):
-        return self._campus_data.snapshot(user_id)
+        snapshot = self._campus_data.snapshot(user_id)
+        snapshot.places = [self._baidu_maps.apply_explicit_entrance(place)
+                           for place in snapshot.places]
+        return snapshot
 
-    def campus_data_places(self, query: str = "", origin: str = ""):
-        return self._campus_data.find_places(query, origin=origin)
+    def campus_data_places(self, query: str = "", origin: str = "", *, user_id: str | None = None):
+        return [self._baidu_maps.apply_explicit_entrance(place) for place in
+                self._campus_data.find_places(query, origin=origin, user_id=user_id)]
 
     def campus_notices(self, keyword: str = "", active_only: bool = False):
         return self._campus_data.search_notices(keyword, active_only=active_only)
 
-    def plan_campus_route(self, origin: str, destination: str):
-        return self._campus_data.plan_route(origin, destination)
+    def configure_baidu_maps(self, settings: Settings, *, transport=None) -> None:
+        self._baidu_maps = BaiduMapsService(settings, transport=transport)
+
+    def set_baidu_server_key_lookup(self, lookup: Callable[[str], str | None]) -> None:
+        self._baidu_server_key_for = lookup
+
+    def _baidu_server_key(self, user_id: str | None) -> str | None:
+        if user_id is None or self._baidu_server_key_for is None:
+            return None
+        return self._baidu_server_key_for(user_id)
+
+    def campus_route_deadline(self) -> float:
+        return monotonic() + self._baidu_maps.settings.baidu_map_total_timeout_seconds
+
+    def campus_place_candidates(self, place_id: str, *, user_id: str, query: str = "",
+                                page: int = 0, deadline: float | None = None):
+        place, package_id, version = self._campus_data.candidate_context(place_id)
+        result = self._baidu_maps.search_candidates(
+            place, query=query, page=page, deadline=deadline,
+            server_ak=self._baidu_server_key(user_id))
+        expires_at = self._place_selections.now() + timedelta(
+            seconds=self._place_selections.lifetime_seconds)
+        candidates = [CampusPlaceCandidate(**item, selection_token=self._place_selections.issue(
+            user_id=user_id, package_id=package_id, version=version, place_id=place_id,
+            candidate=item, expires_at=expires_at)) for item in result.pop("candidates")]
+        return CampusPlaceCandidates(place_id=place_id, expires_at=expires_at,
+                                     candidates=candidates, **result)
+
+    def select_campus_place(self, place_id: str, selection_token: str, *, user_id: str):
+        try:
+            _, package_id, version = self._campus_data.candidate_context(place_id)
+            selection = self._place_selections.verify(
+                selection_token, user_id=user_id, package_id=package_id,
+                version=version, place_id=place_id)
+            return self._campus_data.confirm_place_selection(
+                user_id=user_id, version=version, selection=selection,
+                token_digest=self._place_selections.digest(selection_token))
+        except (ValueError, KeyError):
+            raise BaiduMapsError("MAP_SELECTION_INVALID") from None
+
+    def plan_campus_route(self, origin: str, destination: str, *,
+                          user_id: str | None = None, deadline: float | None = None):
+        deadline = self.campus_route_deadline() if deadline is None else deadline
+        start, end, package_id, version = self._campus_data.route_context(
+            origin, destination, user_id=user_id)
+        start = self._baidu_maps.apply_explicit_entrance(start)
+        end = self._baidu_maps.apply_explicit_entrance(end)
+        server_ak = self._baidu_server_key(user_id)
+        if not self._baidu_maps.configured_for(server_ak):
+            raise BaiduMapsError("MAP_NOT_CONFIGURED")
+        if user_id is not None and (start.location is None or end.location is None):
+            raise BaiduMapsError("MAP_PLACE_SELECTION_REQUIRED")
+        return self._baidu_maps.plan_route(start, end, package_id=package_id,
+                                           package_version=version, deadline=deadline,
+                                           server_ak=server_ak,
+                                           account_scope=user_id if server_ak is not None else None)
 
     def submit_campus_correction(self, *, user_id: str, **payload: str):
         return self._campus_data.submit_correction(user_id=user_id, **payload)

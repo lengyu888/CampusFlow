@@ -7,6 +7,7 @@ import json
 import re
 import secrets
 import sqlite3
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -83,6 +84,14 @@ class AccountStore:
                     user_id TEXT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
                     expires_at TEXT NOT NULL,
                     created_at TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS baidu_map_credentials (
+                    user_id TEXT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+                    kind TEXT NOT NULL CHECK (kind IN ('browser', 'server')),
+                    encrypted_ak TEXT NOT NULL,
+                    hint TEXT NOT NULL,
+                    PRIMARY KEY (user_id, kind)
                 );
 
                 CREATE TABLE IF NOT EXISTS schedule_subscriptions (
@@ -496,6 +505,38 @@ class AccountStore:
         if row is None:
             raise KeyError("user_not_found")
         return row["api_key_encrypted"]
+
+    def get_baidu_map_credentials(self, user_id: str) -> dict[str, tuple[str, str]]:
+        with self._lock:
+            rows = self._connection.execute(
+                """SELECT kind, encrypted_ak, hint FROM baidu_map_credentials
+                   WHERE user_id = ?""",
+                (user_id,),
+            ).fetchall()
+        return {row["kind"]: (row["encrypted_ak"], row["hint"]) for row in rows}
+
+    def update_baidu_map_credentials(
+        self, user_id: str, changes: dict[str, tuple[str, str] | None],
+        *, validate: Callable[[dict[str, tuple[str, str]]], None],
+    ) -> dict[str, tuple[str, str]]:
+        with self._lock, self._connection:
+            for kind, value in changes.items():
+                if value is None:
+                    self._connection.execute(
+                        "DELETE FROM baidu_map_credentials WHERE user_id = ? AND kind = ?",
+                        (user_id, kind),
+                    )
+                else:
+                    self._connection.execute(
+                        """INSERT INTO baidu_map_credentials
+                           (user_id, kind, encrypted_ak, hint) VALUES (?, ?, ?, ?)
+                           ON CONFLICT (user_id, kind) DO UPDATE SET
+                               encrypted_ak = excluded.encrypted_ak, hint = excluded.hint""",
+                        (user_id, kind, *value),
+                    )
+            saved = self.get_baidu_map_credentials(user_id)
+            validate(saved)
+            return saved
 
     def update_settings(
         self,

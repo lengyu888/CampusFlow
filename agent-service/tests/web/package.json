@@ -5,7 +5,7 @@
   "description": "DOM-based regression tests for assistant Markdown rendering",
   "type": "module",
   "scripts": {
-    "test": "node --test markdown.test.mjs theme.test.mjs task-status.test.mjs"
+    "test": "node --test *.test.mjs"
   },
   "engines": {
     "node": "^22.22.2 || ^24.15.0 || >=26.0.0"

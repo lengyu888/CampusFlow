@@ -90,7 +90,7 @@ async def test_campus_data_package_places_notices_and_corrections(
 
     snapshot = await client.get("/api/v1/campus-data")
     assert snapshot.status_code == 200
-    assert snapshot.json()["package"]["version"] == "2026.10.7"
+    assert snapshot.json()["package"]["version"] == "2026.11.8"
     assert snapshot.json()["package"]["place_count"] >= 17
 
     places = await client.get(
@@ -98,7 +98,7 @@ async def test_campus_data_package_places_notices_and_corrections(
         params={"query": "图书馆", "origin": "3教"},
     )
     assert places.status_code == 200
-    assert places.json()[0]["walk_minutes"] == 5
+    assert places.json()[0]["walk_minutes"] is None
 
     notices = await client.get(
         "/api/v1/campus-data/notices",
@@ -113,13 +113,8 @@ async def test_campus_data_package_places_notices_and_corrections(
         "/api/v1/campus-data/route",
         params={"origin": "六教", "destination": "菜鸟驿站"},
     )
-    assert route.status_code == 200
-    assert route.json()["total_minutes"] == 10
-    assert route.json()["is_estimate"] is True
-    assert route.json()["evidence"][0]["status"] == "unverified"
-    assert route.json()["estimated_distance_meters"] == 750
-    assert route.json()["path"][0]["place_id"] == "teaching-6"
-    assert route.json()["path"][-1]["place_id"] == "cainiao-station"
+    assert route.status_code == 503
+    assert route.json()["code"] == "MAP_NOT_CONFIGURED"
 
     missing_route = await client.get(
         "/api/v1/campus-data/route",
