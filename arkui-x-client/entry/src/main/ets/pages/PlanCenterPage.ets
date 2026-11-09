@@ -1462,11 +1462,11 @@ export struct PlanCenterPage {
   @Builder
   private DateChoice(label: string, value: string, choice: string) {
     Button({ type: ButtonType.Normal }) {
-      Text(label).fontSize(this.palette.bodySize).width('100%').textAlign(TextAlign.Center)
+      Text(label).fontSize(this.palette.metaSize).width('100%').textAlign(TextAlign.Center).wordBreak(WordBreak.BREAK_WORD)
         .fontWeight(this.dateChoiceSelected(choice, value) ? FontWeight.Medium : FontWeight.Regular)
-        .fontColor(this.dateChoiceSelected(choice, value) ? this.palette.onAccent : this.palette.quiet)
-    }.constraintSize({ minHeight: 48 }).padding(10).layoutWeight(1)
-      .backgroundColor(this.dateChoiceSelected(choice, value) ? this.palette.accent : this.palette.canvas)
+        .fontColor(this.dateChoiceSelected(choice, value) ? this.palette.accent : this.palette.quiet)
+    }.constraintSize({ minHeight: 44 }).padding({ left: 2, right: 2, top: 4, bottom: 4 }).layoutWeight(1)
+      .backgroundColor(this.dateChoiceSelected(choice, value) ? this.palette.accentSoft : this.palette.field)
       .accessibilityText(`${label}${this.dateChoiceSelected(choice, value) ? '，已选中' : ''}`)
       .borderRadius(this.palette.controlRadius).onClick(() => this.selectDraftDate(value, choice))
   }
@@ -1474,11 +1474,11 @@ export struct PlanCenterPage {
   @Builder
   private TimeChoice(label: string, value: string) {
     Button({ type: ButtonType.Normal }) {
-      Text(label).fontSize(this.palette.bodySize).width('100%').textAlign(TextAlign.Center)
+      Text(label).fontSize(this.palette.metaSize).width('100%').textAlign(TextAlign.Center)
         .fontWeight(this.draftTaskTime === value ? FontWeight.Medium : FontWeight.Regular)
-        .fontColor(this.draftTaskTime === value ? this.palette.onAccent : this.palette.quiet)
-    }.constraintSize({ minHeight: 48 }).padding(10).layoutWeight(1)
-      .backgroundColor(this.draftTaskTime === value ? this.palette.accent : this.palette.canvas)
+        .fontColor(this.draftTaskTime === value ? this.palette.accent : this.palette.quiet)
+    }.constraintSize({ minHeight: 44 }).padding({ left: 2, right: 2, top: 4, bottom: 4 }).layoutWeight(1)
+      .backgroundColor(this.draftTaskTime === value ? this.palette.accentSoft : this.palette.field)
       .accessibilityText(`${label}${this.draftTaskTime === value ? '，已选中' : ''}`)
       .borderRadius(this.palette.controlRadius).onClick(() => this.selectDraftTime(value))
   }
@@ -1546,76 +1546,144 @@ export struct PlanCenterPage {
 
   @Builder
   private TaskForm() {
-    Column({ space: 16 }) {
-      Text(this.draftMessage).fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
+    Column({ space: 12 }) {
+      if (this.draftMessage.length > 0 && this.draftMessage !== '已保存到本机。') {
+        Text(this.draftMessage).fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+      }
       if (this.draftMessage.includes('尚未保存')) {
-        Button('重试保存输入').constraintSize({ minHeight: 44 }).fontSize(this.palette.bodySize)
+        Button('重试保存输入').constraintSize({ minHeight: 44 }).fontSize(this.palette.metaSize)
           .fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft).borderRadius(this.palette.controlRadius)
           .onClick(() => { this.stageTaskDraft(); this.flushTaskDraft(); })
       }
       if (this.pendingCaptureIntent !== null) {
-        Text(`首页建议 ${this.pendingCaptureIntent.date} ${this.pendingCaptureIntent.time}，留 ${this.pendingCaptureIntent.durationMinutes ?? 0} 分钟。已有输入已保留。`)
-          .fontSize(this.palette.bodySize).fontColor(this.palette.secondary).width('100%')
-        Button('使用这个时段，保留标题').constraintSize({ minHeight: 44 }).fontSize(this.palette.bodySize)
-          .fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft).borderRadius(this.palette.controlRadius).enabled(!this.writesBlocked())
-          .onClick(() => this.applyCaptureSuggestion())
+        Column({ space: 4 }) {
+          Text(`首页建议 ${this.pendingCaptureIntent.date} ${this.pendingCaptureIntent.time}，留 ${this.pendingCaptureIntent.durationMinutes ?? 0} 分钟。`)
+            .fontSize(this.palette.metaSize).fontColor(this.palette.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
+          Button('使用时段，保留标题').constraintSize({ minHeight: 44 }).fontSize(this.palette.metaSize)
+            .fontColor(this.palette.accent).backgroundColor(Color.Transparent).padding(0).enabled(!this.writesBlocked())
+            .onClick(() => this.applyCaptureSuggestion())
+        }.width('100%').alignItems(HorizontalAlign.Start).padding(this.palette.cardInset)
+          .backgroundColor(this.palette.accentSoft).borderRadius(this.palette.cardRadius)
       }
       if (this.draftAnchorDate.length > 0 && this.draftAnchorDate !== this.relativeDate(0)) {
-        Text(`输入时的日期是 ${this.draftAnchorDate}；当前仍按 ${this.draftTaskDate || '无日期'} 保存，请核对。`)
-          .fontSize(this.palette.metaSize).fontColor(this.palette.warning).width('100%')
+        Text(`输入时是 ${this.draftAnchorDate}，请核对当前安排 ${this.draftTaskDate || '无日期'}。`)
+          .fontSize(this.palette.metaSize).fontColor(this.palette.warning).width('100%').wordBreak(WordBreak.BREAK_WORD)
+          .padding(this.palette.cardInset).backgroundColor(this.palette.warningSoft).borderRadius(this.palette.cardRadius)
       }
-      Text('记一件事').fontSize(this.palette.sectionTitle).fontColor(this.palette.ink).width('100%')
-      TextInput({ text: this.title, placeholder: '例如：明晚八点复习一小时', controller: this.taskInputController })
-        .width('100%').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize).fontColor(this.palette.ink)
-        .backgroundColor(this.palette.surface).borderRadius(this.palette.controlRadius)
-        .border({ width: 1, color: this.palette.outline }).enabled(this.recoveredDraft === null && !this.actionBlocksWrites())
-        .onChange((value) => { this.title = value; this.stageTaskDraft(); })
-      Button('从这句话提取时间').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
-        .fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft).borderRadius(this.palette.controlRadius)
-        .enabled(this.title.trim().length > 0 && !this.writesBlocked()).onClick(() => this.parseCapture())
-      Text('支持明确日期、时刻和分钟/小时；“下午”“下课后”等不会猜一个时间。提取只填写草稿。')
-        .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
-      if (this.captureOriginalText.length > 0) {
-        Text(`解析原文：${this.captureOriginalText}`).fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
-        ForEach(this.captureIssues, (issue: QuickCaptureIssue) => {
-          Text(issue.message).fontSize(this.palette.bodySize).fontColor(this.palette.warning).width('100%').wordBreak(WordBreak.BREAK_WORD)
-        }, (issue: QuickCaptureIssue, index: number) => `${index}-${issue.code}`)
-        Button('交给助手进一步核对').constraintSize({ minHeight: 44 }).fontSize(this.palette.bodySize).fontColor(this.palette.accent)
-          .backgroundColor(this.palette.accentSoft).borderRadius(this.palette.controlRadius).onClick(() => this.captureToAssistant())
-      }
-      this.EditField('日期 · 可留空', this.draftTaskDate, 'YYYY-MM-DD，留空即无日期', (value: string) => {
-        this.draftTaskDate = value; this.draftDateChoice = value.length === 0 ? 'none' : 'capture'; this.stageTaskDraft();
-      })
-      Row({ space: 8 }) {
-        this.DateChoice('今天', this.relativeDate(0), 'today')
-        this.DateChoice('明天', this.relativeDate(1), 'tomorrow')
-      }.width('100%')
-      Row({ space: 8 }) {
-        this.DateChoice('日历所选', this.selectedDate, 'calendar')
-        this.DateChoice('无日期', '', 'none')
-      }.width('100%')
-      Button(this.captureTimeExpanded ? '收起时间与时长' : '再安排时间、时长').constraintSize({ minHeight: 48 })
-        .fontSize(this.palette.bodySize).fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft)
-        .onClick(() => this.captureTimeExpanded = !this.captureTimeExpanded)
-      if (this.captureTimeExpanded) {
-        Text(`时间：${this.draftTaskTime || '全天 / 尚未定时'} · 北京时间`).fontSize(this.palette.bodySize).fontColor(this.palette.secondary).width('100%')
-        Row({ space: 8 }) {
-          this.TimeChoice('全天', '')
-          this.TimeChoice('08:00', '08:00')
+      Column({ space: 4 }) {
+        Row({ space: 6 }) {
+          Text('待办内容').fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Bold).fontColor(this.palette.ink).layoutWeight(1)
+          Button('提取时间').constraintSize({ minHeight: 44 }).fontSize(this.palette.metaSize)
+            .fontColor(this.title.trim().length > 0 && !this.writesBlocked() ? this.palette.accent : this.palette.quiet)
+            .backgroundColor(Color.Transparent).padding({ left: 8, right: 0 }).accessibilityText('从待办内容提取时间')
+            .enabled(this.title.trim().length > 0 && !this.writesBlocked()).onClick(() => this.parseCapture())
         }.width('100%')
-        Row({ space: 8 }) {
-          this.TimeChoice('14:00', '14:00')
-          Button('自定义时间').constraintSize({ minHeight: 48 }).layoutWeight(1).fontSize(this.palette.bodySize)
-            .fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft).borderRadius(this.palette.controlRadius)
-            .onClick(() => this.openTimePicker())
+        TextInput({ text: this.title, placeholder: '例如 明天 20:00 复习 1 小时', controller: this.taskInputController })
+          .width('100%').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize).fontColor(this.palette.ink)
+          .backgroundColor(this.palette.field).borderRadius(this.palette.controlRadius)
+          .accessibilityText('待办内容').enabled(this.recoveredDraft === null && !this.actionBlocksWrites())
+          .onChange((value) => { this.title = value; this.stageTaskDraft(); })
+        if (this.captureOriginalText.length > 0) {
+          Column({ space: 5 }) {
+            Text(`原句 ${this.captureOriginalText}`).fontSize(this.palette.metaSize)
+              .fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+            ForEach(this.captureIssues, (issue: QuickCaptureIssue) => {
+              Text(issue.message).fontSize(this.palette.metaSize).fontColor(this.palette.warning).width('100%').wordBreak(WordBreak.BREAK_WORD)
+            }, (issue: QuickCaptureIssue, index: number) => `${index}-${issue.code}`)
+            Button('请助手核对').constraintSize({ minHeight: 44 }).fontSize(this.palette.metaSize)
+              .fontColor(this.palette.accent).backgroundColor(Color.Transparent).padding(0)
+              .onClick(() => this.captureToAssistant())
+          }.width('100%').alignItems(HorizontalAlign.Start).padding({ left: 12, right: 12, top: 10 })
+            .backgroundColor(this.captureIssues.length > 0 ? this.palette.warningSoft : this.palette.field)
+            .borderRadius(this.palette.controlRadius).margin({ top: 4 })
+        }
+      }.width('100%').alignItems(HorizontalAlign.Start).padding(this.palette.cardInset)
+        .backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
+
+      Column({ space: 8 }) {
+        Row({ space: 6 }) {
+          Text('安排日期').fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Bold).fontColor(this.palette.ink).layoutWeight(1)
+          Text('选填').fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
         }.width('100%')
-        this.EditField('时长 · 分钟', this.durationText, '可留空，例如 25、60', (value: string) => { this.durationText = value; this.stageTaskDraft(); })
-      }
-      this.CoursePermission(this.allowDuringCourse, (value: boolean) => { this.allowDuringCourse = value; this.stageTaskDraft(); })
-      Button(this.draftTaskDate.length === 0 ? '预览无日期待办' : '核对安排预览').width('100%').constraintSize({ minHeight: 48 })
-        .fontSize(this.palette.bodySize).fontColor(this.palette.onAccent).backgroundColor(this.palette.accent).borderRadius(this.palette.controlRadius)
-        .accessibilityText('预览添加待办').enabled(this.title.trim().length > 0 && !this.writesBlocked()).onClick(() => this.addTask())
+        TextInput({ text: this.draftTaskDate, placeholder: 'YYYY-MM-DD' })
+          .width('100%').constraintSize({ minHeight: 44 }).fontSize(this.palette.bodySize).fontColor(this.palette.ink)
+          .backgroundColor(this.palette.field).borderRadius(this.palette.controlRadius).accessibilityText('安排日期，可留空')
+          .onChange((value: string) => {
+            this.draftTaskDate = value; this.draftDateChoice = value.length === 0 ? 'none' : 'capture'; this.stageTaskDraft();
+          })
+        Row({ space: 4 }) {
+          this.DateChoice('今天', this.relativeDate(0), 'today')
+          this.DateChoice('明天', this.relativeDate(1), 'tomorrow')
+          this.DateChoice('日历所选', this.selectedDate, 'calendar')
+          this.DateChoice('无日期', '', 'none')
+        }.width('100%')
+        Divider().color(this.palette.line).margin({ top: 4 })
+        Button({ type: ButtonType.Normal }) {
+          Row({ space: 6 }) {
+            Text('时间与时长').fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium).fontColor(this.palette.ink).layoutWeight(1)
+            Text(this.draftTaskTime || (this.draftTaskDate.length > 0 ? '全天' : '未定时'))
+              .fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
+            AppIcon({ name: 'chevron', iconSize: 16, color: this.palette.accent }).rotate({ angle: this.captureTimeExpanded ? 90 : 0 })
+          }.width('100%')
+        }.width('100%').constraintSize({ minHeight: 44 }).padding(0).backgroundColor(Color.Transparent)
+          .accessibilityText(this.captureTimeExpanded ? '收起时间与时长' : '展开时间与时长')
+          .onClick(() => this.captureTimeExpanded = !this.captureTimeExpanded)
+        if (this.captureTimeExpanded) {
+          Row({ space: 4 }) {
+            this.TimeChoice('全天', '')
+            this.TimeChoice('08:00', '08:00')
+            this.TimeChoice('14:00', '14:00')
+            Button('自定义').constraintSize({ minHeight: 44 }).layoutWeight(1).fontSize(this.palette.metaSize)
+              .padding({ left: 2, right: 2 }).fontColor(this.palette.accent)
+              .backgroundColor(this.draftTaskTime.length > 0 && this.draftTaskTime !== '08:00' && this.draftTaskTime !== '14:00'
+                ? this.palette.accentSoft : this.palette.field)
+              .borderRadius(this.palette.controlRadius).accessibilityText('自定义时间').onClick(() => this.openTimePicker())
+          }.width('100%')
+          Row({ space: 8 }) {
+            Text('时长（分钟）').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).layoutWeight(1)
+            TextInput({ text: this.durationText, placeholder: '选填' }).width(104).constraintSize({ minHeight: 44 })
+              .fontSize(this.palette.bodySize).fontColor(this.palette.ink).backgroundColor(this.palette.field)
+              .borderRadius(this.palette.controlRadius).accessibilityText('时长，分钟')
+              .onChange((value: string) => { this.durationText = value; this.stageTaskDraft(); })
+          }.width('100%')
+          Text('时间采用北京时间').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
+        }
+      }.width('100%').alignItems(HorizontalAlign.Start).padding(this.palette.cardInset)
+        .backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
+
+      Row({ space: 12 }) {
+        Column({ space: 4 }) {
+          Text('可在上课时完成').fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium).fontColor(this.palette.ink).width('100%')
+          Text(this.allowDuringCourse ? '有重叠课程时需在预览中确认。' : '默认避开课程。')
+            .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+        }.layoutWeight(1).alignItems(HorizontalAlign.Start)
+        Toggle({ type: ToggleType.Switch, isOn: this.allowDuringCourse }).selectedColor(this.palette.accent)
+          .accessibilityText('可在上课时完成').enabled(!this.writesBlocked())
+          .onChange((value: boolean) => { this.allowDuringCourse = value; this.stageTaskDraft(); })
+      }.width('100%').constraintSize({ minHeight: 64 }).padding(this.palette.cardInset)
+        .backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
+
     }.width('100%').alignItems(HorizontalAlign.Start)
+  }
+
+  @Builder
+  private TaskFormFooter() {
+    Column({ space: 6 }) {
+      Row({ space: 6 }) {
+        Text(this.title.trim().length === 0 ? '填写内容后可预览' : '核对后再添加')
+          .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).layoutWeight(1)
+        if (this.draftMessage === '已保存到本机。') {
+          Text('草稿已保存').fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
+        }
+      }.width('100%')
+      Button(this.draftTaskDate.length === 0 ? '预览无日期待办' : '预览待办').width('100%').constraintSize({ minHeight: 48 })
+        .fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium)
+        .fontColor(this.title.trim().length > 0 && !this.writesBlocked() ? this.palette.onAccent : this.palette.disabledContent)
+        .backgroundColor(this.title.trim().length > 0 && !this.writesBlocked() ? this.palette.accent : this.palette.disabledSurface)
+        .borderRadius(this.palette.controlRadius).accessibilityText('预览添加待办')
+        .enabled(this.title.trim().length > 0 && !this.writesBlocked()).onClick(() => this.addTask())
+    }.width('100%').padding({ left: this.palette.pageInset, right: this.palette.pageInset, top: 8, bottom: 10 })
+      .backgroundColor(this.palette.surface)
   }
 
   @Builder
@@ -1914,8 +1982,6 @@ export struct PlanCenterPage {
   private DetailContent(frame: PlanningDetailFrame) {
     Column({ space: 16 }) {
       if (frame.kind === 'draft') {
-        Text('先记下来，日期可以稍后安排。返回会保留输入；核对预览后才加入任务列表。')
-          .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
         this.TaskForm()
       } else if (frame.kind === 'action') {
         if (this.projectedTasks() !== null) {
@@ -2115,6 +2181,7 @@ export struct PlanCenterPage {
           }
         }, (frame: PlanningDetailFrame) => `${frame.key}`)
       }.width('100%').layoutWeight(1).visibility(this.detailKind === 'conflicts' ? Visibility.None : Visibility.Visible)
+      if (this.detailKind === 'draft') { this.TaskFormFooter() }
     }.width('100%').height('100%').backgroundColor(this.palette.canvas)
       .onAreaChange((_oldArea, newArea) => { this.pageWidth = Number(newArea.width); })
   }
