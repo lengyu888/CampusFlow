@@ -713,8 +713,24 @@ class ScheduleSubscriptionSyncResponse(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
+CampusDataIssue = Literal[
+    "not_connected", "auth_invalid", "forbidden", "timeout", "upstream_error",
+    "connection_changed", "cache_unreadable",
+]
+
+
+class CampusDataStatus(BaseModel):
+    state: Literal["live", "cached", "stale", "unverified", "unavailable"]
+    updated_at: datetime | None = None
+    expires_at: datetime | None = None
+    issue: CampusDataIssue | None = None
+    message: str
+    action: Literal["retry", "connect", "none"]
+
+
 class HDUHelpConnectionStatus(BaseModel):
     configured: bool = False
+    connection_state: Literal["connected", "not_connected", "auth_invalid"] = "not_connected"
     provider: Literal["hduhelp"] | None = None
     auth_mode: Literal["oauth", "pat"] | None = None
     token_hint: str | None = None
@@ -741,7 +757,7 @@ class HDUHelpPatConnectRequest(BaseModel):
 class HDUHelpResourceSnapshot(BaseModel):
     resource: str
     data: Any
-    synced_at: datetime
+    synced_at: datetime | None
 
     evidence: list[DataEvidence] = Field(default_factory=list)
 
@@ -774,6 +790,7 @@ class HDUHelpDataResponse(BaseModel):
     sections: list[HDUHelpDisplaySection] = Field(default_factory=list)
     suggested_prompts: list[HDUHelpSuggestedPrompt] = Field(default_factory=list)
     sync_errors: dict[str, str] = Field(default_factory=dict)
+    resource_statuses: dict[str, CampusDataStatus] = Field(default_factory=dict)
 
 
 class HDUHelpSyncResponse(BaseModel):
@@ -801,6 +818,7 @@ class ClassroomSearchResponse(BaseModel):
     has_more: bool = False
 
     evidence: list[DataEvidence] = Field(default_factory=list)
+    data_status: CampusDataStatus | None = None
 
 
 class ClassroomUsageItem(BaseModel):
@@ -818,6 +836,7 @@ class ClassroomUsageResponse(BaseModel):
     items: list[ClassroomUsageItem] = Field(default_factory=list)
 
     evidence: list[DataEvidence] = Field(default_factory=list)
+    data_status: CampusDataStatus | None = None
 
 
 class ElectricityHistoryItem(BaseModel):
@@ -839,6 +858,7 @@ class ElectricityOverview(BaseModel):
     history: list[ElectricityHistoryItem] = Field(default_factory=list)
 
     evidence: list[DataEvidence] = Field(default_factory=list)
+    data_status: CampusDataStatus | None = None
 
 
 class TimetableParseResult(BaseModel):

@@ -125,6 +125,8 @@ struct Index {
   @State private planViewRevision: number = 0;
   @State private planBackRevision: number = 0;
   @State private profileBackRevision: number = 0;
+  @State private campusConnectionRevision: number = 0;
+  @State private campusDataRevision: number = 0;
   @State private profileInnerActive: boolean = false;
   @State private planInnerActive: boolean = false;
   private focusOrigin: AppNavigationState | null = null;
@@ -791,6 +793,11 @@ struct Index {
     this.applyNavigation(isRootRoute(tab) ? selectRoot(this.navigation, tab) : openSecondary(this.navigation, tab));
   }
 
+  private openCampusConnection(): void {
+    this.campusConnectionRevision++;
+    this.selectTab(4);
+  }
+
   private goBack(): void {
     if (this.activeTab === 4 && this.profileInnerActive) { this.profileBackRevision++; return; }
     this.applyNavigation(backNavigation(this.navigation));
@@ -930,6 +937,9 @@ struct Index {
           ProfilePage({ baseUrl: this.serviceBaseUrl(), token: this.token, user: this.user,
             loginPersistenceNotice: this.loginPersistenceNotice, logoutBusy: this.sessionLogoutBusy,
             backRevision: this.profileBackRevision, onInnerNavigationChanged: (active) => this.profileInnerActive = active,
+            connectionsRevision: this.campusConnectionRevision,
+            onCloseConnections: () => this.applyNavigation(backNavigation(this.navigation)),
+            onCampusBindingChanged: () => this.campusDataRevision++,
             onOpenHistory: () => this.selectTab(5), onOpenGuide: () => this.selectTab(10),
             draftNotice: this.draftNotice, draftClearConfirm: this.draftClearConfirm,
             draftCleanupBusy: this.draftCleanupBusy, onClearDrafts: () => this.clearLocalDrafts(),
@@ -963,7 +973,8 @@ struct Index {
         onBack: () => this.goBack() })
         .visibility(this.activeTab === 6 ? Visibility.Visible : Visibility.Hidden)
       CampusServicesPage({ baseUrl: this.serviceBaseUrl(), token: this.token, active: this.activeTab === 7 && this.voiceForeground,
-        onBack: () => this.goBack(), onOpenProfile: () => this.selectTab(4),
+        connectionRevision: this.campusDataRevision,
+        onBack: () => this.goBack(), onOpenProfile: () => this.openCampusConnection(),
         onOpenAgent: (prompt) => this.openAgentWithPrompt(prompt) })
         .visibility(this.activeTab === 7 ? Visibility.Visible : Visibility.Hidden)
       TimetablePage({ baseUrl: this.serviceBaseUrl(), token: this.token, draftLease: this.draftLease, active: this.activeTab === 9 && !this.focusPageOpen && !this.reviewPageOpen && !this.taskStatusOpen && this.voiceForeground,

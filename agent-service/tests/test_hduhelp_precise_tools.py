@@ -36,7 +36,7 @@ def precise_scene(tmp_path):
 
 def save(scene, resource, data, *, age=0, connected=True):
     user = scene.users[0]
-    if connected:
+    if connected and not scene.accounts.get_hduhelp_status(user)["configured"]:
         scene.accounts.save_hduhelp_connection(
             user_id=user,
             access_token_encrypted="synthetic-not-read",
@@ -82,6 +82,9 @@ def test_selected_grade_page_filters_before_paginating_and_keeps_summary(precise
     )
     assert set(result) == {"connected", "grades", "evidence", "query"}
     assert result["grades"]["data"]["gpa"] == 3.2
+    status = result["grades"]["data_status"]
+    assert status["state"] == "cached" and status["issue"] is None
+    assert status["updated_at"] == result["evidence"][0]["updated_at"]
     assert [row["score"] for row in result["grades"]["data"]["grades"]] == list(range(110, 115))
     assert result["query"]["matched_total"] == 120
     assert result["query"]["source_items"] == 121
@@ -208,6 +211,7 @@ def test_stale_precise_query_does_not_decrypt(precise_scene, monkeypatch, age):
     result = invoke(precise_scene, "get_hduhelp_academics", {"resource": "grades"})
     assert result["query"]["status"] == "unavailable"
     assert result["grades"]["data"] is None
+    assert result["grades"]["data_status"]["state"] == "stale"
     assert result["grades"]["evidence"][0]["status"] == "stale"
 
 
@@ -228,6 +232,8 @@ def test_disconnected_precise_query_does_not_read_or_decrypt_or_reveal_orphan_ca
     result = invoke(precise_scene, "get_hduhelp_academics", {"resource": "grades"})
     assert result["connected"] is False
     assert result["query"]["status"] == "unavailable"
+    assert result["grades"]["data_status"]["issue"] == "not_connected"
+    assert result["grades"]["data_status"]["action"] == "connect"
     assert "孤立缓存" not in json.dumps(result)
 
 
@@ -270,6 +276,38 @@ def test_no_argument_call_remains_backward_compatible(precise_scene):
     assert result["grades"]["data"] == {"gpa": 3.5}
 
 
+def test_failed_refresh_and_fresh_cache_are_reported_separately(precise_scene):
+    save(precise_scene, "card_balance", {"balance": 0})
+    precise_scene.accounts.save_hduhelp_resources(
+        user_id=precise_scene.users[0],
+        resources={},
+        errors={"card_balance": "PRIVATE_UPSTREAM_ERROR"},
+    )
+    result = invoke(precise_scene, "get_hduhelp_campus_life", {"resource": "card_balance"})
+    assert result["card_balance"]["data"] == {"balance": 0}
+    status = result["card_balance"]["data_status"]
+    assert status["state"] == "cached"
+    assert status["issue"] == "upstream_error"
+    assert status["action"] == "retry"
+    assert "PRIVATE_UPSTREAM_ERROR" not in json.dumps(result)
+
+
+def test_unreadable_snapshot_does_not_claim_a_usable_cache(precise_scene, monkeypatch):
+    save(precise_scene, "grades", {"gpa": 3.2})
+
+    def invalid_ciphertext(_):
+        raise ValueError("PRIVATE_DECRYPTION_ERROR")
+
+    monkeypatch.setattr(precise_scene.vault, "decrypt", invalid_ciphertext)
+    result = invoke(precise_scene, "get_hduhelp_academics", {"resource": "grades"})
+    snapshot = result["grades"]
+    assert snapshot["data"] is None
+    assert snapshot["data_status"]["state"] == "unavailable"
+    assert snapshot["data_status"]["issue"] == "cache_unreadable"
+    assert snapshot["evidence"][0]["status"] == "error"
+    assert "PRIVATE_DECRYPTION_ERROR" not in json.dumps(result)
+
+
 @pytest.mark.parametrize(
     "payload",
     [
@@ -293,6 +331,7 @@ def test_precise_display_reports_page_scope_without_personal_fields(precise_scen
     assert display.state == "success"
     assert "本页 1 条" in display.summary
     assert "快照" in display.summary
+    assert "缓存" in display.summary
     assert "秘密合成课" not in display.model_dump_json()
 
 

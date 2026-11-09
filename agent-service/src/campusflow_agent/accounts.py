@@ -145,7 +145,9 @@ class AccountStore:
                     updated_at TEXT NOT NULL,
                     last_synced_at TEXT,
                     last_error TEXT,
-                    sync_errors_json TEXT NOT NULL DEFAULT '{}'
+                    sync_errors_json TEXT NOT NULL DEFAULT '{}',
+                    sync_issue_codes_json TEXT NOT NULL DEFAULT '{}',
+                    auth_invalid INTEGER NOT NULL DEFAULT 0
                 );
 
                 CREATE TABLE IF NOT EXISTS hduhelp_resource_cache (
@@ -189,6 +191,14 @@ class AccountStore:
                 "sync_errors_json": (
                     "ALTER TABLE hduhelp_connections "
                     "ADD COLUMN sync_errors_json TEXT NOT NULL DEFAULT '{}'"
+                ),
+                "sync_issue_codes_json": (
+                    "ALTER TABLE hduhelp_connections "
+                    "ADD COLUMN sync_issue_codes_json TEXT NOT NULL DEFAULT '{}'"
+                ),
+                "auth_invalid": (
+                    "ALTER TABLE hduhelp_connections "
+                    "ADD COLUMN auth_invalid INTEGER NOT NULL DEFAULT 0"
                 ),
             }
             for column, statement in hduhelp_migrations.items():
@@ -668,10 +678,13 @@ class AccountStore:
         identity: dict[str, Any] | None = None,
         auth_mode: str = "oauth",
         token_hint: str | None = None,
-    ) -> None:
+    ) -> str:
         now = datetime.now(UTC).isoformat()
         identity = identity or {}
         with self._lock, self._connection:
+            self._connection.execute(
+                "DELETE FROM hduhelp_resource_cache WHERE user_id = ?", (user_id,)
+            )
             self._connection.execute(
                 """
                 INSERT INTO hduhelp_connections (
@@ -691,8 +704,13 @@ class AccountStore:
                     external_user_id = excluded.external_user_id,
                     external_name = excluded.external_name,
                     identity_type = excluded.identity_type,
+                    connected_at = excluded.connected_at,
                     updated_at = excluded.updated_at,
-                    last_error = NULL
+                    last_synced_at = NULL,
+                    last_error = NULL,
+                    sync_errors_json = '{}',
+                    sync_issue_codes_json = '{}',
+                    auth_invalid = 0
                 """,
                 (
                     user_id,
@@ -710,6 +728,7 @@ class AccountStore:
                     now,
                 ),
             )
+        return now
 
     def get_hduhelp_connection_secret(self, user_id: str) -> dict[str, Any] | None:
         with self._lock:
@@ -731,6 +750,13 @@ class AccountStore:
         expected_credential: tuple[str, str] | None = None,
     ) -> None:
         with self._lock, self._connection:
+            if not self._connection.in_transaction:
+                self._connection.execute("BEGIN IMMEDIATE")
+            issues = self.get_hduhelp_issue_codes(user_id)
+            errors = self.get_hduhelp_sync_errors(user_id)
+            for resource in [name for name, issue in issues.items() if issue == "auth_invalid"]:
+                issues.pop(resource)
+                errors.pop(resource, None)
             condition = (" AND access_token_encrypted=? AND connected_at=?"
                          if expected_credential is not None else "")
             cursor = self._connection.execute(
@@ -738,7 +764,8 @@ class AccountStore:
                 UPDATE hduhelp_connections
                 SET access_token_encrypted = ?, refresh_token_encrypted = ?,
                     token_type = ?, scopes_json = ?, expires_at = ?,
-                    updated_at = ?, last_error = NULL
+                    updated_at = ?, last_error = ?, sync_errors_json = ?,
+                    sync_issue_codes_json = ?, auth_invalid = 0
                 WHERE user_id = ?
                 """ + condition,
                 (
@@ -748,6 +775,9 @@ class AccountStore:
                     json.dumps(sorted(set(scopes)), ensure_ascii=False),
                     expires_at.isoformat(),
                     datetime.now(UTC).isoformat(),
+                    "; ".join(errors.values()) or None,
+                    json.dumps(errors, ensure_ascii=False),
+                    json.dumps(issues),
                     user_id,
                     *(expected_credential or ()),
                 ),
@@ -761,10 +791,21 @@ class AccountStore:
         user_id: str,
         resources: dict[str, str],
         errors: dict[str, str] | None = None,
+        issue_codes: dict[str, str] | None = None,
+        expected_credential: tuple[str, str] | None = None,
     ) -> str:
         now = datetime.now(UTC).isoformat()
         error_text = "; ".join(f"{key}: {value}" for key, value in (errors or {}).items())
         with self._lock, self._connection:
+            if expected_credential is not None:
+                if not self._connection.in_transaction:
+                    self._connection.execute("BEGIN IMMEDIATE")
+                row = self._connection.execute(
+                    "SELECT access_token_encrypted, connected_at FROM hduhelp_connections "
+                    "WHERE user_id = ?", (user_id,),
+                ).fetchone()
+                if row is None or tuple(row) != expected_credential:
+                    raise KeyError("hduhelp_connection_changed")
             for resource, encrypted_payload in resources.items():
                 self._connection.execute(
                     """
@@ -780,14 +821,17 @@ class AccountStore:
             self._connection.execute(
                 """
                 UPDATE hduhelp_connections
-                SET last_synced_at = ?, last_error = ?, sync_errors_json = ?, updated_at = ?
+                SET last_synced_at = ?, last_error = ?, sync_errors_json = ?,
+                    sync_issue_codes_json = ?, updated_at = ?, auth_invalid = MAX(auth_invalid, ?)
                 WHERE user_id = ?
                 """,
                 (
                     now,
                     error_text or None,
                     json.dumps(errors or {}, ensure_ascii=False),
+                    json.dumps(issue_codes or {}),
                     now,
+                    "auth_invalid" in (issue_codes or {}).values(),
                     user_id,
                 ),
             )
@@ -796,6 +840,7 @@ class AccountStore:
     def save_hduhelp_refresh(
         self, *, user_id: str, resource: str, encrypted_payload: str | None,
         error: str | None, expected_credential: tuple[str, str], expected_snapshot: dict | None,
+        issue: str | None = None, synced_at: str | None = None,
     ) -> bool:
         """Compare-and-save one resource; never revive a disconnected or replaced connection."""
         now = datetime.now(UTC).isoformat()
@@ -806,7 +851,7 @@ class AccountStore:
             if not self._connection.in_transaction:
                 self._connection.execute("BEGIN IMMEDIATE")
             row = self._connection.execute(
-                "SELECT access_token_encrypted,connected_at,sync_errors_json "
+                "SELECT access_token_encrypted,connected_at,sync_errors_json,sync_issue_codes_json "
                 "FROM hduhelp_connections "
                 "WHERE user_id=?", (user_id,),
             ).fetchone()
@@ -815,30 +860,40 @@ class AccountStore:
             current = self.get_hduhelp_resource(user_id, resource)
             if current != expected_snapshot:
                 return False  # Another refresh/manual sync has already replaced this version.
-            try:
-                errors = json.loads(row[2] or "{}")
-            except (ValueError, TypeError):
-                errors = {}
-            if not isinstance(errors, dict):
-                errors = {}
+            errors = self._hduhelp_string_map(row[2])
+            issues = self._hduhelp_string_map(row[3])
             if error:
                 errors[resource] = error
             else:
                 errors.pop(resource, None)
+            if issue:
+                issues[resource] = issue
+            else:
+                issues.pop(resource, None)
             if encrypted_payload is not None:
                 self._connection.execute(
                     "INSERT INTO hduhelp_resource_cache(user_id,resource,payload_json,synced_at) "
                     "VALUES(?,?,?,?) ON CONFLICT(user_id,resource) DO UPDATE SET "
                     "payload_json=excluded.payload_json,synced_at=excluded.synced_at",
-                    (user_id, resource, encrypted_payload, now),
+                    (user_id, resource, encrypted_payload, synced_at or now),
                 )
             self._connection.execute(
-                "UPDATE hduhelp_connections SET sync_errors_json=?,last_error=?,updated_at=?,"
+                "UPDATE hduhelp_connections SET sync_errors_json=?,sync_issue_codes_json=?,"
+                "last_error=?,updated_at=?,auth_invalid=MAX(auth_invalid,?),"
                 "last_synced_at=CASE WHEN ? THEN ? ELSE last_synced_at END WHERE user_id=?",
-                (json.dumps(errors, ensure_ascii=False), "; ".join(errors.values()) or None, now,
-                 encrypted_payload is not None, now, user_id),
+                (json.dumps(errors, ensure_ascii=False), json.dumps(issues),
+                 "; ".join(errors.values()) or None, now, issue == "auth_invalid",
+                 encrypted_payload is not None, synced_at or now, user_id),
             )
         return True
+
+    def mark_hduhelp_auth_invalid(self, user_id: str, credential: tuple[str, str]) -> None:
+        with self._lock, self._connection:
+            self._connection.execute(
+                "UPDATE hduhelp_connections SET auth_invalid=1, updated_at=? "
+                "WHERE user_id=? AND access_token_encrypted=? AND connected_at=?",
+                (datetime.now(UTC).isoformat(), user_id, *credential),
+            )
 
     def set_hduhelp_error(self, user_id: str, message: str) -> None:
         with self._lock, self._connection:
@@ -875,17 +930,25 @@ class AccountStore:
                 "SELECT sync_errors_json FROM hduhelp_connections WHERE user_id = ?",
                 (user_id,),
             ).fetchone()
-        if row is None:
-            return {}
+        return self._hduhelp_string_map(row[0]) if row else {}
+
+    def get_hduhelp_issue_codes(self, user_id: str) -> dict[str, str]:
+        with self._lock:
+            row = self._connection.execute(
+                "SELECT sync_issue_codes_json FROM hduhelp_connections WHERE user_id = ?",
+                (user_id,),
+            ).fetchone()
+        return self._hduhelp_string_map(row[0]) if row else {}
+
+    @staticmethod
+    def _hduhelp_string_map(value: str | None) -> dict[str, str]:
         try:
-            payload = json.loads(row["sync_errors_json"] or "{}")
+            payload = json.loads(value or "{}")
         except json.JSONDecodeError:
             return {}
         return {
-            str(key): str(value)
-            for key, value in payload.items()
-            if isinstance(key, str) and value is not None
-        }
+            key: item for key, item in payload.items() if isinstance(item, str)
+        } if isinstance(payload, dict) else {}
 
     def clear_hduhelp_resources(self, user_id: str) -> None:
         with self._lock, self._connection:
@@ -917,7 +980,7 @@ class AccountStore:
                 """
                 SELECT auth_mode, token_hint, scopes_json, expires_at,
                        external_name, identity_type,
-                       connected_at, last_synced_at, last_error
+                       connected_at, last_synced_at, last_error, auth_invalid
                 FROM hduhelp_connections WHERE user_id = ?
                 """,
                 (user_id,),
@@ -930,9 +993,10 @@ class AccountStore:
                 (user_id,),
             ).fetchall()
         if row is None:
-            return {"configured": False, "resources": []}
+            return {"configured": False, "connection_state": "not_connected", "resources": []}
         return {
             "configured": True,
+            "connection_state": "auth_invalid" if row["auth_invalid"] else "connected",
             "provider": "hduhelp",
             "auth_mode": row["auth_mode"],
             "token_hint": row["token_hint"],

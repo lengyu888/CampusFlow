@@ -3,29 +3,22 @@
 import asyncio
 import json
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 
 import httpx
 import pytest
 from test_agent_runtime import Client, call, chunk, tool_turn
 from test_multiread_context_budget import multiread_scene
 
+from campusflow_agent import hduhelp_refresh
 from campusflow_agent.hduhelp import HDUHelpService
 from campusflow_agent.hduhelp_access import HDUHelpAccess
 
 
 def scene(tmp_path, monkeypatch, handler, turns, **settings):
-    agent, user = multiread_scene(tmp_path)
+    agent, user = multiread_scene(tmp_path, pat="synthetic-pat-A")
     for key, value in settings.items():
         setattr(agent.settings, key, value)
-    agent.account_store.save_hduhelp_connection(
-        user_id=user,
-        access_token_encrypted=agent.credential_vault.encrypt("synthetic-pat-A"),
-        refresh_token_encrypted=None,
-        token_type="Bearer",
-        scopes=[],
-        expires_at=datetime.max.replace(tzinfo=UTC),
-        auth_mode="pat",
-    )
     http = httpx.AsyncClient(transport=httpx.MockTransport(handler))
     upstream = HDUHelpService(agent.settings, http_client=http)
     agent.hduhelp_access = HDUHelpAccess(agent.account_store, agent.credential_vault, upstream)
@@ -552,10 +545,13 @@ async def test_late_older_turn_cannot_overwrite_newer_turn_cache(tmp_path, monke
 
 async def test_expired_total_refresh_budget_does_not_start_new_resource(tmp_path, monkeypatch):
     requests = []
+    elapsed = 0.0
+    monkeypatch.setattr(hduhelp_refresh, "time", SimpleNamespace(monotonic=lambda: elapsed))
 
     async def handler(request):
+        nonlocal elapsed
         requests.append(request.url.path)
-        await asyncio.sleep(0.2)
+        elapsed = 0.03
         return httpx.Response(200, json={"code": 0, "data": {}})
 
     agent, user, http = scene(

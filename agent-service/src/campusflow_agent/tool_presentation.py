@@ -8,6 +8,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
+from .campus_data_status import ISSUE_MESSAGES, campus_data_status
 from .evidence import data_evidence, safe_source_url
 from .hduhelp_query import SnapshotQuery, precise_page_size
 from .knowledge import (
@@ -19,7 +20,14 @@ from .knowledge import (
     reference_evidence,
 )
 from .route_presentation import route_failure
-from .schemas import CampusRoute, DataEvidence, PendingAction, ToolDisplaySummary, ToolTrace
+from .schemas import (
+    CampusDataStatus,
+    CampusRoute,
+    DataEvidence,
+    PendingAction,
+    ToolDisplaySummary,
+    ToolTrace,
+)
 
 _LABELS = {
     "get_schedule": "课表与事务",
@@ -54,6 +62,11 @@ _SNAPSHOT_FIELDS = {
         "sunrun_detail",
         "subscriptions",
     ),
+}
+_LIVE_RESOURCES = {
+    "get_unused_classrooms": "classrooms",
+    "get_classroom_usage": "classroom_usage",
+    "get_electricity_balance": "electricity",
 }
 
 
@@ -483,7 +496,7 @@ def _present_content(trace: ToolTrace, pending_actions: list[PendingAction]) -> 
         return _unverified(label)
     if name in _SNAPSHOT_FIELDS:
         return _snapshot_summary(name, result, label)
-    if name in {"get_unused_classrooms", "get_classroom_usage", "get_electricity_balance"}:
+    if name in _LIVE_RESOURCES:
         return _live_summary(name, result, label)
     if name in {"propose_task_change", "propose_plan", "propose_plan_change"}:
         return _proposal_summary(name, result, pending_actions, label)
@@ -590,6 +603,40 @@ def _source_records(result: Any) -> list[DataEvidence]:
     return list(records.values())
 
 
+def _campus_status_note(trace: ToolTrace, source: DataEvidence) -> str | None:
+    resource = source.source_id.removeprefix("hduhelp:")
+    result = trace.result
+    if (
+        source.kind != "remote"
+        or not source.source_id.startswith("hduhelp:")
+        or not isinstance(result, dict)
+    ):
+        return None
+    if trace.tool_name in _SNAPSHOT_FIELDS and resource in _SNAPSHOT_FIELDS[trace.tool_name]:
+        snapshot = result.get(resource)
+    elif _LIVE_RESOURCES.get(trace.tool_name) == resource:
+        snapshot = result
+    else:
+        return None
+    if not isinstance(snapshot, dict):
+        return None
+    try:
+        status = CampusDataStatus.model_validate(snapshot.get("data_status"))
+    except ValidationError:
+        return None
+    # Generate the user-visible text from known states. Do not copy a result's
+    # arbitrary message or interpolate provider diagnostics into the summary.
+    if status.state == "unavailable":
+        message = campus_data_status(resource, issue=status.issue).message
+        if "refresh_state" in snapshot:
+            return message + " 本轮未使用旧缓存。"
+        return message
+    stamp = source.updated_at if source.status != "unverified" else ""
+    return campus_data_status(
+        resource, stamp, issue=status.issue, live=status.state == "live"
+    ).message
+
+
 def present_tool_trace(
     trace: ToolTrace, pending_actions: list[PendingAction]
 ) -> ToolDisplaySummary:
@@ -651,20 +698,15 @@ def present_tool_trace(
         display.state = "error"
         display.summary = "本次数据源查询失败，未获得可用的当前结果。"
         if trace.tool_name in _SNAPSHOT_FIELDS and isinstance(trace.result, dict):
-            failures = {
-                "timeout": "本轮校园资料更新超时，未使用旧缓存。可稍后重试。",
-                "auth_invalid": "HDUHelp 令牌已失效，请重新连接。",
-                "forbidden": "该项校园资料缺少访问权限，请核对 HDUHelp 授权。",
-                "connection_changed": "校园连接已变化，请重新核对连接后查询。",
-                "failed": "本轮校园资料更新失败，未使用旧缓存。可稍后重试。",
-            }
+            # Read receipts from before data_status still carry refresh_state.
             for key in _SNAPSHOT_FIELDS[trace.tool_name]:
                 snapshot = trace.result.get(key)
                 if (isinstance(snapshot, dict) and snapshot.get("needs_sync") is True
                         and snapshot.get("data") is None):
                     reason = snapshot.get("refresh_state")
-                    if reason in failures:
-                        display.summary = failures[reason]
+                    issue = "upstream_error" if reason == "failed" else reason
+                    if isinstance(issue, str) and issue in ISSUE_MESSAGES:
+                        display.summary = ISSUE_MESSAGES[issue]
                         break
     elif states == {"missing"}:
         display.state = "unavailable"
@@ -678,4 +720,11 @@ def present_tool_trace(
     elif states != {"fresh"}:
         display.state = "unverified"
         display.summary += " 部分来源缺失或未经实时核验，请查看来源说明。"
+    if len(evidence) == 1:
+        status_note = _campus_status_note(trace, evidence[0])
+        if status_note:
+            if states == {"fresh"}:
+                display.summary += " " + status_note
+            elif states <= {"stale", "error", "missing", "unverified"}:
+                display.summary = status_note + " 暂无可核验的当前结果。"
     return display

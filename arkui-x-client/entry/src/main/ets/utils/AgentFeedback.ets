@@ -70,6 +70,20 @@ function knownErrorMessage(code: string): string {
       return '当前账号中未找到这次专注记录。';
     case 'DATA_SCOPE_UNSUPPORTED':
       return '当前服务尚未提供此学校和校区的校园资料，请核对配置；个人信息尚未更改。';
+    case 'HDUHELP_NOT_CONNECTED':
+      return '尚未连接 HDUHelp，请在校园数据连接中完成授权。';
+    case 'HDUHELP_AUTH_INVALID':
+      return 'HDUHelp 授权已失效，请在校园数据连接中更新令牌或重新授权。';
+    case 'HDUHELP_FORBIDDEN':
+      return 'HDUHelp 未授予这项数据的访问权限，请核对授权范围。';
+    case 'HDUHELP_TIMEOUT':
+      return 'HDUHelp 读取超时，请稍后重试。';
+    case 'HDUHELP_UPSTREAM_ERROR':
+      return 'HDUHelp 暂时无法提供这项数据，请稍后重试。';
+    case 'HDUHELP_CONNECTION_CHANGED':
+      return '校园数据连接已变化，请重新读取。';
+    case 'HDUHELP_CACHE_UNREADABLE':
+      return '这项数据的缓存暂时无法读取，请重新获取。';
     case 'REVIEW_INVALID':
       return '请选择有效日期，再回看这一天或这一周。';
     case 'REVIEW_LIMIT':

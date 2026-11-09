@@ -3,18 +3,17 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { stripThemeTypeScriptTypes as stripTypeScriptTypes } from './helpers/theme-fixture.mjs';
 import { test } from 'node:test';
+import { campusPresentation, CampusFlowRequestError } from './helpers/campus-data-fixture.mjs';
 
-const helperSource = readFileSync(new URL('../entry/src/main/ets/utils/AgentFeedback.ets', import.meta.url), 'utf8')
-  .replace(/^import .*;\r?\n/gm, '');
-const { CampusFlowRequestError } = await import(`data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(helperSource)).toString('base64')}`);
 function component(name, api) {
   const source = readFileSync(new URL(`../entry/src/main/ets/pages/${name}.ets`, import.meta.url), 'utf8');
   const boundary = source.includes('\n  @Builder') ? source.indexOf('\n  @Builder') : source.indexOf('\n  build()');
   const controller = source.slice(0, boundary).replace(/^import[\s\S]*?;\r?\n/gm, '')
     .replace(/^@Component\r?\n/m, '').replace(/@(Prop|State)\s+|@(Watch|StorageLink)\('[^']+'\)\s*/g, '')
     .replace(`export struct ${name}`, `class ${name}`) + '\n}\n';
-  const Page = new Function('CampusFlowApi', 'CampusFlowRequestError', 'AppTheme', 'Curve', 'Scroller',
-    stripTypeScriptTypes(controller) + `\nreturn ${name};`)(api, CampusFlowRequestError, { motion: n => n }, { EaseOut: 'ease' }, class { scrollTo() {} });
+  const Page = new Function('CampusFlowApi', 'CampusFlowRequestError', 'AppTheme', 'Curve', 'Scroller', ...Object.keys(campusPresentation),
+    stripTypeScriptTypes(controller) + `\nreturn ${name};`)(api, CampusFlowRequestError, { motion: n => n }, { EaseOut: 'ease' },
+    class { scrollTo() {} }, ...Object.values(campusPresentation));
   const page = new Page();
   page.baseUrl = 'http://fixture.invalid'; page.token = 'fixture-token';
   page.getUIContext = () => ({ animateTo: (_options, callback) => callback() });
@@ -201,6 +200,22 @@ test('campus connections return to the actual settings origin without touching d
   assert.equal(nav.at(-1),origin.length>0);assert.deepEqual(f.calls,[]);
   assert.deepEqual([p.displayName,p.newApiKey,p.scheduleUrl],['未保存昵称','SYNTHETIC_NEW','synthetic-url']);
  }
+});
+
+test('expired campus connection is visible and direct entry returns to its service in one step', () => {
+  const { page, calls } = profileFixture();
+  const history = [];
+  page.hduHelp = { configured: true, connection_state: 'auth_invalid' };
+  page.onInnerNavigationChanged = active => history.push(active);
+  page.onCloseConnections = () => history.push('return to service');
+  page.connectionsRevision = 1;
+  page.connectionsRequested();
+  assert.equal(page.section, 'connections');
+  assert.equal(page.hduHelpConnectionLabel(), 'HDUHelp 授权已失效');
+  page.backRequested();
+  assert.equal(page.section, '');
+  assert.deepEqual(history, [true, false, 'return to service']);
+  assert.deepEqual(calls, []);
 });
 
 test('administrator settings return to their actual home or data origin without changing drafts',()=>{

@@ -89,15 +89,6 @@ def test_authorized_context_exposes_read_tools_without_installing_skills() -> No
         timetable=[{"date": "2026-10-08", "title": "操作系统"}],
         campus_map={"places": [{"name": "六教"}]},
     )
-    accounts.save_hduhelp_resources(
-        user_id=user.user_id,
-        resources={
-            "identity": "encrypted-identity",
-            "grades": "encrypted-grades",
-            "card_balance": "encrypted-card",
-        },
-        errors={},
-    )
     accounts.save_hduhelp_connection(
         user_id=user.user_id,
         access_token_encrypted="encrypted-pat",
@@ -107,6 +98,15 @@ def test_authorized_context_exposes_read_tools_without_installing_skills() -> No
         expires_at=datetime.max.replace(tzinfo=UTC),
         auth_mode="pat",
         token_hint="•••• test",
+    )
+    accounts.save_hduhelp_resources(
+        user_id=user.user_id,
+        resources={
+            "identity": "encrypted-identity",
+            "grades": "encrypted-grades",
+            "card_balance": "encrypted-card",
+        },
+        errors={},
     )
     service = AgentService(
         Settings(app_env="test"),

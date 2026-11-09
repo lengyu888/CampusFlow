@@ -9,7 +9,12 @@ from contextvars import ContextVar
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from .evidence import data_evidence, hdu_evidence
+from .campus_data_status import (
+    ISSUE_MESSAGES,
+    campus_data_issue,
+    campus_data_status,
+    campus_status_evidence,
+)
 from .hduhelp import RESOURCE_REQUESTS, HDUHelpError
 from .hduhelp_query import ACADEMIC_RESOURCES, CAMPUS_LIFE_RESOURCES, SnapshotQuery
 from .run_budget import CURRENT_RUN_BUDGET
@@ -71,48 +76,33 @@ class RefreshTurn:
         self.token_lock = asyncio.Lock()
 
     def _same_connection(self) -> bool:
-        current = self.coordinator.accounts.get_hduhelp_connection_secret(self.user_id)
-        return current is not None and self.credential == (
-            current["access_token_encrypted"],
-            current["connected_at"],
-        )
+        return self.credential == self.coordinator.access.connection_credential(self.user_id)
 
-    def _missing(self, name, note, status="error", reason="failed") -> dict:
+    def _missing(self, name, issue="upstream_error") -> dict:
+        status = campus_data_status(name, issue=issue)
         return {
             "resource": name,
             "data": None,
             "synced_at": None,
             "needs_sync": True,
-            "refresh_state": reason,
-            "evidence": [
-                data_evidence(
-                    f"hduhelp:{name}", f"HDUHelp · {name}", "remote", status, note=note
-                ).model_dump(mode="json")
-            ],
+            "refresh_state": "failed" if issue == "upstream_error" else issue,
+            "data_status": status.model_dump(mode="json"),
+            "evidence": [campus_status_evidence(name, status).model_dump(mode="json")],
         }
 
     def snapshot(self, user_id, name):
         if user_id != self.user_id or (self.credential is not None and not self._same_connection()):
-            return self._missing(
-                name, "校园连接已变化，请重新核对连接后查询。", reason="connection_changed"
-            )
-        return self.snapshots.get(name, self._missing(name, "该资料尚未在本轮完成更新。"))
+            return self._missing(name, "connection_changed")
+        return self.snapshots.get(name) or self._missing(name)
 
     async def _active_token(self):
         async with self.token_lock:
             if self.token is None:
-                self.token = await self.coordinator.access.active_token(self.user_id)
-                connection = self.coordinator.accounts.get_hduhelp_connection_secret(self.user_id)
-                if connection is None:
-                    raise HDUHelpError("connection changed")
-                if (
-                    self.coordinator.vault.decrypt(connection["access_token_encrypted"])
-                    != self.token
-                ):
-                    raise HDUHelpError("connection changed")
-                self.credential = (connection["access_token_encrypted"], connection["connected_at"])
+                self.token, self.credential = await self.coordinator.access.token_for_connection(
+                    self.user_id
+                )
             if not self._same_connection():
-                raise HDUHelpError("connection changed")
+                raise HDUHelpError("connection changed", code="HDUHELP_CONNECTION_CHANGED")
             return self.token
 
     async def ensure(self, resources, *, budget=None):
@@ -169,9 +159,10 @@ class RefreshTurn:
         key, ticket = (self.user_id, name), uuid4().hex
         coordinator.latest[key] = ticket
         previous = coordinator.accounts.get_hduhelp_resource(self.user_id, name)
+        credential = coordinator.access.connection_credential(self.user_id)
         payload = None
-        error = "本轮校园资料更新失败，未使用旧缓存。请稍后重试。"
-        failure_kind = "failed"
+        stamp = None
+        issue = None
         acquired = False
         try:
             if time.monotonic() >= deadline:
@@ -191,35 +182,27 @@ class RefreshTurn:
             )
             async with asyncio.timeout(seconds):
                 token = await self._active_token()
+                credential = self.credential
                 path, params = RESOURCE_REQUESTS[name]
                 data = await coordinator.access.service.resource_request(token, path, params=params)
                 if not isinstance(data, dict | list):
                     raise HDUHelpError("unsupported resource data")
                 encoded = json.dumps(data, ensure_ascii=False, allow_nan=False)
                 if not self._same_connection():
-                    raise HDUHelpError("connection changed")
+                    raise HDUHelpError("connection changed", code="HDUHELP_CONNECTION_CHANGED")
                 stamp = datetime.now(UTC).isoformat()
                 payload = coordinator.vault.encrypt(encoded)
+                status = campus_data_status(name, stamp, live=True)
                 self.snapshots[name] = {
                     "resource": name,
                     "data": data,
                     "synced_at": stamp,
                     "needs_sync": False,
-                    "evidence": [hdu_evidence(name, stamp).model_dump(mode="json")],
+                    "data_status": status.model_dump(mode="json"),
+                    "evidence": [campus_status_evidence(name, status).model_dump(mode="json")],
                 }
-                error = None
-        except TimeoutError:
-            error = "本轮校园资料更新超时，未使用旧缓存。请稍后重试。"
-            failure_kind = "timeout"
-        except HDUHelpError as exc:
-            if getattr(exc, "code", "") == "HDUHELP_AUTH_INVALID":
-                error = "HDUHelp 令牌已失效，请在个人校园连接中重新连接。"
-                failure_kind = "auth_invalid"
-            elif getattr(exc, "code", "") == "HDUHELP_FORBIDDEN":
-                error = "该项校园资料尚未获得访问权限，请核对 HDUHelp 授权。"
-                failure_kind = "forbidden"
-        except (ValueError, TypeError, KeyError):
-            pass
+        except (TimeoutError, HDUHelpError, ValueError, TypeError, KeyError) as exc:
+            issue = campus_data_issue(exc)
         finally:
             if acquired:
                 coordinator.slots.release()
@@ -228,15 +211,20 @@ class RefreshTurn:
             if latest:
                 coordinator.latest.pop(key, None)
         # A cancelled task never reaches this section.
-        if error is not None:
-            self.snapshots[name] = self._missing(name, error, reason=failure_kind)
-        if latest and self.credential is not None and self._same_connection():
+        same_connection = credential == coordinator.access.connection_credential(self.user_id)
+        if not same_connection:
+            issue = "connection_changed"
+        if issue is not None:
+            self.snapshots[name] = self._missing(name, issue)
+        if latest and credential is not None and same_connection:
             coordinator.accounts.save_hduhelp_refresh(
                 user_id=self.user_id,
                 resource=name,
                 encrypted_payload=payload,
-                error=error,
-                expected_credential=self.credential,
+                error=ISSUE_MESSAGES[issue] if issue else None,
+                issue=issue,
+                synced_at=stamp,
+                expected_credential=credential,
                 expected_snapshot=previous,
             )
 

@@ -3,6 +3,7 @@ import {
   BaiduMapCredentialSettings,
   BaiduMapCredentialStatus,
   BaiduMapCredentialUpdate,
+  CampusDataStatus,
   HDUHelpConnectionStatus,
   HDUHelpDataResponse,
   HDUHelpDisplayItem,
@@ -23,6 +24,9 @@ import { LearningPreferencesPanel } from '../components/LearningPreferencesPanel
 import { ReminderState } from '../utils/ReminderCoordinator';
 import { InfoDisclosure } from '../components/InfoDisclosure';
 import { ConnectionCheckPanel } from '../components/ConnectionCheckPanel';
+import { CampusDataStatusView } from '../components/CampusDataStatusView';
+import { campusSectionsWithStatus, campusStatusFailure, previousCampusStatuses, replaceCampusResourceStatus } from '../utils/CampusDataPresentation';
+import { evidenceTime } from '../utils/EvidencePresentation';
 
 @Component
 export struct ProfilePage {
@@ -44,6 +48,9 @@ export struct ProfilePage {
   onOpenGuide: () => void = () => {};
   onInnerNavigationChanged: (active: boolean) => void = () => {};
   @Watch('backRequested') @Prop backRevision: number = 0;
+  @Watch('connectionsRequested') @Prop connectionsRevision: number = 0;
+  onCloseConnections: () => void = () => {};
+  onCampusBindingChanged: () => void = () => {};
   @Prop reminderState: ReminderState = { phase: 'disabled', message: '本机系统提醒尚未启用。', scheduled: 0, skipped: 0, limited: false, enabled: false };
   @Prop reminderCleanupBusy: boolean = false;
   onEnableReminders: () => void = () => {};
@@ -75,6 +82,7 @@ export struct ProfilePage {
   @State private message: string = '';
   @State private section: string = '';
   private connectionsReturnSection: string = '';
+  private connectionsOpenedFromService: boolean = false;
   private adminReturnSection: string = 'data';
   private pageScroller: Scroller = new Scroller();
   @State private profileMessage: string = '';
@@ -120,6 +128,7 @@ export struct ProfilePage {
   };
   @State private hduHelpAuthorizeUrl: string = '';
   @State private hduHelpPat: string = '';
+  @State private showHduHelpAuthorization: boolean = false;
   @State private hduHelpMessage: string = '';
   @State private hduHelpMessageIsError: boolean = false;
   @State private showHduHelpData: boolean = false;
@@ -127,7 +136,10 @@ export struct ProfilePage {
   @State private hduHelpSections: HDUHelpDisplaySection[] = [];
   @State private hduHelpPrompts: HDUHelpSuggestedPrompt[] = [];
   @State private hduHelpSyncErrors: string[] = [];
+  @State private hduHelpStatuses: Record<string, CampusDataStatus> = {};
+  @State private hduHelpRefreshingResource: string = '';
   @State private hduHelpDataError: string = '';
+  private archiveResources: string[] = ['identity', 'person', 'grades'];
 
   aboutToAppear(): void {
     this.pageActive = true;
@@ -156,6 +168,7 @@ export struct ProfilePage {
     if (!this.subscriptionWritePending) { this.subscriptionBusy = false; }
     this.subscriptionLoading = false;
     this.hduHelpDataLoading = false;
+    this.hduHelpRefreshingResource = '';
     this.adminLoading = false;
   }
   private current(revision: number): boolean { return this.pageActive && this.active && revision === this.pageRevision; }
@@ -171,6 +184,7 @@ export struct ProfilePage {
       next === 'admin' && this.user.role !== 'admin') { return; }
     if (next === 'connections' && this.section !== 'connections') {
       this.connectionsReturnSection = this.section === 'account' ? 'account' : '';
+      this.connectionsOpenedFromService = false;
     }
     if (next === 'admin' && this.section !== 'admin') {
       this.adminReturnSection = this.section === 'data' ? 'data' : '';
@@ -182,16 +196,31 @@ export struct ProfilePage {
     this.pageScroller.scrollTo({ xOffset: 0, yOffset: 0, animation: false });
   }
   private backRequested(): void { if (this.active && this.pageActive) { this.sectionBack(); } }
+  private connectionsRequested(): void {
+    if (this.connectionsRevision === 0 || !this.pageActive) { return; }
+    if (this.showHduHelpData) { this.closeHduHelpData(); }
+    if (this.section === 'baidu-map') { this.clearBaiduMapSettings(); }
+    this.section = 'connections';
+    this.connectionsReturnSection = '';
+    this.connectionsOpenedFromService = true;
+    this.onInnerNavigationChanged(true);
+    this.pageScroller.scrollTo({ xOffset: 0, yOffset: 0, animation: false });
+  }
+
   private sectionBack(): void {
     if (this.showHduHelpData) { this.closeHduHelpData(); return; }
     if (this.section === 'baidu-map') { this.clearBaiduMapSettings(); }
+    const returnToService = this.section === 'connections' && this.connectionsOpenedFromService;
+    this.connectionsOpenedFromService = false;
     this.section = this.section === 'connections' ? this.connectionsReturnSection :
       this.section === 'admin' ? this.adminReturnSection : '';
     this.onInnerNavigationChanged(this.section.length > 0);
     this.pageScroller.scrollTo({ xOffset: 0, yOffset: 0, animation: false });
+    if (returnToService) { this.onCloseConnections(); }
   }
   private closeHduHelpData(): void {
     this.dataRevision++; this.hduHelpDataLoading = false; this.showHduHelpData = false;
+    this.hduHelpRefreshingResource = '';
     this.onInnerNavigationChanged(this.section.length > 0);
   }
   private sectionTitle(): string {
@@ -266,41 +295,96 @@ export struct ProfilePage {
     this.hduHelpMessageIsError = false;
     try {
       const status = await new CampusFlowApi(this.baseUrl, this.token).hduHelpStatus();
-      if (this.current(revision) && request === this.hduReadRevision) { this.hduHelp = status; this.hduHelpLoaded = true; }
+      if (this.current(revision) && request === this.hduReadRevision) { this.applyHduHelpStatus(status); }
     } catch (error) {
       if (this.current(revision) && request === this.hduReadRevision) {
+        this.hduHelpLoaded = false;
         this.hduHelpMessage = this.safeFailure(error, '连接状态读取'); this.hduHelpMessageIsError = true;
       }
     } finally { if (this.current(revision) && request === this.hduReadRevision) { this.hduHelpBusy = false; } }
   }
 
-  private async openHduHelpData(): Promise<void> {
-    if (!this.active || !this.pageActive || this.hduHelpDataLoading) { return; }
+  private campusBindingChanged(): void {
+    this.dataRevision++;
+    this.hduHelpDataLoading = false;
+    this.hduHelpRefreshingResource = '';
+    this.hduHelpSections = [];
+    this.hduHelpStatuses = {};
+    this.hduHelpPrompts = [];
+    this.hduHelpSyncErrors = [];
+    this.hduHelpDataError = '';
+    this.onCampusBindingChanged();
+  }
+
+  private applyHduHelpStatus(status: HDUHelpConnectionStatus): void {
+    if (this.hduHelp.configured && (!status.configured ||
+      (this.hduHelp.connected_at !== null && status.connected_at !== null && status.connected_at !== this.hduHelp.connected_at))) {
+      this.campusBindingChanged();
+    }
+    this.hduHelp = status;
+    this.hduHelpLoaded = true;
+  }
+
+  private async openHduHelpData(resource: string = ''): Promise<void> {
+    if (!this.active || !this.pageActive || this.hduHelpDataLoading || this.hduHelpBusy) { return; }
+    if (resource.length > 0 && (!this.showHduHelpData || !this.archiveResources.includes(resource) ||
+      this.hduHelpStatuses[resource]?.action !== 'retry')) { return; }
     const revision = this.pageRevision;
     const request = ++this.dataRevision;
-    this.getUIContext().animateTo({ duration: AppTheme.motion(200), curve: Curve.EaseOut }, () => {
-      this.showHduHelpData = true;
-      this.onInnerNavigationChanged(true);
-    });
+    const token = this.token;
+    const baseUrl = this.baseUrl;
+    if (!this.showHduHelpData) {
+      this.getUIContext().animateTo({ duration: AppTheme.motion(200), curve: Curve.EaseOut }, () => {
+        this.showHduHelpData = true;
+        this.onInnerNavigationChanged(true);
+      });
+    }
     this.hduHelpDataLoading = true;
+    this.hduHelpRefreshingResource = resource;
     this.hduHelpDataError = '';
+    if (resource.length === 0) { this.hduHelpStatuses = previousCampusStatuses(this.hduHelpStatuses); }
     try {
-      const result: HDUHelpDataResponse = await new CampusFlowApi(this.baseUrl, this.token).hduHelpData();
-      if (!this.current(revision) || request !== this.dataRevision) { return; }
-      const archiveResources: string[] = ['identity', 'person', 'grades'];
-      this.hduHelp = result.status;
+      const api = new CampusFlowApi(baseUrl, token);
+      const result: HDUHelpDataResponse = resource.length > 0 ? await api.refreshHduHelpResource(resource) : await api.hduHelpData();
+      if (!this.current(revision) || request !== this.dataRevision || token !== this.token || baseUrl !== this.baseUrl) { return; }
+      this.applyHduHelpStatus(result.status);
+      this.hduHelpStatuses = result.resource_statuses ?? {};
       this.hduHelpSections = result.sections.filter((section: HDUHelpDisplaySection) =>
-        archiveResources.includes(section.resource));
+        this.archiveResources.includes(section.resource));
       this.hduHelpPrompts = result.suggested_prompts.filter((suggestion: HDUHelpSuggestedPrompt) =>
-        suggestion.resource !== null && archiveResources.includes(suggestion.resource));
-      this.hduHelpSyncErrors = Object.keys(result.sync_errors)
-        .filter((resource: string) => archiveResources.includes(resource))
+        suggestion.resource !== null && this.archiveResources.includes(suggestion.resource));
+      this.hduHelpSyncErrors = result.resource_statuses !== undefined ? [] : Object.keys(result.sync_errors)
+        .filter((resource: string) => this.archiveResources.includes(resource))
         .map((resource: string) => `${this.hduHelpResourceName(resource)}：${result.sync_errors[resource]}`);
     } catch (error) {
-      if (this.current(revision) && request === this.dataRevision) { this.hduHelpDataError = this.safeFailure(error, '校园档案读取'); }
+      if (this.current(revision) && request === this.dataRevision && token === this.token && baseUrl === this.baseUrl) {
+        const failure = campusStatusFailure(error, '暂时无法读取校园档案，请稍后重试。', this.hduHelpStatuses[resource] ?? null,
+          this.hduHelpSections.some((section: HDUHelpDisplaySection) => section.resource === resource));
+        if (failure.issue === 'not_connected' || failure.issue === 'connection_changed' || failure.action === 'none') {
+          this.campusBindingChanged();
+          this.hduHelpDataError = failure.message;
+        } else if (resource.length > 0) {
+          this.hduHelpStatuses = replaceCampusResourceStatus(this.hduHelpStatuses, resource, failure);
+        } else { this.hduHelpDataError = failure.message; }
+      }
     } finally {
-      if (this.current(revision) && request === this.dataRevision) { this.hduHelpDataLoading = false; }
+      if (this.current(revision) && request === this.dataRevision) {
+        this.hduHelpDataLoading = false;
+        this.hduHelpRefreshingResource = '';
+      }
     }
+  }
+
+  private archiveSections(): HDUHelpDisplaySection[] {
+    if (!this.hduHelp.configured) { return []; }
+    return campusSectionsWithStatus(this.hduHelpSections, this.hduHelpStatuses)
+      .filter((section: HDUHelpDisplaySection) => this.archiveResources.includes(section.resource));
+  }
+
+  private hduHelpConnectionLabel(): string {
+    if (!this.hduHelpLoaded) { return '连接状态待核对'; }
+    if (this.hduHelp.connection_state === 'auth_invalid') { return 'HDUHelp 授权已失效'; }
+    return this.hduHelp.configured ? 'HDUHelp 已连接' : 'HDUHelp 未连接';
   }
 
   private hduHelpResourceName(resource: string): string {
@@ -348,18 +432,24 @@ export struct ProfilePage {
       return;
     }
     const revision = this.pageRevision;
+    const token = this.token;
+    const baseUrl = this.baseUrl;
     this.hduHelpBusy = true;
     this.hduReadRevision++;
     this.dataRevision++;
     this.hduHelpDataLoading = false;
     this.hduMutationPending = true;
     try {
-      const result = await new CampusFlowApi(this.baseUrl, this.token)
+      const result = await new CampusFlowApi(baseUrl, token)
         .connectHduHelpPat(this.hduHelpPat.trim());
+      if (!this.pageActive || this.token !== token || this.baseUrl !== baseUrl) { return; }
+      this.campusBindingChanged();
       if (!this.current(revision)) { return; }
       this.hduHelpPat = '';
       this.hduHelp = result.status;
       this.hduHelpLoaded = true;
+      this.showHduHelpAuthorization = false;
+      this.hduHelpAuthorizeUrl = '';
       this.hduHelpMessage = `令牌已连接，已同步 ${result.synced_resources.length} 类 HDUHelp 数据。`;
       this.hduHelpMessageIsError = false;
     } catch (error) {
@@ -380,12 +470,16 @@ export struct ProfilePage {
     try {
       const result = await new CampusFlowApi(this.baseUrl, this.token).syncHduHelp();
       if (!this.current(revision)) { return; }
-      this.hduHelp = result.status;
-      this.hduHelpLoaded = true;
-      this.hduHelpMessage = `已同步 ${result.synced_resources.length} 类 HDUHelp 数据。`;
+      this.applyHduHelpStatus(result.status);
+      const failed = Object.keys(result.errors).length;
+      this.hduHelpMessage = failed > 0 ? `已同步 ${result.synced_resources.length} 类，${failed} 类待处理。`
+        : `已同步 ${result.synced_resources.length} 类 HDUHelp 数据。`;
       this.hduHelpMessageIsError = false;
     } catch (error) {
       if (!this.current(revision)) { return; }
+      if (error instanceof CampusFlowRequestError && error.code === 'HDUHELP_AUTH_INVALID') {
+        this.hduHelp.connection_state = 'auth_invalid';
+      }
       this.hduHelpMessage = this.safeFailure(error, '校园连接操作');
       this.hduHelpMessageIsError = true;
     } finally { this.finishHduOperation(revision); }
@@ -395,17 +489,21 @@ export struct ProfilePage {
     if (!this.active || !this.pageActive || !this.hduHelpLoaded || this.hduHelpBusy) { return; }
     if (!this.confirmDisconnect) { this.confirmDisconnect = true; return; }
     const revision = this.pageRevision;
+    const token = this.token;
+    const baseUrl = this.baseUrl;
     this.hduHelpBusy = true;
     this.hduReadRevision++;
     this.dataRevision++;
     this.hduHelpDataLoading = false;
     this.hduMutationPending = true;
     try {
-      await new CampusFlowApi(this.baseUrl, this.token).disconnectHduHelp();
+      await new CampusFlowApi(baseUrl, token).disconnectHduHelp();
+      if (!this.pageActive || this.token !== token || this.baseUrl !== baseUrl) { return; }
+      this.campusBindingChanged();
       if (!this.current(revision)) { return; }
       this.hduHelp.configured = false;
-      this.hduHelpSections = [];
-      this.hduHelpPrompts = [];
+      this.hduHelp.connection_state = 'not_connected';
+      this.showHduHelpAuthorization = false;
       this.confirmDisconnect = false;
       this.hduHelp.resources = [];
       this.hduHelpAuthorizeUrl = '';
@@ -707,57 +805,57 @@ export struct ProfilePage {
           .backgroundColor(Color.Transparent).borderRadius(this.palette.controlRadius)
           .accessibilityText('返回校园数据连接').onClick(() => this.closeHduHelpData())
         Text('校园档案').fontSize(22).fontWeight(FontWeight.Bold).fontColor(this.palette.ink).layoutWeight(1)
-        Button('刷新').constraintSize({ minHeight: 44 }).fontSize(this.palette.bodySize).fontColor(this.palette.accent)
+        Button('重新读取').constraintSize({ minHeight: 44 }).fontSize(this.palette.bodySize).fontColor(this.palette.accent)
           .backgroundColor(Color.Transparent).enabled(!this.hduHelpDataLoading).onClick(() => this.openHduHelpData())
       }.width('100%').padding({ left: 12, right: 16, top: 8, bottom: 8 })
 
       Scroll() {
         Column({ space: 14 }) {
-          if (this.hduHelpDataLoading) {
+          if (this.hduHelpDataLoading && this.archiveSections().length === 0) {
             Text('正在整理校园数据…').fontSize(this.palette.bodySize).fontColor(this.palette.secondary).width('100%')
               .padding(this.palette.cardInset).backgroundColor(this.palette.surface).borderRadius(20)
-          } else if (this.hduHelpDataError.length > 0) {
-            FeedbackPanel({ kind: 'error', title: '校园档案未更新', message: this.hduHelpDataError,
+          }
+          if (this.hduHelpDataError.length > 0) {
+            FeedbackPanel({ kind: 'error', title: '校园档案未更新',
+              message: this.archiveSections().length > 0 ? `${this.hduHelpDataError} 以下显示上次读取的记录。` : this.hduHelpDataError,
               actionLabel: '重试读取', busy: this.hduHelpDataLoading, onAction: () => this.openHduHelpData() })
-          } else {
-            if (this.hduHelpSections.length === 0) {
-              FeedbackPanel({ kind: 'info', title: '暂无可展示的校园档案', message: '可返回连接设置，检查 HDUHelp 授权与同步状态。' })
-            }
-            Text(`账户、学籍与成绩 · 已同步 ${this.hduHelpSections.length} 个分区`)
-              .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
+          } else if (!this.hduHelpDataLoading && this.archiveSections().length === 0) {
+            FeedbackPanel({ kind: 'info', title: '暂无可展示的校园档案', message: '可返回连接设置，检查 HDUHelp 授权与同步状态。' })
+          }
+          if (this.archiveSections().length > 0) {
+            Text('账户、学籍与成绩').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
 
-            ForEach(this.hduHelpSections, (section: HDUHelpDisplaySection) => {
+            ForEach(this.archiveSections(), (section: HDUHelpDisplaySection) => {
               Column({ space: 10 }) {
-                Row() {
-                  Column({ space: 3 }) {
-                    Text(section.title).fontSize(17).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
+                Column({ space: 3 }) {
+                  Text(section.title).fontSize(17).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
+                  if (section.summary.length > 0) {
                     Text(section.summary).fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
-                  }.alignItems(HorizontalAlign.Start)
-                  Blank()
-                  Row() {
-                    AppIcon({ name: 'check', iconSize: 16, color: this.palette.success })
-                  }.width(28).height(28).justifyContent(FlexAlign.Center)
-                    .backgroundColor(this.palette.successSoft).borderRadius(10)
-                }.width('100%')
+                  }
+                }.width('100%').alignItems(HorizontalAlign.Start)
+                if (this.hduHelpStatuses[section.resource] !== undefined) {
+                  CampusDataStatusView({ status: this.hduHelpStatuses[section.resource], resourceName: section.title,
+                    busy: this.hduHelpRefreshingResource === section.resource, actionEnabled: !this.hduHelpDataLoading,
+                    onRetry: () => this.openHduHelpData(section.resource), onConnect: () => this.closeHduHelpData() })
+                } else {
+                  Text('同步记录 · 更新时间待核对').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
+                }
                 ForEach(section.items, (item: HDUHelpDisplayItem) => {
                   this.dataItem(item)
                 }, (item: HDUHelpDisplayItem) => `${section.resource}-${item.label}`)
               }.width('100%').padding(this.palette.cardInset).backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
-            }, (section: HDUHelpDisplaySection) => section.resource)
-
-            if (this.hduHelpSyncErrors.length > 0) {
-              Column({ space: 8 }) {
-                Text('暂不可用的数据').fontSize(this.palette.bodySize).fontWeight(FontWeight.Bold)
-                  .fontColor(this.palette.danger).width('100%')
-                Text('以下项目需要在 HDUHelp 补充权限或服务授权，其余成功数据已全部展示。')
-                  .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
-                ForEach(this.hduHelpSyncErrors, (message: string) => {
-                  Text(message).fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%').maxLines(3)
-
-                }, (message: string) => message)
-              }.width('100%').padding(17).backgroundColor(this.palette.bg).borderRadius(18)
-            }
-
+            }, (section: HDUHelpDisplaySection) => `${section.resource}-${JSON.stringify(section)}-${JSON.stringify(this.hduHelpStatuses[section.resource])}`)
+          }
+          if (this.hduHelpSyncErrors.length > 0) {
+            Column({ space: 8 }) {
+              Text('上次同步未能读取').fontSize(this.palette.bodySize).fontWeight(FontWeight.Bold)
+                .fontColor(this.palette.danger).width('100%')
+              ForEach(this.hduHelpSyncErrors, (message: string) => {
+                Text(message).fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%').maxLines(3)
+              }, (message: string) => message)
+            }.width('100%').padding(17).backgroundColor(this.palette.bg).borderRadius(18)
+          }
+          if (this.hduHelp.configured) {
             if (this.hduHelpPrompts.length > 0) {
               Column({ space: 11 }) {
                 Text('问问助手').fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Bold).fontColor(this.palette.ink).width('100%')
@@ -807,7 +905,7 @@ export struct ProfilePage {
       Column() {
         this.groupHeader('account', '账号与校园', () => this.accountDirty() ? '有未保存修改' : '昵称、学校与学期', true)
         this.settingSeparator()
-        this.groupHeader('connections', '校园数据连接', () => !this.hduHelpLoaded ? '连接状态待核对' : this.hduHelp.configured ? 'HDUHelp 已连接' : 'HDUHelp 与课表订阅', true)
+        this.groupHeader('connections', '校园数据连接', () => this.hduHelpConnectionLabel(), true)
       }.width('100%').backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius).clip(true)
       Text('使用与偏好').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%').padding({ left: 16, top: 8 })
       Column() {
@@ -1033,7 +1131,7 @@ export struct ProfilePage {
             }.width('100%').padding(this.palette.cardInset).backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
               .border({ width: 1, color: this.palette.line })
           }
-          this.groupHeader('connections', '校园数据连接', () => !this.hduHelpLoaded ? '连接状态待核对' : this.hduHelp.configured ? 'HDUHelp 已连接' : 'HDUHelp 与课表订阅')
+          this.groupHeader('connections', '校园数据连接', () => this.hduHelpConnectionLabel())
           if (this.section === 'connections') {
         Column({ space: 12 }) {
           Row() {
@@ -1042,8 +1140,9 @@ export struct ProfilePage {
               Text('个人令牌或官方授权').fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
             }.alignItems(HorizontalAlign.Start).layoutWeight(1)
             Blank()
-            Text(!this.hduHelpLoaded ? '状态待核对' : this.hduHelp.configured ? '已连接' : '未连接').fontSize(this.palette.metaSize)
-              .fontColor(this.hduHelp.configured ? this.palette.success : this.palette.muted)
+            Text(this.hduHelpConnectionLabel()).fontSize(this.palette.metaSize)
+              .fontColor(this.hduHelp.connection_state === 'auth_invalid' ? this.palette.warning :
+                (this.hduHelpLoaded && this.hduHelp.configured ? this.palette.success : this.palette.muted))
           }.width('100%')
           if (this.hduHelpBusy) {
             FeedbackPanel({ kind: 'loading', title: '正在核对校园连接', message: '请稍候，连接操作不会重复提交。' })
@@ -1068,18 +1167,29 @@ export struct ProfilePage {
               Text(`${this.hduHelp.auth_mode === 'pat' ? `个人令牌 ${this.hduHelp.token_hint ?? ''}` : '官方 OAuth'} · ${this.hduHelp.external_name ?? '当前用户'}`)
                 .fontSize(this.palette.bodySize).fontColor(this.palette.accent).width('100%')
 
-              Text(`${this.hduHelp.resources.length} 类校园数据可供助手使用`)
+              Text(`已保留 ${this.hduHelp.resources.length} 类同步记录`)
                 .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
+              if (this.hduHelp.last_synced_at !== null) {
+                Text(`上次同步 ${evidenceTime(this.hduHelp.last_synced_at)}`)
+                  .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
+              }
             }.width('100%').padding(12).backgroundColor(this.palette.accentSoft).borderRadius(this.palette.controlRadius)
             Row({ space: 9 }) {
               Button('同步数据').layoutWeight(1).constraintSize({ minHeight: 48 }).fontColor(this.palette.onAccent).backgroundColor(this.palette.accent)
-                .borderRadius(this.palette.controlRadius).enabled(this.hduHelpLoaded && !this.hduHelpBusy).onClick(() => this.syncHduHelp())
+                .borderRadius(this.palette.controlRadius)
+                .enabled(this.hduHelpLoaded && !this.hduHelpBusy && this.hduHelp.connection_state !== 'auth_invalid').onClick(() => this.syncHduHelp())
               Button(this.confirmDisconnect ? '确认断开并删除' : '断开并删除').layoutWeight(1).constraintSize({ minHeight: 48 }).fontColor(this.palette.danger).backgroundColor(this.palette.bg)
                 .borderRadius(this.palette.controlRadius).enabled(this.hduHelpLoaded && !this.hduHelpBusy && !this.hduHelpDataLoading).onClick(() => this.disconnectHduHelp())
             }.width('100%')
             Button('我的校园档案').width('100%').constraintSize({ minHeight: 48 }).fontColor(this.palette.accent)
               .backgroundColor(this.palette.accentSoft).borderRadius(this.palette.controlRadius).enabled(!this.hduHelpBusy && !this.hduHelpDataLoading).onClick(() => this.openHduHelpData())
-          } else {
+            if (this.hduHelp.connection_state !== 'auth_invalid') {
+              Button(this.showHduHelpAuthorization ? '收起授权设置' : '更新授权').width('100%').constraintSize({ minHeight: 48 })
+                .fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft).borderRadius(this.palette.controlRadius)
+                .enabled(!this.hduHelpBusy).onClick(() => this.showHduHelpAuthorization = !this.showHduHelpAuthorization)
+            }
+          }
+          if (!this.hduHelp.configured || this.hduHelp.connection_state === 'auth_invalid' || this.showHduHelpAuthorization) {
             Text('HDUHelp 个人访问令牌').fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
             TextInput({ text: this.hduHelpPat, placeholder: 'hduhelp_pat_…' }).type(InputType.Password)
               .constraintSize({ minHeight: 48 }).backgroundColor(this.palette.field).borderRadius(this.palette.controlRadius)

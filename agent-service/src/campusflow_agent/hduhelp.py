@@ -4,7 +4,7 @@ import asyncio
 import base64
 import hashlib
 import secrets
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from urllib.parse import urlencode
@@ -43,6 +43,7 @@ class TokenSet:
 class SyncResult:
     resources: dict[str, Any]
     errors: dict[str, str]
+    error_codes: dict[str, str] = field(default_factory=dict)
 
 
 RESOURCE_REQUESTS: dict[str, tuple[str, dict[str, Any]]] = {
@@ -185,12 +186,14 @@ class HDUHelpService:
         )
         resources: dict[str, Any] = {}
         errors: dict[str, str] = {}
+        error_codes: dict[str, str] = {}
         for name, result in zip(names, results, strict=True):
             if isinstance(result, Exception):
                 errors[name] = str(result)
+                error_codes[name] = getattr(result, "code", "HDUHELP_UPSTREAM_ERROR")
             else:
                 resources[name] = result
-        return SyncResult(resources=resources, errors=errors)
+        return SyncResult(resources=resources, errors=errors, error_codes=error_codes)
 
     async def resource_request(
         self,
@@ -235,13 +238,15 @@ class HDUHelpService:
             code = {401: "HDUHELP_AUTH_INVALID", 403: "HDUHELP_FORBIDDEN"}.get(
                 status, "HDUHELP_UNAVAILABLE")
             raise HDUHelpError(f"HDUHelp API 返回 HTTP {status}。", code=code) from exc
+        except httpx.TimeoutException as exc:
+            raise HDUHelpError("HDUHelp API 请求超时。", code="HDUHELP_TIMEOUT") from exc
         except (httpx.HTTPError, ValueError) as exc:
             raise HDUHelpError("无法连接或解析 HDUHelp API。") from exc
         if not isinstance(payload, dict):
             raise HDUHelpError("HDUHelp API 返回了无效数据。")
         code = payload.get("code")
         if code not in (None, 0):
-            raise HDUHelpError(str(payload.get("msg") or f"HDUHelp 业务错误 {code}"))
+            raise HDUHelpError("HDUHelp API 未返回可用结果。")
         return payload
 
     @staticmethod

@@ -494,9 +494,9 @@ export struct HomePage {
 
   @Builder
   private BufferChoice(value: number) {
-    Button(`${value} 分钟`).constraintSize({ minHeight: 48 }).layoutWeight(1).padding(10)
-      .fontSize(this.palette.metaSize).fontColor(this.bufferMinutes === value ? this.palette.onAccent : this.palette.accent)
-      .backgroundColor(this.bufferMinutes === value ? this.palette.accent : this.palette.surface)
+    Button(`${value}`).constraintSize({ minHeight: 44 }).layoutWeight(1).padding({ left: 4, right: 4 })
+      .fontSize(this.palette.metaSize).fontColor(this.bufferMinutes === value ? this.palette.onAccent : this.palette.ink)
+      .backgroundColor(this.bufferMinutes === value ? this.palette.pressed : this.palette.field)
       .borderRadius(this.palette.controlRadius).accessibilityText(`在定时安排前后预留 ${value} 分钟${this.bufferMinutes === value ? '，已选中' : ''}`)
       .onClick(() => this.setBuffer(value))
   }
@@ -505,38 +505,51 @@ export struct HomePage {
   private FreeTimeHint() {
     if (this.sourcesReady() && this.gapDismissedDate !== this.agenda().today) {
       Column({ space: 12 }) {
-        Row({ space: 8 }) {
-          Text('找一段学习时间').fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium).fontColor(this.palette.ink).layoutWeight(1)
-          Button(this.gapExpanded ? '收起' : '查看空档').fontSize(this.palette.metaSize).fontColor(this.palette.accent).backgroundColor(Color.Transparent)
-            .constraintSize({ minHeight: 44 }).padding(8).onClick(() => animateTo({ duration: AppTheme.motion(160) }, () => this.gapExpanded = !this.gapExpanded))
-        }.width('100%')
+        AppSectionHeader({ title: '找一段学习时间', actionLabel: this.gapExpanded ? '收起' : '查看空档',
+          onAction: () => animateTo({ duration: AppTheme.motion(160) }, () => this.gapExpanded = !this.gapExpanded) })
         if (this.gapExpanded) {
-        if (this.freeTime().window !== null) {
-          Text(`${this.agenda().today} ${this.freeTime().window!.startTime}–${this.freeTime().window!.endTime}`)
-            .fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium).fontColor(this.palette.accent).width('100%')
-          Text(`另有 ${this.freeTime().untimedCount} 项未定时；临时安排未计入。`)
-            .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%').wordBreak(WordBreak.BREAK_WORD)
-        } else {
-          Text(this.freeTime().reason).fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
-        }
-        Text(this.bufferMinutes === 0 ? '未预留额外缓冲。可自行选择，不代表通勤时间估算。' :
-          `已选择在定时安排前后各留 ${this.bufferMinutes} 分钟；这不是通勤时间估算。`)
-          .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%').wordBreak(WordBreak.BREAK_WORD)
-        Button(this.bufferExpanded ? '收起缓冲选项' : '调整预留缓冲').constraintSize({ minHeight: 48 })
-          .fontSize(this.palette.metaSize).fontColor(this.palette.accent).backgroundColor(Color.Transparent).padding(8)
-          .onClick(() => this.bufferExpanded = !this.bufferExpanded)
-        if (this.bufferExpanded) {
-          Row({ space: 8 }) { this.BufferChoice(0); this.BufferChoice(5) }.width('100%')
-          Row({ space: 8 }) { this.BufferChoice(10); this.BufferChoice(15) }.width('100%')
-        }
-        if (this.freeTime().window !== null) {
-          Button('留 25 分钟复习').width('100%').constraintSize({ minHeight: 48 }).padding(12)
-            .fontSize(this.palette.bodySize).fontColor(this.palette.accent).backgroundColor(this.palette.surface)
-            .borderRadius(this.palette.controlRadius).onClick(() => this.useFreeTime())
-          Text('生成草稿后核对保存。').fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
-        }
-        Button('今天不再提示').constraintSize({ minHeight: 44 }).fontSize(this.palette.metaSize)
-          .fontColor(this.palette.quiet).backgroundColor(Color.Transparent).onClick(() => this.gapDismissedDate = this.agenda().today)
+          if (this.freeTime().window !== null) {
+            Column({ space: 5 }) {
+              Text(`${this.freeTime().window!.startTime}–${this.freeTime().window!.endTime}`)
+                .fontSize(24).fontWeight(FontWeight.Bold).fontColor(this.palette.ink).width('100%')
+                .accessibilityText(`今日空档 ${this.freeTime().window!.startTime} 至 ${this.freeTime().window!.endTime}`)
+              Text(this.freeTime().untimedCount > 0
+                ? `未计入 ${this.freeTime().untimedCount} 项未定时待办和临时安排。` : '临时安排未计入。')
+                .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%').wordBreak(WordBreak.BREAK_WORD)
+            }.width('100%').alignItems(HorizontalAlign.Start)
+            Column({ space: 6 }) {
+              Button('留 25 分钟复习').width('100%').constraintSize({ minHeight: 48 }).padding(10)
+                .fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium)
+                .fontColor(this.palette.onAccent).backgroundColor(this.palette.pressed)
+                .borderRadius(this.palette.controlRadius).onClick(() => this.useFreeTime())
+              Text('生成草稿，核对后保存。').fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
+            }.width('100%').alignItems(HorizontalAlign.Start)
+          } else {
+            Text(this.freeTime().reason).fontSize(this.palette.metaSize).fontColor(this.palette.quiet)
+              .width('100%').wordBreak(WordBreak.BREAK_WORD)
+          }
+          Divider().color(this.palette.line)
+          Row({ space: 8 }) {
+            Button(this.bufferExpanded ? '收起缓冲' : this.bufferMinutes === 0 ? '预留缓冲' : `缓冲 ${this.bufferMinutes} 分钟`)
+              .constraintSize({ minHeight: 44 }).fontSize(this.palette.metaSize)
+              .fontColor(this.palette.accent).backgroundColor(Color.Transparent).padding({ left: 0, right: 8 })
+              .onClick(() => this.bufferExpanded = !this.bufferExpanded)
+            Button('今天不再提示').constraintSize({ minHeight: 44 }).fontSize(this.palette.metaSize)
+              .fontColor(this.palette.quiet).backgroundColor(Color.Transparent).padding({ left: 8, right: 0 })
+              .onClick(() => this.gapDismissedDate = this.agenda().today)
+          }.width('100%').justifyContent(FlexAlign.SpaceBetween)
+          if (this.bufferExpanded) {
+            Column({ space: 8 }) {
+              Text('定时安排前后各留几分钟？通勤时间请另外考虑。')
+                .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%').wordBreak(WordBreak.BREAK_WORD)
+              Row({ space: 6 }) {
+                this.BufferChoice(0)
+                this.BufferChoice(5)
+                this.BufferChoice(10)
+                this.BufferChoice(15)
+              }.width('100%')
+            }.width('100%').alignItems(HorizontalAlign.Start)
+          }
         }
       }.width('100%').padding(this.palette.cardInset).alignItems(HorizontalAlign.Start)
         .backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius).border({ width: 1, color: this.palette.line })

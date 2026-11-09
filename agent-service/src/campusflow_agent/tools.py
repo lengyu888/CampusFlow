@@ -12,13 +12,19 @@ from pydantic import BaseModel, Field
 
 from .accounts import AccountStore
 from .baidu_maps import BaiduMapsError
+from .campus_data_status import (
+    campus_data_issue,
+    campus_data_status,
+    campus_resource_issue,
+    campus_status_evidence,
+)
 from .campus_services import (
     building_name,
     classroom_items,
     classroom_usage_items,
     electricity_overview,
 )
-from .evidence import campus_supported, data_evidence, hdu_evidence
+from .evidence import campus_supported, data_evidence
 from .hduhelp import HDUHelpError
 from .hduhelp_access import HDUHelpAccess
 from .hduhelp_query import (
@@ -31,7 +37,7 @@ from .hduhelp_refresh import CURRENT_HDU_TURN, snapshot_resources
 from .key_vault import ApiKeyVault
 from .knowledge import KnowledgeService
 from .route_presentation import route_failure, route_model_receipt
-from .schemas import PlanEditRequest, PlanningActionRequest
+from .schemas import CampusDataIssue, CampusDataStatus, PlanEditRequest, PlanningActionRequest
 from .store import CampusStore
 from .timetable_service import TimetableService
 
@@ -110,71 +116,64 @@ def build_tools(
             data_evidence(source_id, label, "remote", status, note=note).model_dump(mode="json")
         ]
 
-    def live_failure(resource: str, status="missing") -> dict:
+    def campus_metadata(resource: str, status: CampusDataStatus) -> dict:
         return {
-            "available": False,
-            "message": "校园实时数据暂不可用，请检查连接后重新查询。",
-            "evidence": missing_source(
-                f"hduhelp:{resource}",
-                "HDUHelp 实时查询",
-                "未取得本次查询结果，不能推断当前状态。",
-                status=status,
-            ),
+            "data_status": status.model_dump(mode="json"),
+            "evidence": [campus_status_evidence(resource, status).model_dump(mode="json")],
         }
 
-    def hduhelp_resource(name: str) -> dict:
+    def live_failure(resource: str, issue: CampusDataIssue = "upstream_error") -> dict:
+        status = campus_data_status(resource, issue=issue)
+        return {
+            "available": False,
+            "message": status.message,
+            **campus_metadata(resource, status),
+        }
+
+    def live_metadata(resource: str) -> dict:
+        return campus_metadata(resource, campus_data_status(resource, datetime.now(UTC), live=True))
+
+    def hduhelp_connected() -> bool:
+        return (
+            hduhelp_store is not None
+            and credential_vault is not None
+            and hduhelp_store.get_hduhelp_status(CURRENT_USER_ID.get())["configured"]
+        )
+
+    def hduhelp_resource(name: str, *, connected: bool) -> dict:
         turn = CURRENT_HDU_TURN.get()
         if turn is not None:
             return turn.snapshot(CURRENT_USER_ID.get(), name)
-        snapshot = (
-            hduhelp_store.get_hduhelp_resource(CURRENT_USER_ID.get(), name)
-            if hduhelp_store is not None and credential_vault is not None
-            else None
-        )
-        if snapshot is None:
-            return {
-                "resource": name,
-                "data": None,
-                "synced_at": None,
-                "needs_sync": True,
-                "evidence": missing_source(
-                    f"hduhelp:{name}",
-                    "HDUHelp 已同步资料",
-                    "尚未取得该项已授权资料，请先连接并同步。",
-                ),
-            }
-        evidence = hdu_evidence(name, snapshot["synced_at"])
-        result = {
+        user_id = CURRENT_USER_ID.get()
+        snapshot = None
+        issue: CampusDataIssue | None = "not_connected"
+        if connected:
+            snapshot = hduhelp_store.get_hduhelp_resource(user_id, name)
+            issue = campus_resource_issue(hduhelp_store, user_id, name)
+        synced_at = snapshot["synced_at"] if snapshot is not None else None
+        status = campus_data_status(name, synced_at, issue=issue)
+        data = None
+        # Preserve the cache-only path's TTL policy. Do not decrypt expired,
+        # unverified, or disconnected snapshots for model context.
+        if snapshot is not None and status.state == "cached":
+            try:
+                saved = json.loads(credential_vault.decrypt(snapshot["encrypted_data"]))
+                if not isinstance(saved, dict | list):
+                    raise ValueError("unsupported snapshot shape")
+                data = saved
+            except (ValueError, TypeError):
+                status = campus_data_status(name, synced_at, issue="cache_unreadable")
+        return {
             "resource": name,
-            "data": None,
-            "synced_at": snapshot["synced_at"],
-            "needs_sync": True,
-            "evidence": [evidence.model_dump(mode="json")],
+            "data": data,
+            "synced_at": synced_at,
+            "needs_sync": data is None,
+            **campus_metadata(name, status),
         }
-        if evidence.status != "fresh":
-            # Do not decrypt or supply expired balances, exams or other stale personal
-            # facts as model context. Their timestamps remain available for explanation.
-            return result
-        try:
-            data = json.loads(credential_vault.decrypt(snapshot["encrypted_data"]))
-            if not isinstance(data, dict | list):
-                raise ValueError("unsupported snapshot shape")
-            return {**result, "data": data, "needs_sync": False}
-        except (ValueError, json.JSONDecodeError):
-            result["evidence"] = missing_source(
-                f"hduhelp:{name}",
-                "HDUHelp 已同步资料",
-                "已存资料无法读取，请重新同步。",
-                status="error",
-            )
-            return result
 
     def hduhelp_group(names: list[str]) -> dict:
-        snapshots = {name: hduhelp_resource(name) for name in names}
-        connected = (
-            hduhelp_store is not None
-            and hduhelp_store.get_hduhelp_status(CURRENT_USER_ID.get())["configured"]
-        )
+        connected = hduhelp_connected()
+        snapshots = {name: hduhelp_resource(name, connected=connected) for name in names}
         return {
             "connected": connected,
             **snapshots,
@@ -194,17 +193,10 @@ def build_tools(
             return hduhelp_group(list(allowed))
         query = SnapshotQuery(resource, semester, start_date, end_date, keyword, limit, offset)
         query.validate(allowed)
-        connected = bool(hduhelp_store is not None and credential_vault is not None and
-                         hduhelp_store.get_hduhelp_status(CURRENT_USER_ID.get())["configured"])
-        if connected:
-            snapshot, metadata = select_snapshot(hduhelp_resource(resource), query)
-        else:
-            snapshot = {"resource": resource, "data": None, "synced_at": None,
-                        "needs_sync": True, "evidence": missing_source(
-                            f"hduhelp:{resource}", "HDUHelp 已同步资料",
-                            "尚未连接授权资料，请先连接并同步。"
-                        )}
-            metadata = query.metadata()
+        connected = hduhelp_connected()
+        snapshot, metadata = select_snapshot(
+            hduhelp_resource(resource, connected=connected), query,
+        )
         return {"connected": connected, "query": metadata, resource: snapshot,
                 "evidence": snapshot["evidence"]}
 
@@ -466,7 +458,7 @@ def build_tools(
         使用当前教学周、今天和当前时段。
         """
         if hduhelp_access is None:
-            return live_failure("classrooms")
+            return live_failure("classrooms", "not_connected")
         params: dict[str, object] = {
             "status": "unused",
             "limit": max(1, min(limit, 50)),
@@ -485,22 +477,17 @@ def build_tools(
                 "/hduhelp-neo/academic/classroom",
                 params=params,
             )
-        except HDUHelpError:
-            return live_failure("classrooms", "error")
-        if not isinstance(payload, list) or any(not isinstance(item, dict) for item in payload):
-            return live_failure("classrooms", "error")
-        try:
             classrooms = classroom_items(payload)
+        except (HDUHelpError, TimeoutError) as exc:
+            return live_failure("classrooms", campus_data_issue(exc))
         except (ValueError, TypeError, OverflowError):
-            return live_failure("classrooms", "error")
-        if any(not item["location_id"] or not item["location_name"] for item in classrooms):
-            return live_failure("classrooms", "error")
+            return live_failure("classrooms")
         return {
             "available": True,
             "building": building_name(building_id) if building_id else "全部教学楼",
             "time": "指定节次" if sections else "当前时段",
             "classrooms": classrooms,
-            "evidence": [hdu_evidence("classrooms", datetime.now(UTC)).model_dump(mode="json")],
+            **live_metadata("classrooms"),
         }
 
     @tool
@@ -511,7 +498,7 @@ def build_tools(
     ) -> dict:
         """实时查询指定教室本学期的周次、星期和节次占用安排。"""
         if hduhelp_access is None:
-            return live_failure("classroom_usage")
+            return live_failure("classroom_usage", "not_connected")
         params: dict[str, object] = {"locationID": location_id}
         if school_year:
             params["schoolYear"] = school_year
@@ -523,57 +510,50 @@ def build_tools(
                 "/hduhelp-neo/academic/classroom/usage",
                 params=params,
             )
-        except HDUHelpError:
-            return live_failure("classroom_usage", "error")
-        if not isinstance(payload, list) or any(not isinstance(item, dict) for item in payload):
-            return live_failure("classroom_usage", "error")
-        try:
             usage = classroom_usage_items(payload)
+        except (HDUHelpError, TimeoutError) as exc:
+            return live_failure("classroom_usage", campus_data_issue(exc))
         except (ValueError, TypeError, OverflowError):
-            return live_failure("classroom_usage", "error")
-        if any(
-            item["week"] < 1 or not 1 <= item["weekday"] <= 7 or item["section"] < 1
-            for item in usage
-        ):
-            return live_failure("classroom_usage", "error")
+            return live_failure("classroom_usage")
         return {
             "available": True,
             "location_id": location_id,
             "usage": usage,
-            "evidence": [
-                hdu_evidence("classroom_usage", datetime.now(UTC)).model_dump(mode="json")
-            ],
+            **live_metadata("classroom_usage"),
         }
 
     @tool
     async def get_electricity_balance() -> dict:
         """读取当前用户在 HDUHelp 绑定寝室的电费余额和近 14 天变化。"""
         if hduhelp_access is None:
-            return live_failure("electricity")
+            return live_failure("electricity", "not_connected")
         user_id = CURRENT_USER_ID.get()
+        connected_at = (
+            hduhelp_store.get_hduhelp_status(user_id).get("connected_at")
+            if hduhelp_store is not None else None
+        )
         try:
             binding, balance, history = await asyncio.gather(
                 hduhelp_access.get(user_id, "/hduhelp-neo/campuslife/electric/binding"),
                 hduhelp_access.get(user_id, "/hduhelp-neo/campuslife/electric/balance"),
                 hduhelp_access.get(user_id, "/hduhelp-neo/campuslife/electric/history"),
             )
-        except HDUHelpError:
-            return live_failure("electricity", "error")
-        if not all(isinstance(item, dict) for item in (binding, balance, history)):
-            return live_failure("electricity", "error")
-        try:
+            if hduhelp_store is not None and (
+                hduhelp_store.get_hduhelp_status(user_id).get("connected_at") != connected_at
+            ):
+                return live_failure("electricity", "connection_changed")
             overview = electricity_overview(binding, balance, history)
+        except (HDUHelpError, TimeoutError) as exc:
+            return live_failure("electricity", campus_data_issue(exc))
         except (ValueError, TypeError, OverflowError, OSError):
-            return live_failure("electricity", "error")
+            return live_failure("electricity")
         updated_at = overview.get("balance_updated_at")
         if isinstance(updated_at, datetime):
             overview["balance_updated_at"] = updated_at.isoformat()
         return {
             "available": True,
             **overview,
-            "evidence": [
-                hdu_evidence("electricity", datetime.now(UTC)).model_dump(mode="json"),
-            ],
+            **live_metadata("electricity"),
         }
 
     @tool
