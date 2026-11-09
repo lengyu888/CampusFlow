@@ -213,6 +213,10 @@ export class CampusFlowApi implements SessionVerificationPort, ReviewGateway, Fo
         if (path === '/api/v1/schedule-subscriptions' || path.startsWith('/api/v1/schedule-subscriptions/')) {
           throw this.importFailure(response.responseCode, text);
         }
+        if (path.startsWith('/api/v1/campus-services/') || path === '/api/v1/hduhelp/data' ||
+          path.startsWith('/api/v1/hduhelp/resources/')) {
+          throw requestFailure(response.responseCode, text);
+        }
         if (path === '/api/v1/sessions' || path.startsWith('/api/v1/sessions/') || path === '/api/v1/onboarding' || path.startsWith('/api/v1/onboarding/') || path === '/api/v1/models' || path === '/api/v1/learning-preferences' || path.startsWith('/api/v1/knowledge/') || path === '/api/v1/chat' || path.startsWith('/api/v1/agent-runs') || path.startsWith('/api/v1/actions/') || path.startsWith('/api/v1/planning/') ||
           path.startsWith('/api/v1/focus-records') || path.startsWith('/api/v1/focus-operations/') || path.startsWith('/api/v1/reviews?') ||
           path === '/api/v1/tasks' || path.startsWith('/api/v1/tasks/') || path.startsWith('/api/v1/task-status-operations/') ||
@@ -534,6 +538,11 @@ export class CampusFlowApi implements SessionVerificationPort, ReviewGateway, Fo
 
   async hduHelpData(): Promise<HDUHelpDataResponse> {
     return this.request<HDUHelpDataResponse>('/api/v1/hduhelp/data', http.RequestMethod.GET);
+  }
+
+  async refreshHduHelpResource(resource: string): Promise<HDUHelpDataResponse> {
+    return this.request<HDUHelpDataResponse>(`/api/v1/hduhelp/resources/${encodeURIComponent(resource)}/refresh`,
+      http.RequestMethod.POST, '{}');
   }
 
   async connectHduHelp(): Promise<HDUHelpConnectResponse> {

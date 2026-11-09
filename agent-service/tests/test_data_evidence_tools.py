@@ -301,9 +301,18 @@ async def test_malformed_live_classroom_data_is_not_reported_as_confirmed_empty(
     assert result["evidence"][0]["updated_at"] is None
 
 
-async def test_live_error_diagnostics_are_not_source_notes(scene):
+@pytest.mark.parametrize(
+    "code, issue, action, word",
+    [
+        ("HDUHELP_UNAVAILABLE", "upstream_error", "retry", "重试"),
+        ("HDUHELP_AUTH_INVALID", "auth_invalid", "connect", "令牌"),
+        ("HDUHELP_FORBIDDEN", "forbidden", "connect", "权限"),
+        ("HDUHELP_TIMEOUT", "timeout", "retry", "超时"),
+    ],
+)
+async def test_live_error_diagnostics_are_not_source_notes(scene, code, issue, action, word):
     async def get(*args, **kwargs):
-        raise HDUHelpError("PRIVATE_TOKEN_FROM_UPSTREAM")
+        raise HDUHelpError("PRIVATE_TOKEN_FROM_UPSTREAM", code=code)
 
     tools = {
         item.name: item
@@ -311,8 +320,71 @@ async def test_live_error_diagnostics_are_not_source_notes(scene):
     }
     result = await tools["get_classroom_usage"].ainvoke({"location_id": "synthetic"})
     assert result["available"] is False
+    assert result["data_status"]["state"] == "unavailable"
+    assert result["data_status"]["issue"] == issue
+    assert result["data_status"]["action"] == action
     assert "PRIVATE_TOKEN" not in json.dumps(result)
-    assert display("get_classroom_usage", result).state == "error"
+    shown = display("get_classroom_usage", result)
+    assert shown.state == "error"
+    assert word in shown.summary
+    assert "PRIVATE_TOKEN" not in shown.model_dump_json()
+
+
+async def test_successful_live_classroom_query_distinguishes_empty_results_from_failure(scene):
+    async def get(*args, **kwargs):
+        return []
+
+    tools = {
+        item.name: item
+        for item in build_tools(scene.store, hduhelp_access=SimpleNamespace(get=get))
+    }
+    result = await tools["get_unused_classrooms"].ainvoke({})
+    assert result["available"] is True
+    assert result["data_status"]["state"] == "live"
+    assert result["data_status"]["updated_at"] == result["evidence"][0]["updated_at"]
+    assert result["data_status"]["issue"] is None
+    shown = display("get_unused_classrooms", result)
+    assert shown.state == "empty"
+    assert "本次" in shown.summary
+
+
+async def test_electricity_discards_parts_read_across_connection_replacement(scene):
+    user_id = scene.users[0]
+
+    def connect(encrypted_token):
+        scene.accounts.save_hduhelp_connection(
+            user_id=user_id,
+            access_token_encrypted=encrypted_token,
+            refresh_token_encrypted=None,
+            token_type="Bearer",
+            scopes=[],
+            expires_at=datetime.now(UTC) + timedelta(days=1),
+            auth_mode="pat",
+        )
+
+    connect("synthetic-old-connection")
+
+    async def get(user, path):
+        assert user == user_id
+        if path.endswith("/balance"):
+            connect("synthetic-new-connection")
+        return {"meterId": "private-meter", "balance": 1234}
+
+    tools = {
+        item.name: item
+        for item in build_tools(
+            scene.store, hduhelp_store=scene.accounts, hduhelp_access=SimpleNamespace(get=get)
+        )
+    }
+    token = CURRENT_USER_ID.set(user_id)
+    try:
+        result = await tools["get_electricity_balance"].ainvoke({})
+    finally:
+        CURRENT_USER_ID.reset(token)
+    assert result["available"] is False
+    assert result["data_status"]["issue"] == "connection_changed"
+    assert "balance" not in result
+    assert "private-meter" not in json.dumps(result)
 
 
 def test_presenter_rechecks_expiry_and_strips_nonpublic_source_url():

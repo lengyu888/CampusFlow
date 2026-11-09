@@ -29,11 +29,11 @@ def building_name(building_id: str) -> str:
 
 def classroom_items(payload: Any) -> list[dict[str, Any]]:
     if not isinstance(payload, list):
-        return []
+        raise ValueError("invalid classroom response")
     result: list[dict[str, Any]] = []
     for raw in payload:
-        if not isinstance(raw, dict):
-            continue
+        if not isinstance(raw, dict) or not raw.get("locationID"):
+            raise ValueError("invalid classroom item")
         building_id = str(raw.get("buildingID") or "")
         result.append(
             {
@@ -53,16 +53,21 @@ def classroom_items(payload: Any) -> list[dict[str, Any]]:
 
 def classroom_usage_items(payload: Any) -> list[dict[str, Any]]:
     if not isinstance(payload, list):
-        return []
+        raise ValueError("invalid classroom usage response")
     result: list[dict[str, Any]] = []
     for raw in payload:
         if not isinstance(raw, dict):
-            continue
+            raise ValueError("invalid classroom usage item")
+        week = int(raw.get("week") or 0)
+        weekday = int(raw.get("weekday") or 0)
+        section = int(raw.get("section") or 0)
+        if week < 1 or not 1 <= weekday <= 7 or section < 1:
+            raise ValueError("invalid classroom usage time")
         result.append(
             {
-                "week": int(raw.get("week") or 0),
-                "weekday": int(raw.get("weekday") or 0),
-                "section": int(raw.get("section") or 0),
+                "week": week,
+                "weekday": weekday,
+                "section": section,
                 "course_name": str(raw.get("courseName") or "课程占用"),
                 "location_name": str(raw.get("locationName") or ""),
                 "start_time": str(raw.get("startTime") or ""),
@@ -77,17 +82,16 @@ def electricity_overview(
     balance: Any,
     history: Any,
 ) -> dict[str, Any]:
-    binding_data = binding if isinstance(binding, dict) else {}
-    balance_data = balance if isinstance(balance, dict) else {}
-    history_data = history if isinstance(history, dict) else {}
-    meter_id = str(binding_data.get("meterId") or balance_data.get("meterId") or "")
-    timestamp = balance_data.get("time")
+    if not all(isinstance(item, dict) for item in (binding, balance, history)):
+        raise ValueError("invalid electricity response")
+    meter_id = str(binding.get("meterId") or balance.get("meterId") or "")
+    timestamp = balance.get("time")
     updated_at: datetime | None = None
     if isinstance(timestamp, (int, float)) and timestamp > 0:
         updated_at = datetime.fromtimestamp(timestamp, tz=UTC)
 
     history_items: list[dict[str, str]] = []
-    raw_history = history_data.get("history")
+    raw_history = history.get("history")
     if isinstance(raw_history, list):
         for item in raw_history:
             if not isinstance(item, dict):
@@ -101,20 +105,20 @@ def electricity_overview(
             )
 
     return {
-        "bound": bool(meter_id or binding_data.get("roomId")),
+        "bound": bool(meter_id or binding.get("roomId")),
         "room_name": str(
-            balance_data.get("roomName") or binding_data.get("roomName") or ""
+            balance.get("roomName") or binding.get("roomName") or ""
         ),
-        "campus_name": str(binding_data.get("campusName") or ""),
-        "building_name": str(binding_data.get("buildingName") or ""),
-        "floor_name": str(binding_data.get("floorName") or ""),
+        "campus_name": str(binding.get("campusName") or ""),
+        "building_name": str(binding.get("buildingName") or ""),
+        "floor_name": str(binding.get("floorName") or ""),
         "meter_hint": f"•••• {meter_id[-4:]}" if meter_id else "",
         "balance": (
-            float(balance_data["balance"])
-            if isinstance(balance_data.get("balance"), (int, float))
+            float(balance["balance"])
+            if isinstance(balance.get("balance"), (int, float))
             else None
         ),
         "balance_updated_at": updated_at,
-        "daily_average": str(history_data.get("average") or ""),
+        "daily_average": str(history.get("average") or ""),
         "history": history_items,
     }

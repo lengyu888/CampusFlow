@@ -629,8 +629,21 @@ export interface SyncResponse {
   warnings: string[];
 }
 
+export type CampusDataIssue = 'not_connected' | 'auth_invalid' | 'forbidden' | 'timeout' | 'upstream_error' |
+  'connection_changed' | 'cache_unreadable';
+
+export interface CampusDataStatus {
+  state: 'live' | 'cached' | 'stale' | 'unverified' | 'unavailable';
+  updated_at: string | null;
+  expires_at: string | null;
+  issue: CampusDataIssue | null;
+  message: string;
+  action: 'retry' | 'connect' | 'none';
+}
+
 export interface HDUHelpConnectionStatus {
   configured: boolean;
+  connection_state?: 'connected' | 'not_connected' | 'auth_invalid';
   provider: string | null;
   auth_mode: string | null;
   token_hint: string | null;
@@ -682,6 +695,7 @@ export interface HDUHelpDataResponse {
   sections: HDUHelpDisplaySection[];
   suggested_prompts: HDUHelpSuggestedPrompt[];
   sync_errors: Record<string, string>;
+  resource_statuses?: Record<string, CampusDataStatus>;
 }
 
 export interface ClassroomItem {
@@ -702,6 +716,7 @@ export interface ClassroomSearchResponse {
   total: number;
   has_more: boolean;
   evidence?: DataEvidence[];
+  data_status?: CampusDataStatus;
 }
 
 export interface ClassroomUsageItem {
@@ -718,6 +733,7 @@ export interface ClassroomUsageResponse {
   location_id: string;
   items: ClassroomUsageItem[];
   evidence?: DataEvidence[];
+  data_status?: CampusDataStatus;
 }
 
 export interface ElectricityHistoryItem {
@@ -738,6 +754,7 @@ export interface ElectricityOverview {
   daily_average: string;
   history: ElectricityHistoryItem[];
   evidence?: DataEvidence[];
+  data_status?: CampusDataStatus;
 }
 
 export interface AdminUserSummary {

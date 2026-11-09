@@ -30,7 +30,7 @@ def encoded_size(messages, tools):
     )
 
 
-def multiread_scene(tmp_path):
+def multiread_scene(tmp_path, *, pat: str | None = None):
     accounts = AccountStore(str(tmp_path / "multiread.db"))
     user = accounts.register(
         email="multiread@example.invalid", password="synthetic-only", display_name="合成学生"
@@ -64,11 +64,12 @@ def multiread_scene(tmp_path):
     vault = ApiKeyVault(settings)
     accounts.save_hduhelp_connection(
         user_id=user,
-        access_token_encrypted="synthetic-unused",
+        access_token_encrypted=vault.encrypt(pat) if pat else "synthetic-unused",
         refresh_token_encrypted=None,
         token_type="Bearer",
         scopes=[],
         expires_at=datetime.now(UTC) + timedelta(days=1),
+        auth_mode="pat" if pat else "oauth",
     )
     grades = [
         {

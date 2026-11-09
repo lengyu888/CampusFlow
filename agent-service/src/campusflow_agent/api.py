@@ -31,6 +31,14 @@ from .accounts import (
 )
 from .action_service import ActionError, ActionService
 from .agent import AgentBudgetExceeded, AgentConfigurationError, AgentService
+from .campus_data_status import (
+    ISSUE_MESSAGES,
+    LEGACY_ISSUES,
+    campus_data_issue,
+    campus_data_status,
+    campus_status_evidence,
+    stored_campus_issue,
+)
 from .campus_services import (
     building_name,
     classroom_items,
@@ -38,7 +46,7 @@ from .campus_services import (
     electricity_overview,
 )
 from .config import Settings, get_settings
-from .evidence import campus_supported, hdu_evidence
+from .evidence import campus_supported
 from .focus_schemas import (
     FocusActive,
     FocusDetail,
@@ -48,9 +56,10 @@ from .focus_schemas import (
     FocusUUID,
 )
 from .focus_service import FocusError, FocusService
-from .hduhelp import HDUHelpError, HDUHelpService, TokenSet
+from .hduhelp import RESOURCE_REQUESTS, HDUHelpError, HDUHelpService, SyncResult, TokenSet
 from .hduhelp_access import HDUHelpAccess
 from .hduhelp_presenter import build_hduhelp_presentation
+from .hduhelp_refresh import RefreshCoordinator
 from .key_vault import ApiKeyVault
 from .knowledge import KnowledgeHit, KnowledgeSearchResponse, KnowledgeService
 from .learning_preferences import register_learning_preferences
@@ -72,6 +81,7 @@ from .schemas import (
     AuthResponse,
     CampusCorrection,
     CampusCorrectionCreate,
+    CampusDataIssue,
     CampusDataPlace,
     CampusDataSnapshot,
     CampusMapParseResult,
@@ -282,6 +292,9 @@ def create_app(
         hduhelp_access,
         weather_service=weather_service,
     )
+    campus_refresh = getattr(agent_service, "campus_refresh", None) or RefreshCoordinator(
+        settings, account_store, api_key_vault, hduhelp_access
+    )
     vision_service = vision_service or VisionService(settings)
     schedule_subscription_service = schedule_subscription_service or ScheduleSubscriptionService()
 
@@ -479,7 +492,12 @@ def create_app(
         return ScheduleSubscriptionStatus(configured=True, **saved)
 
     def hduhelp_status(user_id: str) -> HDUHelpConnectionStatus:
-        return HDUHelpConnectionStatus(**account_store.get_hduhelp_status(user_id))
+        connection = HDUHelpConnectionStatus(**account_store.get_hduhelp_status(user_id))
+        if connection.connection_state == "auth_invalid":
+            connection.last_error = ISSUE_MESSAGES["auth_invalid"]
+        elif connection.last_error:
+            connection.last_error = "部分校园资料更新失败，请查看各项状态。"
+        return connection
 
     def save_hduhelp_tokens(
         user_id: str,
@@ -513,11 +531,34 @@ def create_app(
             auth_mode="oauth",
         )
 
-    async def active_hduhelp_token(user_id: str) -> str:
-        try:
-            return await hduhelp_access.active_token(user_id)
-        except HDUHelpError as exc:
-            raise HTTPException(status_code=502, detail=str(exc)) from exc
+    def campus_read_error(issue: CampusDataIssue) -> CampusFlowError:
+        return CampusFlowError(502, ISSUE_MESSAGES[issue], f"HDUHELP_{issue.upper()}")
+
+    def prepare_hduhelp_sync(
+        result: SyncResult,
+    ) -> tuple[dict[str, str], dict[str, str], dict[str, CampusDataIssue]]:
+        encrypted, errors, issues = {}, {}, {}
+        for name, raw_error in result.errors.items():
+            if name in RESOURCE_REQUESTS:
+                code = result.error_codes.get(name)
+                issue = campus_data_issue(code) if code else stored_campus_issue(None, raw_error)
+                issues[name] = issue or "upstream_error"
+                errors[name] = (
+                    raw_error if raw_error in LEGACY_ISSUES else ISSUE_MESSAGES[issues[name]]
+                )
+        for name, data in result.resources.items():
+            if name not in RESOURCE_REQUESTS:
+                continue
+            try:
+                if not isinstance(data, dict | list):
+                    raise ValueError("unsupported resource data")
+                encrypted[name] = api_key_vault.encrypt(
+                    json.dumps(data, ensure_ascii=False, allow_nan=False)
+                )
+            except (ValueError, TypeError):
+                issues[name] = "upstream_error"
+                errors[name] = ISSUE_MESSAGES["upstream_error"]
+        return encrypted, errors, issues
 
     @app.get("/", include_in_schema=False)
     async def frontend() -> FileResponse:
@@ -654,16 +695,17 @@ def create_app(
                 detail="请输入以 hduhelp_pat_ 开头的 HDUHelp 个人访问令牌。",
             )
         result = await hduhelp_service.sync_resources(pat)
-        if not result.resources:
-            detail = next(iter(result.errors.values()), "HDUHelp 未返回可访问的数据。")
+        encrypted_resources, errors, issues = prepare_hduhelp_sync(result)
+        if not encrypted_resources:
+            detail = next(iter(errors.values()), "HDUHelp 未返回可访问的数据。")
             raise HTTPException(status_code=401, detail=f"令牌验证失败：{detail}")
         identity = result.resources.get("identity")
         if not isinstance(identity, dict):
             identity = {}
-        account_store.clear_hduhelp_resources(user.user_id)
-        account_store.save_hduhelp_connection(
+        encrypted_pat = api_key_vault.encrypt(pat)
+        connected_at = account_store.save_hduhelp_connection(
             user_id=user.user_id,
-            access_token_encrypted=api_key_vault.encrypt(pat),
+            access_token_encrypted=encrypted_pat,
             refresh_token_encrypted=None,
             token_type="Bearer",
             scopes=[],
@@ -672,19 +714,20 @@ def create_app(
             auth_mode="pat",
             token_hint=f"•••• {pat[-4:]}",
         )
-        encrypted_resources = {
-            name: api_key_vault.encrypt(json.dumps(resource, ensure_ascii=False))
-            for name, resource in result.resources.items()
-        }
-        account_store.save_hduhelp_resources(
-            user_id=user.user_id,
-            resources=encrypted_resources,
-            errors=result.errors,
-        )
+        try:
+            account_store.save_hduhelp_resources(
+                user_id=user.user_id,
+                resources=encrypted_resources,
+                errors=errors,
+                issue_codes=issues,
+                expected_credential=(encrypted_pat, connected_at),
+            )
+        except KeyError as exc:
+            raise campus_read_error("connection_changed") from exc
         return HDUHelpSyncResponse(
             status=hduhelp_status(user.user_id),
-            synced_resources=sorted(result.resources),
-            errors=result.errors,
+            synced_resources=sorted(encrypted_resources),
+            errors=errors,
         )
 
     @app.get("/api/v1/hduhelp/callback", include_in_schema=False)
@@ -706,58 +749,133 @@ def create_app(
 
     @app.post("/api/v1/hduhelp/sync", response_model=HDUHelpSyncResponse)
     async def sync_hduhelp(user: CurrentUser) -> HDUHelpSyncResponse:
-        access_token = await active_hduhelp_token(user.user_id)
-        result = await hduhelp_service.sync_resources(access_token)
-        if not result.resources:
-            detail = next(iter(result.errors.values()), "HDUHelp 没有返回可同步数据。")
-            account_store.set_hduhelp_error(user.user_id, detail)
-            raise HTTPException(status_code=502, detail=detail)
-        encrypted_resources = {
-            name: api_key_vault.encrypt(json.dumps(payload, ensure_ascii=False))
-            for name, payload in result.resources.items()
+        try:
+            access_token, credential = await hduhelp_access.token_for_connection(user.user_id)
+        except HDUHelpError as exc:
+            raise campus_read_error(campus_data_issue(exc)) from exc
+        previous = {
+            name: account_store.get_hduhelp_resource(user.user_id, name)
+            for name in RESOURCE_REQUESTS
         }
-        account_store.save_hduhelp_resources(
-            user_id=user.user_id,
-            resources=encrypted_resources,
-            errors=result.errors,
-        )
+        result = await hduhelp_service.sync_resources(access_token)
+        if hduhelp_access.connection_credential(user.user_id) != credential:
+            raise campus_read_error("connection_changed")
+        encrypted, errors, issues = prepare_hduhelp_sync(result)
+        synced = []
+        for name in encrypted.keys() | errors.keys():
+            saved = account_store.save_hduhelp_refresh(
+                user_id=user.user_id, resource=name, encrypted_payload=encrypted.get(name),
+                error=errors.get(name), issue=issues.get(name), expected_credential=credential,
+                expected_snapshot=previous[name],
+            )
+            if saved and name in encrypted:
+                synced.append(name)
+        if hduhelp_access.connection_credential(user.user_id) != credential:
+            raise campus_read_error("connection_changed")
+        if not synced:
+            issue = "auth_invalid" if "auth_invalid" in issues.values() else next(
+                iter(issues.values()), "upstream_error"
+            )
+            raise campus_read_error(issue)
         return HDUHelpSyncResponse(
             status=hduhelp_status(user.user_id),
-            synced_resources=sorted(result.resources),
-            errors=result.errors,
+            synced_resources=sorted(synced),
+            errors=errors,
         )
 
-    @app.get("/api/v1/hduhelp/data", response_model=HDUHelpDataResponse)
-    async def get_hduhelp_data(user: CurrentUser) -> HDUHelpDataResponse:
+    def hduhelp_data(
+        user_id: str, *, refreshed: tuple[str, str] | None = None,
+        attempted: tuple[str, CampusDataIssue] | None = None,
+    ) -> HDUHelpDataResponse:
+        credential = hduhelp_access.connection_credential(user_id)
+        connection = hduhelp_status(user_id)
+        sync_errors = {
+            name: message
+            for name, message in account_store.get_hduhelp_sync_errors(user_id).items()
+            if name in RESOURCE_REQUESTS
+        }
+        issues = account_store.get_hduhelp_issue_codes(user_id)
+        cached = {item["resource"]: item for item in account_store.list_hduhelp_resources(user_id)}
+        if credential != hduhelp_access.connection_credential(user_id):
+            raise campus_read_error("connection_changed")
         resources: list[HDUHelpResourceSnapshot] = []
         presentation_resources: dict[str, object] = {}
-        sync_errors = account_store.get_hduhelp_sync_errors(user.user_id)
-        for item in account_store.list_hduhelp_resources(user.user_id):
+        resource_statuses = {}
+        now = datetime.now(UTC)
+        for name in RESOURCE_REQUESTS:
+            item = cached.get(name)
+            stamp = item["synced_at"] if item else None
+            issue = stored_campus_issue(issues.get(name), sync_errors.get(name))
+            if attempted and attempted[0] == name:
+                issue = attempted[1]
+            if connection.connection_state in {"auth_invalid", "not_connected"}:
+                issue = connection.connection_state
+            data = None
             try:
-                data = json.loads(api_key_vault.decrypt(item["encrypted_data"]))
-            except (ValueError, json.JSONDecodeError):
-                sync_errors[item["resource"]] = "本地缓存无法读取，请重新同步。"
+                if item is not None and connection.configured:
+                    data = json.loads(api_key_vault.decrypt(item["encrypted_data"]))
+                    if not isinstance(data, dict | list):
+                        raise ValueError("unsupported cache")
+            except ValueError:
+                issue = "cache_unreadable"
+                sync_errors[name] = ISSUE_MESSAGES[issue]
+                data = None
+            if (
+                issue != "cache_unreadable"
+                and name in sync_errors
+                and sync_errors[name] not in LEGACY_ISSUES
+            ):
+                persisted_issue = stored_campus_issue(issues.get(name), sync_errors[name])
+                sync_errors[name] = ISSUE_MESSAGES[persisted_issue or "upstream_error"]
+            data_status = campus_data_status(
+                name, stamp, issue=issue, live=refreshed == (name, stamp) and issue is None, now=now
+            )
+            resource_statuses[name] = data_status
+            if data is None:
                 continue
             resources.append(
                 HDUHelpResourceSnapshot(
-                    resource=item["resource"],
+                    resource=name,
                     data=data,
-                    synced_at=item["synced_at"],
-                    evidence=[hdu_evidence(item["resource"], item["synced_at"])],
+                    synced_at=data_status.updated_at,
+                    evidence=[campus_status_evidence(name, data_status)],
                 )
             )
-            presentation_resources[item["resource"]] = data
+            presentation_resources[name] = data
         sections, prompts = build_hduhelp_presentation(presentation_resources)
         sources = {item.resource: item.evidence for item in resources}
         for section in sections:
             section.evidence = sources.get(section.resource, [])
         return HDUHelpDataResponse(
-            status=hduhelp_status(user.user_id),
+            status=connection,
             resources=resources,
             sections=sections,
             suggested_prompts=prompts,
             sync_errors=sync_errors,
+            resource_statuses=resource_statuses,
         )
+
+    @app.get("/api/v1/hduhelp/data", response_model=HDUHelpDataResponse)
+    async def get_hduhelp_data(user: CurrentUser) -> HDUHelpDataResponse:
+        return hduhelp_data(user.user_id)
+
+    @app.post("/api/v1/hduhelp/resources/{resource}/refresh", response_model=HDUHelpDataResponse)
+    async def refresh_hduhelp_resource(resource: str, user: CurrentUser) -> HDUHelpDataResponse:
+        if resource not in RESOURCE_REQUESTS:
+            raise CampusFlowError(404, "没有该项校园资料。", "HDUHELP_RESOURCE_NOT_FOUND")
+        turn = campus_refresh.turn(user.user_id)
+        try:
+            await turn.ensure((resource,))
+            snapshot = turn.snapshot(user.user_id, resource)
+            stamp = snapshot["synced_at"]
+            issue = snapshot["data_status"]["issue"]
+            return hduhelp_data(
+                user.user_id,
+                refreshed=(resource, stamp) if stamp is not None else None,
+                attempted=(resource, issue) if issue else None,
+            )
+        finally:
+            await turn.close()
 
     @app.get(
         "/api/v1/campus-services/classrooms",
@@ -791,18 +909,24 @@ def create_app(
                 "/hduhelp-neo/academic/classroom",
                 params=params,
             )
-        except HDUHelpError as exc:
-            raise HTTPException(status_code=502, detail=str(exc)) from exc
-        pagination = envelope.get("pagination")
-        if not isinstance(pagination, dict):
-            pagination = {}
+            items = classroom_items(envelope.get("data"))
+            pagination = envelope.get("pagination")
+            if not isinstance(pagination, dict):
+                pagination = {}
+            total = int(pagination.get("total") or 0)
+        except (HDUHelpError, TimeoutError) as exc:
+            raise campus_read_error(campus_data_issue(exc)) from exc
+        except (ValueError, TypeError, OverflowError, OSError) as exc:
+            raise campus_read_error("upstream_error") from exc
         period = f"第 {min(section)}–{max(section)} 节" if section else "当前时段"
         location = building_name(building_id) if building_id else "全部教学楼"
+        data_status = campus_data_status("classrooms", datetime.now(UTC), live=True)
         return ClassroomSearchResponse(
-            evidence=[hdu_evidence("classrooms", datetime.now(UTC))],
+            evidence=[campus_status_evidence("classrooms", data_status)],
+            data_status=data_status,
             query_label=f"{location} · {period}",
-            items=classroom_items(envelope.get("data")),
-            total=int(pagination.get("total") or 0),
+            items=items,
+            total=total,
             has_more=bool(pagination.get("hasMore")),
         )
 
@@ -827,12 +951,17 @@ def create_app(
                 "/hduhelp-neo/academic/classroom/usage",
                 params=params,
             )
-        except HDUHelpError as exc:
-            raise HTTPException(status_code=502, detail=str(exc)) from exc
+            items = classroom_usage_items(payload)
+        except (HDUHelpError, TimeoutError) as exc:
+            raise campus_read_error(campus_data_issue(exc)) from exc
+        except (ValueError, TypeError, OverflowError, OSError) as exc:
+            raise campus_read_error("upstream_error") from exc
+        data_status = campus_data_status("classroom_usage", datetime.now(UTC), live=True)
         return ClassroomUsageResponse(
-            evidence=[hdu_evidence("classroom_usage", datetime.now(UTC))],
+            evidence=[campus_status_evidence("classroom_usage", data_status)],
+            data_status=data_status,
             location_id=location_id,
-            items=classroom_usage_items(payload),
+            items=items,
         )
 
     @app.get(
@@ -840,6 +969,7 @@ def create_app(
         response_model=ElectricityOverview,
     )
     async def get_electricity(user: CurrentUser) -> ElectricityOverview:
+        connected_at = account_store.get_hduhelp_status(user.user_id).get("connected_at")
         try:
             binding, balance, history = await asyncio.gather(
                 hduhelp_access.get(
@@ -855,10 +985,17 @@ def create_app(
                     "/hduhelp-neo/campuslife/electric/history",
                 ),
             )
-        except HDUHelpError as exc:
-            raise HTTPException(status_code=502, detail=str(exc)) from exc
-        result = ElectricityOverview.model_validate(electricity_overview(binding, balance, history))
-        result.evidence = [hdu_evidence("electricity", datetime.now(UTC))]
+            result = ElectricityOverview.model_validate(
+                electricity_overview(binding, balance, history)
+            )
+        except (HDUHelpError, TimeoutError) as exc:
+            raise campus_read_error(campus_data_issue(exc)) from exc
+        except (ValueError, TypeError, OverflowError, OSError) as exc:
+            raise campus_read_error("upstream_error") from exc
+        if connected_at != account_store.get_hduhelp_status(user.user_id).get("connected_at"):
+            raise campus_read_error("connection_changed")
+        result.data_status = campus_data_status("electricity", datetime.now(UTC), live=True)
+        result.evidence = [campus_status_evidence("electricity", result.data_status)]
         return result
 
     @app.delete("/api/v1/hduhelp/connection", status_code=204)

@@ -1,4 +1,5 @@
 import {
+  CampusDataStatus,
   ClassroomItem,
   DataEvidence,
   ClassroomSearchResponse,
@@ -18,10 +19,12 @@ import { AppIcon } from '../components/AppIcon';
 import { AppPageHeader } from '../components/AppPageHeader';
 import { AppSectionHeader } from '../components/AppSectionHeader';
 import { AppActionRow } from '../components/AppActionRow';
+import { CampusDataStatusView } from '../components/CampusDataStatusView';
 import { FeedbackPanel } from '../components/FeedbackPanel';
 import { EvidencePanel } from '../components/EvidencePanel';
 import { InfoDisclosure } from '../components/InfoDisclosure';
 import { evidenceTime } from '../utils/EvidencePresentation';
+import { campusSectionsWithStatus, campusStatusFailure, previousCampusStatuses, replaceCampusResourceStatus } from '../utils/CampusDataPresentation';
 
 class CampusServiceOption implements SelectOption {
   value: string;
@@ -31,11 +34,17 @@ class CampusServiceOption implements SelectOption {
   }
 }
 
+const emptyElectricity: ElectricityOverview = {
+  bound: false, room_name: '', campus_name: '', building_name: '', floor_name: '', meter_hint: '',
+  balance: null, balance_updated_at: null, daily_average: '', history: []
+};
+
 @Component
 export struct CampusServicesPage {
   @StorageLink('campusflowThemePalette') private palette: ThemePalette = themePalette('paper-green');
-  @Prop baseUrl: string;
-  @Prop token: string;
+  @Watch('scopeChanged') @Prop baseUrl: string;
+  @Watch('scopeChanged') @Prop token: string;
+  @Watch('bindingChanged') @Prop connectionRevision: number = 0;
   @Watch('activeChanged') @Prop active: boolean = true;
   onOpenProfile: () => void = () => {};
   private pageActive: boolean = true;
@@ -45,7 +54,9 @@ export struct CampusServicesPage {
   private campusRevision: number = 0;
   private usageRoom: ClassroomItem | null = null;
   private scrollers: Scroller[] = [new Scroller(), new Scroller(), new Scroller(), new Scroller()];
-  @State private usageError: string = '';
+  @State private usageError: CampusDataStatus | null = null;
+  @State private usageStatus: CampusDataStatus | null = null;
+  @State private usageLoaded: boolean = false;
   @State private classroomLimit: number = 20;
   @State private usageLimit: number = 8;
   onBack: () => void = () => {};
@@ -59,29 +70,24 @@ export struct CampusServicesPage {
   @State private classroomTotal: number = 0;
   @State private classroomLabel: string = '当前时段';
   @State private classroomLoading: boolean = true;
-  @State private classroomError: string = '';
+  @State private classroomError: CampusDataStatus | null = null;
+  @State private classroomStatus: CampusDataStatus | null = null;
+  @State private classroomResultKey: string = '';
   @State private usageTitle: string = '';
   @State private usageItems: ClassroomUsageItem[] = [];
   @State private usageLoading: boolean = false;
-  @State private electricityLoading: boolean = true;
-  @State private electricityError: string = '';
-  @State private campusInfoLoading: boolean = true;
+  @State private electricityLoading: boolean = false;
+  @State private electricityError: CampusDataStatus | null = null;
+  @State private electricityLoaded: boolean = false;
+  @State private campusInfoLoading: boolean = false;
   @State private campusInfoError: string = '';
+  @State private campusInfoLoaded: boolean = false;
   @State private campusSections: HDUHelpDisplaySection[] = [];
   @State private campusPrompts: HDUHelpSuggestedPrompt[] = [];
+  @State private campusStatuses: Record<string, CampusDataStatus> = {};
+  @State private campusRefreshingResource: string = '';
   @State private campusConfigured: boolean = false;
-  @State private electricityData: ElectricityOverview = {
-    bound: false,
-    room_name: '',
-    campus_name: '',
-    building_name: '',
-    floor_name: '',
-    meter_hint: '',
-    balance: null,
-    balance_updated_at: null,
-    daily_average: '',
-    history: []
-  };
+  @State private electricityData: ElectricityOverview = emptyElectricity;
 
   private buildingLabels: string[] = [
     '全部教学楼', '1教', '2教', '3教', '4教', '5教北楼', '5教南楼',
@@ -111,6 +117,27 @@ export struct CampusServicesPage {
     this.usageLoading = false;
     this.electricityLoading = false;
     this.campusInfoLoading = false;
+    this.campusRefreshingResource = '';
+  }
+
+  private scopeChanged(): void {
+    this.invalidateRequests();
+    this.classrooms = [];
+    this.classroomEvidence = [];
+    this.classroomResultKey = '';
+    this.classroomError = null;
+    this.classroomStatus = null;
+    this.closeUsage();
+    this.electricityLoaded = false;
+    this.electricityData = emptyElectricity;
+    this.electricityError = null;
+    this.clearCampusInfo();
+    this.campusInfoError = '';
+  }
+
+  private bindingChanged(): void {
+    this.scopeChanged();
+    if (this.active && this.pageActive) { this.loadCurrentService(); }
   }
 
   private activeChanged(): void {
@@ -151,7 +178,11 @@ export struct CampusServicesPage {
     this.usageRevision++;
     this.usageTitle = '';
     this.usageLoading = false;
-    this.usageError = '';
+    this.usageError = null;
+    this.usageStatus = null;
+    this.usageLoaded = false;
+    this.usageItems = [];
+    this.usageEvidence = [];
     this.usageRoom = null;
   }
 
@@ -167,13 +198,23 @@ export struct CampusServicesPage {
     return [];
   }
 
+  private classroomQueryKey(): string {
+    return `${this.buildingIds[this.selectedBuilding]}:${this.selectedPeriod}`;
+  }
+
+  private hasClassroomResult(): boolean {
+    return this.classroomResultKey === this.classroomQueryKey() && this.classroomError?.state !== 'unavailable' &&
+      this.classroomStatus?.state !== 'unavailable';
+  }
+
   private async loadClassrooms(): Promise<void> {
     if (!this.pageActive || !this.active || this.activeService !== 0) { return; }
     const revision = ++this.classroomRevision;
     const token = this.token;
     const baseUrl = this.baseUrl;
+    const queryKey = this.classroomQueryKey();
     this.classroomLoading = true;
-    this.classroomError = '';
+    this.classroomError = null;
     this.closeUsage();
     try {
       const result: ClassroomSearchResponse = await new CampusFlowApi(baseUrl, token)
@@ -181,12 +222,16 @@ export struct CampusServicesPage {
       if (!this.current(token, baseUrl) || revision !== this.classroomRevision) { return; }
       this.classrooms = result.items;
       this.classroomEvidence = result.evidence ?? [];
+      this.classroomStatus = result.data_status ?? null;
+      this.classroomResultKey = queryKey;
       this.classroomTotal = result.total;
       this.classroomLabel = result.query_label;
       this.classroomLimit = 20;
-    } catch {
+    } catch (error) {
       if (this.current(token, baseUrl) && revision === this.classroomRevision) {
-        this.classroomError = '暂时无法查询空闲教室，请检查连接后重试。';
+        this.classroomError = campusStatusFailure(error, '暂时无法查询空闲教室，请检查连接后重试。',
+          this.classroomStatus, this.classroomResultKey === queryKey);
+        if (this.classroomError.state === 'unavailable') { this.classroomResultKey = ''; }
       }
     } finally {
       if (this.current(token, baseUrl) && revision === this.classroomRevision) { this.classroomLoading = false; }
@@ -195,25 +240,35 @@ export struct CampusServicesPage {
 
   private async loadUsage(room: ClassroomItem): Promise<void> {
     if (!this.pageActive || !this.active || this.activeService !== 0 || this.classroomLoading) { return; }
+    const sameRoom = this.usageRoom?.location_id === room.location_id;
+    if (sameRoom && this.usageLoading) { return; }
     const revision = ++this.usageRevision;
     const token = this.token;
     const baseUrl = this.baseUrl;
     this.usageTitle = room.location_name;
     this.usageRoom = room;
     this.usageLoading = true;
-    this.usageError = '';
-    this.usageItems = [];
-    this.usageEvidence = [];
-    this.usageLimit = 8;
+    this.usageError = null;
+    if (!sameRoom) {
+      this.usageItems = [];
+      this.usageEvidence = [];
+      this.usageStatus = null;
+      this.usageLoaded = false;
+      this.usageLimit = 8;
+    }
     try {
       const result: ClassroomUsageResponse = await new CampusFlowApi(baseUrl, token).classroomUsage(room.location_id);
       if (this.current(token, baseUrl) && revision === this.usageRevision) {
         this.usageItems = result.items;
         this.usageEvidence = result.evidence ?? [];
+        this.usageStatus = result.data_status ?? null;
+        this.usageLoaded = true;
       }
-    } catch {
+    } catch (error) {
       if (this.current(token, baseUrl) && revision === this.usageRevision) {
-        this.usageError = '暂时无法读取这间教室的占用安排，可以重试。';
+        this.usageError = campusStatusFailure(error, '暂时无法读取这间教室的占用安排，可以重试。',
+          this.usageStatus, this.usageLoaded);
+        if (this.usageError.state === 'unavailable') { this.usageLoaded = false; }
       }
     } finally {
       if (this.current(token, baseUrl) && revision === this.usageRevision) { this.usageLoading = false; }
@@ -221,43 +276,96 @@ export struct CampusServicesPage {
   }
 
   private async loadElectricity(): Promise<void> {
-    if (!this.pageActive || !this.active || this.activeService !== 1) { return; }
+    if (!this.pageActive || !this.active || this.activeService !== 1 || this.electricityLoading) { return; }
     const revision = ++this.electricityRevision;
     const token = this.token;
     const baseUrl = this.baseUrl;
     this.electricityLoading = true;
-    this.electricityError = '';
+    this.electricityError = null;
     try {
       const result = await new CampusFlowApi(baseUrl, token).electricity();
-      if (this.current(token, baseUrl) && revision === this.electricityRevision) { this.electricityData = result; }
-    } catch {
       if (this.current(token, baseUrl) && revision === this.electricityRevision) {
-        this.electricityError = '暂时无法读取电费数据，请检查连接后重试。';
+        this.electricityData = result;
+        this.electricityLoaded = result.data_status?.state !== 'unavailable';
+      }
+    } catch (error) {
+      if (this.current(token, baseUrl) && revision === this.electricityRevision) {
+        this.electricityError = campusStatusFailure(error, '暂时无法读取电费数据，请检查连接后重试。',
+          this.electricityData.data_status ?? null, this.electricityLoaded);
+        if (this.electricityError.state === 'unavailable') { this.electricityLoaded = false; }
       }
     } finally {
       if (this.current(token, baseUrl) && revision === this.electricityRevision) { this.electricityLoading = false; }
     }
   }
 
+  private clearCampusInfo(): void {
+    this.campusConfigured = false;
+    this.campusInfoLoaded = false;
+    this.campusSections = [];
+    this.campusPrompts = [];
+    this.campusStatuses = {};
+  }
+
+  private applyCampusInfo(result: HDUHelpDataResponse): void {
+    this.campusConfigured = result.status.configured;
+    this.campusInfoLoaded = true;
+    this.campusSections = result.sections;
+    this.campusPrompts = result.suggested_prompts;
+    this.campusStatuses = result.resource_statuses ?? {};
+  }
+
   private async loadCampusInfo(): Promise<void> {
-    if (!this.pageActive || !this.active || this.activeService < 2) { return; }
+    if (!this.pageActive || !this.active || this.activeService < 2 || this.campusInfoLoading ||
+      this.campusRefreshingResource.length > 0) { return; }
     const revision = ++this.campusRevision;
     const token = this.token;
     const baseUrl = this.baseUrl;
     this.campusInfoLoading = true;
     this.campusInfoError = '';
+    this.campusStatuses = previousCampusStatuses(this.campusStatuses);
     try {
       const result: HDUHelpDataResponse = await new CampusFlowApi(baseUrl, token).hduHelpData();
       if (!this.current(token, baseUrl) || revision !== this.campusRevision) { return; }
-      this.campusConfigured = result.status.configured;
-      this.campusSections = result.sections;
-      this.campusPrompts = result.suggested_prompts;
-    } catch {
+      this.applyCampusInfo(result);
+    } catch (error) {
       if (this.current(token, baseUrl) && revision === this.campusRevision) {
-        this.campusInfoError = '暂时无法读取校园生活数据，请检查连接后重试。';
+        const failure = campusStatusFailure(error, '暂时无法读取校园生活数据，请检查连接后重试。', null, this.campusInfoLoaded);
+        if (failure.state === 'unavailable') { this.clearCampusInfo(); }
+        this.campusInfoError = failure.message;
       }
     } finally {
       if (this.current(token, baseUrl) && revision === this.campusRevision) { this.campusInfoLoading = false; }
+    }
+  }
+
+  private async refreshCampusResource(resource: string): Promise<void> {
+    const status = this.campusStatuses[resource];
+    if (!this.pageActive || !this.active || this.activeService < 2 || this.campusInfoLoading ||
+      this.campusRefreshingResource.length > 0 || status?.action !== 'retry') { return; }
+    const revision = ++this.campusRevision;
+    const token = this.token;
+    const baseUrl = this.baseUrl;
+    this.campusRefreshingResource = resource;
+    try {
+      const result = await new CampusFlowApi(baseUrl, token).refreshHduHelpResource(resource);
+      if (this.current(token, baseUrl) && revision === this.campusRevision) {
+        this.applyCampusInfo(result);
+        this.campusInfoError = '';
+      }
+    } catch (error) {
+      if (this.current(token, baseUrl) && revision === this.campusRevision) {
+        const failure = campusStatusFailure(error, '暂时无法更新这项校园数据，请重试。', status,
+          this.campusSections.some((section: HDUHelpDisplaySection) => section.resource === resource));
+        if (failure.issue === 'not_connected' || failure.issue === 'connection_changed' || failure.action === 'none') {
+          this.clearCampusInfo();
+          this.campusInfoError = failure.message;
+        } else {
+          this.campusStatuses = replaceCampusResourceStatus(this.campusStatuses, resource, failure);
+        }
+      }
+    } finally {
+      if (this.current(token, baseUrl) && revision === this.campusRevision) { this.campusRefreshingResource = ''; }
     }
   }
 
@@ -272,6 +380,14 @@ export struct CampusServicesPage {
 
   private updatedText(): string {
     return evidenceTime(this.electricityData.balance_updated_at);
+  }
+
+  private displayedSections(): HDUHelpDisplaySection[] {
+    return campusSectionsWithStatus(this.campusSections, this.campusStatuses);
+  }
+
+  private sectionKey(section: HDUHelpDisplaySection): string {
+    return `${section.resource}-${JSON.stringify(section)}-${JSON.stringify(this.campusStatuses[section.resource])}`;
   }
 
   @Builder
@@ -320,7 +436,9 @@ export struct CampusServicesPage {
   private classroomView() {
     Column({ space: 14 }) {
       Column({ space: 12 }) {
-        AppSectionHeader({ title: '查找空闲教室', actionLabel: '刷新', onAction: () => this.loadClassrooms() })
+        AppSectionHeader({ title: '查找空闲教室',
+          actionLabel: this.classroomError === null && this.classroomStatus === null ? '刷新' : '',
+          actionEnabled: !this.classroomLoading, onAction: () => this.loadClassrooms() })
 
         Select(this.buildingLabels.map((label: string) => new CampusServiceOption(label)))
           .selected(this.selectedBuilding)
@@ -369,60 +487,72 @@ export struct CampusServicesPage {
           }.width('100%')
           if (this.usageLoading) {
             FeedbackPanel({ kind: 'loading', title: '正在读取占用安排', message: this.usageTitle })
-          } else if (this.usageError.length > 0) {
-            FeedbackPanel({ kind: 'error', title: '占用安排暂不可用', message: this.usageError,
-              actionLabel: '重试', onAction: () => this.retryUsage() })
-          } else if (this.usageItems.length === 0) {
-            Text('本次未返回占用记录，不代表教室一定空闲。').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
           } else {
-            ForEach(this.usageItems.slice(0, this.usageLimit), (item: ClassroomUsageItem) => {
-              Row() {
-                Text(`第${item.week}周 · ${this.weekdayName(item.weekday)} · 第${item.section}节`)
-                  .fontSize(this.palette.metaSize).fontColor(this.palette.ink).layoutWeight(1)
-                Text(item.course_name).fontSize(this.palette.metaSize).fontColor(this.palette.secondary).maxLines(1)
-              }.width('100%')
-            }, (item: ClassroomUsageItem) => `${item.week}-${item.weekday}-${item.section}-${item.course_name}`)
-            if (this.usageLimit < this.usageItems.length) {
-              Button(`查看更多（还有 ${this.usageItems.length - this.usageLimit} 项）`).constraintSize({ minHeight: 48 })
-                .fontSize(this.palette.metaSize).fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft)
-                .borderRadius(this.palette.controlRadius)
-                .onClick(() => this.usageLimit += 20)
+            if (this.usageError !== null || this.usageStatus !== null) {
+              CampusDataStatusView({ status: (this.usageError ?? this.usageStatus) as CampusDataStatus,
+                resourceName: '教室占用安排', onRetry: () => this.retryUsage(), onConnect: () => this.onOpenProfile() })
             }
-          }
-          if (!this.usageLoading && this.usageError.length === 0) {
-            EvidencePanel({ evidence: this.usageEvidence, active: this.active })
+            if (this.usageLoaded && this.usageStatus?.state !== 'unavailable') {
+              if (this.usageItems.length === 0 && this.usageError === null) {
+                Text('当前数据未包含占用记录，现场情况以实际安排为准。')
+                  .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
+              }
+              ForEach(this.usageItems.slice(0, this.usageLimit), (item: ClassroomUsageItem) => {
+                Row() {
+                  Text(`第${item.week}周 · ${this.weekdayName(item.weekday)} · 第${item.section}节`)
+                    .fontSize(this.palette.metaSize).fontColor(this.palette.ink).layoutWeight(1)
+                  Text(item.course_name).fontSize(this.palette.metaSize).fontColor(this.palette.secondary).maxLines(1)
+                }.width('100%')
+              }, (item: ClassroomUsageItem) => `${item.week}-${item.weekday}-${item.section}-${item.course_name}`)
+              if (this.usageLimit < this.usageItems.length) {
+                Button(`查看更多（还有 ${this.usageItems.length - this.usageLimit} 项）`).constraintSize({ minHeight: 48 })
+                  .fontSize(this.palette.metaSize).fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft)
+                  .borderRadius(this.palette.controlRadius)
+                  .onClick(() => this.usageLimit += 20)
+              }
+              if (this.usageError === null) { EvidencePanel({ evidence: this.usageEvidence, active: this.active }) }
+            }
           }
         }.width('100%').padding(this.palette.cardInset).backgroundColor(this.palette.surface)
           .borderRadius(this.palette.cardRadius).border({ width: 1, color: this.palette.line })
       }
 
       Row() {
-        Text(this.classroomLabel).fontSize(this.palette.bodySize).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
+        Text(this.hasClassroomResult() ? this.classroomLabel : `${this.buildingLabels[this.selectedBuilding]} · ${this.periodLabels[this.selectedPeriod]}`)
+          .fontSize(this.palette.bodySize).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
         Blank()
-        Text(this.classroomLoading || this.classroomError.length > 0 ? '待查询' : `${this.classroomTotal} 条记录`).fontSize(this.palette.metaSize).fontColor(this.palette.accent)
+        if (!this.classroomLoading && this.hasClassroomResult()) {
+          Text(`${this.classroomTotal} 条记录`).fontSize(this.palette.metaSize).fontColor(this.palette.accent)
+        }
       }.width('100%')
 
-      if (!this.classroomLoading && this.classroomError.length === 0) {
-        EvidencePanel({ evidence: this.classroomEvidence, active: this.active })
-      }
       if (this.classroomLoading) {
         FeedbackPanel({ kind: 'loading', title: '正在查询空闲教室', message: '上次结果暂不作为当前状态。' })
-      } else if (this.classroomError.length > 0) {
-        FeedbackPanel({ kind: 'error', title: '查询未完成', message: this.classroomError, actionLabel: '重试', onAction: () => this.loadClassrooms() })
-      } else if (this.classrooms.length === 0) {
-        FeedbackPanel({ kind: 'empty', title: '本次未返回教室记录', message: '先核对来源状态；也可换教学楼或节次查询。' })
       } else {
-        Column() {
-          ForEach(this.classrooms.slice(0, this.classroomLimit), (room: ClassroomItem, index: number) => {
-            if (index > 0) { Divider().color(this.palette.line).strokeWidth(0.5).margin({ left: 16, right: 16 }) }
-            this.classroomCard(room)
-          }, (room: ClassroomItem) => room.location_id)
-        }.width('100%').backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius).clip(true)
-        if (this.classroomLimit < this.classrooms.length) {
-          Button(`查看更多（还有 ${this.classrooms.length - this.classroomLimit} 间）`).constraintSize({ minHeight: 48 })
-            .fontSize(this.palette.metaSize).fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft)
-            .borderRadius(this.palette.controlRadius)
-            .onClick(() => this.classroomLimit += 20)
+        if (this.classroomError !== null || this.classroomStatus !== null && this.classroomResultKey === this.classroomQueryKey()) {
+          CampusDataStatusView({ status: (this.classroomError ?? this.classroomStatus) as CampusDataStatus,
+            resourceName: '空闲教室', onRetry: () => this.loadClassrooms(), onConnect: () => this.onOpenProfile() })
+            .padding(this.palette.cardInset).backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
+        }
+        if (this.hasClassroomResult()) {
+          if (this.classroomError === null) { EvidencePanel({ evidence: this.classroomEvidence, active: this.active }) }
+          if (this.classrooms.length === 0 && this.classroomError === null) {
+            FeedbackPanel({ kind: 'empty', title: '当前数据未包含教室记录', message: '可以换教学楼或节次查询。' })
+          }
+          if (this.classrooms.length > 0) {
+            Column() {
+              ForEach(this.classrooms.slice(0, this.classroomLimit), (room: ClassroomItem, index: number) => {
+                if (index > 0) { Divider().color(this.palette.line).strokeWidth(0.5).margin({ left: 16, right: 16 }) }
+                this.classroomCard(room)
+              }, (room: ClassroomItem) => room.location_id)
+            }.width('100%').backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius).clip(true)
+          }
+          if (this.classroomLimit < this.classrooms.length) {
+            Button(`查看更多（还有 ${this.classrooms.length - this.classroomLimit} 间）`).constraintSize({ minHeight: 48 })
+              .fontSize(this.palette.metaSize).fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft)
+              .borderRadius(this.palette.controlRadius)
+              .onClick(() => this.classroomLimit += 20)
+          }
         }
       }
     }.width('100%').alignItems(HorizontalAlign.Start)
@@ -433,17 +563,26 @@ export struct CampusServicesPage {
     Column({ space: this.palette.sectionGap }) {
       if (this.electricityLoading) {
         FeedbackPanel({ kind: 'loading', title: '正在读取寝室电费', message: '以数据源记录的更新时间为准。' })
-      } else if (this.electricityError.length > 0) {
-        FeedbackPanel({ kind: 'error', title: '电费数据暂不可用', message: this.electricityError, actionLabel: '重试', onAction: () => this.loadElectricity() })
-      } else if (!this.electricityData.bound) {
+      } else if (this.electricityError !== null || this.electricityData.data_status !== undefined) {
+        CampusDataStatusView({ status: (this.electricityError ?? this.electricityData.data_status) as CampusDataStatus,
+          resourceName: '寝室电费', onRetry: () => this.loadElectricity(), onConnect: () => this.onOpenProfile() })
+          .padding(this.palette.cardInset).backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
+      }
+      if (!this.electricityLoading && !this.electricityLoaded && this.electricityError === null &&
+        this.electricityData.data_status === undefined) {
+        FeedbackPanel({ kind: 'info', title: '寝室电费待读取', actionLabel: '读取', onAction: () => this.loadElectricity() })
+      }
+      if (!this.electricityLoading && this.electricityLoaded && !this.electricityData.bound && this.electricityError === null) {
         Column({ space: 8 }) {
           Text('未取得电表记录').fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
           Text('请核对来源；未绑定电表时，先在 HDUHelp 绑定。').fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
-          Button('重新检查').constraintSize({ minHeight: 48 }).fontColor(this.palette.onAccent).backgroundColor(this.palette.accent).borderRadius(13)
-            .onClick(() => this.loadElectricity())
+          if (this.electricityData.data_status === undefined) {
+            Button('重新检查').constraintSize({ minHeight: 48 }).fontColor(this.palette.onAccent).backgroundColor(this.palette.accent).borderRadius(13)
+              .onClick(() => this.loadElectricity())
+          }
         }.width('100%').alignItems(HorizontalAlign.Start).padding(this.palette.cardInset).backgroundColor(this.palette.surface)
           .borderRadius(this.palette.cardRadius).border({ width: 1, color: this.palette.line })
-      } else {
+      } else if (!this.electricityLoading && this.electricityLoaded && this.electricityData.bound) {
         Column({ space: 18 }) {
           Row() {
             Column({ space: 4 }) {
@@ -463,8 +602,10 @@ export struct CampusServicesPage {
           }.width('100%')
           Row() {
             Text(`更新于 ${this.updatedText()}`).fontSize(this.palette.metaSize).fontColor(this.palette.secondary).layoutWeight(1)
-            Button('刷新余额').constraintSize({ minHeight: 48 }).fontSize(this.palette.metaSize).fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft)
-              .borderRadius(11).onClick(() => this.loadElectricity())
+            if (this.electricityData.data_status === undefined && this.electricityError === null) {
+              Button('刷新余额').constraintSize({ minHeight: 48 }).fontSize(this.palette.metaSize).fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft)
+                .borderRadius(11).onClick(() => this.loadElectricity())
+            }
           }.width('100%')
         }.width('100%').padding(this.palette.cardInset).backgroundColor(this.palette.surface)
           .borderRadius(this.palette.cardRadius).border({ width: 1, color: this.palette.line })
@@ -490,7 +631,7 @@ export struct CampusServicesPage {
           }
         }.width('100%').padding(18).backgroundColor(this.palette.surface).borderRadius(18)
       }
-      if (!this.electricityLoading && this.electricityError.length === 0) {
+      if (!this.electricityLoading && this.electricityLoaded && this.electricityError === null) {
         EvidencePanel({ evidence: this.electricityData.evidence ?? [], active: this.active })
       }
     }.width('100%').alignItems(HorizontalAlign.Start)
@@ -519,18 +660,18 @@ export struct CampusServicesPage {
   }
 
   private librarySections(): HDUHelpDisplaySection[] {
-    return this.campusSections.filter((section: HDUHelpDisplaySection) =>
+    return this.displayedSections().filter((section: HDUHelpDisplaySection) =>
       section.resource.startsWith('library_'));
   }
 
   private campusCardSections(): HDUHelpDisplaySection[] {
-    return this.campusSections.filter((section: HDUHelpDisplaySection) =>
+    return this.displayedSections().filter((section: HDUHelpDisplaySection) =>
       section.resource === 'card_balance');
   }
 
   private otherLiveSections(): HDUHelpDisplaySection[] {
     const archived: string[] = ['identity', 'person', 'grades', 'card_balance'];
-    return this.campusSections.filter((section: HDUHelpDisplaySection) =>
+    return this.displayedSections().filter((section: HDUHelpDisplaySection) =>
       !archived.includes(section.resource) && !section.resource.startsWith('library_'));
   }
 
@@ -548,22 +689,40 @@ export struct CampusServicesPage {
   @Builder
   private liveDataSection(section: HDUHelpDisplaySection) {
     Column({ space: 11 }) {
-      Row() {
-        Column({ space: 3 }) {
-          Text(section.title).fontSize(17).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
+      Column({ space: 3 }) {
+        Text(section.title).fontSize(17).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
+        if (section.summary.length > 0) {
           Text(section.summary).fontSize(this.palette.metaSize).fontColor(this.palette.secondary).wordBreak(WordBreak.BREAK_WORD)
-        }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-        Row() {
-          AppIcon({ name: 'info', iconSize: 16, color: this.palette.quiet })
-        }.width(28).height(28).justifyContent(FlexAlign.Center)
-          .backgroundColor(this.palette.field).borderRadius(10)
-      }.width('100%')
+        }
+      }.width('100%').alignItems(HorizontalAlign.Start)
+      if (this.campusStatuses[section.resource] !== undefined) {
+        CampusDataStatusView({ status: this.campusStatuses[section.resource], resourceName: section.title,
+          busy: this.campusRefreshingResource === section.resource,
+          actionEnabled: !this.campusInfoLoading && this.campusRefreshingResource.length === 0,
+          onRetry: () => this.refreshCampusResource(section.resource), onConnect: () => this.onOpenProfile() })
+      }
       ForEach(section.items, (item: HDUHelpDisplayItem) => {
         this.campusDataItem(item)
       }, (item: HDUHelpDisplayItem) => `${section.resource}-${item.label}`)
-      EvidencePanel({ evidence: section.evidence ?? [], active: this.active })
+      if (section.summary.length > 0 || section.items.length > 0 || section.evidence !== undefined) {
+        EvidencePanel({ evidence: section.evidence ?? [], active: this.active })
+      }
     }.width('100%').padding(this.palette.cardInset).backgroundColor(this.palette.surface)
       .borderRadius(this.palette.cardRadius)
+  }
+
+  @Builder
+  private campusInfoFeedback() {
+    if (this.campusInfoLoading && !this.campusInfoLoaded) {
+      FeedbackPanel({ kind: 'loading', title: '正在读取校园数据' })
+    } else if (this.campusInfoError.length > 0) {
+      FeedbackPanel({ kind: 'error', title: '校园数据读取失败',
+        message: this.campusInfoLoaded ? `${this.campusInfoError} 以下显示上次读取的记录。` : this.campusInfoError,
+        actionLabel: '重试读取', busy: this.campusInfoLoading, onAction: () => this.loadCampusInfo() })
+    } else if (this.campusInfoLoaded && !this.campusConfigured) {
+      FeedbackPanel({ kind: 'info', title: '尚未连接 HDUHelp', message: '完成授权后可读取校园数据。',
+        actionLabel: '校园数据连接', onAction: () => this.onOpenProfile() })
+    }
   }
 
   @Builder
@@ -585,30 +744,17 @@ export struct CampusServicesPage {
   private libraryView() {
     Column({ space: this.palette.sectionGap }) {
       AppSectionHeader({ title: '图书馆记录', subtitle: '到馆、借阅与座位记录',
-        actionLabel: '刷新', onAction: () => this.loadCampusInfo() })
-
-      if (this.campusInfoLoading) {
-        FeedbackPanel({ kind: 'loading', title: '正在读取图书馆数据', message: '正在读取已连接的校园数据。' })
-      } else if (this.campusInfoError.length > 0) {
-        FeedbackPanel({ kind: 'error', title: '校园数据暂不可用', message: this.campusInfoError, actionLabel: '重试', onAction: () => this.loadCampusInfo() })
-      } else if (!this.campusConfigured) {
-        Column({ space: 8 }) {
-          Text('尚未连接 HDUHelp').fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
-          Text('在数据连接中配置令牌，即可读取图书馆记录。')
-            .fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
-          Button('打开数据与连接').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
-            .fontColor(this.palette.onAccent).backgroundColor(this.palette.accent).borderRadius(this.palette.controlRadius)
-            .onClick(() => this.onOpenProfile())
-        }.width('100%').alignItems(HorizontalAlign.Start).padding(20)
-          .backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius).border({ width: 1, color: this.palette.line })
-      } else {
+        actionLabel: '重新读取', actionEnabled: !this.campusInfoLoading && this.campusRefreshingResource.length === 0,
+        onAction: () => this.loadCampusInfo() })
+      this.campusInfoFeedback()
+      if (this.campusInfoLoaded && this.campusConfigured) {
         if (this.librarySections().length === 0) {
           Text('当前没有可展示的图书馆数据').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
             .padding(20).backgroundColor(this.palette.surface).borderRadius(20)
         } else {
           ForEach(this.librarySections(), (section: HDUHelpDisplaySection) => {
             this.liveDataSection(section)
-          }, (section: HDUHelpDisplaySection) => section.resource)
+          }, (section: HDUHelpDisplaySection) => this.sectionKey(section))
         }
         this.agentPromptBlock(this.libraryPrompts(), '结合到馆与借阅记录继续规划')
       }
@@ -619,30 +765,24 @@ export struct CampusServicesPage {
   private campusCardView() {
     Column({ space: this.palette.sectionGap }) {
       AppSectionHeader({ title: '校园卡', subtitle: '余额与校园生活动态',
-        actionLabel: '刷新', onAction: () => this.loadCampusInfo() })
-
-      if (this.campusInfoLoading) {
-        FeedbackPanel({ kind: 'loading', title: '正在读取校园卡数据', message: '正在读取已连接的校园数据。' })
-      } else if (this.campusInfoError.length > 0) {
-        FeedbackPanel({ kind: 'error', title: '校园数据暂不可用', message: this.campusInfoError, actionLabel: '重试', onAction: () => this.loadCampusInfo() })
-      } else if (!this.campusConfigured) {
-        FeedbackPanel({ kind: 'info', title: '尚未连接校园数据', message: '连接 HDUHelp 后可查询校园卡余额。',
-          actionLabel: '打开数据与连接', onAction: () => this.onOpenProfile() })
-      } else {
+        actionLabel: '重新读取', actionEnabled: !this.campusInfoLoading && this.campusRefreshingResource.length === 0,
+        onAction: () => this.loadCampusInfo() })
+      this.campusInfoFeedback()
+      if (this.campusInfoLoaded && this.campusConfigured) {
         if (this.campusCardSections().length === 0) {
           Text('当前没有可展示的校园卡数据').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
             .padding(20).backgroundColor(this.palette.surface).borderRadius(20)
         } else {
           ForEach(this.campusCardSections(), (section: HDUHelpDisplaySection) => {
             this.liveDataSection(section)
-          }, (section: HDUHelpDisplaySection) => section.resource)
+          }, (section: HDUHelpDisplaySection) => this.sectionKey(section))
         }
 
         if (this.otherLiveSections().length > 0) {
           Text('其他校园服务').fontSize(this.palette.bodySize).fontWeight(FontWeight.Bold).fontColor(this.palette.ink).width('100%')
           ForEach(this.otherLiveSections(), (section: HDUHelpDisplaySection) => {
             this.liveDataSection(section)
-          }, (section: HDUHelpDisplaySection) => section.resource)
+          }, (section: HDUHelpDisplaySection) => this.sectionKey(section))
         }
         this.agentPromptBlock(this.campusLifePrompts(), '结合余额、考试与提醒继续规划')
       }

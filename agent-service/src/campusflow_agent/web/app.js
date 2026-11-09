@@ -1792,15 +1792,23 @@ const hduHelpResourceLabels = {
   exams: "考试安排",
   card_balance: "校园卡余额",
   library_bookings: "图书馆预约",
+  library_attendance: "图书馆到馆",
+  library_reading: "图书馆借阅",
+  library_seat_reservations: "图书馆座位",
+  sunrun_overview: "阳光长跑",
+  sunrun_group: "长跑分组",
+  sunrun_detail: "长跑记录",
+  subscriptions: "校园提醒订阅",
 };
 
 function renderHduHelpStatus(status) {
   state.hduHelp = status;
   const connected = Boolean(status.configured);
-  elements.connectHduHelpButton.hidden = connected;
-  elements.hduHelpPatForm.hidden = connected;
+  const expired = status.connection_state === "auth_invalid";
+  elements.connectHduHelpButton.hidden = connected && !expired;
+  elements.hduHelpPatForm.hidden = connected && !expired;
   elements.viewHduHelpDataButton.hidden = !connected;
-  elements.syncHduHelpButton.hidden = !connected;
+  elements.syncHduHelpButton.hidden = !connected || expired;
   elements.disconnectHduHelpButton.hidden = !connected;
   elements.hduHelpResourceList.replaceChildren();
   if (!connected) {
@@ -1822,7 +1830,8 @@ function renderHduHelpStatus(status) {
   const credential = status.auth_mode === "pat"
     ? `个人令牌 ${status.token_hint ?? "已配置"}`
     : "官方 OAuth";
-  elements.hduHelpConnectionState.textContent = `${credential}${identity} · 最近同步 ${syncedAt}`;
+  elements.hduHelpConnectionState.textContent =
+    `${credential}${identity} · ${expired ? "授权已失效 · " : ""}最近成功同步 ${syncedAt}`;
   const resources = status.resources?.length ? status.resources : Object.keys(hduHelpResourceLabels);
   resources.forEach((resource) => {
     const chip = document.createElement("span");
@@ -1833,17 +1842,63 @@ function renderHduHelpStatus(status) {
   if (status.last_error) {
     const chip = document.createElement("span");
     chip.className = "warning";
-    chip.textContent = "部分数据待重试";
+    chip.textContent = expired ? "请重新连接" : "部分数据待重试";
     elements.hduHelpResourceList.append(chip);
   }
 }
 
+let hduHelpResourceRefreshing = false;
+
+function appendHduHelpDataStatus(card, resource, dataStatus) {
+  if (!dataStatus) return;
+  const note = document.createElement("p");
+  const updated = dataStatus.updated_at
+    ? ` · 最近获取 ${new Date(dataStatus.updated_at).toLocaleString("zh-CN", {
+        timeZone: "Asia/Shanghai", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit",
+      })}`
+    : "";
+  note.textContent = `${dataStatus.message}${updated}`;
+  card.append(note);
+  if (!["retry", "connect"].includes(dataStatus.action)) return;
+  const action = document.createElement("button");
+  action.type = "button";
+  action.textContent = dataStatus.action === "connect" ? "更新授权"
+    : dataStatus.issue ? "重试此项" : "刷新此项";
+  action.addEventListener("click", async () => {
+    if (dataStatus.action === "connect") {
+      elements.hduHelpPatForm.hidden = false;
+      elements.connectHduHelpButton.hidden = false;
+      elements.hduHelpPatInput.focus();
+      return;
+    }
+    if (hduHelpResourceRefreshing || elements.syncHduHelpButton.disabled) return;
+    const owner = state.user;
+    const connection = state.hduHelp;
+    hduHelpResourceRefreshing = true;
+    action.disabled = true;
+    try {
+      const data = await api(`/api/v1/hduhelp/resources/${encodeURIComponent(resource)}/refresh`, {
+        method: "POST",
+      });
+      if (state.user === owner && state.hduHelp === connection) renderHduHelpData(data);
+    } catch (error) {
+      if (state.user === owner) showToast(error.message, "error");
+    } finally {
+      hduHelpResourceRefreshing = false;
+      action.disabled = false;
+    }
+  });
+  card.append(action);
+}
+
 function renderHduHelpData(payload) {
+  if (payload.status) renderHduHelpStatus(payload.status);
   const sections = payload.sections ?? [];
+  const resourceStatuses = payload.resource_statuses ?? {};
   const prompts = payload.suggested_prompts ?? [];
   elements.hduHelpDataSummary.textContent = sections.length
-    ? `已整理 ${sections.length} 个信息分区，可直接交给 Agent 继续规划。`
-    : "还没有可展示的数据，请先同步校园档案。";
+    ? `已整理 ${sections.length} 个信息分区，请按各项状态查看。`
+    : "暂无可展示的数据，请查看各项状态。";
   elements.hduHelpDataSections.replaceChildren();
   sections.forEach((section) => {
     const card = document.createElement("article");
@@ -1855,7 +1910,7 @@ function renderHduHelpData(payload) {
     const ready = document.createElement("span");
     title.textContent = section.title;
     summary.textContent = section.summary;
-    ready.textContent = "已同步";
+    ready.textContent = resourceStatuses[section.resource] ? "" : "已同步";
     copy.append(title, summary);
     header.append(copy, ready);
     const itemList = document.createElement("dl");
@@ -1868,8 +1923,22 @@ function renderHduHelpData(payload) {
       itemList.append(label, value);
     });
     card.append(header, itemList);
+    appendHduHelpDataStatus(card, section.resource, resourceStatuses[section.resource]);
     elements.hduHelpDataSections.append(card);
   });
+  if (payload.status?.configured) {
+    const shown = new Set(sections.map((section) => section.resource));
+    Object.entries(resourceStatuses).forEach(([resource, dataStatus]) => {
+      if (shown.has(resource)) return;
+      const card = document.createElement("article");
+      card.className = "hduhelp-data-section";
+      const title = document.createElement("h4");
+      title.textContent = hduHelpResourceLabels[resource] ?? resource;
+      card.append(title);
+      appendHduHelpDataStatus(card, resource, dataStatus);
+      elements.hduHelpDataSections.append(card);
+    });
+  }
   elements.hduHelpPromptList.replaceChildren();
   prompts.forEach((suggestion) => {
     const button = document.createElement("button");
@@ -1881,6 +1950,7 @@ function renderHduHelpData(payload) {
 }
 
 async function loadHduHelpData() {
+  const owner = state.user;
   const opening = elements.hduHelpDataPanel.hidden;
   if (!opening) {
     elements.hduHelpDataPanel.hidden = true;
@@ -1891,18 +1961,22 @@ async function loadHduHelpData() {
   elements.viewHduHelpDataButton.textContent = "收起校园档案";
   elements.hduHelpDataSummary.textContent = "正在整理已同步的数据…";
   try {
-    renderHduHelpData(await api("/api/v1/hduhelp/data"));
+    const data = await api("/api/v1/hduhelp/data");
+    if (state.user === owner && !elements.hduHelpDataPanel.hidden) renderHduHelpData(data);
   } catch (error) {
+    if (state.user !== owner || elements.hduHelpDataPanel.hidden) return;
     elements.hduHelpDataSummary.textContent = error.message;
     showToast(error.message, "error");
   }
 }
 
 async function loadHduHelpStatus() {
+  const owner = state.user;
   try {
-    renderHduHelpStatus(await api("/api/v1/hduhelp/status"));
+    const status = await api("/api/v1/hduhelp/status");
+    if (state.user === owner) renderHduHelpStatus(status);
   } catch (error) {
-    showToast(error.message, "error");
+    if (state.user === owner) showToast(error.message, "error");
   }
 }
 
@@ -1921,6 +1995,7 @@ async function connectHduHelpPat(event) {
   event.preventDefault();
   const pat = elements.hduHelpPatInput.value.trim();
   if (!pat) return;
+  const owner = state.user;
   const button = elements.hduHelpPatForm.querySelector('button[type="submit"]');
   setButtonBusy(button, true, "正在验证…");
   try {
@@ -1929,36 +2004,53 @@ async function connectHduHelpPat(event) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ pat }),
     });
+    if (state.user !== owner) return;
     elements.hduHelpPatInput.value = "";
     renderHduHelpStatus(payload.status);
     if (!elements.hduHelpDataPanel.hidden) {
       const data = await api("/api/v1/hduhelp/data");
+      if (state.user !== owner) return;
       renderHduHelpData(data);
     }
     const failed = Object.keys(payload.errors ?? {}).length;
     showToast(failed
-      ? `令牌已连接，${payload.synced_resources.length} 类数据成功，${failed} 类权限不足`
+      ? `令牌已连接，${payload.synced_resources.length} 类数据成功，${failed} 类待处理`
       : `令牌已连接并同步 ${payload.synced_resources.length} 类数据`);
   } catch (error) {
-    showToast(error.message, "error");
+    if (state.user === owner) showToast(error.message, "error");
   } finally {
-    elements.hduHelpPatInput.value = "";
+    if (state.user === owner) elements.hduHelpPatInput.value = "";
     setButtonBusy(button, false, "");
   }
 }
 
 async function syncHduHelp() {
+  if (hduHelpResourceRefreshing) return;
+  const owner = state.user;
   elements.syncHduHelpButton.disabled = true;
   try {
     const payload = await api("/api/v1/hduhelp/sync", { method: "POST" });
+    if (state.user !== owner) return;
     renderHduHelpStatus(payload.status);
     if (!elements.hduHelpDataPanel.hidden) {
-      renderHduHelpData(await api("/api/v1/hduhelp/data"));
+      const data = await api("/api/v1/hduhelp/data");
+      if (state.user !== owner) return;
+      renderHduHelpData(data);
     }
     const failed = Object.keys(payload.errors ?? {}).length;
     showToast(failed ? `已同步 ${payload.synced_resources.length} 类数据，${failed} 类待重试` : `已同步 ${payload.synced_resources.length} 类校园数据`);
   } catch (error) {
+    if (state.user !== owner) return;
     showToast(error.message, "error");
+    await loadHduHelpStatus();
+    if (state.user === owner && !elements.hduHelpDataPanel.hidden) {
+      try {
+        const data = await api("/api/v1/hduhelp/data");
+        if (state.user === owner) renderHduHelpData(data);
+      } catch {
+        // Keep the existing results while the server is unreachable.
+      }
+    }
   } finally {
     elements.syncHduHelpButton.disabled = false;
   }
