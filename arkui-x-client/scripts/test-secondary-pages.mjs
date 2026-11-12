@@ -86,14 +86,20 @@ function profileFixture(handlers = {}) {
   return { page, calls, updated };
 }
 const mapSettings = () => ({browser:{configured:true,source:'account',hint:'••••1234'},server:{configured:false,source:'none',hint:null}});
+test('Baidu map settings display the API mask with its separator and omit invalid hints', () => {
+  const { page } = profileFixture();
+  assert.equal(page.baiduKeyStatus({ configured: true, source: 'account', hint: '•••• 0001' }), '个人配置 · •••• 0001');
+  assert.equal(page.baiduKeyStatus({ configured: true, source: 'account', hint: 'fixture-invalid-mask' }), '个人配置');
+});
 test('Baidu map settings send only explicit key changes and keep separate profile drafts', async () => {
  const f=profileFixture(),p=f.page;p.section='baidu-map';await p.loadBaiduMapSettings();
  await p.saveBaiduMapSettings();assert.deepEqual(f.calls,[['map-status']]);
  p.displayName='未保存昵称';p.newApiKey='MODEL_DRAFT';p.newBaiduBrowserKey='  BROWSER_FIXTURE  ';
  await p.saveBaiduMapSettings();assert.deepEqual(f.calls.at(-1),['map-write',{browser_ak:'BROWSER_FIXTURE'}]);
  assert.equal(p.newBaiduBrowserKey,'');assert.equal(p.newApiKey,'MODEL_DRAFT');assert.equal(p.displayName,'未保存昵称');
- p.newBaiduServerKey='UNSENT_SERVER_DRAFT';await p.saveBaiduMapSettings('browser');
- assert.deepEqual(f.calls.at(-1),['map-write',{browser_ak:null}]);assert.equal(p.newBaiduServerKey,'UNSENT_SERVER_DRAFT');
+ p.newBaiduBrowserKey='UNSENT_BROWSER_DRAFT';p.newBaiduServerKey='UNSENT_SERVER_DRAFT';await p.saveBaiduMapSettings('browser');
+ assert.deepEqual(f.calls.at(-1),['map-write',{browser_ak:null}]);
+ assert.equal(p.newBaiduBrowserKey,'');assert.equal(p.newBaiduServerKey,'UNSENT_SERVER_DRAFT');
  p.sectionBack();assert.equal(p.newBaiduServerKey,'');
 });
 test('late Baidu map writes cannot restore key drafts or old status after an account switch', async () => {

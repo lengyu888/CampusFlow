@@ -24,6 +24,7 @@ from .schemas import CampusDataPlace, CampusGeoPoint, CampusRoute, CampusRouteSt
 CAMPUS_QUERY = "杭州电子科技大学下沙校区"
 CITY = "杭州市"
 _API_ORIGIN = "https://api.map.baidu.com"
+_WALKING_PATH = "/directionlite/v1/walking"
 
 
 class _BaiduKeyLogFilter(logging.Filter):
@@ -76,6 +77,20 @@ def _distance(first: CampusGeoPoint, second: CampusGeoPoint) -> float:
 
 def _normalized(value: str) -> str:
     return re.sub(r"[\s（）()·—\-]", "", value).lower()
+
+
+def _poi_entrance(candidate: dict) -> CampusGeoPoint | None:
+    detail = candidate.get("detail_info")
+    entrance = detail.get("navi_location") if isinstance(detail, dict) else None
+    for coordinates in (entrance, candidate.get("location")):
+        try:
+            point = CampusGeoPoint.model_validate(coordinates)
+        except ValidationError:
+            continue
+        # BD-09 bounds enclose the Xiasha teaching and student living areas.
+        if 30.300 <= point.lat <= 30.335 and 120.330 <= point.lng <= 120.365:
+            return point
+    return None
 
 
 class BaiduMapsService:
@@ -251,13 +266,8 @@ class BaiduMapsService:
         if any("http" in item.lower() or "ak=" in item.lower()
                or ak in item for item in (name, address, uid)):
             return None
-        try:
-            point = CampusGeoPoint.model_validate(candidate.get("location"))
-        except ValidationError:
-            return None
-        # BD-09 bounds enclose the Xiasha teaching and student living areas. This
-        # also permits local POIs whose upstream address omits 下沙/高教园.
-        if not (30.300 <= point.lat <= 30.335 and 120.330 <= point.lng <= 120.365):
+        point = _poi_entrance(candidate)
+        if point is None:
             return None
         return {"name": name, "address": address, "baidu_uid": uid,
                 "location": point.model_dump()}
@@ -268,7 +278,7 @@ class BaiduMapsService:
                                          follow_redirects=False, trust_env=False) as client:
                 data = await self._request(client, "/place/v2/search", {
                     "query": query, "region": CITY, "city_limit": "true", "scope": 2,
-                    "output": "json", "ret_coordtype": "bd09ll", "page_size": 20,
+                    "output": "json", "page_size": 20,
                     "page_num": page,
                 }, deadline, ak)
         total, results = data.get("total"), data.get("results")
@@ -334,11 +344,14 @@ class BaiduMapsService:
                         if len(payload) > 2_000_000:
                             raise BaiduMapsError("MAP_UPSTREAM_ERROR")
             data = json.loads(payload)
-            if (not isinstance(data, dict) or type(data.get("status")) is not int
-                    or data["status"] != 0):
+            if not isinstance(data, dict) or type(data.get("status")) is not int:
                 raise BaiduMapsError("MAP_UPSTREAM_ERROR")
             if monotonic() >= min(deadline, request_deadline):
                 raise BaiduMapsError("MAP_UPSTREAM_TIMEOUT")
+            if path == _WALKING_PATH and data["status"] == 7:
+                raise BaiduMapsError("MAP_NO_ROUTE")
+            if data["status"] != 0:
+                raise BaiduMapsError("MAP_UPSTREAM_ERROR")
             return data
         except (httpx.TimeoutException, TimeoutError):
             raise BaiduMapsError("MAP_UPSTREAM_TIMEOUT") from None
@@ -352,7 +365,7 @@ class BaiduMapsService:
         query = place.name if "杭州电子科技大学" in place.name else f"{CAMPUS_QUERY} {place.name}"
         data = await self._request(client, "/place/v2/search", {
             "query": query, "region": CITY, "city_limit": "true",
-            "scope": 2, "output": "json", "ret_coordtype": "bd09ll",
+            "scope": 2, "output": "json",
             "page_size": 20, "page_num": 0,
         }, deadline, ak)
         results = data.get("results")
@@ -386,7 +399,9 @@ class BaiduMapsService:
             if (not isinstance(uid, str) or not uid or len(uid) > 128
                     or ak in uid):
                 continue
-            point = CampusGeoPoint.model_validate(candidate.get("location"))
+            point = _poi_entrance(candidate)
+            if point is None:
+                continue
             if uid in matches and matches[uid][0] != point:
                 raise BaiduMapsError("MAP_PLACE_AMBIGUOUS")
             matches[uid] = (point, uid)
@@ -412,7 +427,7 @@ class BaiduMapsService:
                 if destination.baidu_uid:
                     params["destination_uid"] = destination.baidu_uid
                 data = await self._request(
-                    client, "/directionlite/v1/walking", params, deadline, ak,
+                    client, _WALKING_PATH, params, deadline, ak,
                 )
                 route = self._convert(data, origin, destination, package_id, package_version, ak)
                 if monotonic() >= deadline:

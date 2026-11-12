@@ -1,4 +1,4 @@
-import { CampusDataPlace, CampusDataSnapshot, CampusPlaceCandidate, CampusRoute, DataEvidence } from '../model/ApiModels';
+import { CampusDataPlace, CampusDataSnapshot, CampusPlaceCandidate, CampusRoute, CampusRouteStep, DataEvidence } from '../model/ApiModels';
 import { RouteMap } from '../components/RouteMap';
 import { CampusFlowApi } from '../services/CampusFlowApi';
 import { AppTheme } from '../theme/AppTheme';
@@ -171,7 +171,8 @@ export struct RoutePage {
 
   private async loadPlaces(): Promise<void> {
     if (!this.active || !this.pageActive || this.routeScope.length === 0 || this.token.length === 0 ||
-      this.school.length === 0 || this.campus.length === 0 || this.loading && this.placesRevision > 0) { return; }
+      this.school.length === 0 || this.campus.length === 0 || this.candidateSaving ||
+      this.loading && this.placesRevision > 0) { return; }
     this.closePlacePicker();
     const revision = ++this.placesRevision;
     const token = this.token;
@@ -270,7 +271,7 @@ export struct RoutePage {
   }
 
   private async createRoute(): Promise<void> {
-    if (!this.mapActive() || this.routeLoading ||
+    if (!this.mapActive() || this.routeLoading || this.candidateSaving ||
       this.activeContextKey !== this.routeContextKey || this.appliedIntentKey !== this.intentKey()) { return; }
     const origin = this.places[this.originIndex];
     const destination = this.places[this.destinationIndex];
@@ -312,7 +313,7 @@ export struct RoutePage {
     this.candidates = []; this.selectedCandidateIndex = -1; this.candidateExpiresAt = '';
     this.candidateEndpoint = ''; this.candidateQuery = ''; this.candidatePage = -1;
     this.candidateHasMore = false; this.candidateTruncated = false;
-    this.candidateLoading = false; this.candidateSaving = false; this.candidateError = '';
+    this.candidateLoading = false; this.candidateError = '';
   }
 
   private pickerPlace(): CampusDataPlace | undefined {
@@ -332,7 +333,8 @@ export struct RoutePage {
   }
 
   private async openPlacePicker(origin: boolean): Promise<void> {
-    if (!this.mapActive() || this.activeContextKey !== this.routeContextKey || this.appliedIntentKey !== this.intentKey()) { return; }
+    if (!this.mapActive() || this.candidateSaving || this.activeContextKey !== this.routeContextKey ||
+      this.appliedIntentKey !== this.intentKey()) { return; }
     const place = this.places[origin ? this.originIndex : this.destinationIndex];
     if (place === undefined) { return; }
     this.closePlacePicker(); this.invalidateRoute();
@@ -341,11 +343,12 @@ export struct RoutePage {
   }
 
   private candidateQueryChanged(value: string): void {
+    if (this.candidateSaving) { return; }
     this.candidateRevision++;
     this.candidateQuery = value;
     this.candidates = []; this.selectedCandidateIndex = -1; this.candidateExpiresAt = '';
     this.candidatePage = -1; this.candidateHasMore = false; this.candidateTruncated = false;
-    this.candidateLoading = false; this.candidateSaving = false; this.candidateError = '';
+    this.candidateLoading = false; this.candidateError = '';
   }
 
   private async loadCandidates(more: boolean): Promise<void> {
@@ -357,9 +360,12 @@ export struct RoutePage {
     const previousExpiry = more ? this.candidateExpiresAt : '';
     const revision = ++this.candidateRevision;
     const context = this.candidateContext();
-    if (!more) { this.candidates = []; this.candidatePage = -1; this.candidateHasMore = false; this.candidateTruncated = false; }
-    // Each page has a short-lived credential; loading another page requires a fresh explicit choice.
-    this.selectedCandidateIndex = -1; this.candidateExpiresAt = ''; this.candidateError = ''; this.candidateLoading = true;
+    if (!more) {
+      this.candidates = []; this.candidatePage = -1; this.candidateHasMore = false; this.candidateTruncated = false;
+      this.candidateExpiresAt = '';
+    }
+    // Keep the existing candidates' expiry if the next page fails to load.
+    this.selectedCandidateIndex = -1; this.candidateError = ''; this.candidateLoading = true;
     try {
       const result = await new CampusFlowApi(this.baseUrl, this.token).campusPlaceCandidates(place.place_id, page, query);
       if (!this.candidateCurrent(revision, context)) { return; }
@@ -410,7 +416,6 @@ export struct RoutePage {
       if (!validPlaceSelection(saved, place.place_id) || saved.baidu_uid !== candidate.baidu_uid ||
         saved.location.lat !== candidate.location.lat || saved.location.lng !== candidate.location.lng) { throw new Error('invalid selection'); }
       this.closePlacePicker();
-      await this.loadPlaces();
     } catch (error) {
       if (this.candidateCurrent(revision, context)) {
         this.candidateError = error instanceof CampusFlowRequestError ?
@@ -420,8 +425,17 @@ export struct RoutePage {
         }
       }
     } finally {
-      if (this.candidateCurrent(revision, context)) { this.candidateSaving = false; }
+      this.candidateSaving = false;
+      // A save can finish after the picker closes. Re-read the current context before planning again.
+      if (!this.candidateCurrent(revision, context)) { await this.loadPlaces(); }
     }
+  }
+
+  private walkingInstructions(steps: CampusRouteStep[]): string {
+    return steps.map((step: CampusRouteStep) => {
+      const duration = step.minutes > 0 ? '（约 ' + step.minutes + ' 分钟）' : '';
+      return step.index + '. ' + step.instruction + duration;
+    }).join('\n');
   }
 
   private candidatePlaces(): CampusDataPlace[] {
@@ -488,11 +502,13 @@ export struct RoutePage {
   }
 
   @Builder
-  private EndpointSelection(place: CampusDataPlace, origin: boolean) {
+  private EndpointSelection(origin: boolean) {
     Column({ space: 6 }) {
-      Text(`${origin ? '起点' : '终点'} · ${this.placeSelectionStatus(place)}`).fontSize(this.palette.metaSize)
+      Text(`${origin ? '起点' : '终点'} · ${this.placeSelectionStatus(this.places[origin ? this.originIndex : this.destinationIndex])}`)
+        .fontSize(this.palette.metaSize)
         .fontColor(this.palette.quiet).width('100%').wordBreak(WordBreak.BREAK_WORD)
-      Button(hasPlaceLocation(place) ? '重新选择地图入口' : '检索并确认地图入口')
+      Button(hasPlaceLocation(this.places[origin ? this.originIndex : this.destinationIndex])
+        ? '重新选择地图入口' : '检索并确认地图入口')
         .fontSize(this.palette.bodySize).fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft)
         .borderRadius(this.palette.controlRadius).width('100%').constraintSize({ minHeight: 44 })
         .enabled(!this.candidateSaving).onClick(() => this.openPlacePicker(origin))
@@ -615,12 +631,13 @@ export struct RoutePage {
               }.width('100%')
 
               Text('手动选择起点，不读取当前位置。').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
-              if (this.places[this.originIndex] !== undefined) { this.EndpointSelection(this.places[this.originIndex], true) }
-              if (this.places[this.destinationIndex] !== undefined) { this.EndpointSelection(this.places[this.destinationIndex], false) }
+              if (this.places[this.originIndex] !== undefined) { this.EndpointSelection(true) }
+              if (this.places[this.destinationIndex] !== undefined) { this.EndpointSelection(false) }
 
               Button(this.routeLoading ? '正在查询百度步行路线…' : '规划步行路线').width('100%').constraintSize({ minHeight: 48 })
                 .fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium).fontColor(this.palette.onAccent)
-                .backgroundColor(this.palette.accent).borderRadius(this.palette.controlRadius).enabled(!this.routeLoading && this.candidateEndpoint.length === 0)
+                .backgroundColor(this.palette.accent).borderRadius(this.palette.controlRadius)
+                .enabled(!this.routeLoading && !this.candidateSaving && this.candidateEndpoint.length === 0)
                 .onClick(() => this.createRoute())
             }
 
@@ -642,6 +659,9 @@ export struct RoutePage {
           if (this.route !== null) {
             Text(`百度步行路线 · 约 ${this.route.total_minutes} 分钟 · ${this.route.distance_meters ?? 0} 米`)
               .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%').wordBreak(WordBreak.BREAK_WORD)
+            if (this.route.steps.length > 0) {
+              InfoDisclosure({ title: '查看分段步行指引', message: this.walkingInstructions(this.route.steps) })
+            }
             InfoDisclosure({ title: '路线与开放时间说明', message: '路线与预计步行时间来自百度地图；请核对现场通行情况。手动选择起终点，不读取当前位置。开放时间为参考资料，临时闭馆请另行核对。' })
             EvidencePanel({ evidence: this.route.evidence ?? [], active: this.active })
             this.PlaceEvidence(this.route.origin)

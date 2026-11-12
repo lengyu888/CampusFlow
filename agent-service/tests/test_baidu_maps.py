@@ -154,6 +154,15 @@ def test_upstream_errors_do_not_expose_key_or_url(response):
     assert "https://" not in str(failure.value)
 
 
+def test_baidu_walking_no_result_status_is_reported_as_no_route():
+    provider = service(lambda request: httpx.Response(200, json={"status": 7}),
+                       baidu_map_place_overrides_json=overrides())
+    with pytest.raises(BaiduMapsError) as failure:
+        provider.plan_route(*places(), package_id="hdu-xiasha", package_version="1")
+    assert failure.value.code == "MAP_NO_ROUTE"
+    assert failure.value.status_code == 404
+
+
 def test_timeout_and_expired_queue_deadline_are_safe():
     async def slow(request):
         await asyncio.sleep(0.2)

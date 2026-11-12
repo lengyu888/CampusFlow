@@ -1484,7 +1484,16 @@ function createManagedCampusMap(title) {
 function buildCampusRouteMap(route) {
   const frame = createManagedCampusMap("百度校园步行路线地图");
   frame.loading = "lazy";
-  campusRouteMaps.set(frame, {owner: currentCampusMapOwner(), route});
+  // The renderer needs geometry and endpoint identifiers, not account selection or evidence records.
+  const point = value => ({lat: value?.lat, lng: value?.lng});
+  const endpoint = place => ({place_id: place.place_id, location: point(place.location)});
+  campusRouteMaps.set(frame, {owner: currentCampusMapOwner(), route: {
+    provider: route.provider,
+    coordinate_system: route.coordinate_system,
+    origin: endpoint(route.origin),
+    destination: endpoint(route.destination),
+    polyline: Array.isArray(route.polyline) ? route.polyline.map(point) : [],
+  }});
   frame.addEventListener("load", syncCampusRouteMaps);
   return frame;
 }
@@ -1529,10 +1538,12 @@ function renderCampusRoute(route, context = null) {
 
   const metrics = document.createElement("div");
   metrics.className = "campus-route-metrics";
+  const openNow = route.destination.open_now;
+  const openingStatus = typeof openNow === "boolean" ? (openNow ? "开放记录" : "关闭记录") : "状态未知";
   [
     [`${route.total_minutes}`, "分钟"],
     [`${realRoute ? route.distance_meters ?? "—" : route.estimated_distance_meters ?? "—"}`, realRoute ? "米 / 百度预计" : "米 / 历史估算"],
-    [route.destination.open_now ? "OPEN" : "CLOSED", route.destination.open_hours],
+    [openingStatus, route.destination.open_hours || "开放时间未提供"],
   ].forEach(([value, label]) => {
     const item = document.createElement("div");
     const strong = document.createElement("strong");

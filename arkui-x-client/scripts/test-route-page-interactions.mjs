@@ -7,9 +7,9 @@ const source=readFileSync(new URL('../entry/src/main/ets/pages/RoutePage.ets',im
 const controller=source.slice(0,source.indexOf('\n  @Builder')).replace(/^import [^\n]+;\r?\n/gm,'').replace(/^@Component\r?\n/gm,'')
  .replace(/@(State|Prop)\s+|@Watch\('[^']+'\)\s*/g,'').replace('export struct RoutePage','class RoutePage')+'\n}';
 const matcher=readFileSync(new URL('../entry/src/main/ets/utils/CourseRouteIntent.ets',import.meta.url),'utf8').replace(/^import [^\n]+;\r?\n/gm,'');
-const {matchCoursePlace}=await import(`data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(matcher)).toString('base64')}`);
 const bridgeSource=readFileSync(new URL('../entry/src/main/ets/utils/RouteMapBridge.ets',import.meta.url),'utf8').replace(/^import [^\n]+;\r?\n/gm,'').replace(/^export /gm,'');
 const {validBaiduRoute,supportedMapCampus,validCampusGeoPoint}=new Function(stripTypeScriptTypes(bridgeSource)+'\nreturn {validBaiduRoute,supportedMapCampus,validCampusGeoPoint};')();
+const matchCoursePlace=new Function('supportedMapCampus',stripTypeScriptTypes(matcher.replace(/^export /gm,''))+'\nreturn matchCoursePlace;')(supportedMapCampus);
 const selectionSource=readFileSync(new URL('../entry/src/main/ets/utils/CampusPlaceSelection.ets',import.meta.url),'utf8').replace(/^import [^\n]+;\r?\n/gm,'').replace(/^export /gm,'');
 const selectionHelpers=new Function('validCampusGeoPoint',stripTypeScriptTypes(selectionSource)+'\nreturn {candidatePreviewPlace,hasPlaceLocation,validPlaceCandidates,validPlaceSelection};')(validCampusGeoPoint);
 const feedbackSource=readFileSync(new URL('../entry/src/main/ets/utils/AgentFeedback.ets',import.meta.url),'utf8').replace(/^import [^\n]+;\r?\n/gm,'');
@@ -209,7 +209,8 @@ test('query, endpoint, context, account and hiding invalidate late candidate pag
  for(const change of [p=>p.choosePlace(2,false),p=>{p.active=false;p.activeChanged();},p=>{p.token='new';p.accountChanged();}]){
  const pending=deferred();const {page,calls}=setup({confirmCampusPlaceSelection:()=>pending.promise});await page.loadPlaces();choosePair(page);await page.openPlacePicker(true);page.previewCandidate(0);
  const save=page.confirmCandidate();change(page);await tick();const before=calls.filter(x=>x[0]==='data').length;pending.resolve(selection());await save;
- assert.equal(calls.filter(x=>x[0]==='data').length,before);assert.equal(page.candidateSaving,false);assert.equal(page.candidates.length,0);
+ assert.equal(calls.filter(x=>x[0]==='data').length,before + (page.active ? 1 : 0));
+ assert.equal(page.candidateSaving,false);assert.equal(page.candidates.length,0);
  }
 });
 
@@ -238,4 +239,43 @@ test('short custom searches accept the server effective campus-prefixed query',a
  const {page,hooks}=setup();await page.loadPlaces();choosePair(page);await page.openPlacePicker(true);page.candidateQueryChanged('图书馆北门');
  hooks.campusPlaceCandidates=async(id,p,q)=>({...candidatePage(id,p,q),query:`杭州电子科技大学 下沙校区 ${q}`});
  await page.loadCandidates(false);assert.equal(page.candidates.length,1);assert.equal(page.candidateError,'');
+});
+
+test('failed pagination preserves the first page expiry and permits confirming a displayed candidate',async()=>{
+ const {page,calls}=setup({campusPlaceCandidates:async(id,p,q)=>{
+   if(p>0)throw Error('offline');
+   return candidatePage(id,p,q);
+ }});
+ await page.loadPlaces();choosePair(page);await page.openPlacePicker(true);
+ const expiry=page.candidateExpiresAt;
+ await page.loadCandidates(true);
+ assert.equal(page.candidates.length,1);assert.equal(page.candidateExpiresAt,expiry);
+ assert.match(page.candidateError,/暂时无法读取/);
+ page.previewCandidate(0);await page.confirmCandidate();
+ assert.deepEqual(calls.find(x=>x[0]==='confirm'),['confirm','a','private-1']);
+});
+
+test('closing a saving picker blocks more writes and routes until its result has been re-read',async()=>{
+ const pending=deferred();
+ const {page,calls,hooks}=setup({confirmCampusPlaceSelection:()=>pending.promise});
+ await page.loadPlaces();choosePair(page);await page.openPlacePicker(true);page.previewCandidate(0);
+ const saving=page.confirmCandidate();
+ page.closePlacePicker();page.choosePlace(2,false);
+ assert.equal(page.candidateSaving,true);
+ await page.openPlacePicker(true);await page.confirmCandidate();await page.createRoute();
+ assert.equal(calls.filter(x=>x[0]==='candidates').length,1);
+ assert.equal(calls.filter(x=>x[0]==='confirm').length,1);
+ assert.equal(calls.some(x=>x[0]==='route'),false);
+ hooks.campusData=async()=>data([{...places[0],selection:selection(),location:selection().location},places[1],places[2]]);
+ pending.resolve(selection());await saving;
+ assert.equal(page.candidateSaving,false);assert.equal(page.places[page.originIndex].selection.baidu_uid,'uid-1');
+ await page.createRoute();
+ assert.deepEqual(calls.find(x=>x[0]==='route'),['route','a','c']);
+});
+
+test('native route summary discloses provider walking instructions when present',()=>{
+ const {page}=setup();
+ assert.equal(page.walkingInstructions([{index:1,instruction:'向北步行',minutes:2},{index:2,instruction:'右转',minutes:0}]),
+  '1. 向北步行（约 2 分钟）\n2. 右转');
+ assert.match(source,/if \(this\.route\.steps\.length > 0\)\s*\{\s*InfoDisclosure\(\{ title: '查看分段步行指引', message: this\.walkingInstructions\(this\.route\.steps\)/);
 });

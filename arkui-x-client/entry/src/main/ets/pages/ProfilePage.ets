@@ -551,7 +551,7 @@ export struct ProfilePage {
     if (!value.configured) { return '未配置'; }
     const source = value.source === 'account' ? '个人配置' : '服务端默认';
     const hint = value.hint ?? '';
-    return /^[•*]{2,8}[A-Za-z0-9_-]{0,4}$/.test(hint) ? `${source} · ${hint}` : source;
+    return /^[•*]{2,8} ?[A-Za-z0-9_-]{4}$/.test(hint) ? `${source} · ${hint}` : source;
   }
 
   private validateBaiduMapStatus(status: BaiduMapCredentialSettings): BaiduMapCredentialSettings {
@@ -615,8 +615,8 @@ export struct ProfilePage {
       const status = this.validateBaiduMapStatus(await new CampusFlowApi(baseUrl, token).updateBaiduMapSettings(payload));
       if (!this.baiduMapCurrent(revision, baseUrl, token)) { return; }
       this.baiduMapStatus = status;
-      if (typeof payload.browser_ak === 'string' && this.newBaiduBrowserKey === browserDraft) { this.newBaiduBrowserKey = ''; }
-      if (typeof payload.server_ak === 'string' && this.newBaiduServerKey === serverDraft) { this.newBaiduServerKey = ''; }
+      if (payload.browser_ak !== undefined && this.newBaiduBrowserKey === browserDraft) { this.newBaiduBrowserKey = ''; }
+      if (payload.server_ak !== undefined && this.newBaiduServerKey === serverDraft) { this.newBaiduServerKey = ''; }
       this.baiduMapMessage = '百度地图配置已保存。';
     } catch (error) {
       if (!this.baiduMapCurrent(revision, baseUrl, token)) { return; }
@@ -758,16 +758,6 @@ export struct ProfilePage {
       Text(label).fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
       TextInput({ text: value }).type(secure ? InputType.Password : InputType.Normal)
         .constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize).backgroundColor(this.palette.field).borderRadius(this.palette.controlRadius).enabled(!this.settingsBusy).onChange(onChange)
-    }.width('100%').alignItems(HorizontalAlign.Start)
-  }
-
-  @Builder
-  private baiduKeyField(label: string, value: string, onChange: (value: string) => void) {
-    Column({ space: 6 }) {
-      Text(label).fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
-      TextInput({ text: value }).type(InputType.Password).enableAutoFill(false)
-        .constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize).backgroundColor(this.palette.field)
-        .borderRadius(this.palette.controlRadius).enabled(!this.baiduMapBusy).onChange(onChange)
     }.width('100%').alignItems(HorizontalAlign.Start)
   }
 
@@ -1099,10 +1089,22 @@ export struct ProfilePage {
           if (this.section === 'baidu-map') {
             Column({ space: 16 }) {
               if (this.baiduMapStatus !== null) {
-                this.baiduKeyField(`浏览器端 AK（加载地图） · ${this.baiduKeyStatus(this.baiduMapStatus.browser)}`,
-                  this.newBaiduBrowserKey, (value) => this.newBaiduBrowserKey = value)
-                this.baiduKeyField(`服务端 AK（检索和路线） · ${this.baiduKeyStatus(this.baiduMapStatus.server)}`,
-                  this.newBaiduServerKey, (value) => this.newBaiduServerKey = value)
+                Column({ space: 6 }) {
+                  Text(`浏览器端 AK（加载地图） · ${this.baiduKeyStatus(this.baiduMapStatus.browser)}`)
+                    .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
+                  TextInput({ text: this.newBaiduBrowserKey }).type(InputType.Password).enableAutoFill(false)
+                    .constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize).backgroundColor(this.palette.field)
+                    .borderRadius(this.palette.controlRadius).enabled(!this.baiduMapBusy)
+                    .onChange((value: string) => this.newBaiduBrowserKey = value)
+                }.width('100%').alignItems(HorizontalAlign.Start)
+                Column({ space: 6 }) {
+                  Text(`服务端 AK（检索和路线） · ${this.baiduKeyStatus(this.baiduMapStatus.server)}`)
+                    .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
+                  TextInput({ text: this.newBaiduServerKey }).type(InputType.Password).enableAutoFill(false)
+                    .constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize).backgroundColor(this.palette.field)
+                    .borderRadius(this.palette.controlRadius).enabled(!this.baiduMapBusy)
+                    .onChange((value: string) => this.newBaiduServerKey = value)
+                }.width('100%').alignItems(HorizontalAlign.Start)
                 Text('留空保留现有配置。密钥由当前行简服务端加密保存。')
                   .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
                 Button(this.baiduMapBusy ? '正在处理…' : '保存地图密钥').width('100%').constraintSize({ minHeight: 48 })

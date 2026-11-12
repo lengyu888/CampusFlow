@@ -44,7 +44,23 @@ def test_paged_candidates_filter_campus_without_rejecting_large_search_total():
     assert requests[0].url.params["page_num"] == "1"
     assert requests[0].url.params["page_size"] == "20"
     assert requests[0].url.params["query"] == "杭州电子科技大学(高教园校区)-图书馆"
+    assert "ret_coordtype" not in requests[0].url.params
     assert all(place.selection is None for place in store.campus_data_snapshot("alice").places)
+
+
+@pytest.mark.parametrize("entrance,expected", [
+    ({"lat": 30.321, "lng": 120.341}, {"lat": 30.321, "lng": 120.341}),
+    ({"lat": 30.4, "lng": 120.1}, {"lat": 30.32, "lng": 120.34}),
+])
+def test_candidate_uses_baidu_navigation_point_when_within_campus(entrance, expected):
+    store = configured_store(lambda request: httpx.Response(200, json={
+        "status": 0, "total": 1, "results": [
+            poi("图书馆", "lib", detail_info={"navi_location": entrance}),
+        ],
+    }))
+    result = candidate(store).candidates[0]
+    assert result.location.model_dump() == expected
+    assert choose(store, result.selection_token).location == result.location
 
 
 def test_last_allowed_page_exposes_truncation_and_empty_page_can_have_more():

@@ -350,7 +350,7 @@ def create_app(
     def map_renderer_config(
         browser_ak: str, server_ak: str, route_configured: bool,
     ) -> JSONResponse:
-        if browser_ak == server_ak:
+        if browser_ak in (server_ak, (settings.baidu_map_server_ak or "").strip()):
             browser_ak = ""
         return JSONResponse(content={
             "browser_ak": browser_ak, "configured": bool(browser_ak),
@@ -361,7 +361,7 @@ def create_app(
     @app.get("/api/v1/maps/baidu/config")
     async def baidu_maps_config() -> JSONResponse:
         return map_renderer_config(
-            (settings.baidu_map_browser_ak or "").strip(),
+            default_baidu_browser_key(),
             (settings.baidu_map_server_ak or "").strip(),
             store._baidu_maps.configured,
         )
@@ -706,9 +706,14 @@ def create_app(
         configured = bool((fallback or "").strip())
         return BaiduMapKeyStatus(configured=configured, source="server" if configured else "none")
 
+    def default_baidu_browser_key() -> str:
+        browser_ak = (settings.baidu_map_browser_ak or "").strip()
+        server_ak = (settings.baidu_map_server_ak or "").strip()
+        return browser_ak if browser_ak != server_ak else ""
+
     def map_settings_status(entries: dict[str, tuple[str, str]]) -> BaiduMapSettingsStatus:
         return BaiduMapSettingsStatus(
-            browser=map_key_status(entries.get("browser"), settings.baidu_map_browser_ak),
+            browser=map_key_status(entries.get("browser"), default_baidu_browser_key()),
             server=map_key_status(entries.get("server"), settings.baidu_map_server_ak),
         )
 
@@ -716,13 +721,13 @@ def create_app(
         browser_ak = decrypt_map_key(entries.get("browser"))
         server_ak = decrypt_map_key(entries.get("server"))
         return (
-            (settings.baidu_map_browser_ak or "").strip() if browser_ak is None else browser_ak,
+            default_baidu_browser_key() if browser_ak is None else browser_ak,
             (settings.baidu_map_server_ak or "").strip() if server_ak is None else server_ak,
         )
 
     def validate_map_keys(entries: dict[str, tuple[str, str]]) -> None:
         browser_ak, server_ak = effective_map_keys(entries)
-        if browser_ak and browser_ak == server_ak:
+        if browser_ak and browser_ak in (server_ak, (settings.baidu_map_server_ak or "").strip()):
             raise CampusFlowError(
                 status_code=422,
                 detail="浏览器端与服务端必须使用不同的百度地图 AK。",

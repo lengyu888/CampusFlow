@@ -82,10 +82,10 @@ test('map configuration uses an authenticated request and only falls back anonym
 });
 
 test('credential transport sends explicit fields only and returns masked status data',async()=>{
- const data={browser:{configured:true,source:'account',hint:'••••1234',browser_ak:'RAW_BROWSER'},
+ const data={browser:{configured:true,source:'account',hint:'•••• 1234',browser_ak:'RAW_BROWSER'},
   server:{configured:true,source:'server',hint:'RAW_SERVER',server_ak:'RAW_SERVER'},server_ak:'RAW_SERVER'};
  const f=fixture({responseCode:200,result:JSON.stringify(data)});
- const expected={browser:{configured:true,source:'account',hint:'••••1234'},server:{configured:true,source:'server',hint:null}};
+ const expected={browser:{configured:true,source:'account',hint:'•••• 1234'},server:{configured:true,source:'server',hint:null}};
  assert.deepEqual(await f.api.baiduMapSettings(),expected);
  assert.deepEqual(await f.api.updateBaiduMapSettings({browser_ak:undefined,server_ak:null,api_key:'OTHER_SECRET'}),expected);
  assert.equal(f.calls[1].options.method,'PUT');assert.equal(f.calls[1].url,'https://fixture.invalid/api/v1/me/baidu-maps');

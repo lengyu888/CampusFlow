@@ -116,6 +116,26 @@ async def test_same_key_cannot_be_used_for_both_roles():
         assert (await client.get(SETTINGS_URL)).json()["server"]["source"] == "server"
 
 
+async def test_platform_server_key_never_becomes_an_account_browser_key():
+    platform_key = "test-private-platform"
+    app = create_app(settings=Settings(
+        _env_file=None, app_env="test", database_path=":memory:",
+        baidu_map_browser_ak=platform_key, baidu_map_server_ak=platform_key,
+    ))
+    async with client_for(app) as client:
+        await register(client, "alice@example.test")
+        saved = await client.put(SETTINGS_URL, json={"server_ak": "test-private-personal"})
+        assert saved.status_code == 200
+        assert saved.json()["browser"]["configured"] is False
+        runtime = await client.get(RUNTIME_URL)
+        assert runtime.status_code == 200
+        assert runtime.json()["browser_ak"] == ""
+        assert runtime.json()["route_configured"] is True
+        rejected = await client.put(SETTINGS_URL, json={"browser_ak": platform_key})
+        assert rejected.status_code == 422
+        assert platform_key not in rejected.text
+
+
 async def test_server_key_rotates_for_route_and_candidates_without_leaking_to_logs(caplog):
     settings = Settings(
         _env_file=None, app_env="test", database_path=":memory:",

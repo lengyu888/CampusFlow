@@ -524,7 +524,7 @@ export class CampusFlowApi implements SessionVerificationPort, ReviewGateway, Fo
     if (typeof value?.configured !== 'boolean' || !['account', 'server', 'none'].includes(value.source)) {
       throw localRequestFailure('INVALID_RESPONSE');
     }
-    const hint = typeof value.hint === 'string' && /^[•*]{2,8}[A-Za-z0-9_-]{0,4}$/.test(value.hint) ? value.hint : null;
+    const hint = typeof value.hint === 'string' && /^[•*]{2,8} ?[A-Za-z0-9_-]{4}$/.test(value.hint) ? value.hint : null;
     return { configured: value.configured, source: value.source, hint: hint };
   }
 

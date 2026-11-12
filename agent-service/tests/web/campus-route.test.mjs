@@ -5,7 +5,7 @@ import { JSDOM } from 'jsdom';
 const app = readFileSync(new URL('../../src/campusflow_agent/web/app.js', import.meta.url), 'utf8');
 const origin = {place_id: 'a', name: '<img src=x onerror=alert(1)>', location: {lat: 30.3, lng: 120.3}};
 const destination = {place_id: 'library', name: '杭州电子科技大学(高教园校区)-图书馆',
-  aliases: ['图书馆', '校图书馆'], location: {lat: 30.4, lng: 120.4}};
+  aliases: ['图书馆', '校图书馆'], location: {lat: 30.4, lng: 120.4}, open_now: null};
 const route = {provider: 'baidu', coordinate_system: 'bd09ll', origin, destination,
   polyline: [origin.location, destination.location], path: [], total_minutes: 4, distance_meters: 270, steps: []};
 const mapConfig = {configured: true, browser_ak: 'fixture-public-browser-ak', route_configured: true,
@@ -33,8 +33,10 @@ function environment(user = {user_id: 'owner', school: '杭州电子科技大学
     window.changeOwner = () => {state.user = {...state.user, user_id: 'another'}; if (typeof syncCampusRouteMaps === 'function') syncCampusRouteMaps();};`);
   return {dom, window: dom.window, document: dom.window.document, requests};
 }
-test('Baidu route iframe receives only allowlisted public map config before route state', async t => {
-  const f = environment(); f.window.renderRoute(route);
+test('Baidu route iframe receives only allowlisted public map config and route geometry', async t => {
+  const f = environment();
+  f.window.renderRoute({...route, destination: {...destination, selection: {name: 'selected entrance'}},
+    evidence: [{note: 'account evidence'}], polyline: [origin.location, {...destination.location, extra: 'ignored'}]});
   t.after(() => f.dom.window.close());
   const iframe = f.document.querySelector('iframe'); assert.ok(iframe);
   assert.equal(iframe.getAttribute('src'), '/static/baidu-map.html?v=3&managed=1');
@@ -49,11 +51,24 @@ test('Baidu route iframe receives only allowlisted public map config before rout
   assert.deepEqual(f.requests.map(({path}) => path), ['/api/v1/me/baidu-maps/config']);
   assert.equal(f.requests[0].options.cache, 'no-store');
   assert.deepEqual(structuredClone(calls[0]), mapConfig);
-  assert.equal(calls.at(-1).route.provider, 'baidu');
-  assert.equal(calls.at(-1).route.destination.name, destination.name);
-  assert.equal(calls.at(-1).active, true);
+  const originForMap = {place_id: origin.place_id, location: origin.location};
+  const destinationForMap = {place_id: destination.place_id, location: destination.location};
+  assert.deepEqual(structuredClone(calls.at(-1)), {active: true, origin: originForMap, destination: destinationForMap,
+    route: {provider: 'baidu', coordinate_system: 'bd09ll', origin: originForMap, destination: destinationForMap,
+      polyline: [origin.location, destination.location]}});
   f.window.hideMaps(); assert.equal(calls.at(-1).active, false);
   f.window.changeOwner(); assert.equal(calls.at(-1), 'clear');
+});
+
+test('the route card distinguishes unknown opening status from a closed record', t => {
+  const f = environment();
+  t.after(() => f.dom.window.close());
+  f.window.renderRoute(route);
+  f.window.renderRoute({...route, destination: {...destination, open_now: false, open_hours: '08:00–21:00'}});
+  const statusMetrics = [...f.document.querySelectorAll('.campus-route-metrics > div:last-child')];
+  assert.deepEqual(statusMetrics.map(metric => metric.querySelector('strong').textContent), ['状态未知', '关闭记录']);
+  assert.equal(statusMetrics[0].querySelector('span').textContent, '开放时间未提供');
+  assert.equal(statusMetrics[1].querySelector('span').textContent, '08:00–21:00');
 });
 
 test('only a missing account config endpoint falls back to the old public endpoint', async t => {
