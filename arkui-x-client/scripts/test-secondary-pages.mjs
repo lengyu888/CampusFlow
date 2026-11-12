@@ -73,6 +73,8 @@ function profileFixture(handlers = {}) {
   const calls = [], updated = [];
   class Api {
     updateSettings(...args) { calls.push(['settings', ...args]); return handlers.settings?.(...args) ?? Promise.resolve(user()); }
+    baiduMapSettings() { calls.push(['map-status']); return handlers.mapStatus?.() ?? Promise.resolve(mapSettings()); }
+    updateBaiduMapSettings(payload) { calls.push(['map-write', payload]); return handlers.mapWrite?.(payload) ?? Promise.resolve(mapSettings()); }
     me() { calls.push(['me']); return handlers.me?.() ?? Promise.resolve(user()); }
     subscriptionStatus() { calls.push(['subscriptionStatus']); return Promise.resolve({ configured: false }); }
     hduHelpStatus() { calls.push(['hduHelpStatus']); return Promise.resolve({ configured: false, resources: [] }); }
@@ -83,6 +85,34 @@ function profileFixture(handlers = {}) {
   const page = component('ProfilePage', Api); page.user = user(); page.hduHelpLoaded = true; page.onUserChanged = value => updated.push(value);
   return { page, calls, updated };
 }
+const mapSettings = () => ({browser:{configured:true,source:'account',hint:'••••1234'},server:{configured:false,source:'none',hint:null}});
+test('Baidu map settings display the API mask with its separator and omit invalid hints', () => {
+  const { page } = profileFixture();
+  assert.equal(page.baiduKeyStatus({ configured: true, source: 'account', hint: '•••• 0001' }), '个人配置 · •••• 0001');
+  assert.equal(page.baiduKeyStatus({ configured: true, source: 'account', hint: 'fixture-invalid-mask' }), '个人配置');
+});
+test('Baidu map settings send only explicit key changes and keep separate profile drafts', async () => {
+ const f=profileFixture(),p=f.page;p.section='baidu-map';await p.loadBaiduMapSettings();
+ await p.saveBaiduMapSettings();assert.deepEqual(f.calls,[['map-status']]);
+ p.displayName='未保存昵称';p.newApiKey='MODEL_DRAFT';p.newBaiduBrowserKey='  BROWSER_FIXTURE  ';
+ await p.saveBaiduMapSettings();assert.deepEqual(f.calls.at(-1),['map-write',{browser_ak:'BROWSER_FIXTURE'}]);
+ assert.equal(p.newBaiduBrowserKey,'');assert.equal(p.newApiKey,'MODEL_DRAFT');assert.equal(p.displayName,'未保存昵称');
+ p.newBaiduBrowserKey='UNSENT_BROWSER_DRAFT';p.newBaiduServerKey='UNSENT_SERVER_DRAFT';await p.saveBaiduMapSettings('browser');
+ assert.deepEqual(f.calls.at(-1),['map-write',{browser_ak:null}]);
+ assert.equal(p.newBaiduBrowserKey,'');assert.equal(p.newBaiduServerKey,'UNSENT_SERVER_DRAFT');
+ p.sectionBack();assert.equal(p.newBaiduServerKey,'');
+});
+test('late Baidu map writes cannot restore key drafts or old status after an account switch', async () => {
+ const write=deferred(),status=deferred();let reads=0;
+ const f=profileFixture({mapWrite:()=>write.promise,mapStatus:()=>reads++===0?Promise.resolve(mapSettings()):status.promise});
+ const p=f.page;p.section='baidu-map';await p.loadBaiduMapSettings();p.newBaiduServerKey='OLD_SECRET';
+ const saving=p.saveBaiduMapSettings();p.token='new-account';p.baiduMapAccountChanged();
+ await p.saveBaiduMapSettings();assert.equal(f.calls.filter(call=>call[0]==='map-write').length,1);
+ assert.equal(p.newBaiduServerKey,'');assert.equal(p.baiduMapStatus,null);
+ write.resolve(mapSettings());await saving;assert.equal(p.baiduMapStatus,null);
+ const next={browser:{configured:false,source:'none',hint:null},server:{configured:true,source:'server',hint:'••••1111'}};
+ status.resolve(next);await settle();assert.deepEqual(p.baiduMapStatus,next);
+});
 test('profile groups preserve all unsaved inputs; account save never includes an unsubmitted model key', async () => {
   const f = profileFixture(); f.page.displayName = '未保存昵称'; f.page.school = '未保存学校'; f.page.newApiKey = 'PRIVATE_KEY';
   for (const group of ['account', 'model', 'connections', 'preferences']) { f.page.toggleGroup(group); f.page.toggleGroup(group); }

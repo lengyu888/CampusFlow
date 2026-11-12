@@ -31,6 +31,7 @@ from .accounts import (
 )
 from .action_service import ActionError, ActionService
 from .agent import AgentBudgetExceeded, AgentConfigurationError, AgentService
+from .baidu_maps import CAMPUS_QUERY, CITY, BaiduMapsError
 from .campus_data_status import (
     ISSUE_MESSAGES,
     LEGACY_ISSUES,
@@ -79,6 +80,9 @@ from .schemas import (
     AdminUserSummary,
     AgentRunRequest,
     AuthResponse,
+    BaiduMapKeyStatus,
+    BaiduMapSettingsStatus,
+    BaiduMapSettingsUpdate,
     CampusCorrection,
     CampusCorrectionCreate,
     CampusDataIssue,
@@ -86,6 +90,9 @@ from .schemas import (
     CampusDataSnapshot,
     CampusMapParseResult,
     CampusNotice,
+    CampusPlaceCandidates,
+    CampusPlaceSelection,
+    CampusPlaceSelectionRequest,
     CampusRoute,
     ChatRequest,
     ChatResponse,
@@ -266,6 +273,7 @@ def create_app(
     settings = settings or get_settings()
     model_catalog = ModelCatalog(settings)
     store = store or CampusStore(settings.database_path)
+    store.configure_baidu_maps(settings)
     account_store = account_store or AccountStore(settings.database_path)
     replanning_service = replanning_service or ReplanningService(account_store, store)
     timetable_service = timetable_service or TimetableService(account_store, store)
@@ -275,6 +283,22 @@ def create_app(
     review_service = ReviewService(focus_service, task_status_service)
     skill_store = skill_store or SkillStore(settings.database_path)
     api_key_vault = api_key_vault or ApiKeyVault(settings)
+
+    def decrypt_map_key(entry: tuple[str, str] | None) -> str | None:
+        if entry is None:
+            return None
+        try:
+            return api_key_vault.decrypt(entry[0])
+        except ValueError:
+            raise BaiduMapsError(
+                "MAP_NOT_CONFIGURED",
+                message="当前账号的地图密钥无法读取，请在个人设置中重新配置。",
+            ) from None
+
+    def personal_baidu_server_key(user_id: str) -> str | None:
+        return decrypt_map_key(account_store.get_baidu_map_credentials(user_id).get("server"))
+
+    store.set_baidu_server_key_lookup(personal_baidu_server_key)
     hduhelp_service = hduhelp_service or HDUHelpService(settings)
     hduhelp_access = hduhelp_access or HDUHelpAccess(
         account_store,
@@ -317,6 +341,31 @@ def create_app(
     )
     app.state.run_service = run_service
 
+    @app.exception_handler(BaiduMapsError)
+    async def baidu_maps_error_handler(request: Request, exc: BaiduMapsError) -> JSONResponse:
+        return JSONResponse(status_code=exc.status_code,
+                            content={"detail": exc.message, "code": exc.code},
+                            headers={"Cache-Control": "no-store"})
+
+    def map_renderer_config(
+        browser_ak: str, server_ak: str, route_configured: bool,
+    ) -> JSONResponse:
+        if browser_ak in (server_ak, (settings.baidu_map_server_ak or "").strip()):
+            browser_ak = ""
+        return JSONResponse(content={
+            "browser_ak": browser_ak, "configured": bool(browser_ak),
+            "route_configured": route_configured,
+            "campus_query": CAMPUS_QUERY, "city": CITY,
+        }, headers={"Cache-Control": "no-store"})
+
+    @app.get("/api/v1/maps/baidu/config")
+    async def baidu_maps_config() -> JSONResponse:
+        return map_renderer_config(
+            default_baidu_browser_key(),
+            (settings.baidu_map_server_ak or "").strip(),
+            store._baidu_maps.configured,
+        )
+
     @app.exception_handler(ReviewError)
     async def review_error_handler(request: Request, exc: ReviewError) -> JSONResponse:
         return JSONResponse(
@@ -331,6 +380,13 @@ def create_app(
 
     @app.exception_handler(RequestValidationError)
     async def request_error_handler(request: Request, exc: RequestValidationError):
+        if request.url.path.endswith("/api/v1/me/baidu-maps"):
+            return JSONResponse(
+                status_code=422,
+                content={"detail": "百度地图 AK 格式无效，请检查输入后重试。",
+                         "code": "BAIDU_MAP_SETTINGS_INVALID"},
+                headers={"Cache-Control": "no-store"},
+            )
         if request.url.path == "/api/v1/reviews":
             return JSONResponse(
                 status_code=422,
@@ -641,6 +697,77 @@ def create_app(
     async def user_context(user: CurrentUser) -> UserContextResponse:
         timetable, campus_map = account_store.get_context(user.user_id)
         return UserContextResponse(timetable=timetable, campus_map=campus_map)
+
+    def map_key_status(
+        entry: tuple[str, str] | None, fallback: str | None,
+    ) -> BaiduMapKeyStatus:
+        if entry is not None:
+            return BaiduMapKeyStatus(configured=True, source="account", hint=entry[1])
+        configured = bool((fallback or "").strip())
+        return BaiduMapKeyStatus(configured=configured, source="server" if configured else "none")
+
+    def default_baidu_browser_key() -> str:
+        browser_ak = (settings.baidu_map_browser_ak or "").strip()
+        server_ak = (settings.baidu_map_server_ak or "").strip()
+        return browser_ak if browser_ak != server_ak else ""
+
+    def map_settings_status(entries: dict[str, tuple[str, str]]) -> BaiduMapSettingsStatus:
+        return BaiduMapSettingsStatus(
+            browser=map_key_status(entries.get("browser"), default_baidu_browser_key()),
+            server=map_key_status(entries.get("server"), settings.baidu_map_server_ak),
+        )
+
+    def effective_map_keys(entries: dict[str, tuple[str, str]]) -> tuple[str, str]:
+        browser_ak = decrypt_map_key(entries.get("browser"))
+        server_ak = decrypt_map_key(entries.get("server"))
+        return (
+            default_baidu_browser_key() if browser_ak is None else browser_ak,
+            (settings.baidu_map_server_ak or "").strip() if server_ak is None else server_ak,
+        )
+
+    def validate_map_keys(entries: dict[str, tuple[str, str]]) -> None:
+        browser_ak, server_ak = effective_map_keys(entries)
+        if browser_ak and browser_ak in (server_ak, (settings.baidu_map_server_ak or "").strip()):
+            raise CampusFlowError(
+                status_code=422,
+                detail="浏览器端与服务端必须使用不同的百度地图 AK。",
+                code="BAIDU_MAP_SETTINGS_INVALID",
+                headers={"Cache-Control": "no-store"},
+            )
+
+    @app.get("/api/v1/me/baidu-maps", response_model=BaiduMapSettingsStatus)
+    async def get_baidu_map_settings(
+        user: CurrentUser, response: Response,
+    ) -> BaiduMapSettingsStatus:
+        response.headers["Cache-Control"] = "no-store"
+        return map_settings_status(account_store.get_baidu_map_credentials(user.user_id))
+
+    @app.put("/api/v1/me/baidu-maps", response_model=BaiduMapSettingsStatus)
+    async def update_baidu_map_settings(
+        payload: BaiduMapSettingsUpdate, user: CurrentUser, response: Response,
+    ) -> BaiduMapSettingsStatus:
+        response.headers["Cache-Control"] = "no-store"
+        changes: dict[str, tuple[str, str] | None] = {}
+        for kind, value in (("browser", payload.browser_ak), ("server", payload.server_ak)):
+            if f"{kind}_ak" not in payload.model_fields_set:
+                continue
+            if value is None:
+                changes[kind] = None
+            else:
+                key = value.get_secret_value()
+                changes[kind] = (api_key_vault.encrypt(key), f"•••• {key[-4:]}")
+        saved = account_store.update_baidu_map_credentials(
+            user.user_id, changes, validate=validate_map_keys,
+        )
+        return map_settings_status(saved)
+
+    @app.get("/api/v1/me/baidu-maps/config")
+    async def account_baidu_maps_config(user: CurrentUser) -> JSONResponse:
+        entries = account_store.get_baidu_map_credentials(user.user_id)
+        browser_ak, server_ak = effective_map_keys(entries)
+        return map_renderer_config(
+            browser_ak, server_ak, store._baidu_maps.configured_for(server_ak),
+        )
 
     @app.get("/api/v1/me/timetable", response_model=TimetableSnapshot)
     async def timetable_snapshot(user: CurrentUser) -> TimetableSnapshot:
@@ -1144,18 +1271,52 @@ def create_app(
         return await weather_service.forecast(day, user.school or "", user.campus or "")
 
     @app.get("/api/v1/campus-data", response_model=CampusDataSnapshot)
-    async def campus_data(user: CurrentUser) -> CampusDataSnapshot:
+    async def campus_data(user: CurrentUser, response: Response) -> CampusDataSnapshot:
         require_supported_campus(user)
+        response.headers["Cache-Control"] = "no-store"
         return store.campus_data_snapshot(user.user_id)
 
     @app.get("/api/v1/campus-data/places", response_model=list[CampusDataPlace])
     async def campus_data_places(
         user: CurrentUser,
+        response: Response,
         query: str = "",
         origin: str = "",
     ) -> list[CampusDataPlace]:
         require_supported_campus(user)
-        return store.campus_data_places(query, origin)
+        response.headers["Cache-Control"] = "no-store"
+        return store.campus_data_places(query, origin, user_id=user.user_id)
+
+    @app.get("/api/v1/campus-data/places/{place_id}/candidates",
+             response_model=CampusPlaceCandidates)
+    async def campus_place_candidates(
+        place_id: str,
+        user: CurrentUser,
+        response: Response,
+        page: Annotated[int, Query(ge=0, le=4)] = 0,
+        query: Annotated[str, Query(max_length=300)] = "",
+    ) -> CampusPlaceCandidates:
+        require_supported_campus(user)
+        response.headers["Cache-Control"] = "no-store"
+        try:
+            return await asyncio.to_thread(
+                store.campus_place_candidates, place_id, user_id=user.user_id,
+                query=query, page=page, deadline=store.campus_route_deadline())
+        except KeyError:
+            raise BaiduMapsError("MAP_PLACE_UNRESOLVED", status_code=404) from None
+
+    @app.put("/api/v1/campus-data/places/{place_id}/selection",
+             response_model=CampusPlaceSelection)
+    async def campus_place_selection(
+        place_id: str,
+        payload: CampusPlaceSelectionRequest,
+        user: CurrentUser,
+        response: Response,
+    ) -> CampusPlaceSelection:
+        require_supported_campus(user)
+        response.headers["Cache-Control"] = "no-store"
+        return await asyncio.to_thread(
+            store.select_campus_place, place_id, payload.selection_token, user_id=user.user_id)
 
     @app.get("/api/v1/campus-data/notices", response_model=list[CampusNotice])
     async def campus_data_notices(
@@ -1169,22 +1330,24 @@ def create_app(
     @app.get("/api/v1/campus-data/route", response_model=CampusRoute)
     async def campus_data_route(
         user: CurrentUser,
+        response: Response,
         origin: str,
         destination: str,
     ) -> CampusRoute:
         require_supported_campus(user)
+        response.headers["Cache-Control"] = "no-store"
         try:
-            return store.plan_campus_route(origin, destination)
+            deadline = store.campus_route_deadline()
+            return await asyncio.to_thread(store.plan_campus_route, origin, destination,
+                                           deadline=deadline, user_id=user.user_id)
         except KeyError as exc:
             if exc.args and exc.args[0] == "campus_route_place_not_found":
-                raise HTTPException(
+                raise BaiduMapsError(
+                    "MAP_PLACE_UNRESOLVED",
                     status_code=404,
-                    detail="未找到起点或终点，请尝试使用建筑名、简称或地点类别。",
+                    message="未找到起点或终点，请使用校园地点列表中的名称或简称。",
                 ) from exc
-            raise HTTPException(
-                status_code=404,
-                detail="当前校园数据包中还没有这两个地点之间的步行关系。",
-            ) from exc
+            raise BaiduMapsError("MAP_NO_ROUTE") from exc
 
     @app.get(
         "/api/v1/campus-data/corrections",

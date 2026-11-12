@@ -254,7 +254,11 @@ class FakeHDUHelpService:
 @pytest_asyncio.fixture
 async def client() -> AsyncIterator[AsyncClient]:
     store = CampusStore()
-    settings = Settings(app_env="test", database_path=":memory:")
+    settings = Settings(
+        app_env="test", database_path=":memory:",
+        baidu_map_browser_ak=None, baidu_map_server_ak=None,
+        baidu_map_place_overrides_json="{}",
+    )
     app = create_app(
         settings=settings,
         store=store,

@@ -1,5 +1,7 @@
 from datetime import datetime
 
+import pytest
+
 from campusflow_agent.campus_data import (
     CAMPUS_TIMEZONE,
     MAP_POINTS,
@@ -16,15 +18,27 @@ def test_package_exposes_versioned_places_and_notices() -> None:
     snapshot = data.snapshot("student-001")
 
     assert snapshot.package.package_id == "hdu-xiasha"
-    assert snapshot.package.version == "2026.10.7"
+    assert snapshot.package.version == "2026.11.8"
     assert snapshot.package.place_count >= 17
     assert snapshot.package.notice_count == 0
     assert snapshot.notices == []
     assert snapshot.package.evidence[0].status == "unverified"
-    assert any(place.name == "图书馆" for place in snapshot.places)
+    assert any(place.name == "杭州电子科技大学(高教园校区)-图书馆" for place in snapshot.places)
 
 
-def test_place_lookup_supports_alias_open_hours_and_walk_time() -> None:
+@pytest.mark.parametrize("value", ["临安校区图书馆", "图书馆或六教", "别校图书馆", "教"])
+def test_real_route_context_rejects_ambiguous_or_extra_place_text(value):
+    with pytest.raises(KeyError, match="campus_route_place_not_found"):
+        CampusDataStore().route_context(value, "library")
+
+
+def test_real_route_context_accepts_only_exact_normalized_ids_names_or_aliases():
+    origin, destination, _, _ = CampusDataStore().route_context(" LIBRARY ", " 六教 ")
+    assert origin.place_id == "library"
+    assert destination.place_id == "teaching-6"
+
+
+def test_place_lookup_supports_alias_hours_without_invented_walk_time() -> None:
     data = CampusDataStore()
 
     places = data.find_places(
@@ -34,10 +48,10 @@ def test_place_lookup_supports_alias_open_hours_and_walk_time() -> None:
     )
 
     assert len(places) == 1
-    assert places[0].name == "图书馆"
+    assert places[0].name == "杭州电子科技大学(高教园校区)-图书馆"
     assert places[0].open_now is None
     assert places[0].open_hours == "07:00–22:00"
-    assert places[0].walk_minutes == 5
+    assert places[0].walk_minutes is None
 
 
 def test_route_from_sixth_teaching_building_to_cainiao_uses_uploaded_map_graph() -> None:
@@ -56,7 +70,7 @@ def test_route_from_sixth_teaching_building_to_cainiao_uses_uploaded_map_graph()
     assert route.total_minutes == 10
     assert route.estimated_distance_meters == 750
     assert [step.minutes for step in route.steps] == [5, 5]
-    assert "北二门" in route.steps[0].instruction
+    assert "学生生活区-南1门" in route.steps[0].instruction
     assert route.path[0].place_id == "teaching-6"
     assert route.path[-1].place_id == "cainiao-station"
     assert [(point.x, point.y) for point in route.path] == [
@@ -146,4 +160,4 @@ def test_campus_store_merges_user_confirmed_and_official_places() -> None:
     )
 
     assert store.find_places("自习室", "student-001")[0]["name"] == "自定义自习室"
-    assert store.find_places("图书馆", "student-001", "3教")[0]["walk_minutes"] == 5
+    assert store.find_places("图书馆", "student-001", "3教")[0]["walk_minutes"] is None

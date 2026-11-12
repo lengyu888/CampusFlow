@@ -1,10 +1,20 @@
 from __future__ import annotations
 
+import re
 from datetime import date, datetime
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, SecretStr, StrictBool, StrictInt, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    SecretStr,
+    StrictBool,
+    StrictInt,
+    field_validator,
+    model_validator,
+)
 
 
 class ChatRequest(BaseModel):
@@ -885,6 +895,54 @@ class CampusDataPackage(BaseModel):
     evidence: list[DataEvidence] = Field(default_factory=list)
 
 
+class CampusGeoPoint(BaseModel):
+    """Baidu BD-09 longitude/latitude; image coordinates must never enter this model."""
+
+    lat: float = Field(ge=-90, le=90, allow_inf_nan=False)
+    lng: float = Field(ge=-180, le=180, allow_inf_nan=False)
+
+    @field_validator("lat", "lng", mode="before")
+    @classmethod
+    def numeric_coordinate(cls, value):
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ValueError("coordinate must be a finite number")
+        return value
+
+
+class CampusPlaceSelection(BaseModel):
+    place_id: str
+    name: str = Field(min_length=1, max_length=300)
+    address: str = Field(max_length=600)
+    baidu_uid: str = Field(min_length=1, max_length=128)
+    location: CampusGeoPoint
+    confirmed_at: datetime
+
+
+class CampusPlaceCandidate(BaseModel):
+    name: str = Field(min_length=1, max_length=300)
+    address: str = Field(max_length=600)
+    baidu_uid: str = Field(min_length=1, max_length=128)
+    location: CampusGeoPoint
+    selection_token: str = Field(min_length=1, max_length=8192)
+
+
+class CampusPlaceCandidates(BaseModel):
+    place_id: str
+    query: str
+    page: int = Field(ge=0, le=4)
+    page_size: int = 20
+    total: int = Field(ge=0)
+    has_more: bool
+    truncated: bool
+    candidates: list[CampusPlaceCandidate] = Field(default_factory=list, max_length=20)
+    expires_at: datetime
+
+
+class CampusPlaceSelectionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    selection_token: str = Field(min_length=1, max_length=8192)
+
+
 class CampusDataPlace(BaseModel):
     place_id: str
     name: str
@@ -895,6 +953,9 @@ class CampusDataPlace(BaseModel):
     open_hours: str
     walk_minutes: int | None = Field(default=None, ge=0)
     source: str
+    location: CampusGeoPoint | None = None
+    baidu_uid: str | None = None
+    selection: CampusPlaceSelection | None = None
 
     evidence: list[DataEvidence] = Field(default_factory=list)
 
@@ -920,11 +981,30 @@ class CampusRoute(BaseModel):
     destination: CampusDataPlace
     total_minutes: int = Field(ge=0)
     estimated_distance_meters: int = Field(ge=0)
-    path: list[CampusRoutePoint] = Field(min_length=1)
+    path: list[CampusRoutePoint] = Field(default_factory=list)
     steps: list[CampusRouteStep] = Field(default_factory=list)
     note: str
 
     evidence: list[DataEvidence] = Field(default_factory=list)
+
+    provider: Literal["baidu", "reference"] = "reference"
+    coordinate_system: Literal["bd09ll", "image"] = "image"
+    polyline: list[CampusGeoPoint] = Field(default_factory=list, max_length=20000)
+    distance_meters: int | None = Field(default=None, ge=0)
+    duration_seconds: int | None = Field(default=None, ge=0)
+    queried_at: datetime | None = None
+
+    @model_validator(mode="after")
+    def valid_route_geometry(self):
+        if self.provider == "baidu":
+            if (self.coordinate_system != "bd09ll" or self.path or len(self.polyline) < 2
+                    or self.distance_meters is None or self.duration_seconds is None
+                    or self.queried_at is None or self.origin.location is None
+                    or self.destination.location is None):
+                raise ValueError("Baidu route requires BD-09 geometry and acquisition metadata")
+        elif self.coordinate_system != "image" or not self.path:
+            raise ValueError("historical reference route requires image geometry")
+        return self
 
 
 class CampusNotice(BaseModel):
@@ -1024,6 +1104,40 @@ class UserSettingsUpdate(BaseModel):
 class UserContextResponse(BaseModel):
     timetable: list[TimetableEntry] = Field(default_factory=list)
     campus_map: CampusMapParseResult
+
+
+class BaiduMapSettingsUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid", hide_input_in_errors=True)
+
+    browser_ak: SecretStr | None = None
+    server_ak: SecretStr | None = None
+
+    @field_validator("browser_ak", "server_ak")
+    @classmethod
+    def validate_ak(cls, value: SecretStr | None) -> SecretStr | None:
+        if value is None:
+            return None
+        key = value.get_secret_value().strip()
+        if not re.fullmatch(r"[A-Za-z0-9_-]{8,128}", key):
+            raise ValueError("百度地图 AK 格式无效")
+        return SecretStr(key)
+
+    @model_validator(mode="after")
+    def require_change(self) -> BaiduMapSettingsUpdate:
+        if not self.model_fields_set:
+            raise ValueError("请至少提供一项百度地图 AK 配置")
+        return self
+
+
+class BaiduMapKeyStatus(BaseModel):
+    configured: bool
+    source: Literal["account", "server", "none"]
+    hint: str | None = None
+
+
+class BaiduMapSettingsStatus(BaseModel):
+    browser: BaiduMapKeyStatus
+    server: BaiduMapKeyStatus
 
 
 class AdminUserSummary(BaseModel):

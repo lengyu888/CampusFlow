@@ -33,6 +33,30 @@ export interface UserProfile {
   api_key_hint: string | null;
 }
 
+export interface BaiduMapCredentialStatus {
+  configured: boolean;
+  source: string;
+  hint: string | null;
+}
+
+export interface BaiduMapCredentialSettings {
+  browser: BaiduMapCredentialStatus;
+  server: BaiduMapCredentialStatus;
+}
+
+export interface BaiduMapCredentialUpdate {
+  browser_ak?: string | null;
+  server_ak?: string | null;
+}
+
+export interface BaiduMapConfig {
+  configured: boolean;
+  browser_ak: string;
+  route_configured: boolean;
+  campus_query: string;
+  city: string;
+}
+
 export interface AuthResponse {
   user: UserProfile;
   access_token: string;
@@ -373,6 +397,41 @@ export interface SessionContext {
   active_run: RunSnapshot | null;
 }
 
+// Baidu BD-09 latitude / longitude. Never reuse legacy image x/y values.
+export interface CampusGeoPoint {
+  lat: number;
+  lng: number;
+}
+
+export interface CampusPlaceSelection {
+  place_id: string;
+  name: string;
+  address: string;
+  baidu_uid: string;
+  location: CampusGeoPoint;
+  confirmed_at: string;
+}
+
+export interface CampusPlaceCandidate {
+  name: string;
+  address: string;
+  baidu_uid: string;
+  location: CampusGeoPoint;
+  selection_token: string;
+}
+
+export interface CampusPlaceCandidates {
+  place_id: string;
+  query: string;
+  page: number;
+  page_size: number;
+  total: number;
+  has_more: boolean;
+  truncated: boolean;
+  candidates: CampusPlaceCandidate[];
+  expires_at: string;
+}
+
 export interface CampusDataPlace {
   place_id: string;
   name: string;
@@ -381,6 +440,9 @@ export interface CampusDataPlace {
   aliases: string[];
   open_now: boolean | null;
   open_hours: string;
+  location?: CampusGeoPoint | null;
+  baidu_uid?: string | null;
+  selection?: CampusPlaceSelection | null;
   evidence?: DataEvidence[];
 }
 
@@ -411,6 +473,13 @@ export interface CampusRouteStep {
 }
 
 export interface CampusRoute {
+  // Optional fields keep older saved route records readable as reference data.
+  provider?: 'baidu' | 'reference';
+  coordinate_system?: 'bd09ll' | 'image';
+  polyline?: CampusGeoPoint[];
+  distance_meters?: number | null;
+  duration_seconds?: number | null;
+  queried_at?: string | null;
   package_id: string;
   package_version: string;
   origin: CampusDataPlace;

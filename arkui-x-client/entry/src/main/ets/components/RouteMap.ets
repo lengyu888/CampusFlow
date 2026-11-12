@@ -1,116 +1,146 @@
-import { CampusRoute } from '../model/ApiModels';
-import { ROUTE_MAP_ASPECT_RATIO, RouteMapGeometry, routeMapGeometry, routeScreenPoint } from '../utils/RouteGeometry';
-import { AppTheme } from '../theme/AppTheme';
+import { webview } from '@kit.ArkWeb';
+import { BaiduMapConfig, CampusDataPlace, CampusRoute } from '../model/ApiModels';
+import { CampusFlowApi } from '../services/CampusFlowApi';
+import { mapConfigScript, mapStateScript, routeMapUrl, trustedMapDocument } from '../utils/RouteMapBridge';
 import { ThemePalette, themePalette } from '../theme/ThemePalette';
 
 @Component
 export struct RouteMap {
-  @Watch('drawRoute') @StorageLink('campusflowThemePalette') private palette: ThemePalette = themePalette('paper-green');
-  @Watch('routeChanged') @Prop route: CampusRoute;
-  @State private geometry: RouteMapGeometry = routeMapGeometry(0);
-  private settings: RenderingContextSettings = new RenderingContextSettings(true);
-  private context: CanvasRenderingContext2D = new CanvasRenderingContext2D(this.settings);
+  @StorageLink('campusflowThemePalette') private palette: ThemePalette = themePalette('paper-green');
+  @Watch('sourceChanged') @Prop baseUrl: string = '';
+  @Watch('tokenChanged') @Prop token: string = '';
+  @Watch('stateChanged') @Prop active: boolean = true;
+  @Watch('stateChanged') @Prop route: CampusRoute | null = null;
+  @Watch('stateChanged') @Prop origin: CampusDataPlace | null = null;
+  @Watch('stateChanged') @Prop destination: CampusDataPlace | null = null;
+  @State private documentUrl: string = '';
+  @State private errorText: string = '';
+  private controller: webview.WebviewController = new webview.WebviewController();
+  private pageActive: boolean = false;
   private ready: boolean = false;
+  private loadedBaseUrl: string = '';
+  private configRevision: number = 0;
 
-  private drawRoute(): void {
-    if (!this.ready || this.geometry.width === 0) {
+  aboutToAppear(): void {
+    this.pageActive = true;
+    this.sourceChanged();
+  }
+
+  aboutToDisappear(): void {
+    this.clearDocument();
+    this.pageActive = false;
+    this.invalidateDocument();
+    this.documentUrl = '';
+  }
+
+  private clearDocument(): void {
+    if (!this.ready) { return; }
+    try {
+      if (trustedMapDocument(this.controller.getUrl(), this.loadedBaseUrl)) {
+        this.controller.runJavaScript(mapStateScript({ active: false, route: null, origin: null, destination: null }))
+          .catch(() => {});
+      }
+    } catch { /* The Web controller may already have been detached. */ }
+  }
+
+  private sourceChanged(): void {
+    this.clearDocument();
+    this.invalidateDocument();
+    this.errorText = '';
+    this.documentUrl = this.pageActive && this.active && this.token.length > 0 ? routeMapUrl(this.baseUrl) : '';
+  }
+
+  private invalidateDocument(): void {
+    this.configRevision++;
+    this.ready = false;
+    this.loadedBaseUrl = '';
+  }
+
+  private tokenChanged(): void {
+    const previous = this.documentUrl;
+    this.sourceChanged();
+    if (previous.length > 0 && this.documentUrl === previous) { this.retryMap(); }
+  }
+
+  private stateChanged(): void {
+    if (!this.pageActive) { return; }
+    if (!this.active) {
+      this.clearDocument();
+      this.invalidateDocument();
+      this.documentUrl = '';
       return;
     }
-    const geometry = this.geometry;
-    this.context.clearRect(0, 0, this.context.width, this.context.height);
+    if (this.documentUrl !== routeMapUrl(this.baseUrl)) { this.sourceChanged(); return; }
+    this.pushState();
+  }
 
-    if (this.route.path.length === 0) {
-      return;
-    }
-    const first = this.route.path[0];
-    const firstPoint = routeScreenPoint(first.x, first.y, geometry);
-    this.context.strokeStyle = this.palette.accent;
-    this.context.lineWidth = 4 * geometry.scale;
-    this.context.lineJoin = 'round';
-    this.context.lineCap = 'round';
-    this.context.shadowColor = this.palette.surface;
-    this.context.shadowBlur = 5 * geometry.scale;
-    this.context.beginPath();
-    this.context.moveTo(firstPoint.x, firstPoint.y);
-    for (let index = 1; index < this.route.path.length; index++) {
-      const point = this.route.path[index];
-      const screenPoint = routeScreenPoint(point.x, point.y, geometry);
-      this.context.lineTo(screenPoint.x, screenPoint.y);
-    }
-    this.context.stroke();
-    this.context.shadowBlur = 0;
+  private configCurrent(revision: number, baseUrl: string, token: string): boolean {
+    return this.pageActive && this.active && revision === this.configRevision &&
+      this.baseUrl === baseUrl && this.token === token;
+  }
 
-    for (let index = 0; index < this.route.path.length; index++) {
-      const point = this.route.path[index];
-      const screenPoint = routeScreenPoint(point.x, point.y, geometry);
-      const radius = (index === 0 || index === this.route.path.length - 1 ? 7 : 3.5) * geometry.scale;
-      this.context.beginPath();
-      this.context.fillStyle = index === 0 ? this.palette.ink :
-        (index === this.route.path.length - 1 ? this.palette.terracotta : this.palette.surface);
-      this.context.arc(screenPoint.x, screenPoint.y, radius, 0, Math.PI * 2);
-      this.context.fill();
-      this.context.strokeStyle = this.palette.accent;
-      this.context.lineWidth = 2 * geometry.scale;
-      this.context.stroke();
+  private async pageFinished(url: string): Promise<void> {
+    const baseUrl = this.baseUrl;
+    const token = this.token;
+    if (!this.pageActive || !this.active || token.length === 0 || !trustedMapDocument(url, baseUrl)) { return; }
+    const revision = ++this.configRevision;
+    try {
+      if (!trustedMapDocument(this.controller.getUrl(), baseUrl)) { return; }
+      const config = await new CampusFlowApi(baseUrl, token).baiduMapConfig();
+      if (!this.configCurrent(revision, baseUrl, token) || !trustedMapDocument(this.controller.getUrl(), baseUrl)) { return; }
+      this.loadedBaseUrl = baseUrl;
+      this.ready = true;
+      this.errorText = '';
+      this.pushState(config);
+    } catch {
+      if (this.configCurrent(revision, baseUrl, token)) { this.errorText = '地图配置暂时无法读取，请重试。'; }
     }
   }
 
-  private routeChanged(): void {
-    this.drawRoute();
+  private pushState(config: BaiduMapConfig | null = null): void {
+    if (!this.ready || !this.active || !this.pageActive) { return; }
+    try {
+      if (!trustedMapDocument(this.controller.getUrl(), this.baseUrl)) { this.ready = false; return; }
+      const initialize = config === null ? '' : mapConfigScript(config);
+      this.controller.runJavaScript(initialize + mapStateScript({ active: true, route: this.route,
+        origin: this.origin, destination: this.destination })).catch(() => {});
+    } catch { this.ready = false; }
+  }
+
+  private retryMap(): void {
+    if (!this.pageActive || !this.active || this.documentUrl.length === 0) { return; }
+    this.errorText = '';
+    this.invalidateDocument();
+    try { this.controller.loadUrl(this.documentUrl); }
+    catch { this.errorText = '地图暂时无法显示，请重试。'; }
   }
 
   build() {
-    Column({ space: 12 }) {
-      Stack({ alignContent: Alignment.TopStart }) {
-        Image($r('app.media.hdu_campus_map_original'))
-          .width(this.geometry.width)
-          .height(this.geometry.imageHeight)
-          .objectFit(ImageFit.Fill)
-        Canvas(this.context)
-          .width('100%')
-          .height('100%')
-          .onReady(() => {
-            // onReady runs after initial layout and every Canvas size change.
-            // Read its actual width so window resizing keeps the image aligned.
-            this.geometry = routeMapGeometry(this.context.width);
-            this.ready = true;
-            this.drawRoute();
+    Column({ space: 8 }) {
+      if (this.documentUrl.length > 0) {
+        Web({ src: this.documentUrl, controller: this.controller })
+          .width('100%').height(400)
+          .javaScriptAccess(true).domStorageAccess(false).fileAccess(false).geolocationAccess(false)
+          .onPageBegin(() => { this.invalidateDocument(); })
+          .onPageEnd((event) => { if (event) { this.pageFinished(event.url); } })
+          .onLoadIntercept((event) => {
+            if (!event || !event.data.isMainFrame()) { return false; }
+            return !trustedMapDocument(event.data.getRequestUrl(), this.baseUrl);
           })
+          .onErrorReceive((event) => {
+            if (event && event.request.isMainFrame() && this.pageActive && this.active) {
+              this.invalidateDocument();
+              this.errorText = '地图页面加载失败，请检查服务连接后重试。';
+            }
+          })
+      } else if (this.active) {
+        Text('地图服务地址不可用，请核对连接设置。').fontColor(this.palette.quiet).fontSize(this.palette.bodySize)
       }
-      .width('100%')
-      .aspectRatio(ROUTE_MAP_ASPECT_RATIO)
-      .clip(true)
-      .borderRadius(this.palette.controlRadius)
-
-      Text('原图：HDUHELP 杭电地图 · 主题色路线为行简示意叠加层')
-        .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
-
-      Row({ space: 8 }) {
-        Column({ space: 4 }) {
-          Text(`${this.route.origin.name} → ${this.route.destination.name}`)
-            .fontSize(this.palette.bodySize)
-            .fontWeight(FontWeight.Medium)
-            .fontColor(this.palette.ink)
-            .width('100%').wordBreak(WordBreak.BREAK_WORD)
-          Text(`估算 ${this.route.estimated_distance_meters} 米 · 步行约 ${this.route.total_minutes} 分钟`)
-            .fontSize(this.palette.metaSize)
-            .fontColor(this.palette.secondary)
-            .width('100%')
-        }
-        .alignItems(HorizontalAlign.Start)
-        .layoutWeight(1)
-        Text('示意路线')
-          .fontSize(this.palette.metaSize)
-          .fontColor(this.palette.accent)
-          .backgroundColor(this.palette.accentSoft)
-          .padding({ left: 10, right: 10, top: 6, bottom: 6 })
-          .borderRadius(8)
+      if (this.errorText.length > 0) {
+        Text(this.errorText).fontColor(this.palette.quiet).fontSize(this.palette.bodySize).width('100%')
+        Button('重新加载地图').onClick(() => this.retryMap()).fontColor(this.palette.accent)
+          .backgroundColor(this.palette.accentSoft).constraintSize({ minHeight: 44 })
       }
-      .width('100%')
-    }
-    .width('100%')
-    .padding(this.palette.cardInset)
-    .backgroundColor(this.palette.surface)
-    .borderRadius(this.palette.cardRadius)
+    }.width('100%').clip(true).borderRadius(this.palette.cardRadius)
   }
 }

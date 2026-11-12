@@ -15,6 +15,7 @@ from .schemas import (
     CampusDataPlace,
     CampusDataSnapshot,
     CampusNotice,
+    CampusPlaceSelection,
     CampusRoute,
     CampusRoutePoint,
     CampusRouteStep,
@@ -29,92 +30,119 @@ PACKAGE = {
     "package_id": DEFAULT_PACKAGE_ID,
     "school": "杭州电子科技大学",
     "campus": "下沙校区",
-    "version": "2026.10.7",
-    "published_at": "2026-10-07T13:00:00+08:00",
-    "description": (
-        "根据项目内杭电下沙校区地图整理的静态参考数据；"
-        "地点与开放时段未实时核验，步行关系为人工估算。"
-    ),
+    "version": "2026.11.8",
+    "published_at": "2026-11-08T00:00:00+08:00",
+    "description": "杭电下沙校园地点与开放时段参考资料，尚未实时核验。",
 }
 
 
 PLACES = [
-    ("library", "图书馆", "学习空间", "教学区", ["图书馆教学区", "校图书馆"], "07:00", "22:00", 0),
-    ("student-center", "学生活动中心", "校园服务", "教学区", ["活动中心"], "08:00", "21:30", 0),
+    (
+        "library", "杭州电子科技大学(高教园校区)-图书馆", "学习空间", "教学区",
+        ["图书馆", "图书馆教学区", "校图书馆"], "07:00", "22:00", 0,
+    ),
+    (
+        "student-center", "杭州电子科技大学(下沙校区)南区-学生活动中心南楼", "校园服务", "教学区",
+        ["学生活动中心", "活动中心"], "08:00", "21:30", 0,
+    ),
     (
         "teaching-3",
-        "第3教研楼（信礼楼）",
+        "杭州电子科技大学(下沙校区)-第三教学科研楼",
         "教学楼",
         "教学区",
-        ["3教", "第三教研楼", "信礼楼"],
+        ["第3教研楼（信礼楼）", "第3教研楼", "3教", "第三教研楼", "信礼楼"],
         "07:00",
         "22:30",
         0,
     ),
     (
         "teaching-4",
-        "第4教研楼（信智楼）",
+        "杭州电子科技大学(下沙校区)南区-第四教学科研楼",
         "教学楼",
         "教学区",
-        ["4教", "第四教研楼", "信智楼"],
+        ["第4教研楼（信智楼）", "第4教研楼", "4教", "第四教研楼", "信智楼"],
         "07:00",
         "22:30",
         0,
     ),
     (
         "teaching-6",
-        "第6教研楼（信诚楼）",
+        "杭州电子科技大学(下沙校区)-第六教学科研楼中楼",
         "教学楼",
         "教学区",
-        ["6教", "第六教研楼", "信诚楼"],
+        ["第6教研楼（信诚楼）", "第6教研楼", "6教", "第六教研楼", "信诚楼"],
         "07:00",
         "22:30",
         0,
     ),
     (
         "teaching-7",
-        "第7教研楼（信博楼）",
+        "杭州电子科技大学第七教学科研楼北楼",
         "教学楼",
         "教学区",
-        ["7教", "第七教研楼", "信博楼"],
+        ["第7教研楼（信博楼）", "第7教研楼", "7教", "第七教研楼", "信博楼"],
         "07:00",
         "22:30",
         0,
     ),
     (
         "teaching-12",
-        "第12教研楼（守正楼）",
+        "杭州电子科技大学(下沙校区12号楼教学)",
         "教学楼",
         "教学区",
-        ["12教", "十二教", "守正楼"],
+        ["第12教研楼（守正楼）", "第12教研楼", "12教", "十二教", "守正楼"],
         "07:00",
         "22:30",
         0,
     ),
-    ("east-track", "东操场", "运动场地", "教学区", ["东田径场"], "06:00", "22:00", 0),
-    ("west-track", "西田径场", "运动场地", "生活区", ["体育场"], "06:00", "22:00", 0),
-    ("gym", "体育馆", "运动场地", "教学区", ["体育馆主馆"], "08:00", "22:00", 0),
-    ("canteen-1", "第一餐厅", "餐饮", "生活区", ["一餐", "第一食堂"], "06:30", "21:30", 0),
-    ("canteen-5", "第五餐厅", "餐饮", "生活区", ["五餐", "第五食堂"], "06:30", "21:30", 0),
-    ("campus-clinic", "校医院", "医疗服务", "生活区", ["医务室"], "08:00", "21:00", 0),
-    ("south-gate", "南大门", "校门", "南侧", ["南门"], "00:00", "23:59", 1),
-    ("east-gate", "东门", "校门", "东侧", ["生活区东门"], "00:00", "23:59", 1),
+    (
+        "east-track", "杭州电子科技大学(下沙校区田径场)", "运动场地", "教学区",
+        ["东操场", "东田径场"], "06:00", "22:00", 0,
+    ),
+    (
+        "west-track", "杭州电子科技大学体育场", "运动场地", "生活区",
+        ["西田径场", "体育场"], "06:00", "22:00", 0,
+    ),
+    (
+        "gym", "杭州电子科技大学下沙校区训练馆", "运动场地", "教学区",
+        ["体育馆", "体育馆主馆"], "08:00", "22:00", 0,
+    ),
+    (
+        "canteen-1", "杭州电子科技大学(下沙校区)第一餐厅", "餐饮", "生活区",
+        ["第一餐厅", "一餐", "第一食堂"], "06:30", "21:30", 0,
+    ),
+    (
+        "canteen-5", "杭州电子科技大学学生生活区-第5餐厅", "餐饮", "生活区",
+        ["第五餐厅", "五餐", "第五食堂"], "06:30", "21:30", 0,
+    ),
+    (
+        "campus-clinic", "杭州电子科技大学(下沙校区)-校医院", "医疗服务", "生活区",
+        ["校医院", "医务室"], "08:00", "21:00", 0,
+    ),
+    (
+        "south-gate", "杭州电子科技大学(下沙校区)南区-南门", "校门", "南侧",
+        ["南大门", "南门"], "00:00", "23:59", 1,
+    ),
+    (
+        "east-gate", "杭州电子科技大学(下沙校区)学生生活区-东2门", "校门", "东侧",
+        ["东门", "生活区东门"], "00:00", "23:59", 1,
+    ),
     (
         "north-2-gate",
-        "北二门/南二门通道",
+        "杭州电子科技大学(下沙校区)学生生活区-南1门",
         "校门",
         "学林街",
-        ["北二门", "南二门", "教学区北门"],
+        ["北二门/南二门通道", "北二门", "南二门", "教学区北门"],
         "00:00",
         "23:59",
         1,
     ),
     (
         "cainiao-station",
-        "菜鸟驿站",
+        "菜鸟驿站(杭州电子科技大学(下沙校区)店)",
         "快递服务",
         "生活区北侧",
-        ["菜鸟", "快递站", "快递点", "拿快递"],
+        ["菜鸟驿站", "菜鸟", "快递站", "快递点", "拿快递"],
         "08:00",
         "21:00",
         0,
@@ -408,6 +436,21 @@ class CampusDataStore:
 
                 CREATE INDEX IF NOT EXISTS idx_campus_corrections_user
                 ON campus_corrections(user_id, created_at DESC);
+
+                CREATE TABLE IF NOT EXISTS campus_place_selections (
+                    user_id TEXT NOT NULL,
+                    package_id TEXT NOT NULL,
+                    package_version TEXT NOT NULL,
+                    place_id TEXT NOT NULL,
+                    selection_json TEXT NOT NULL,
+                    token_digest TEXT NOT NULL,
+                    PRIMARY KEY (user_id, package_id, package_version, place_id)
+                );
+
+                CREATE TABLE IF NOT EXISTS campus_selection_receipts (
+                    token_digest TEXT PRIMARY KEY,
+                    used_at TEXT NOT NULL
+                );
                 """
             )
             self._connection.execute(
@@ -499,12 +542,12 @@ class CampusDataStore:
         return [
             data_evidence(
                 "campus:hdu-xiasha-reference",
-                "杭电下沙静态校园参考图",
+                "杭电下沙校园地点参考资料",
                 "reference",
                 "unverified",
                 updated_at=PACKAGE["published_at"],
                 note="时间为数据包声明的版本时间，非现场核验时间。开放时段仅供参考，"
-                "当前开放情况未知；线段为示意，步行时间与距离为人工估算，不含实时路况。",
+                "当前开放情况未知。",
             )
         ]
 
@@ -599,18 +642,16 @@ class CampusDataStore:
                     heappush(queue, (next_total, next_id, [*path, next_id]))
         return None
 
-    def _walk_minutes(self, origin_id: str | None, destination_id: str) -> int | None:
-        route = self._shortest_path(origin_id, destination_id)
-        return route[1] if route else None
-
     def _place_model(
         self,
         row: sqlite3.Row,
         *,
         at: datetime,
         walk_minutes: int | None = None,
+        user_id: str | None = None,
     ) -> CampusDataPlace:
         aliases = json.loads(row["aliases_json"])
+        selection = self._place_selection(row["place_id"], user_id)
         return CampusDataPlace(
             place_id=row["place_id"],
             name=row["name"],
@@ -626,7 +667,63 @@ class CampusDataStore:
             walk_minutes=walk_minutes,
             source="CampusFlow 静态参考数据包",
             evidence=self.reference_evidence(),
+            selection=selection,
+            location=selection.location if selection else None,
+            baidu_uid=selection.baidu_uid if selection else None,
         )
+
+    def _place_selection(self, place_id: str, user_id: str | None) -> CampusPlaceSelection | None:
+        if user_id is None:
+            return None
+        package = self._package_row()
+        row = self._connection.execute(
+            """SELECT selection_json FROM campus_place_selections
+               WHERE user_id = ? AND package_id = ? AND package_version = ? AND place_id = ?""",
+            (user_id, package["package_id"], package["version"], place_id),
+        ).fetchone()
+        return CampusPlaceSelection.model_validate_json(row["selection_json"]) if row else None
+
+    def confirm_place_selection(self, *, user_id: str, version: str,
+                                selection: CampusPlaceSelection,
+                                token_digest: str) -> CampusPlaceSelection:
+        """Atomically save a receipt once, allowing retry only while it is current."""
+        with self._lock, self._connection:
+            package = self._package_row()
+            if version != package["version"]:
+                raise ValueError("selection_context_changed")
+            self._place_row(selection.place_id)
+            key = (user_id, package["package_id"], version, selection.place_id)
+            used = self._connection.execute(
+                "SELECT 1 FROM campus_selection_receipts WHERE token_digest = ?", (token_digest,),
+            ).fetchone()
+            current = self._connection.execute(
+                """SELECT token_digest, selection_json FROM campus_place_selections
+                   WHERE user_id = ? AND package_id = ? AND package_version = ? AND place_id = ?""",
+                key,
+            ).fetchone()
+            if used:
+                if current and current["token_digest"] == token_digest:
+                    return CampusPlaceSelection.model_validate_json(current["selection_json"])
+                raise ValueError("selection_receipt_replayed")
+            self._connection.execute(
+                """INSERT INTO campus_place_selections
+                   (user_id, package_id, package_version, place_id, selection_json, token_digest)
+                   VALUES (?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(user_id, package_id, package_version, place_id) DO UPDATE SET
+                   selection_json = excluded.selection_json,
+                   token_digest = excluded.token_digest""",
+                (*key, selection.model_dump_json(), token_digest),
+            )
+            self._connection.execute(
+                "INSERT INTO campus_selection_receipts (token_digest, used_at) VALUES (?, ?)",
+                (token_digest, datetime.now(UTC).isoformat()),
+            )
+            # Receipts are valid for ten minutes; this keeps replay bookkeeping bounded.
+            self._connection.execute(
+                "DELETE FROM campus_selection_receipts WHERE used_at < ?",
+                ((datetime.now(UTC) - timedelta(minutes=11)).isoformat(),),
+            )
+            return selection
 
     def find_places(
         self,
@@ -634,6 +731,7 @@ class CampusDataStore:
         *,
         origin: str = "",
         at: datetime | None = None,
+        user_id: str | None = None,
     ) -> list[CampusDataPlace]:
         current = at or datetime.now(UTC)
         needle = self._normalized(query)
@@ -642,7 +740,6 @@ class CampusDataStore:
                 "SELECT * FROM campus_data_places WHERE package_id = ? ORDER BY category, name",
                 (DEFAULT_PACKAGE_ID,),
             ).fetchall()
-            origin_id = self._resolve_place_id(origin)
             result = []
             for row in rows:
                 aliases = json.loads(row["aliases_json"])
@@ -655,10 +752,50 @@ class CampusDataStore:
                     self._place_model(
                         row,
                         at=current,
-                        walk_minutes=self._walk_minutes(origin_id, row["place_id"]),
+                        user_id=user_id,
                     )
                 )
         return result
+
+    def route_context(self, origin: str, destination: str, *, user_id: str | None = None):
+        """Take a small immutable lookup snapshot, releasing the DB lock before HTTP."""
+        with self._lock:
+            origin_id = self._resolve_route_place_id(origin)
+            destination_id = self._resolve_route_place_id(destination)
+            if not origin_id or not destination_id:
+                raise KeyError("campus_route_place_not_found")
+            current = datetime.now(UTC)
+            package = self._package_row()
+            return (
+                self._place_model(self._place_row(origin_id), at=current, user_id=user_id),
+                self._place_model(self._place_row(destination_id), at=current, user_id=user_id),
+                package["package_id"], package["version"],
+            )
+
+    def candidate_context(self, place_id: str):
+        with self._lock:
+            package = self._package_row()
+            return (self._place_model(self._place_row(place_id), at=datetime.now(UTC)),
+                    package["package_id"], package["version"])
+
+    def _resolve_route_place_id(self, value: str) -> str | None:
+        """Real routes require an exact identity; fuzzy legacy search can change campuses."""
+        needle = self._normalized(value)
+        # Common spoken building names remain supported without substring matching.
+        spoken_names = {"三教": "3教", "四教": "4教", "六教": "6教",
+                        "七教": "7教", "十二教": "12教"}
+        needle = spoken_names.get(needle, needle)
+        if not needle:
+            return None
+        rows = self._connection.execute(
+            "SELECT * FROM campus_data_places WHERE package_id = ?", (DEFAULT_PACKAGE_ID,),
+        ).fetchall()
+        matches = {
+            row["place_id"] for row in rows
+            if any(needle == self._normalized(candidate) for candidate in
+                   [row["place_id"], row["name"], *json.loads(row["aliases_json"])])
+        }
+        return next(iter(matches)) if len(matches) == 1 else None
 
     @staticmethod
     def _edge_geometry(origin_id: str, destination_id: str) -> list[tuple[float, float]]:
@@ -875,7 +1012,7 @@ class CampusDataStore:
     def snapshot(self, user_id: str) -> CampusDataSnapshot:
         return CampusDataSnapshot(
             package=self.package(),
-            places=self.find_places(),
+            places=self.find_places(user_id=user_id),
             notices=self.search_notices(),
             corrections=self.list_corrections(user_id),
         )

@@ -33,7 +33,9 @@ python -m uvicorn campusflow_agent.main:app --host 0.0.0.0 --port 8000
 - 断开并删除 HDUHelp 数据：`DELETE /api/v1/hduhelp/connection`
 - 校园数据包快照：`GET /api/v1/campus-data`
 - 地点/步行查询：`GET /api/v1/campus-data/places?query=&origin=`
-- 校园路线图：`GET /api/v1/campus-data/route?origin=&destination=`
+- 百度步行路线：`GET /api/v1/campus-data/route?origin=&destination=`（登录并校验校区）
+- 公开地图配置：`GET /api/v1/maps/baidu/config`（仅浏览器 AK、配置状态及公共校园信息）
+- 共用交互地图页：`GET /static/baidu-map.html`（百度 JSAPI 4.0）
 - 校园通知：`GET /api/v1/campus-data/notices?keyword=&active_only=`
 - 用户纠错：`GET /api/v1/campus-data/corrections`、`POST /api/v1/campus-data/corrections`
 - Swagger：`GET /docs`
@@ -54,6 +56,22 @@ python -m uvicorn campusflow_agent.main:app --host 0.0.0.0 --port 8000
 - 删除待办：`DELETE /api/v1/tasks/{task_id}`
 - 删除计划卡片并保留其待办：`DELETE /api/v1/plans/{plan_id}`
 - 确认事务：`POST /api/v1/actions/{proposal_id}/confirm`
+
+## 百度校园地图配置
+
+用户可以在个人设置分别保存浏览器端和服务端 AK。维护者也可以在后端 `.env` 配置
+`BAIDU_MAP_BROWSER_AK`、`BAIDU_MAP_SERVER_AK` 作为默认值，然后重启后端。
+浏览器 AK 会提供给地图页，应配置 Referer 白名单；服务端 AK 仅供后端调用，
+应配置服务器出口 IP 白名单。空配置仍可启动后端，地图/路线会提示尚未配置；不会回退到人工路线。
+
+默认仅支持杭州电子科技大学下沙校区，手选起终点，不请求 GPS 定位或持续导航。
+原生与 Web 共用 JSAPI 4.0 地图；页面/API/Agent 使用同一百度地点解析与步行路线服务。
+路线距离与耗时是百度预计值（`is_estimate=true`），包含查询时间，成功结果缓存 60 秒；不代表实时道路通行或无障碍保证。
+
+后端单次百度请求默认 5 秒、整次查询默认 15 秒（含地点解析、算路与排队），分别由
+`BAIDU_MAP_REQUEST_TIMEOUT_SECONDS`、`BAIDU_MAP_TOTAL_TIMEOUT_SECONDS` 调整。
+`BAIDU_MAP_PLACE_OVERRIDES_JSON={}` 可按地点 ID 配置已核验的 BD-09 入口坐标；无法唯一确认的 POI 会拒绝算路，不能任取首项或伪造坐标。
+现有 17 个地点均需配置真实 AK 后逐项核验，详见[百度校园地图接入与验收](../docs/project-documents/baidu-campus-map.md)。
 
 ## HDUHelp 按资源精确查询
 

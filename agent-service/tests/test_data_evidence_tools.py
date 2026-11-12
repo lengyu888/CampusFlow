@@ -161,7 +161,11 @@ def test_demo_notices_stay_explicit_even_in_existing_database(scene):
     assert result["evidence"][0]["updated_at"] is None
 
 
-def test_unrelated_campus_never_receives_hdu_reference_places_or_route(scene):
+def test_unrelated_campus_never_receives_hdu_reference_places_or_route(scene, monkeypatch):
+    def unexpected_route(*args, **kwargs):
+        pytest.fail("unsupported campus must not call the route provider")
+
+    monkeypatch.setattr(scene.store, "plan_campus_route", unexpected_route)
     result = invoke(scene, "find_campus_places", {"query": "图书馆"}, user=1)
     assert result["items"] == []
     assert result["evidence"][0]["status"] == "missing"
@@ -169,6 +173,7 @@ def test_unrelated_campus_never_receives_hdu_reference_places_or_route(scene):
         scene, "plan_campus_route", {"origin": "六教", "destination": "菜鸟驿站"}, user=1
     )
     assert route["available"] is False and "path" not in route
+    assert route["evidence"][0]["status"] == "missing"
 
 
 def test_user_places_remain_available_without_assuming_they_are_open(scene):

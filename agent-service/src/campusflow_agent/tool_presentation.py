@@ -19,6 +19,7 @@ from .knowledge import (
     coverage_evidence,
     reference_evidence,
 )
+from .route_presentation import route_failure
 from .schemas import (
     CampusDataStatus,
     CampusRoute,
@@ -518,6 +519,11 @@ def _present_content(trace: ToolTrace, pending_actions: list[PendingAction]) -> 
             ),
         )
     if name == "plan_campus_route":
+        if result.get("available") is False:
+            return ToolDisplaySummary(
+                label=label, state="unavailable",
+                summary=route_failure(result.get("code", "MAP_UPSTREAM_ERROR"))["message"],
+            )
         if type(result.get("total_minutes")) is not int:
             return _unverified(label)
         try:
@@ -527,7 +533,10 @@ def _present_content(trace: ToolTrace, pending_actions: list[PendingAction]) -> 
         return ToolDisplaySummary(
             label=label,
             state="success",
-            summary=f"已生成参考路线，步行约 {route.total_minutes} 分钟；时间和距离为估算。",
+            summary=(f"百度步行路线：约 {route.distance_meters} 米，"
+                     f"预计 {route.total_minutes} 分钟。"
+                     if route.provider == "baidu" else
+                     f"已生成历史参考路线，步行约 {route.total_minutes} 分钟；时间和距离为估算。"),
         )
     if name == "get_weather":
         if result.get("available") is False:

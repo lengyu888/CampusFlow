@@ -22,7 +22,7 @@ CampusFlow 是面向高校学生的跨端 AI Agent。客户端采用 ArkUI-X/Ark
 - HDUHelp PAT / OAuth2 + PKCE 校园档案连接（学籍、成绩、考试、校园卡、图书馆预约）
 - HDUHelp 实时空闲教室、教室学期占用记录与寝室电费查询
 - 杭电下沙校区版本化数据包、建筑别名、开放时间与步行关系
-- 基于已确认杭电地图的最短步行路径、矢量路线图与分步导航
+- 百度 JSAPI 4.0 交互地图、杭电下沙真实路网步行路线与预计耗时（需本地配置百度 AK）
 - 带有效期的校园通知查询，以及用户级纠错待审核流程
 - 将确认后的个人课表和校园地点注入 Agent 工具
 - API Key 注册时加密保存，后续登录免重复配置
@@ -36,7 +36,7 @@ CampusFlow 是面向高校学生的跨端 AI Agent。客户端采用 ArkUI-X/Ark
 - 用户级 Skill 安装、启停、升级、卸载与逐项权限确认
 - Skill 安装/状态/工具运行审计，Agent Tool Calling 自动关联运行记录
 - ArkUI-X Stage 模型客户端、类型化 FastAPI 请求层和四主入口原生页面
-- ArkTS 原生校园路线图、课表订阅、规划和官方 Skills 操作界面
+- ArkTS 页面与 ArkWeb 校园地图、课表订阅、规划和官方 Skills 操作界面
 - 今日页计划进展、带日期/时间的手动待办，以及完成状态即时刷新
 - 带核对回执的待办完成与恢复、关联任务的专注记录、每日和每周回看
 - 实时回复和历史共用 Markdown；上翻阅读时暂停自动跟随，回到底部可恢复
@@ -91,6 +91,12 @@ Copy-Item .env.example .env
 `.env` 中的 OAuth、LangSmith 和生产密钥均为可选配置。开发环境未设置
 `APP_SECRET_KEY` 时会在 `agent-service/data/.campusflow.key` 生成仅供本机使用的密钥；
 `data/` 和 `.env` 已被 Git 忽略。
+
+在「个人设置 → 百度地图」或 Web 的个人配置中，可分别保存浏览器端和服务端 AK。
+维护者也可在后端 `.env` 配置 `BAIDU_MAP_BROWSER_AK` 和 `BAIDU_MAP_SERVER_AK` 作为默认值，再重启后端。
+仅支持杭电下沙校区、手选起终点，不请求 GPS 或持续导航；路线与耗时为百度预计值，成功结果缓存 60 秒。
+未配置或无法确认地点时明确提示，不回退到人工示意路线。真实瓦片、17 个地点 POI 和道路覆盖仍需实际 AK 验收，
+配置、白名单与入口坐标校准见[百度校园地图说明](docs/project-documents/baidu-campus-map.md)。
 
 ### 2. 启动后端
 

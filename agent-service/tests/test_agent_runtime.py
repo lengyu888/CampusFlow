@@ -10,6 +10,7 @@ import pytest
 from langchain_core.tools import tool
 from openai import AsyncOpenAI
 from pydantic import ValidationError
+from test_tools import configure_mock_baidu_route
 
 import campusflow_agent.agent as agent_module
 from campusflow_agent.agent import AgentBudgetExceeded, AgentConfigurationError, AgentService
@@ -583,6 +584,7 @@ async def test_invalid_call_identifiers_reject_whole_batch_before_any_invocation
 
 async def test_direct_route_uses_actual_tool_events_zero_model_calls_and_no_history(monkeypatch):
     service, client = setup(monkeypatch, [])
+    requests = configure_mock_baidu_route(service.store)
     skills = SkillStore()
     skills.install("student-001", "campus-navigator", ["places.read"])
     service.skill_store = skills
@@ -593,8 +595,12 @@ async def test_direct_route_uses_actual_tool_events_zero_model_calls_and_no_hist
         get_hduhelp_status=lambda _: {"configured": False},
     )
     reply, events = await run(service, message="从六教到菜鸟驿站怎么走？")
-    assert "步行约 10 分钟" in reply.message
-    assert reply.tool_traces[0].result["destination"]["place_id"] == "cainiao-station"
+    assert "预计步行约 7 分钟、220 米" in reply.message
+    route = reply.tool_traces[0].result
+    assert route["provider"] == "baidu"
+    assert route["destination"]["place_id"] == "cainiao-station"
+    assert route["path"] == [] and len(route["polyline"]) == 3
+    assert len(requests) == 1
     assert [kind for kind, _ in events] == ["tool_start", "tool_end", "answer_delta"]
     assert client.requests == []
     assert service.store.get_history("student-001", "session") == []

@@ -149,7 +149,7 @@ test("dependency or parser failure preserves the complete original reply as text
 test("actual appendMessage renders new and restored assistant replies but keeps user text literal", () => {
   const dom = environment();
   const appSource = readWeb("app.js");
-  const appendFunction = appSource.slice(appSource.indexOf("function appendMessage("), appSource.indexOf("const SVG_NS"));
+  const appendFunction = appSource.slice(appSource.indexOf("function appendMessage("), appSource.indexOf("function campusRouteMapAllowed("));
   dom.window.eval(`
     const state = { user: { display_name: "同学" } };
     const elements = { messages: document.querySelector("#messages") };

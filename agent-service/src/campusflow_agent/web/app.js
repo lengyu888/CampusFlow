@@ -115,6 +115,15 @@ const elements = {
   settingsSemester: $("#settingsSemester"),
   settingsApiKey: $("#settingsApiKey"),
   settingsKeyState: $("#settingsKeyState"),
+  baiduMapSettingsForm: $("#baiduMapSettingsForm"),
+  baiduBrowserAk: $("#baiduBrowserAk"),
+  baiduServerAk: $("#baiduServerAk"),
+  baiduBrowserStatus: $("#baiduBrowserStatus"),
+  baiduServerStatus: $("#baiduServerStatus"),
+  baiduMapSettingsStatus: $("#baiduMapSettingsStatus"),
+  clearBaiduBrowserAk: $("#clearBaiduBrowserAk"),
+  clearBaiduServerAk: $("#clearBaiduServerAk"),
+  saveBaiduMapSettings: $("#saveBaiduMapSettings"),
   hduHelpConnectionState: $("#hduHelpConnectionState"),
   hduHelpResourceList: $("#hduHelpResourceList"),
   hduHelpPatForm: $("#hduHelpPatForm"),
@@ -152,6 +161,17 @@ const elements = {
   correctionValue: $("#correctionValue"),
   correctionReason: $("#correctionReason"),
   campusCorrectionList: $("#campusCorrectionList"),
+  campusPlaceSelect: $("#campusPlaceSelect"),
+  campusPlaceQuery: $("#campusPlaceQuery"),
+  campusPlaceSearchForm: $("#campusPlaceSearchForm"),
+  campusPlaceSearchButton: $("#campusPlaceSearchButton"),
+  campusPlaceSavedSelection: $("#campusPlaceSavedSelection"),
+  campusPlaceReselectButton: $("#campusPlaceReselectButton"),
+  campusPlaceSelectionStatus: $("#campusPlaceSelectionStatus"),
+  campusPlaceCandidates: $("#campusPlaceCandidates"),
+  campusPlaceMoreButton: $("#campusPlaceMoreButton"),
+  campusPlacePreview: $("#campusPlacePreview"),
+  campusPlaceConfirmButton: $("#campusPlaceConfirmButton"),
   editOnboardingButton: $("#editOnboardingButton"),
   adminUserCount: $("#adminUserCount"),
   adminUserRows: $("#adminUserRows"),
@@ -178,6 +198,7 @@ const state = {
   scheduleSubscriptionUrl: "",
   scheduleSubscription: null,
   campusData: null,
+  settingsTab: "profile",
   hduHelp: null,
 };
 
@@ -189,6 +210,12 @@ function createSessionId() {
 async function responseError(response) {
   try {
     const payload = await response.json();
+    const selectionMessage = {
+      MAP_PLACE_SELECTION_REQUIRED: "请到设置 → 学习数据 → 校园地点确认，检索并确认起点和终点入口后重新规划。",
+      MAP_SELECTION_EXPIRED: "候选已过期，请重新检索并确认地点。",
+      MAP_SELECTION_INVALID: "候选已失效，请重新检索并确认地点。",
+    }[payload.detail?.code ?? payload.code];
+    if (selectionMessage) return selectionMessage;
     if (Array.isArray(payload.detail)) {
       return payload.detail.map((item) => item.msg).join("；");
     }
@@ -227,6 +254,9 @@ function showOnly(view) {
   elements.appView.hidden = view !== "app";
   elements.settingsView.hidden = view !== "settings";
   document.body.style.overflow = ["app", "settings"].includes(view) ? "hidden" : "auto";
+  syncCampusRouteMaps();
+  syncCampusPlaceSelection();
+  syncBaiduMapSettings();
 }
 
 function setButtonBusy(button, busy, label) {
@@ -593,6 +623,8 @@ function showApp() {
 
 function switchAppTab(tab) {
   state.appTab = tab;
+  syncCampusRouteMaps();
+  syncCampusPlaceSelection();
   $$('[data-app-tab]').forEach((button) => {
     button.classList.toggle("active", button.dataset.appTab === tab);
   });
@@ -1287,66 +1319,205 @@ function appendMessage(role, content, options = {}) {
   return article;
 }
 
-const SVG_NS = "http://www.w3.org/2000/svg";
+function campusRouteMapAllowed() {
+  const normalize = (value) => String(value ?? "").toLowerCase().replace(/\s/g, "");
+  return ["杭州电子科技大学", "杭电", "hdu"].includes(normalize(state.user?.school)) &&
+    ["下沙", "下沙校区", "xiasha"].includes(normalize(state.user?.campus));
+}
 
-function svgNode(tag, attributes = {}, text = "") {
-  const node = document.createElementNS(SVG_NS, tag);
-  Object.entries(attributes).forEach(([key, value]) => node.setAttribute(key, String(value)));
-  if (text) node.textContent = text;
-  return node;
+const campusMapDocument = "/static/baidu-map.html?v=3&managed=1";
+const campusRouteMaps = new Map();
+const campusMapBindings = new WeakMap();
+let campusMapOwner = {key: "", request: null};
+
+function clearCampusMapConfig(owner) {
+  owner.request?.controller.abort();
+  owner.request = null;
+}
+
+function currentCampusMapOwner() {
+  const key = state.user?.user_id
+    ? JSON.stringify([globalThis.location.origin, globalThis.location.pathname, state.user.user_id]) : "";
+  if (campusMapOwner.key !== key) {
+    clearCampusMapConfig(campusMapOwner);
+    campusMapOwner = {key, request: null};
+  }
+  return campusMapOwner;
+}
+
+async function fetchCampusMapConfig(owner, request) {
+  const options = {cache: "no-store", signal: request.controller.signal};
+  let value;
+  try {
+    value = await api("/api/v1/me/baidu-maps/config", options);
+  } catch (error) {
+    if (error.status !== 404 || currentCampusMapOwner() !== owner || owner.request !== request) throw error;
+    value = await api("/api/v1/maps/baidu/config", options);
+  }
+  if (typeof value?.configured !== "boolean" || typeof value.route_configured !== "boolean" ||
+    typeof value.campus_query !== "string" || typeof value.city !== "string" ||
+    (value.configured && (typeof value.browser_ak !== "string" || !value.browser_ak.trim()))) {
+    throw new Error("invalid-campus-map-config");
+  }
+  return {configured: value.configured, browser_ak: value.configured ? value.browser_ak : "",
+    route_configured: value.route_configured, campus_query: value.campus_query, city: value.city};
+}
+
+function campusMapConfigRequest(owner) {
+  if (owner.request) return owner.request;
+  const request = {controller: new AbortController(), promise: null};
+  owner.request = request;
+  request.promise = fetchCampusMapConfig(owner, request).catch(error => {
+    if (owner.request === request) owner.request = null;
+    throw error;
+  });
+  return request;
+}
+
+function campusMapBridge(frame) {
+  try {
+    const child = frame.contentWindow;
+    const expected = new URL(campusMapDocument, globalThis.location.origin).href;
+    return child?.location.href === expected ? child.CampusFlowMap : null;
+  } catch {
+    return null;
+  }
+}
+
+function clearManagedCampusMap(frame) {
+  try { campusMapBridge(frame)?.clear(); } catch { /* A detached frame has no active map. */ }
+  campusMapBindings.get(frame)?.feedback?.remove();
+  campusMapBindings.delete(frame);
+  frame.remove();
+}
+
+function campusMapLoadFailed(frame, binding, retry) {
+  if (binding.feedback) return;
+  const feedback = document.createElement("p");
+  feedback.className = "campus-route-summary";
+  feedback.setAttribute("role", "status");
+  feedback.textContent = "暂时无法加载地图配置。";
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "line-button";
+  button.textContent = "重试加载地图";
+  button.addEventListener("click", retry);
+  feedback.append(" ", button);
+  binding.feedback = feedback;
+  frame.hidden = true;
+  frame.after(feedback);
+}
+
+function setManagedCampusMapState(frame, canActivate, mapState) {
+  const bridge = campusMapBridge(frame);
+  const owner = currentCampusMapOwner();
+  if (!owner.key || !canActivate() || typeof bridge?.setConfig !== "function") return;
+  const request = campusMapConfigRequest(owner);
+  const binding = campusMapBindings.get(frame) ?? {feedback: null};
+  if (binding.bridge === bridge && binding.request === request) {
+    if (binding.ready) bridge.setState(mapState);
+    return;
+  }
+  Object.assign(binding, {bridge, request, ready: false});
+  campusMapBindings.set(frame, binding);
+  const current = () => frame.isConnected && currentCampusMapOwner() === owner && canActivate() &&
+    campusMapBindings.get(frame) === binding && binding.request === request && campusMapBridge(frame) === bridge;
+  void (async () => {
+    try {
+      const config = await request.promise;
+      if (!current() || owner.request !== request) return;
+      bridge.setConfig(config);
+      bridge.setState(mapState);
+      binding.ready = true;
+      binding.feedback?.remove();
+      binding.feedback = null;
+      frame.hidden = false;
+    } catch {
+      if (current()) campusMapLoadFailed(frame, binding, () => setManagedCampusMapState(frame, canActivate, mapState));
+    } finally {
+      if (binding.request === request && !binding.ready) binding.request = null;
+    }
+  })();
+}
+
+function syncCampusRouteMaps() {
+  const owner = currentCampusMapOwner();
+  for (const [frame, entry] of campusRouteMaps) {
+    try {
+      if (!frame.isConnected || entry.owner !== owner || !campusRouteMapAllowed()) {
+        clearManagedCampusMap(frame);
+        campusRouteMaps.delete(frame);
+        continue;
+      }
+      const active = () => !document.hidden && !elements.appView.hidden && state.appTab === "agent" &&
+        campusRouteMaps.get(frame) === entry && campusRouteMapAllowed();
+      if (active()) setManagedCampusMapState(frame, active, {active: true,
+        route: entry.route, origin: entry.route.origin, destination: entry.route.destination});
+      else campusMapBridge(frame)?.setState({active: false, route: null, origin: null, destination: null});
+    } catch {
+      // The iframe is fixed to our same-origin static page; an unavailable bridge can retry on load.
+    }
+  }
+}
+
+function clearCampusRouteMaps() {
+  for (const frame of campusRouteMaps.keys()) clearManagedCampusMap(frame);
+  campusRouteMaps.clear();
+}
+
+document.addEventListener("visibilitychange", syncCampusRouteMaps);
+window.addEventListener("pagehide", () => {
+  clearCampusMapConfig(currentCampusMapOwner());
+  clearCampusRouteMaps();
+});
+
+function createManagedCampusMap(title) {
+  const frame = document.createElement("iframe");
+  frame.className = "campus-baidu-map";
+  frame.title = title;
+  frame.src = campusMapDocument;
+  frame.setAttribute("allow", "geolocation 'none'");
+  frame.referrerPolicy = "strict-origin-when-cross-origin";
+  return frame;
 }
 
 function buildCampusRouteMap(route) {
-  const svg = svgNode("svg", {
-    viewBox: "0 0 100 74",
-    role: "img",
-    "aria-label": `${route.origin.name}到${route.destination.name}校园路线图`,
-    preserveAspectRatio: "xMidYMid meet",
-  });
-
-  svg.append(svgNode("rect", {x: 0, y: 0, width: 100, height: 74, rx: 3, class: "route-map-base"}));
-  svg.append(svgNode("rect", {x: 2, y: 2, width: 96, height: 24, rx: 2, class: "route-zone route-zone-living"}));
-  svg.append(svgNode("rect", {x: 2, y: 32, width: 96, height: 40, rx: 2, class: "route-zone route-zone-teaching"}));
-  svg.append(svgNode("path", {d: "M2 29 H98", class: "route-road-major"}));
-  svg.append(svgNode("text", {x: 4, y: 6, class: "route-zone-label"}, "生活区 / LIVING"));
-  svg.append(svgNode("text", {x: 4, y: 36, class: "route-zone-label"}, "教学区 / ACADEMIC"));
-  svg.append(svgNode("text", {x: 82, y: 28.2, class: "route-road-label"}, "学林街"));
-
-  [
-    ["18楼", 13, 9, 10, 6], ["16楼", 25, 9, 9, 6], ["15楼", 37, 8, 10, 7],
-    ["五餐", 53, 17, 10, 6], ["生活区东门", 82, 14, 13, 7],
-    ["体育馆", 8, 39, 13, 9], ["4教", 24, 52, 11, 9], ["6教", 37, 45, 12, 10],
-    ["图书馆", 47, 35, 14, 8], ["7教", 57, 45, 11, 10], ["12教", 68, 52, 11, 9],
-    ["东操场", 80, 38, 14, 13], ["1教", 55, 61, 11, 8],
-  ].forEach(([label, x, y, width, height]) => {
-    const group = svgNode("g", {class: "route-landmark"});
-    group.append(svgNode("rect", {x, y, width, height, rx: 1.3}));
-    group.append(svgNode("text", {x: x + width / 2, y: y + height / 2 + 1}, label));
-    svg.append(group);
-  });
-
-  svg.append(svgNode("path", {d: "M28 20 V45 H42 M28 39 H74 M52 32 V67 M16 48 H86", class: "route-campus-road"}));
-
-  const pointString = route.path.map((point) => `${point.x},${point.y}`).join(" ");
-  svg.append(svgNode("polyline", {points: pointString, class: "route-line-shadow"}));
-  svg.append(svgNode("polyline", {points: pointString, class: "route-line"}));
-
-  const nodes = route.path.filter((point) => point.place_id);
-  nodes.forEach((point, index) => {
-    const endpoint = index === 0 || index === nodes.length - 1;
-    const group = svgNode("g", {class: endpoint ? "route-node endpoint" : "route-node"});
-    group.append(svgNode("circle", {cx: point.x, cy: point.y, r: endpoint ? 2.1 : 1.35}));
-    if (endpoint) {
-      group.append(svgNode("circle", {cx: point.x, cy: point.y, r: 3.3, class: "route-node-pulse"}));
-    }
-    group.append(svgNode("text", {x: point.x + 2.8, y: point.y - 2}, point.label));
-    svg.append(group);
-  });
-  return svg;
+  const frame = createManagedCampusMap("百度校园步行路线地图");
+  frame.loading = "lazy";
+  // The renderer needs geometry and endpoint identifiers, not account selection or evidence records.
+  const point = value => ({lat: value?.lat, lng: value?.lng});
+  const endpoint = place => ({place_id: place.place_id, location: point(place.location)});
+  campusRouteMaps.set(frame, {owner: currentCampusMapOwner(), route: {
+    provider: route.provider,
+    coordinate_system: route.coordinate_system,
+    origin: endpoint(route.origin),
+    destination: endpoint(route.destination),
+    polyline: Array.isArray(route.polyline) ? route.polyline.map(point) : [],
+  }});
+  frame.addEventListener("load", syncCampusRouteMaps);
+  return frame;
 }
 
-function renderCampusRoute(route) {
-  if (!route?.path?.length || !route.origin || !route.destination) return;
+function rebuildCampusRouteMaps(owner) {
+  for (const [frame, entry] of [...campusRouteMaps]) {
+    if (frame.isConnected && entry.owner === owner && campusRouteMapAllowed()) {
+      frame.before(buildCampusRouteMap(entry.route));
+    }
+    clearManagedCampusMap(frame);
+    campusRouteMaps.delete(frame);
+  }
+}
+
+function campusPlaceDisplayName(place) {
+  // The campus reference list keeps the familiar campus name as its first alias.
+  const shortName = Array.isArray(place.aliases) ? place.aliases[0] : undefined;
+  return typeof shortName === "string" && shortName.trim() ? shortName : place.name;
+}
+
+function renderCampusRoute(route, context = null) {
+  if (context && (context.owner !== state.user?.user_id || context.sessionId !== state.sessionId)) return;
+  if (!route?.origin || !route.destination) return;
+  const realRoute = route.provider === "baidu" && route.coordinate_system === "bd09ll";
   clearEmptyState();
   const card = document.createElement("article");
   card.className = "campus-route-card";
@@ -1355,9 +1526,11 @@ function renderCampusRoute(route) {
   head.className = "campus-route-head";
   const titleWrap = document.createElement("div");
   const eyebrow = document.createElement("span");
-  eyebrow.textContent = `CAMPUS ROUTE / v${route.package_version}`;
+  eyebrow.textContent = realRoute ? "BAIDU MAP / 步行路线" : "CAMPUS ROUTE / 历史摘要";
   const title = document.createElement("h3");
-  title.textContent = `${route.origin.name} → ${route.destination.name}`;
+  const originName = realRoute ? campusPlaceDisplayName(route.origin) : route.origin.name;
+  const destinationName = realRoute ? campusPlaceDisplayName(route.destination) : route.destination.name;
+  title.textContent = `${originName} → ${destinationName}`;
   titleWrap.append(eyebrow, title);
   const mode = document.createElement("b");
   mode.textContent = "步行";
@@ -1365,10 +1538,12 @@ function renderCampusRoute(route) {
 
   const metrics = document.createElement("div");
   metrics.className = "campus-route-metrics";
+  const openNow = route.destination.open_now;
+  const openingStatus = typeof openNow === "boolean" ? (openNow ? "开放记录" : "关闭记录") : "状态未知";
   [
     [`${route.total_minutes}`, "分钟"],
-    [`${route.estimated_distance_meters}`, "米估算"],
-    [route.destination.open_now ? "OPEN" : "CLOSED", route.destination.open_hours],
+    [`${realRoute ? route.distance_meters ?? "—" : route.estimated_distance_meters ?? "—"}`, realRoute ? "米 / 百度预计" : "米 / 历史估算"],
+    [openingStatus, route.destination.open_hours || "开放时间未提供"],
   ].forEach(([value, label]) => {
     const item = document.createElement("div");
     const strong = document.createElement("strong");
@@ -1381,7 +1556,13 @@ function renderCampusRoute(route) {
 
   const map = document.createElement("div");
   map.className = "campus-route-map";
-  map.append(buildCampusRouteMap(route));
+  if (realRoute && campusRouteMapAllowed()) map.append(buildCampusRouteMap(route));
+  else {
+    const summary = document.createElement("p");
+    summary.className = "campus-route-summary";
+    summary.textContent = realRoute ? "当前账号学校或校区不支持此校园地图。" : "历史路线仅保留文本摘要，请重新规划以获取百度步行路线。";
+    map.append(summary);
+  }
 
   const steps = document.createElement("ol");
   steps.className = "campus-route-steps";
@@ -1399,7 +1580,7 @@ function renderCampusRoute(route) {
 
   const note = document.createElement("p");
   note.className = "campus-route-note";
-  note.textContent = route.note;
+  note.textContent = realRoute ? `百度地图预计步行路线，实际通行以现场情况为准。${route.note ?? ""}` : route.note ?? "历史路线数据";
   card.append(head, metrics, map, steps, note);
   elements.messages.append(card);
   scrollMessages();
@@ -1518,6 +1699,7 @@ async function refreshSessions() {
 
 async function sendMessage(message) {
   if (!message || state.sending) return;
+  const routeContext = {owner: state.user?.user_id, sessionId: state.sessionId};
   state.sending = true;
   elements.sendButton.disabled = true;
   elements.messageInput.disabled = true;
@@ -1549,7 +1731,7 @@ async function sendMessage(message) {
     appendMessage("assistant", payload.message);
     payload.tool_traces.forEach((trace) => {
       renderToolTrace(trace);
-      if (trace.tool_name === "plan_campus_route") renderCampusRoute(trace.result);
+      if (trace.tool_name === "plan_campus_route") renderCampusRoute(trace.result, routeContext);
     });
     payload.pending_actions.forEach(renderPendingAction);
     setServiceState(true, "Agent 服务在线");
@@ -1575,7 +1757,9 @@ function resizeComposer() {
 }
 
 function resetSession(notify = true) {
+  clearCampusRouteMaps();
   state.sessionId = createSessionId();
+  syncCampusPlaceSelection();
   state.hasTraces = false;
   setSessionId();
   elements.messages.innerHTML = '<div class="empty-state" id="emptyState"><div class="orb"><span></span><span></span><span></span></div><p class="eyebrow">NEW CONTEXT</p><h3>新会话已就绪</h3><p>个人课表和校园数据继续可用，对话上下文与执行轨迹已经清空。</p></div>';
@@ -1661,6 +1845,7 @@ async function openSession(sessionId) {
     const history = await api(`/api/v1/sessions/${encodeURIComponent(sessionId)}/history`);
     const session = state.sessions.find((item) => item.session_id === sessionId);
     state.sessionId = sessionId;
+    syncCampusPlaceSelection();
     state.hasTraces = false;
     if (session?.model_name) {
       const modelInput = $(`input[name="model"][value="${session.model_name}"]`);
@@ -1668,6 +1853,7 @@ async function openSession(sessionId) {
       elements.modelBadge.textContent = modelLabel(session.model_name);
     }
     setSessionId();
+    clearCampusRouteMaps();
     elements.messages.replaceChildren();
     history.forEach((message) => appendMessage(message.role, message.content));
     elements.traceList.innerHTML = '<div class="trace-empty">已恢复对话文本<br /><span>新的工具调用会继续显示在这里</span></div>';
@@ -1738,13 +1924,117 @@ function fillSettingsProfile() {
   elements.adminTabButton.hidden = user.role !== "admin";
 }
 
+let baiduMapSettingsView = null;
+let baiduMapSettingsSave = null;
+
+function baiduMapKeySources(payload) {
+  const readSource = value => {
+    if (value?.configured === false && value.source === "none") return "none";
+    if (value?.configured === true && ["account", "server"].includes(value.source)) return value.source;
+    throw new Error("invalid-baidu-map-key-status");
+  };
+  return {browser: readSource(payload?.browser), server: readSource(payload?.server)};
+}
+
+function renderBaiduMapSettings(view, message = "") {
+  const busy = !!view && baiduMapSettingsSave?.owner === view.owner;
+  const sources = view?.sources;
+  const labels = {account: "正在使用个人配置", server: "正在使用服务器配置", none: "尚未配置"};
+  elements.baiduBrowserStatus.textContent = labels[sources?.browser] ?? "";
+  elements.baiduServerStatus.textContent = labels[sources?.server] ?? "";
+  elements.clearBaiduBrowserAk.hidden = sources?.browser !== "account";
+  elements.clearBaiduServerAk.hidden = sources?.server !== "account";
+  elements.baiduBrowserAk.disabled = elements.baiduServerAk.disabled = busy || !sources;
+  elements.clearBaiduBrowserAk.disabled = elements.clearBaiduServerAk.disabled = busy || !sources;
+  setButtonBusy(elements.saveBaiduMapSettings, busy, "正在保存…");
+  elements.saveBaiduMapSettings.disabled = busy || !sources;
+  elements.baiduMapSettingsStatus.textContent = message;
+}
+
+function clearBaiduMapSettingsView() {
+  baiduMapSettingsView?.controller.abort();
+  baiduMapSettingsView = null;
+  elements.baiduMapSettingsForm.reset();
+  renderBaiduMapSettings(null);
+}
+
+async function loadBaiduMapSettings(view) {
+  const pending = baiduMapSettingsSave;
+  if (pending?.owner === view.owner) await pending.promise.catch(() => {});
+  if (baiduMapSettingsView !== view || currentCampusMapOwner() !== view.owner) return;
+  try {
+    const result = await api("/api/v1/me/baidu-maps", {cache: "no-store", signal: view.controller.signal});
+    if (baiduMapSettingsView !== view || currentCampusMapOwner() !== view.owner) return;
+    view.sources = baiduMapKeySources(result);
+    renderBaiduMapSettings(view);
+  } catch (error) {
+    if (baiduMapSettingsView !== view || currentCampusMapOwner() !== view.owner) return;
+    renderBaiduMapSettings(view, error.status === 404 ? "此服务器暂不支持个人地图配置。" :
+      "暂时无法读取地图配置，请重新打开个人配置后重试。");
+  }
+}
+
+function syncBaiduMapSettings() {
+  const owner = state.user?.user_id && !document.hidden && !elements.settingsView.hidden && state.settingsTab === "profile"
+    ? currentCampusMapOwner() : null;
+  if ((baiduMapSettingsView?.owner ?? null) === owner) return;
+  clearBaiduMapSettingsView();
+  if (!owner) return;
+  const view = {owner, controller: new AbortController(), sources: null};
+  baiduMapSettingsView = view;
+  renderBaiduMapSettings(view, "正在读取地图配置…");
+  void loadBaiduMapSettings(view);
+}
+
+async function updateBaiduMapSettings(payload) {
+  const view = baiduMapSettingsView;
+  const owner = currentCampusMapOwner();
+  if (!view?.sources || view.owner !== owner || baiduMapSettingsSave?.owner === owner) return;
+  if (!Object.keys(payload).length) {
+    renderBaiduMapSettings(view, "请输入要更新的 AK。");
+    return;
+  }
+  elements.baiduMapSettingsForm.reset();
+  const operation = {owner, promise: api("/api/v1/me/baidu-maps", {
+    method: "PUT", headers: {"Content-Type": "application/json"}, cache: "no-store", body: JSON.stringify(payload),
+  })};
+  baiduMapSettingsSave = operation;
+  renderBaiduMapSettings(view, "正在保存地图配置…");
+  let sources;
+  let message;
+  try {
+    const result = await operation.promise;
+    if (baiduMapSettingsSave !== operation || currentCampusMapOwner() !== owner) return;
+    clearCampusMapConfig(owner);
+    clearCampusPlaceCandidates();
+    updateCampusPlaceControls();
+    rebuildCampusRouteMaps(owner);
+    sources = baiduMapKeySources(result);
+    message = "地图配置已更新。";
+  } catch {
+    message = "地图配置保存失败，请重试。";
+  } finally {
+    if (baiduMapSettingsSave === operation) baiduMapSettingsSave = null;
+    if (baiduMapSettingsView?.owner === owner && currentCampusMapOwner() === owner) {
+      if (sources) baiduMapSettingsView.sources = sources;
+      renderBaiduMapSettings(baiduMapSettingsView, message);
+    }
+  }
+}
+
+document.addEventListener("visibilitychange", syncBaiduMapSettings);
+window.addEventListener("pagehide", clearBaiduMapSettingsView);
+
 function switchSettingsTab(tab) {
+  state.settingsTab = tab;
   $$('[data-settings-tab]').forEach((button) => {
     button.classList.toggle("active", button.dataset.settingsTab === tab);
   });
   $$('[data-settings-panel]').forEach((panel) => {
     panel.hidden = panel.dataset.settingsPanel !== tab;
   });
+  syncCampusPlaceSelection();
+  syncBaiduMapSettings();
   if (tab === "data") loadSettingsContext();
   if (tab === "admin") loadAdminUsers();
 }
@@ -2136,7 +2426,272 @@ function correctionStatusLabel(status) {
   return { pending: "待审核", accepted: "已采纳", rejected: "未采纳" }[status] ?? status;
 }
 
+// Candidate credentials stay in this page's memory and never enter a map bridge or storage.
+const campusPlaceSelection = {version: 0, ownerKey: null, packageKey: null, controller: null,
+  candidates: [], selected: null, page: -1, hasMore: false, expiresAt: 0, query: "",
+  busy: false, saving: false, frame: null};
+let campusDataRequestVersion = 0;
+
+function campusPlaceOwnerKey() {
+  return JSON.stringify([state.user?.user_id, state.sessionId, state.user?.school,
+    state.user?.campus, globalThis.location.origin, globalThis.location.pathname]);
+}
+
+function campusPlacePackageKey() {
+  return JSON.stringify([state.campusData?.package?.package_id, state.campusData?.package?.version]);
+}
+
+function campusPlacePanelActive() {
+  return !!state.user && !document.hidden && !elements.settingsView.hidden && state.settingsTab === "data";
+}
+
+function clearCampusPlacePreview() {
+  const current = campusPlaceSelection;
+  if (current.frame) clearManagedCampusMap(current.frame);
+  current.frame = null;
+  elements.campusPlacePreview.replaceChildren();
+  current.selected = null;
+  elements.campusPlaceConfirmButton.disabled = true;
+}
+
+function clearCampusPlaceCandidates() {
+  const current = campusPlaceSelection;
+  current.version++;
+  current.controller?.abort();
+  current.controller = null;
+  current.candidates = [];
+  current.page = -1;
+  current.hasMore = false;
+  current.expiresAt = 0;
+  current.busy = false;
+  current.saving = false;
+  clearCampusPlacePreview();
+  elements.campusPlaceCandidates.replaceChildren();
+  elements.campusPlaceMoreButton.hidden = true;
+  elements.campusPlaceSelectionStatus.textContent = "请选择地点后检索候选。";
+}
+
+function syncCampusPlaceSelection() {
+  const current = campusPlaceSelection;
+  const ownerKey = campusPlaceOwnerKey();
+  const packageKey = campusPlacePackageKey();
+  if (current.ownerKey !== null && current.ownerKey !== ownerKey) {
+    clearCampusPlaceCandidates();
+    campusDataRequestVersion++;
+    state.campusData = null;
+    elements.campusPlaceSelect.replaceChildren();
+    elements.campusPlaceQuery.value = "";
+    elements.campusPlaceSavedSelection.textContent = "";
+  }
+  if (current.packageKey !== null && current.packageKey !== packageKey) {
+    clearCampusPlaceCandidates();
+    campusDataRequestVersion++;
+  }
+  current.ownerKey = ownerKey;
+  current.packageKey = campusPlacePackageKey();
+  if (!campusPlacePanelActive() || !campusRouteMapAllowed()) {
+    clearCampusPlaceCandidates();
+    campusDataRequestVersion++;
+  }
+  updateCampusPlaceControls();
+}
+
+function campusPlacePointValid(point) {
+  return point && typeof point.lat === "number" && typeof point.lng === "number" &&
+    Number.isFinite(point.lat) && Number.isFinite(point.lng) && Math.abs(point.lat) <= 90 && Math.abs(point.lng) <= 180;
+}
+
+function updateCampusPlaceControls() {
+  const current = campusPlaceSelection;
+  const place = state.campusData?.places?.find(item => item.place_id === elements.campusPlaceSelect.value);
+  const allowed = campusRouteMapAllowed() && !!place && campusPlacePanelActive();
+  elements.campusPlaceSearchButton.disabled = !allowed || current.busy || current.saving;
+  elements.campusPlaceMoreButton.hidden = !current.hasMore;
+  elements.campusPlaceMoreButton.disabled = !allowed || current.busy || current.saving;
+  elements.campusPlaceConfirmButton.disabled = !allowed || !current.selected || current.busy || current.saving;
+  elements.campusPlaceReselectButton.hidden = !place?.selection;
+  elements.campusPlaceReselectButton.disabled = !allowed || current.busy || current.saving;
+  elements.campusPlaceSavedSelection.textContent = place?.selection
+    ? `已确认：${place.selection.name} · ${place.selection.address || "地址未提供"}`
+    : place?.location ? "此地点已有维护者配置的入口，可直接规划；也可检索并确认自己的入口。" : "尚未确认入口，请检索候选后选择并确认。";
+  if (!campusRouteMapAllowed()) elements.campusPlaceSelectionStatus.textContent = "当前学校或校区暂不支持校园地点确认。";
+}
+
+function renderCampusPlaceSelection() {
+  const selectedId = elements.campusPlaceSelect.value;
+  syncCampusPlaceSelection();
+  elements.campusPlaceSelect.replaceChildren();
+  for (const place of state.campusData?.places ?? []) {
+    const option = document.createElement("option");
+    option.value = place.place_id;
+    option.textContent = `${campusPlaceDisplayName(place)}${place.selection ? " · 已确认" : ""}`;
+    elements.campusPlaceSelect.append(option);
+  }
+  if ([...elements.campusPlaceSelect.options].some(option => option.value === selectedId)) {
+    elements.campusPlaceSelect.value = selectedId;
+  }
+  updateCampusPlaceControls();
+}
+
+function campusPlaceTicketCurrent(ticket) {
+  return ticket.version === campusPlaceSelection.version && ticket.ownerKey === campusPlaceOwnerKey() &&
+    ticket.packageKey === campusPlacePackageKey() && ticket.placeId === elements.campusPlaceSelect.value &&
+    ticket.query === elements.campusPlaceQuery.value.trim() && campusPlacePanelActive() && campusRouteMapAllowed();
+}
+
+function campusPlaceFailureMessage(error, saving = false) {
+  // Never display provider URLs, credentials, or arbitrary upstream error text in this panel.
+  if (error.status === 401) return "登录已失效，请重新登录后检索候选。";
+  if (["候选已过期，请重新检索并确认地点。", "候选已失效，请重新检索并确认地点。"].includes(error.message)) return error.message;
+  if (error.status === 503) return "校园地点服务暂不可用，请联系维护者完善配置后重试。";
+  return saving ? "入口确认未完成，请重新检索候选后重试。" : "候选检索未完成，请检查网络后重新检索。";
+}
+
+function renderCampusPlaceCandidates() {
+  const current = campusPlaceSelection;
+  elements.campusPlaceCandidates.replaceChildren();
+  for (const candidate of current.candidates) {
+    const card = document.createElement("article");
+    const name = document.createElement("b");
+    const address = document.createElement("p");
+    const preview = document.createElement("button");
+    name.textContent = candidate.name;
+    address.textContent = candidate.address || "地址未提供，请结合地图确认入口。";
+    preview.type = "button";
+    preview.className = "line-button";
+    preview.dataset.campusPlacePreview = "";
+    preview.textContent = "在地图预览";
+    preview.setAttribute("aria-pressed", String(current.selected === candidate));
+    preview.disabled = current.busy || current.saving;
+    preview.addEventListener("click", () => previewCampusPlace(candidate));
+    card.append(name, address, preview);
+    elements.campusPlaceCandidates.append(card);
+  }
+  updateCampusPlaceControls();
+}
+
+function previewCampusPlace(candidate) {
+  syncCampusPlaceSelection();
+  const current = campusPlaceSelection;
+  if (!campusPlacePanelActive() || !current.candidates.includes(candidate) || current.busy || current.saving) return;
+  if (Date.now() >= current.expiresAt) {
+    clearCampusPlaceCandidates();
+    elements.campusPlaceSelectionStatus.textContent = "候选已过期，请重新检索并确认地点。";
+    return;
+  }
+  clearCampusPlacePreview();
+  current.selected = candidate;
+  const frame = createManagedCampusMap("校园候选入口地图预览");
+  current.frame = frame;
+  const version = current.version;
+  const owner = currentCampusMapOwner();
+  frame.addEventListener("load", () => {
+    const active = () => current.frame === frame && current.version === version && currentCampusMapOwner() === owner &&
+      campusPlacePanelActive() && campusRouteMapAllowed();
+    if (!active()) return;
+    // The shared renderer receives only public marker data, never the candidate or auth object.
+    const origin = {place_id: elements.campusPlaceSelect.value, name: candidate.name,
+      location: {lat: candidate.location.lat, lng: candidate.location.lng}};
+    setManagedCampusMapState(frame, active, {active: true, route: null, origin, destination: null});
+  });
+  elements.campusPlacePreview.append(frame);
+  elements.campusPlaceSelectionStatus.textContent = `正在预览：${candidate.name} · ${candidate.address || "地址未提供"}。请核对地图后点击“确认此地点”。`;
+  renderCampusPlaceCandidates();
+}
+
+async function searchCampusPlaceCandidates(more = false) {
+  syncCampusPlaceSelection();
+  const current = campusPlaceSelection;
+  if (!campusPlacePanelActive() || !campusRouteMapAllowed() || !state.campusData || current.busy || current.saving) return;
+  const placeId = elements.campusPlaceSelect.value;
+  if (!state.campusData.places.some(place => place.place_id === placeId)) return;
+  const page = more ? current.page + 1 : 0;
+  if (page > 4 || (more && !current.hasMore)) return;
+  const previous = more ? [...current.candidates] : [];
+  const previousExpiry = current.expiresAt;
+  const query = elements.campusPlaceQuery.value.trim();
+  clearCampusPlaceCandidates();
+  current.candidates = previous;
+  current.query = query;
+  current.busy = true;
+  current.controller = new AbortController();
+  const ticket = {version: current.version, ownerKey: campusPlaceOwnerKey(), packageKey: campusPlacePackageKey(), placeId, query};
+  const params = new URLSearchParams({page: String(page)});
+  if (query) params.set("query", query);
+  renderCampusPlaceCandidates();
+  elements.campusPlaceSelectionStatus.textContent = "正在检索当前校区的候选入口…";
+  try {
+    const result = await api(`/api/v1/campus-data/places/${encodeURIComponent(placeId)}/candidates?${params}`, {
+      signal: current.controller.signal, cache: "no-store",
+    });
+    if (!campusPlaceTicketCurrent(ticket)) return;
+    if (result.place_id !== placeId || result.page !== page || !Array.isArray(result.candidates) ||
+      !Number.isFinite(Date.parse(result.expires_at))) throw new Error("invalid-candidates");
+    const candidates = result.candidates.filter(candidate => typeof candidate.name === "string" &&
+      typeof candidate.selection_token === "string" && !!candidate.selection_token && campusPlacePointValid(candidate.location));
+    current.candidates = [...previous, ...candidates];
+    current.page = page;
+    current.hasMore = result.has_more === true && page < 4;
+    current.expiresAt = previous.length ? Math.min(previousExpiry, Date.parse(result.expires_at)) : Date.parse(result.expires_at);
+    current.busy = false;
+    renderCampusPlaceCandidates();
+    elements.campusPlaceSelectionStatus.textContent = candidates.length
+      ? `已展示 ${current.candidates.length} 个候选，请逐一预览后确认。${current.hasMore ? "可加载更多候选。" : ""}${result.truncated ? "检索已达上限，可缩小检索词重新查询。" : ""}`
+      : `本页没有合法校园候选。${current.hasMore ? "可加载更多候选，或修改检索词。" : "请修改检索词后重新检索。"}`;
+  } catch (error) {
+    if (!campusPlaceTicketCurrent(ticket)) return;
+    clearCampusPlaceCandidates();
+    elements.campusPlaceSelectionStatus.textContent = campusPlaceFailureMessage(error);
+    updateCampusPlaceControls();
+  }
+}
+
+async function confirmCampusPlaceSelection() {
+  syncCampusPlaceSelection();
+  const current = campusPlaceSelection;
+  const candidate = current.selected;
+  if (!candidate || current.busy || current.saving || !campusPlacePanelActive()) return;
+  if (Date.now() >= current.expiresAt) {
+    clearCampusPlaceCandidates();
+    elements.campusPlaceSelectionStatus.textContent = "候选已过期，请重新检索并确认地点。";
+    updateCampusPlaceControls();
+    return;
+  }
+  const ticket = {version: current.version, ownerKey: campusPlaceOwnerKey(), packageKey: campusPlacePackageKey(),
+    placeId: elements.campusPlaceSelect.value, query: elements.campusPlaceQuery.value.trim()};
+  current.saving = true;
+  current.controller = new AbortController();
+  renderCampusPlaceCandidates();
+  elements.campusPlaceSelectionStatus.textContent = "正在保存当前账号的入口选择…";
+  let saved = false;
+  try {
+    const result = await api(`/api/v1/campus-data/places/${encodeURIComponent(ticket.placeId)}/selection`, {
+      method: "PUT", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({selection_token: candidate.selection_token}), signal: current.controller.signal, cache: "no-store",
+    });
+    if (!campusPlaceTicketCurrent(ticket)) return;
+    if (result.place_id !== ticket.placeId || !campusPlacePointValid(result.location)) throw new Error("invalid-selection");
+    saved = true;
+    const snapshot = await api("/api/v1/campus-data", {signal: current.controller.signal, cache: "no-store"});
+    if (!campusPlaceTicketCurrent(ticket)) return;
+    clearCampusPlaceCandidates();
+    clearCampusRouteMaps();
+    renderCampusData(snapshot);
+    elements.campusPlaceSelectionStatus.textContent = "入口已保存到当前账号，之后规划路线时会复用。需要更换时可重新选择。";
+  } catch (error) {
+    if (!campusPlaceTicketCurrent(ticket)) return;
+    clearCampusPlaceCandidates();
+    elements.campusPlaceSelectionStatus.textContent = saved
+      ? "入口已保存，但资料刷新未完成。请重新打开学习数据确认最新入口。" : campusPlaceFailureMessage(error, true);
+    updateCampusPlaceControls();
+  }
+}
+
+document.addEventListener("visibilitychange", syncCampusPlaceSelection);
+window.addEventListener("pagehide", () => { clearCampusPlaceCandidates(); campusDataRequestVersion++; });
+
 function renderCampusData(payload) {
+  syncCampusPlaceSelection();
   state.campusData = payload;
   const dataPackage = payload.package;
   elements.campusPackageName.textContent = `${dataPackage.school} · ${dataPackage.campus}`;
@@ -2176,12 +2731,18 @@ function renderCampusData(payload) {
     item.append(copy, badge);
     elements.campusCorrectionList.append(item);
   });
+  renderCampusPlaceSelection();
 }
 
 async function loadCampusData() {
+  const ownerKey = campusPlaceOwnerKey();
+  const version = ++campusDataRequestVersion;
   try {
-    renderCampusData(await api("/api/v1/campus-data"));
+    const payload = await api("/api/v1/campus-data", {cache: "no-store"});
+    if (version !== campusDataRequestVersion || ownerKey !== campusPlaceOwnerKey() || !campusPlacePanelActive()) return;
+    renderCampusData(payload);
   } catch (error) {
+    if (version !== campusDataRequestVersion || ownerKey !== campusPlaceOwnerKey() || !campusPlacePanelActive()) return;
     elements.campusPackageName.textContent = "校园数据包加载失败";
     showToast(error.message, "error");
   }
@@ -2302,6 +2863,8 @@ async function saveSettings(event) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
+    syncCampusPlaceSelection();
+    syncCampusRouteMaps();
     fillSettingsProfile();
     showToast("账户配置已更新");
   } catch (error) {
@@ -2370,6 +2933,21 @@ elements.historySearch.addEventListener("input", () => {
   elements.historySearch.searchTimer = setTimeout(() => loadHistory(elements.historySearch.value.trim()), 180);
 });
 elements.settingsForm.addEventListener("submit", saveSettings);
+elements.baiduMapSettingsForm.addEventListener("submit", event => {
+  event.preventDefault();
+  const browserAk = elements.baiduBrowserAk.value.trim();
+  const serverAk = elements.baiduServerAk.value.trim();
+  const payload = {};
+  if (browserAk) payload.browser_ak = browserAk;
+  if (serverAk) payload.server_ak = serverAk;
+  void updateBaiduMapSettings(payload);
+});
+elements.clearBaiduBrowserAk.addEventListener("click", () => {
+  if (baiduMapSettingsView?.sources?.browser === "account") void updateBaiduMapSettings({browser_ak: null});
+});
+elements.clearBaiduServerAk.addEventListener("click", () => {
+  if (baiduMapSettingsView?.sources?.server === "account") void updateBaiduMapSettings({server_ak: null});
+});
 elements.hduHelpPatForm.addEventListener("submit", connectHduHelpPat);
 elements.connectHduHelpButton.addEventListener("click", connectHduHelp);
 elements.viewHduHelpDataButton.addEventListener("click", loadHduHelpData);
@@ -2380,6 +2958,16 @@ elements.scheduleSubscriptionForm.addEventListener("submit", saveScheduleSubscri
 elements.syncSubscriptionButton.addEventListener("click", syncScheduleSubscription);
 elements.disconnectSubscriptionButton.addEventListener("click", disconnectScheduleSubscription);
 elements.campusCorrectionForm.addEventListener("submit", submitCampusCorrection);
+elements.campusPlaceSearchForm.addEventListener("submit", event => {event.preventDefault(); void searchCampusPlaceCandidates();});
+elements.campusPlaceMoreButton.addEventListener("click", () => {void searchCampusPlaceCandidates(true);});
+elements.campusPlaceReselectButton.addEventListener("click", () => {void searchCampusPlaceCandidates();});
+elements.campusPlaceConfirmButton.addEventListener("click", () => {void confirmCampusPlaceSelection();});
+elements.campusPlaceSelect.addEventListener("change", () => {
+  clearCampusPlaceCandidates();
+  elements.campusPlaceQuery.value = "";
+  updateCampusPlaceControls();
+});
+elements.campusPlaceQuery.addEventListener("input", () => {clearCampusPlaceCandidates(); updateCampusPlaceControls();});
 elements.quickTaskForm.addEventListener("submit", createQuickTask);
 elements.skillSearch.addEventListener("input", () => {
   clearTimeout(elements.skillSearch.searchTimer);

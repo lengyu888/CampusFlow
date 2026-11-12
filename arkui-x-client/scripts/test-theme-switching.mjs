@@ -63,5 +63,6 @@ test('every live color consumer observes palette, and Canvas explicitly redraws 
   const icon = readFileSync(new URL('../entry/src/main/ets/components/AppIcon.ets', import.meta.url), 'utf8');
   const route = readFileSync(new URL('../entry/src/main/ets/components/RouteMap.ets', import.meta.url), 'utf8');
   assert.match(icon, /@Watch\('redraw'\) @StorageLink\('campusflowThemePalette'\)/);
-  assert.match(route, /@Watch\('drawRoute'\) @StorageLink\('campusflowThemePalette'\)/);
+  assert.match(route, /@StorageLink\('campusflowThemePalette'\)/);
+  assert.match(route, /Web\(\{/);
 });

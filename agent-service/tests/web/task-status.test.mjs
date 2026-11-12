@@ -150,7 +150,7 @@ test('browser restart resumes only the saved receipt lookup, never a new mutatio
 
 test('action proposals are placed inside the conversation, not the hidden mobile trace panel', () => {
   const dom = new JSDOM('<main id="messages"></main><aside id="trace" style="display:none"></aside>', {runScripts: 'outside-only'});
-  const append = app.slice(app.indexOf('function appendMessage('), app.indexOf('const SVG_NS'));
+  const append = app.slice(app.indexOf('function appendMessage('), app.indexOf('function campusRouteMapAllowed('));
   const proposal = app.slice(app.indexOf('function actionDescription('), app.indexOf('async function confirmAction('));
   dom.window.eval(`const state = {user: {display_name: '合成同学'}};
     const elements = {messages: document.querySelector('#messages'), traceList: document.querySelector('#trace')};
