@@ -11,11 +11,11 @@ const bridgeSource=readFileSync(new URL('../entry/src/main/ets/utils/RouteMapBri
 const {validBaiduRoute,supportedMapCampus,validCampusGeoPoint}=new Function(stripTypeScriptTypes(bridgeSource)+'\nreturn {validBaiduRoute,supportedMapCampus,validCampusGeoPoint};')();
 const matchCoursePlace=new Function('supportedMapCampus',stripTypeScriptTypes(matcher.replace(/^export /gm,''))+'\nreturn matchCoursePlace;')(supportedMapCampus);
 const selectionSource=readFileSync(new URL('../entry/src/main/ets/utils/CampusPlaceSelection.ets',import.meta.url),'utf8').replace(/^import [^\n]+;\r?\n/gm,'').replace(/^export /gm,'');
-const selectionHelpers=new Function('validCampusGeoPoint',stripTypeScriptTypes(selectionSource)+'\nreturn {candidatePreviewPlace,hasPlaceLocation,validPlaceCandidates,validPlaceSelection};')(validCampusGeoPoint);
+const selectionHelpers=new Function('validCampusGeoPoint',stripTypeScriptTypes(selectionSource)+'\nreturn {candidatePreviewPlace,conflictingParcelBrand,hasPlaceLocation,matchesCampusPlace,validPlaceCandidates,validPlaceSelection};')(validCampusGeoPoint);
 const feedbackSource=readFileSync(new URL('../entry/src/main/ets/utils/AgentFeedback.ets',import.meta.url),'utf8').replace(/^import [^\n]+;\r?\n/gm,'');
 const {CampusFlowRequestError,requestFailure}=await import(`data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(feedbackSource)).toString('base64')}`);
-const createPage=new Function('CampusFlowApi','Scroller','matchCoursePlace','validBaiduRoute','supportedMapCampus','CampusFlowRequestError','requestFailure',...Object.keys(selectionHelpers),stripTypeScriptTypes(controller)+'\nreturn RoutePage;');
-const create=(api,scroller,match)=>createPage(api,scroller,match,validBaiduRoute,supportedMapCampus,CampusFlowRequestError,requestFailure,...Object.values(selectionHelpers));
+const createPage=new Function('CampusFlowApi','Scroller','Edge','matchCoursePlace','validBaiduRoute','supportedMapCampus','CampusFlowRequestError','requestFailure',...Object.keys(selectionHelpers),stripTypeScriptTypes(controller)+'\nreturn RoutePage;');
+const create=(api,scroller,match)=>createPage(api,scroller,{Top:0},match,validBaiduRoute,supportedMapCampus,CampusFlowRequestError,requestFailure,...Object.values(selectionHelpers));
 const places=[{place_id:'a',name:'图书馆',aliases:['校图书馆'],zone:'教学区',location:{lat:30.31,lng:120.31}},
  {place_id:'b',name:'第7教研楼（信博楼）',aliases:['7教','第七教研楼'],zone:'教学区',location:{lat:30.32,lng:120.32}},
  {place_id:'c',name:'操场',aliases:['东操场'],zone:'教学区',location:{lat:30.33,lng:120.33}}];
@@ -34,7 +34,7 @@ const deferred=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve
 function setup(overrides={}){
  const calls=[];const hooks={campusData:async()=>data(),campusRoute:async(a,b)=>route(a,b),campusPlaceCandidates:async(id,page,query)=>candidatePage(id,page,query),confirmCampusPlaceSelection:async(id)=>selection(id),...overrides};
  class Api{campusData(){calls.push(['data']);return hooks.campusData();}campusRoute(...args){calls.push(['route',...args]);return hooks.campusRoute(...args);}campusPlaceCandidates(...args){calls.push(['candidates',...args]);return hooks.campusPlaceCandidates(...args);}confirmCampusPlaceSelection(...args){calls.push(['confirm',...args]);return hooks.confirmCampusPlaceSelection(...args);}}
- const Page=create(Api,class Scroller{},matchCoursePlace);const page=new Page();page.baseUrl='https://fixture.invalid';page.token='account';
+ const Page=create(Api,class Scroller{scrollEdge(){}},matchCoursePlace);const page=new Page();page.baseUrl='https://fixture.invalid';page.token='account';
  page.school='杭州电子科技大学';page.campus='下沙校区';
  page.routeScope='fixture-account';page.accountChanged();page.applyContext();return{page,calls,hooks};
 }
@@ -49,7 +49,7 @@ test('campus labels use the display alias while entrance search still sends the 
  const track={...places[2],aliases:[]};
  const {page,calls}=setup({campusData:async()=>data([library,places[1],track])});
  await page.loadPlaces();choosePair(page);
- assert.deepEqual(page.options().map(option=>option.value),['图书馆','7教','操场']);
+ assert.deepEqual(page.places.map(place=>page.placeLabel(place)),['图书馆','7教','操场']);
  await page.openPlacePicker(true);
  assert.equal(page.candidateQuery,library.name);
  assert.deepEqual(calls.find(call=>call[0]==='candidates'),['candidates','a',0,library.name]);
@@ -125,10 +125,13 @@ test('a malformed refreshed source cannot be used to generate a route from stale
 });
 // Actual production methods with offline transport doubles; no ArkUI/native rendering is asserted.
 test('native map is shown before calculating a route and accepts current service and explicit endpoints',()=>{
- const map=source.indexOf('RouteMap({');const conditional=source.indexOf('if (this.route !== null)',source.indexOf('  build()'));
- assert.ok(map>=0&&map<conditional);assert.match(source.slice(map,map+350),/baseUrl: this.baseUrl/);
- assert.match(source.slice(map,map+350),/origin: this.previewPlace\(this.places\[this.originIndex\]/);
- assert.match(source.slice(map,map+350),/destination: this.previewPlace\(this.places\[this.destinationIndex\]/);
+ const map=source.indexOf('RouteMap({');const details=source.indexOf('this.RouteDetails()',map);
+ assert.ok(map>=0&&map<details);assert.match(source.slice(map,map+350),/baseUrl: this.baseUrl/);
+ const mapBranch=source.slice(source.indexOf('\n  build()'),map);
+ assert.match(mapBranch,/if \(this\.choosingEndpoint\.length === 0 && \(this\.candidateEndpoint\.length === 0 \|\| this\.selectedCandidateIndex >= 0\)\)/);
+ assert.match(mapBranch,/地图预览 · 尚未生成路线/);
+ assert.match(source.slice(map,map+700),/origin: [\s\S]+?this.previewPlace\(this.places\[this.originIndex\]/);
+ assert.match(source.slice(map,map+700),/destination: [\s\S]+?this.previewPlace\(this.places\[this.destinationIndex\]/);
 });
 test('hidden and disposed pages clear already displayed routes while preserving manual choices',async()=>{
  for(const disappear of [false,true]){const {page}=setup();await page.loadPlaces();choosePair(page);await page.createRoute();assert.ok(page.route);
@@ -250,7 +253,7 @@ test('failed pagination preserves the first page expiry and permits confirming a
  const expiry=page.candidateExpiresAt;
  await page.loadCandidates(true);
  assert.equal(page.candidates.length,1);assert.equal(page.candidateExpiresAt,expiry);
- assert.match(page.candidateError,/暂时无法读取/);
+ assert.match(page.candidatePageError,/暂时无法读取/);
  page.previewCandidate(0);await page.confirmCandidate();
  assert.deepEqual(calls.find(x=>x[0]==='confirm'),['confirm','a','private-1']);
 });
@@ -277,5 +280,62 @@ test('native route summary discloses provider walking instructions when present'
  const {page}=setup();
  assert.equal(page.walkingInstructions([{index:1,instruction:'向北步行',minutes:2},{index:2,instruction:'右转',minutes:0}]),
   '1. 向北步行（约 2 分钟）\n2. 右转');
- assert.match(source,/if \(this\.route\.steps\.length > 0\)\s*\{\s*InfoDisclosure\(\{ title: '查看分段步行指引', message: this\.walkingInstructions\(this\.route\.steps\)/);
+ assert.match(source,/if \(this\.route\.steps\.length > 0\)\s*\{\s*InfoDisclosure\(\{ title: '分段步行指引', message: this\.walkingInstructions\(this\.route\.steps\)/);
+});
+
+test('endpoint search accepts aliases and areas and excludes the opposite endpoint', async () => {
+ const {page}=setup();
+ await page.loadPlaces();
+ page.choosePlace(1,false);
+ page.openEndpointList(true);
+ page.placeQuery='校图书馆 教学区';
+ assert.deepEqual(page.matchingPlaces().map(place=>place.place_id),['a']);
+ page.placeQuery='7教';
+ assert.deepEqual(page.matchingPlaces(),[]);
+ page.backPressed();
+ assert.equal(page.choosingEndpoint,'');
+ assert.equal(page.destinationIndex,1);
+});
+
+test('the text input echoing the preset keyword does not cancel the first candidate search', async () => {
+ const pending=deferred();
+ const {page}=setup({campusPlaceCandidates:()=>pending.promise});
+ await page.loadPlaces();choosePair(page);
+ const read=page.openPlacePicker(true);
+ page.candidateQueryChanged(page.candidateQuery);
+ assert.equal(page.candidateLoading,true);
+ pending.resolve(candidatePage());await read;
+ assert.equal(page.candidates.length,1);
+});
+
+test('parcel brand conflicts need explicit acknowledgment for new and saved entrances', async () => {
+ const differentBrand={...candidate(),name:'京东快递（学源街店）'};
+ const stored={...selection('c'),name:differentBrand.name};
+ const station={...places[2],name:'菜鸟驿站',aliases:['快递驿站'],location:stored.location,selection:stored};
+ const {page,calls}=setup({campusData:async()=>data([places[0],places[1],station]),
+   campusPlaceCandidates:async(id,p,q)=>({...candidatePage(id,p,q),candidates:[differentBrand]}),
+   confirmCampusPlaceSelection:async()=>stored});
+ await page.loadPlaces();
+ page.choosePlace(0,true);
+ page.choosePlace(2,false);
+ await page.createRoute();
+ assert.equal(calls.some(call=>call[0]==='route'),false);
+ assert.equal(page.routeActionLabel(),'按已保存入口规划');
+ await page.performRouteAction();
+ assert.equal(calls.filter(call=>call[0]==='route').length,1);
+ assert.ok(page.route);
+ assert.equal(page.routeFormExpanded,false);
+
+ await page.openPlacePicker(false);
+ page.previewCandidate(0);
+ await page.confirmCandidate();
+ assert.equal(calls.some(call=>call[0]==='confirm'),false);
+ page.candidateAcknowledged=true;
+ page.backPressed();
+ page.previewCandidate(0);
+ assert.equal(page.candidateAcknowledged,false);
+ page.candidateAcknowledged=true;
+ await page.confirmCandidate();
+ assert.deepEqual(calls.find(call=>call[0]==='confirm'),['confirm','c','private-1']);
+ assert.equal(selectionHelpers.conflictingParcelBrand(places[1],'信博楼东门'),false);
 });

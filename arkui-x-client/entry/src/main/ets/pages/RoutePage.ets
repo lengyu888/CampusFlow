@@ -4,6 +4,7 @@ import { CampusFlowApi } from '../services/CampusFlowApi';
 import { AppTheme } from '../theme/AppTheme';
 import { ThemePalette, themePalette } from '../theme/ThemePalette';
 import { AppPageHeader } from '../components/AppPageHeader';
+import { AppIcon } from '../components/AppIcon';
 import { InfoDisclosure } from '../components/InfoDisclosure';
 import { FeedbackPanel } from '../components/FeedbackPanel';
 import { EvidencePanel } from '../components/EvidencePanel';
@@ -11,21 +12,13 @@ import { openingStatus } from '../utils/EvidencePresentation';
 import { CourseRouteIntent, CoursePlaceMatch, matchCoursePlace } from '../utils/CourseRouteIntent';
 import { supportedMapCampus, validBaiduRoute } from '../utils/RouteMapBridge';
 import { CampusFlowRequestError, requestFailure } from '../utils/AgentFeedback';
-import { candidatePreviewPlace, hasPlaceLocation, validPlaceCandidates, validPlaceSelection } from '../utils/CampusPlaceSelection';
+import { candidatePreviewPlace, conflictingParcelBrand, hasPlaceLocation, matchesCampusPlace, validPlaceCandidates, validPlaceSelection } from '../utils/CampusPlaceSelection';
 
 interface RouteSelectionState {
   key: string;
   intentKey: string;
   originId: string;
   destinationId: string;
-}
-
-class CampusSelectOption implements SelectOption {
-  value: ResourceStr;
-
-  constructor(value: string) {
-    this.value = value;
-  }
 }
 
 @Component
@@ -39,7 +32,9 @@ export struct RoutePage {
   @Watch('contextChanged') @Prop routeContextKey: string = '0';
   @Watch('contextChanged') @Prop courseIntent: CourseRouteIntent | null = null;
   @Watch('activeChanged') @Prop active: boolean = true;
+  @Watch('backPressed') @Prop backRevision: number = 0;
   onBack: () => void = () => {};
+  onInnerNavigationChanged: (open: boolean) => void = () => {};
   @State private places: CampusDataPlace[] = [];
   @State private packageEvidence: DataEvidence[] = [];
   @State private originIndex: number = -1;
@@ -51,6 +46,8 @@ export struct RoutePage {
   @State private routeLoading: boolean = false;
   @State private errorText: string = '';
   @State private placesError: string = '';
+  @State private choosingEndpoint: string = '';
+  @State private placeQuery: string = '';
   @State private candidateEndpoint: string = '';
   @State private candidateQuery: string = '';
   @State private candidates: CampusPlaceCandidate[] = [];
@@ -62,6 +59,9 @@ export struct RoutePage {
   @State private candidateLoading: boolean = false;
   @State private candidateSaving: boolean = false;
   @State private candidateError: string = '';
+  @State private candidatePageError: string = '';
+  @State private candidateAcknowledged: boolean = false;
+  @State private routeFormExpanded: boolean = false;
   private candidateRevision: number = 0;
   private scroller: Scroller = new Scroller();
   private pageActive: boolean = true;
@@ -223,8 +223,39 @@ export struct RoutePage {
     return typeof alias === 'string' && alias.trim().length > 0 ? alias.trim() : place?.name ?? '';
   }
 
-  private options(): Array<SelectOption> {
-    return this.places.map((place: CampusDataPlace) => new CampusSelectOption(this.placeLabel(place)));
+  private matchingPlaces(): CampusDataPlace[] {
+    const excluded = this.places[this.choosingEndpoint === 'origin' ? this.destinationIndex : this.originIndex]?.place_id;
+    return this.places.filter((place: CampusDataPlace) => place.place_id !== excluded && matchesCampusPlace(place, this.placeQuery));
+  }
+
+  private openEndpointList(origin: boolean): void {
+    if (!this.mapActive() || this.candidateSaving) { return; }
+    this.closePlacePicker();
+    this.choosingEndpoint = origin ? 'origin' : 'destination';
+    this.onInnerNavigationChanged(true);
+    this.scroller.scrollEdge(Edge.Top);
+  }
+
+  private backPressed(): void {
+    if (this.candidateSaving) { return; }
+    if (this.selectedCandidateIndex >= 0) {
+      this.selectedCandidateIndex = -1;
+      this.candidateAcknowledged = false;
+      this.candidateError = '';
+    } else if (this.candidateEndpoint.length > 0 || this.choosingEndpoint.length > 0) {
+      this.closePlacePicker();
+    } else {
+      this.onBack();
+      return;
+    }
+    this.scroller.scrollEdge(Edge.Top);
+  }
+
+  private pageTitle(): string {
+    if (this.choosingEndpoint.length > 0) { return this.choosingEndpoint === 'origin' ? '选择起点' : '选择终点'; }
+    if (this.selectedCandidateIndex >= 0) { return '核对地图入口'; }
+    if (this.candidateEndpoint.length > 0) { return this.candidateEndpoint === 'origin' ? '搜索起点入口' : '搜索终点入口'; }
+    return '校园导航';
   }
 
   private current(revision: number, token: string, baseUrl: string, scope: string, route: boolean): boolean {
@@ -246,16 +277,26 @@ export struct RoutePage {
     this.route = null;
     this.routeLoading = false;
     this.errorText = '';
+    this.routeFormExpanded = false;
   }
 
   private choosePlace(index: number, origin: boolean): void {
     if (!this.active || !this.pageActive || this.routeScope.length === 0 || this.loading || this.placesError.length > 0) { return; }
-    if (!Number.isInteger(index) || index < 0 || index >= this.places.length) { return; }
+    if (!Number.isInteger(index) || index < 0 || index >= this.places.length ||
+      index === (origin ? this.destinationIndex : this.originIndex)) { return; }
     this.closePlacePicker();
     if (origin) { this.originIndex = index; this.pendingOriginId = this.places[index].place_id; }
     else { this.destinationIndex = index; this.pendingDestinationId = this.places[index].place_id; this.preselectCourse = false; }
     this.rememberSelection();
     this.invalidateRoute();
+  }
+
+  private selectEndpoint(placeId: string): void {
+    const origin = this.choosingEndpoint === 'origin';
+    const index = this.places.findIndex((place: CampusDataPlace) => place.place_id === placeId);
+    this.choosePlace(index, origin);
+    this.scroller.scrollEdge(Edge.Top);
+    if (index >= 0 && !hasPlaceLocation(this.places[index])) { this.openPlacePicker(origin); }
   }
 
   private swap(): void {
@@ -270,7 +311,7 @@ export struct RoutePage {
     this.invalidateRoute();
   }
 
-  private async createRoute(): Promise<void> {
+  private async createRoute(useSavedEntries: boolean = false): Promise<void> {
     if (!this.mapActive() || this.routeLoading || this.candidateSaving ||
       this.activeContextKey !== this.routeContextKey || this.appliedIntentKey !== this.intentKey()) { return; }
     const origin = this.places[this.originIndex];
@@ -282,6 +323,10 @@ export struct RoutePage {
     if (this.candidateEndpoint.length > 0) { this.errorText = '请先确认候选地点或取消预览，再规划路线。'; return; }
     if (!hasPlaceLocation(origin)) { await this.openPlacePicker(true); return; }
     if (!hasPlaceLocation(destination)) { await this.openPlacePicker(false); return; }
+    if (this.routeEntryNeedsReview() && !useSavedEntries) {
+      this.errorText = '请核对起终点，再选择按已保存入口规划。';
+      return;
+    }
     const revision = ++this.routeRevision;
     const token = this.token;
     const baseUrl = this.baseUrl;
@@ -296,7 +341,9 @@ export struct RoutePage {
       if (!this.current(revision, token, baseUrl, scope, true)) { return; }
       if (route.origin?.place_id !== origin.place_id || route.destination?.place_id !== destination.place_id ||
         route.package_id !== packageId || route.package_version !== packageVersion || !validBaiduRoute(route)) { throw new Error('invalid route'); }
+      this.routeFormExpanded = false;
       this.route = route;
+      this.scroller.scrollEdge(Edge.Top);
     } catch (error) {
       if (this.current(revision, token, baseUrl, scope, true)) {
         this.errorText = error instanceof CampusFlowRequestError ?
@@ -309,11 +356,14 @@ export struct RoutePage {
   }
 
   private closePlacePicker(): void {
+    if (this.choosingEndpoint.length > 0 || this.candidateEndpoint.length > 0) { this.onInnerNavigationChanged(false); }
     this.candidateRevision++;
+    this.choosingEndpoint = ''; this.placeQuery = '';
     this.candidates = []; this.selectedCandidateIndex = -1; this.candidateExpiresAt = '';
     this.candidateEndpoint = ''; this.candidateQuery = ''; this.candidatePage = -1;
     this.candidateHasMore = false; this.candidateTruncated = false;
-    this.candidateLoading = false; this.candidateError = '';
+    this.candidateLoading = false; this.candidateError = ''; this.candidatePageError = '';
+    this.candidateAcknowledged = false;
   }
 
   private pickerPlace(): CampusDataPlace | undefined {
@@ -339,16 +389,19 @@ export struct RoutePage {
     if (place === undefined) { return; }
     this.closePlacePicker(); this.invalidateRoute();
     this.candidateEndpoint = origin ? 'origin' : 'destination'; this.candidateQuery = place.name;
+    this.onInnerNavigationChanged(true);
+    this.scroller.scrollEdge(Edge.Top);
     await this.loadCandidates(false);
   }
 
   private candidateQueryChanged(value: string): void {
-    if (this.candidateSaving) { return; }
+    if (this.candidateSaving || value === this.candidateQuery) { return; }
     this.candidateRevision++;
     this.candidateQuery = value;
     this.candidates = []; this.selectedCandidateIndex = -1; this.candidateExpiresAt = '';
     this.candidatePage = -1; this.candidateHasMore = false; this.candidateTruncated = false;
-    this.candidateLoading = false; this.candidateError = '';
+    this.candidateLoading = false; this.candidateError = ''; this.candidatePageError = '';
+    this.candidateAcknowledged = false;
   }
 
   private async loadCandidates(more: boolean): Promise<void> {
@@ -357,6 +410,7 @@ export struct RoutePage {
       more && (!this.candidateHasMore || this.candidatePage >= 4)) { return; }
     const page = more ? this.candidatePage + 1 : 0;
     const query = this.candidateQuery.trim();
+    if (query.length === 0) { this.candidateError = '请输入地点或入口名称。'; return; }
     const previousExpiry = more ? this.candidateExpiresAt : '';
     const revision = ++this.candidateRevision;
     const context = this.candidateContext();
@@ -365,19 +419,27 @@ export struct RoutePage {
       this.candidateExpiresAt = '';
     }
     // Keep the existing candidates' expiry if the next page fails to load.
-    this.selectedCandidateIndex = -1; this.candidateError = ''; this.candidateLoading = true;
+    this.selectedCandidateIndex = -1; this.candidateAcknowledged = false;
+    this.candidateError = ''; this.candidatePageError = ''; this.candidateLoading = true;
     try {
       const result = await new CampusFlowApi(this.baseUrl, this.token).campusPlaceCandidates(place.place_id, page, query);
       if (!this.candidateCurrent(revision, context)) { return; }
       if (!validPlaceCandidates(result, place.place_id, page)) { throw new Error('invalid candidates'); }
-      this.candidates = (more ? this.candidates : []).concat(result.candidates);
+      const candidates = (more ? this.candidates : []).concat(result.candidates);
+      const seen = new Set<string>();
+      this.candidates = candidates.filter((candidate: CampusPlaceCandidate) => {
+        if (seen.has(candidate.baidu_uid)) { return false; }
+        seen.add(candidate.baidu_uid);
+        return true;
+      });
       this.candidatePage = result.page; this.candidateHasMore = result.has_more && result.page < 4;
       this.candidateTruncated = result.truncated;
       this.candidateExpiresAt = previousExpiry.length > 0 && Date.parse(previousExpiry) < Date.parse(result.expires_at) ? previousExpiry : result.expires_at;
     } catch (error) {
       if (this.candidateCurrent(revision, context)) {
-        this.candidateError = error instanceof CampusFlowRequestError ?
+        const message = error instanceof CampusFlowRequestError ?
           requestFailure(error.statusCode, JSON.stringify({ code: error.code })).message : '暂时无法读取候选地点，请重试检索。';
+        if (more) { this.candidatePageError = message; } else { this.candidateError = message; }
       }
     } finally {
       if (this.candidateCurrent(revision, context)) { this.candidateLoading = false; }
@@ -387,6 +449,9 @@ export struct RoutePage {
   private previewCandidate(index: number): void {
     if (!this.mapActive() || this.candidateLoading || this.candidateSaving || !Number.isInteger(index) || index < 0 || index >= this.candidates.length) { return; }
     this.selectedCandidateIndex = index; this.invalidateRoute();
+    this.candidateAcknowledged = false;
+    this.candidateError = '';
+    this.scroller.scrollEdge(Edge.Top);
   }
 
   private previewPlace(place: CampusDataPlace | null, origin: boolean): CampusDataPlace | null {
@@ -396,13 +461,47 @@ export struct RoutePage {
   }
 
   private placeSelectionStatus(place: CampusDataPlace): string {
-    if (validPlaceSelection(place.selection, place.place_id)) { return `已确认：${place.selection!.name} · ${place.selection!.address}`; }
-    return hasPlaceLocation(place) ? '已配置地图入口，可直接规划路线。' : '待确认地图入口，请检索候选并核对位置。';
+    if (validPlaceSelection(place.selection, place.place_id)) { return `已确认 · ${place.selection!.name}`; }
+    return hasPlaceLocation(place) ? '已有地图入口' : '待确认地图入口';
+  }
+
+  private savedEntryConflict(place: CampusDataPlace | undefined): boolean {
+    return place !== undefined && validPlaceSelection(place.selection, place.place_id) &&
+      conflictingParcelBrand(place, place.selection!.name);
+  }
+
+  private routeEntryNeedsReview(): boolean {
+    return this.savedEntryConflict(this.places[this.originIndex]) || this.savedEntryConflict(this.places[this.destinationIndex]);
+  }
+
+  private routeActionLabel(): string {
+    if (this.routeLoading) { return '正在规划…'; }
+    const origin = this.places[this.originIndex];
+    const destination = this.places[this.destinationIndex];
+    if (origin === undefined || destination === undefined) { return '规划步行路线'; }
+    if (!hasPlaceLocation(origin)) { return '确认起点入口'; }
+    if (!hasPlaceLocation(destination)) { return '确认终点入口'; }
+    return this.routeEntryNeedsReview() ? '按已保存入口规划' : '规划步行路线';
+  }
+
+  private performRouteAction(): Promise<void> {
+    return this.createRoute(this.routeEntryNeedsReview());
+  }
+
+  private routedPlaceLabel(place: CampusDataPlace | undefined): string {
+    return this.savedEntryConflict(place) ? place!.selection!.name : this.placeLabel(place);
+  }
+
+  private candidateConflict(): boolean {
+    const place = this.pickerPlace();
+    const candidate = this.candidates[this.selectedCandidateIndex];
+    return place !== undefined && candidate !== undefined && conflictingParcelBrand(place, candidate.name);
   }
 
   private async confirmCandidate(): Promise<void> {
     const place = this.pickerPlace(); const candidate = this.candidates[this.selectedCandidateIndex];
     if (!this.mapActive() || place === undefined || candidate === undefined || this.candidateSaving || this.candidateLoading) { return; }
+    if (this.candidateConflict() && !this.candidateAcknowledged) { return; }
     const revision = ++this.candidateRevision; const context = this.candidateContext();
     if (!this.candidateCurrent(revision, context)) { return; }
     if (!Number.isFinite(Date.parse(this.candidateExpiresAt)) || Date.parse(this.candidateExpiresAt) <= Date.now()) {
@@ -502,176 +601,292 @@ export struct RoutePage {
   }
 
   @Builder
-  private EndpointSelection(origin: boolean) {
-    Column({ space: 6 }) {
-      Text(`${origin ? '起点' : '终点'} · ${this.placeSelectionStatus(this.places[origin ? this.originIndex : this.destinationIndex])}`)
-        .fontSize(this.palette.metaSize)
-        .fontColor(this.palette.quiet).width('100%').wordBreak(WordBreak.BREAK_WORD)
-      Button(hasPlaceLocation(this.places[origin ? this.originIndex : this.destinationIndex])
-        ? '重新选择地图入口' : '检索并确认地图入口')
-        .fontSize(this.palette.bodySize).fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft)
-        .borderRadius(this.palette.controlRadius).width('100%').constraintSize({ minHeight: 44 })
-        .enabled(!this.candidateSaving).onClick(() => this.openPlacePicker(origin))
+  private EndpointRow(place: CampusDataPlace | undefined, origin: boolean) {
+    Column({ space: 0 }) {
+      Button({ type: ButtonType.Normal }) {
+        Row({ space: 12 }) {
+          Circle().width(12).height(12).fill(origin ? this.palette.surface : this.palette.accent)
+            .stroke(this.palette.accent).strokeWidth(2)
+          Column({ space: 3 }) {
+            Text(origin ? '起点' : '终点').fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
+            Text(this.placeLabel(place) || (origin ? '选择出发地点' : '选择到达地点'))
+              .fontSize(this.palette.bodySize + 2).fontWeight(FontWeight.Medium)
+              .fontColor(place === undefined ? this.palette.secondary : this.palette.ink)
+              .width('100%').wordBreak(WordBreak.BREAK_WORD)
+          }.layoutWeight(1).alignItems(HorizontalAlign.Start)
+          AppIcon({ name: 'chevron', iconSize: 19, color: this.palette.secondary })
+        }.width('100%').padding({ top: 11, bottom: 11 })
+      }.width('100%').constraintSize({ minHeight: 52 }).padding(0).backgroundColor(Color.Transparent)
+        .accessibilityText((origin ? '选择起点 ' : '选择终点 ') + this.placeLabel(place))
+        .onClick(() => this.openEndpointList(origin))
+      if (place !== undefined) {
+        Row({ space: 8 }) {
+          Text(this.savedEntryConflict(place) ? `名称需核对 · ${place.selection!.name}` : this.placeSelectionStatus(place))
+            .fontSize(this.palette.metaSize).fontColor(this.savedEntryConflict(place) ? this.palette.warning : this.palette.secondary)
+            .wordBreak(WordBreak.BREAK_WORD).layoutWeight(1)
+          Button(hasPlaceLocation(place) ? '换入口' : '确认入口', { type: ButtonType.Normal })
+            .fontSize(this.palette.metaSize).fontColor(this.palette.accent).backgroundColor(Color.Transparent)
+            .padding({ left: 6, right: 2 }).constraintSize({ minHeight: 44 })
+            .onClick(() => this.openPlacePicker(origin))
+        }.width('100%').padding({ left: 24 })
+      }
     }.width('100%').alignItems(HorizontalAlign.Start)
   }
 
   @Builder
-  private PlacePicker() {
-    if (this.candidateEndpoint.length > 0) {
-      Column({ space: 12 }) {
-        Text(`确认${this.candidateEndpoint === 'origin' ? '起点' : '终点'}地图入口`)
-          .fontSize(this.palette.sectionTitle).fontColor(this.palette.ink).width('100%')
-        Text(this.placeLabel(this.pickerPlace())).fontSize(this.palette.bodySize).fontColor(this.palette.ink)
-          .width('100%').wordBreak(WordBreak.BREAK_WORD)
-        TextInput({ text: this.candidateQuery, placeholder: '输入地点或入口名称' }).fontColor(this.palette.ink)
-          .backgroundColor(this.palette.field).borderRadius(this.palette.controlRadius).height(48)
-          .maxLength(200).enabled(!this.candidateSaving).onChange((value: string) => this.candidateQueryChanged(value))
-        Row({ space: 12 }) {
-          Button('检索候选').fontSize(this.palette.bodySize).fontColor(this.palette.onAccent)
-            .backgroundColor(this.palette.accent).borderRadius(this.palette.controlRadius).constraintSize({ minHeight: 44 }).layoutWeight(1)
-            .enabled(!this.candidateLoading && !this.candidateSaving).onClick(() => this.loadCandidates(false))
-          Button('取消预览').fontSize(this.palette.bodySize).fontColor(this.palette.accent)
-            .backgroundColor(this.palette.accentSoft).borderRadius(this.palette.controlRadius).constraintSize({ minHeight: 44 }).layoutWeight(1)
-            .onClick(() => this.closePlacePicker())
-        }.width('100%')
-        Text('点选候选可在下方地图预览；核对名称、地址和位置后，点击“确认此地点”保存到当前账号。')
-          .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%').wordBreak(WordBreak.BREAK_WORD)
-        if (this.candidateLoading) {
-          FeedbackPanel({ kind: 'loading', title: '正在检索候选地点', message: '保留起终点，等候查询结果。' })
-        }
+  private PlaceRow(name: string, description: string, selected: boolean, onChoose: () => void, caution: boolean = false) {
+    Button({ type: ButtonType.Normal }) {
+      Row({ space: 10 }) {
+        Column({ space: 4 }) {
+          Text(name).fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium).fontColor(this.palette.ink)
+            .width('100%').wordBreak(WordBreak.BREAK_WORD)
+          if (description.length > 0) {
+            Text(description).fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
+              .width('100%').wordBreak(WordBreak.BREAK_WORD)
+          }
+          if (caution) {
+            Text('品牌名称不同').fontSize(this.palette.metaSize).fontColor(this.palette.warning)
+          }
+        }.layoutWeight(1).alignItems(HorizontalAlign.Start)
+        AppIcon({ name: selected ? 'check' : 'chevron', iconSize: 18, color: selected ? this.palette.accent : this.palette.secondary })
+      }.width('100%').padding({ top: 13, bottom: 13, left: 15, right: 13 })
+    }.width('100%').constraintSize({ minHeight: 52 }).padding(0)
+      .backgroundColor(selected ? this.palette.accentSoft : this.palette.surface).onClick(onChoose)
+  }
+
+  @Builder
+  private EndpointList() {
+    TextInput({ text: this.placeQuery, placeholder: '搜索楼宇、简称或区域' })
+      .fontColor(this.palette.ink).backgroundColor(this.palette.surface).borderRadius(this.palette.controlRadius)
+      .height(48).width('100%').maxLength(80).onChange((value: string) => this.placeQuery = value)
+    if (this.matchingPlaces().length === 0) {
+      FeedbackPanel({ kind: 'empty', title: '没有匹配的校园地点', message: '试试楼名或常用简称。' })
+    } else {
+      Column() {
+        ForEach(this.matchingPlaces(), (place: CampusDataPlace, index: number) => {
+          if (index > 0) { Divider().color(this.palette.line).margin({ left: 15, right: 15 }) }
+          this.PlaceRow(this.placeLabel(place), place.name === this.placeLabel(place) ? place.zone : place.name,
+            this.places[this.choosingEndpoint === 'origin' ? this.originIndex : this.destinationIndex]?.place_id === place.place_id,
+            () => this.selectEndpoint(place.place_id))
+        }, (place: CampusDataPlace) => place.place_id)
+      }.width('100%').backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius).clip(true)
+    }
+  }
+
+  @Builder
+  private CandidateList() {
+    Column({ space: 12 }) {
+      Text(this.placeLabel(this.pickerPlace())).fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Bold)
+        .fontColor(this.palette.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
+      if (this.pickerPlace()?.selection?.name) {
+        Text(`当前入口 · ${this.pickerPlace()?.selection?.name}`).fontSize(this.palette.metaSize)
+          .fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+      }
+      Row({ space: 8 }) {
+        TextInput({ text: this.candidateQuery, placeholder: '输入地点或入口名称' })
+          .fontColor(this.palette.ink).backgroundColor(this.palette.field).borderRadius(this.palette.controlRadius)
+          .layoutWeight(1).height(46).maxLength(200).enterKeyType(EnterKeyType.Search)
+          .onChange((value: string) => this.candidateQueryChanged(value)).onSubmit(() => this.loadCandidates(false))
+        Button('搜索').fontSize(this.palette.bodySize).fontColor(this.palette.onAccent)
+          .backgroundColor(this.palette.accent).borderRadius(this.palette.controlRadius).constraintSize({ minHeight: 46 })
+          .enabled(!this.candidateLoading && this.candidateQuery.trim().length > 0).onClick(() => this.loadCandidates(false))
+      }.width('100%')
+      if (this.placeLabel(this.pickerPlace()).length > 0 && this.placeLabel(this.pickerPlace()) !== this.candidateQuery) {
+        Button(`搜“${this.placeLabel(this.pickerPlace())}”`, { type: ButtonType.Normal })
+          .fontSize(this.palette.metaSize).fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft)
+          .borderRadius(this.palette.controlRadius).constraintSize({ minHeight: 44 })
+          .onClick(() => {
+            this.candidateQueryChanged(this.placeLabel(this.pickerPlace()));
+            this.loadCandidates(false);
+          })
+      }
+    }.width('100%').alignItems(HorizontalAlign.Start).padding(this.palette.cardInset)
+      .backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
+    if (this.candidates.length > 0) {
+      Text(`候选入口 · ${this.candidates.length}`).fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
+      Column() {
         ForEach(this.candidates, (candidate: CampusPlaceCandidate, index: number) => {
-          Column({ space: 6 }) {
-            Text(candidate.name).fontSize(this.palette.bodySize).fontColor(this.palette.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
-            Text(candidate.address.length > 0 ? candidate.address : '未提供地址，请核对地图位置。')
-              .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%').wordBreak(WordBreak.BREAK_WORD)
-            Button(this.selectedCandidateIndex === index ? '已选中 · 地图预览中' : '选择并预览位置')
-              .fontSize(this.palette.bodySize).fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft)
-              .borderRadius(this.palette.controlRadius).width('100%').constraintSize({ minHeight: 44 })
-              .enabled(!this.candidateLoading && !this.candidateSaving).onClick(() => this.previewCandidate(index))
-          }.width('100%').padding(12).backgroundColor(this.palette.field).borderRadius(this.palette.controlRadius)
-        }, (candidate: CampusPlaceCandidate, index: number) => `${candidate.baidu_uid}-${index}`)
-        if (!this.candidateLoading && this.candidatePage >= 0 && this.candidates.length === 0 && this.candidateError.length === 0) {
-          Text(this.candidateHasMore ? '本页没有符合校园范围的候选，可加载下一页或修改关键词。' : '没有找到符合校园范围的候选，请修改关键词后重试。')
-            .fontSize(this.palette.bodySize).fontColor(this.palette.quiet).width('100%').wordBreak(WordBreak.BREAK_WORD)
+          if (index > 0) { Divider().color(this.palette.line).margin({ left: 15, right: 15 }) }
+          this.PlaceRow(candidate.name, candidate.address || '暂无地址', false, () => this.previewCandidate(index),
+            this.pickerPlace() !== undefined && conflictingParcelBrand(this.pickerPlace()!, candidate.name))
+        }, (candidate: CampusPlaceCandidate) => candidate.baidu_uid)
+      }.width('100%').backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius).clip(true)
+    }
+    if (this.candidateLoading) {
+      FeedbackPanel({ kind: 'loading', title: this.candidatePage < 0 ? '正在搜索地图入口' : '正在加载更多入口' })
+    } else if (this.candidateError.length > 0) {
+      FeedbackPanel({ kind: 'error', title: '入口尚未确认', message: this.candidateError,
+        actionLabel: '重新搜索', onAction: () => this.loadCandidates(false) })
+    } else if (this.candidatePage >= 0 && this.candidates.length === 0 && !this.candidatePageError) {
+      FeedbackPanel({ kind: 'empty', title: '未找到校区内的入口',
+        message: this.candidateHasMore ? '可加载下一页，或换一个关键词。' : '试试楼名、地标或门的方向。' })
+    }
+    if (this.candidateHasMore && !this.candidateLoading) {
+      if (this.candidatePageError.length > 0) {
+        Text(this.candidatePageError).fontSize(this.palette.metaSize).fontColor(this.palette.warning).width('100%')
+      }
+      Button(this.candidatePageError ? '重试加载下一页' : '加载更多入口', { type: ButtonType.Normal })
+        .fontSize(this.palette.bodySize).fontColor(this.palette.accent).backgroundColor(this.palette.surface)
+        .borderRadius(this.palette.controlRadius).width('100%').constraintSize({ minHeight: 44 }).onClick(() => this.loadCandidates(true))
+    }
+    if (this.candidateTruncated) {
+      Text('可用更具体的门名缩小搜索范围。').fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
+    }
+  }
+
+  @Builder
+  private CandidatePreview(candidate: CampusPlaceCandidate) {
+    Column({ space: 6 }) {
+      Text(`${this.candidateEndpoint === 'origin' ? '起点' : '终点'} · ${this.placeLabel(this.pickerPlace())}`)
+        .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
+      Text(candidate.name).fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Bold)
+        .fontColor(this.palette.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
+      Text(candidate.address || '暂无地址，请核对地图位置。').fontSize(this.palette.metaSize)
+        .fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+    }.width('100%').alignItems(HorizontalAlign.Start).padding(this.palette.cardInset)
+      .backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
+    if (this.candidateConflict()) {
+      Column({ space: 4 }) {
+        Text('快递品牌与校园地点名称不同').fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium)
+          .fontColor(this.palette.warning).width('100%')
+        Row({ space: 5 }) {
+          Checkbox({ name: 'map-entrance-confirmation' }).select(this.candidateAcknowledged)
+            .selectedColor(this.palette.accent).enabled(!this.candidateSaving)
+            .accessibilityText('仍将此入口保存到当前地点')
+            .onChange((checked: boolean) => this.candidateAcknowledged = checked)
+          Text('仍将此入口保存到当前地点').fontSize(this.palette.metaSize).fontColor(this.palette.ink).layoutWeight(1)
+        }.width('100%').constraintSize({ minHeight: 44 })
+      }.width('100%').padding({ left: 14, right: 14, top: 12 }).backgroundColor(this.palette.warningSoft)
+        .borderRadius(this.palette.controlRadius)
+    }
+  }
+
+  @Builder
+  private RouteForm() {
+    if (this.loading) {
+      FeedbackPanel({ kind: 'loading', title: '正在读取校园地点' })
+    } else if (this.placesError.length > 0) {
+      FeedbackPanel({ kind: 'error', title: '地点暂不可用', message: this.placesError,
+        actionLabel: '重试读取地点', onAction: () => this.loadPlaces() })
+    } else if (this.places.length < 2) {
+      FeedbackPanel({ kind: 'empty', title: '地点数据不足', message: '需要至少两个校园地点才能规划路线。',
+        actionLabel: '重新读取', onAction: () => this.loadPlaces() })
+    } else {
+      Column({ space: 8 }) {
+        Row() {
+          Text('步行路线').fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
+          Blank()
+          if (this.route !== null) {
+            Button('查看当前路线', { type: ButtonType.Normal }).fontSize(this.palette.metaSize).fontColor(this.palette.accent)
+              .backgroundColor(Color.Transparent).constraintSize({ minHeight: 44 })
+              .onClick(() => this.routeFormExpanded = false)
+          }
+          Button('交换', { type: ButtonType.Normal }).fontSize(this.palette.metaSize).fontColor(this.palette.accent)
+            .backgroundColor(Color.Transparent).constraintSize({ minWidth: 52, minHeight: 44 })
+            .accessibilityText('交换起点和终点').enabled(this.originIndex >= 0 && this.destinationIndex >= 0).onClick(() => {
+              this.getUIContext().animateTo({ duration: AppTheme.motion(200), curve: Curve.EaseOut }, () => this.swap());
+            })
+        }.width('100%')
+        this.EndpointRow(this.places[this.originIndex], true)
+        Divider().color(this.palette.line).margin({ left: 24 })
+        this.EndpointRow(this.places[this.destinationIndex], false)
+        if (this.routeActionLabel() === '按已保存入口规划') {
+          Text('路线将使用上方已保存的百度地点。').fontSize(this.palette.metaSize)
+            .fontColor(this.palette.warning).width('100%').padding({ bottom: 3 })
         }
-        if (this.candidateHasMore) {
-          Button('加载更多候选').fontSize(this.palette.bodySize).fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft)
-            .borderRadius(this.palette.controlRadius).width('100%').constraintSize({ minHeight: 44 })
-            .enabled(!this.candidateLoading && !this.candidateSaving).onClick(() => this.loadCandidates(true))
-        }
-        if (this.candidateTruncated) {
-          Text('已达到本次检索页数上限，请用更具体的入口名称缩小范围。').fontSize(this.palette.metaSize)
-            .fontColor(this.palette.quiet).width('100%').wordBreak(WordBreak.BREAK_WORD)
-        }
-        if (this.candidateError.length > 0) {
-          FeedbackPanel({ kind: 'error', title: '地点尚未确认', message: this.candidateError,
-            actionLabel: '重新检索', busy: this.candidateLoading || this.candidateSaving, onAction: () => this.loadCandidates(false) })
-        }
-        Button(this.candidateSaving ? '正在保存并核对地点…' : '确认此地点').fontSize(this.palette.bodySize)
+        Button(this.routeActionLabel())
+          .width('100%').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium)
           .fontColor(this.palette.onAccent).backgroundColor(this.palette.accent).borderRadius(this.palette.controlRadius)
-          .width('100%').constraintSize({ minHeight: 48 })
-          .enabled(this.selectedCandidateIndex >= 0 && !this.candidateLoading && !this.candidateSaving)
-          .onClick(() => this.confirmCandidate())
-      }.width('100%').alignItems(HorizontalAlign.Start).padding(this.palette.cardInset)
+          .enabled(!this.routeLoading && !this.candidateSaving && this.originIndex >= 0 && this.destinationIndex >= 0)
+          .onClick(() => this.performRouteAction())
+      }.width('100%').padding({ left: 15, right: 15, top: 6, bottom: 14 })
         .backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
+      if (this.errorText.length > 0) {
+        FeedbackPanel({ kind: 'error', title: '路线尚未生成', message: this.errorText,
+          actionLabel: this.routeActionLabel(), busy: this.routeLoading, onAction: () => this.performRouteAction() })
+      }
+    }
+  }
+
+  @Builder
+  private RouteResultHeader(route: CampusRoute) {
+    Column({ space: 6 }) {
+      Row({ space: 8 }) {
+        Text(`约 ${route.total_minutes} 分钟`).fontSize(23).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
+          .layoutWeight(1)
+        Button('调整起终点', { type: ButtonType.Normal }).fontSize(this.palette.metaSize).fontColor(this.palette.accent)
+          .backgroundColor(this.palette.accentSoft).borderRadius(this.palette.controlRadius)
+          .constraintSize({ minHeight: 44 }).onClick(() => this.routeFormExpanded = true)
+      }.width('100%')
+      Text(`${route.distance_meters ?? 0} 米 · 百度步行路线`).fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
+      Text(`${this.routedPlaceLabel(this.places[this.originIndex])} → ${this.routedPlaceLabel(this.places[this.destinationIndex])}`)
+        .fontSize(this.palette.bodySize).fontColor(this.palette.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
+    }.width('100%').alignItems(HorizontalAlign.Start).padding(this.palette.cardInset)
+      .backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
+  }
+
+  @Builder
+  private RouteDetails() {
+    if (this.route !== null) {
+      if (this.route.steps.length > 0) {
+        InfoDisclosure({ title: '分段步行指引', message: this.walkingInstructions(this.route.steps) })
+      }
+      InfoDisclosure({ title: '路线说明', message: '步行时间仅供参考，请以现场通行情况为准。' })
+      EvidencePanel({ evidence: this.route.evidence ?? [], active: this.active })
+      this.PlaceEvidence(this.route.origin)
+      this.PlaceEvidence(this.route.destination)
+    } else if (this.mapActive()) {
+      InfoDisclosure({ title: '地图说明', message: '可拖动或缩放地图。起点由你选择，应用不读取当前位置。' })
+      EvidencePanel({ evidence: this.packageEvidence, active: this.active })
     }
   }
 
   build() {
     Column() {
-      AppPageHeader({ title: '校园导航', onBack: () => this.onBack() })
-
+      AppPageHeader({ title: this.pageTitle(), backEnabled: !this.candidateSaving, onBack: () => this.backPressed() })
       Scroll(this.scroller) {
-        Column({ space: 16 }) {
-          this.CourseContext()
-          Column({ space: 12 }) {
-            Row() {
-              Text('选择路线').fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
-              Blank()
-              Button('交换起终点').constraintSize({ minHeight: 44 }).fontSize(this.palette.metaSize).fontColor(this.palette.accent)
-                .padding({ left: 8, right: 0 }).backgroundColor(Color.Transparent)
-                .enabled(!this.loading && this.originIndex >= 0 && this.destinationIndex >= 0).onClick(() => {
-                  this.getUIContext().animateTo({ duration: AppTheme.motion(200), curve: Curve.EaseOut }, () => this.swap());
-                })
-            }.width('100%')
-
-            if (this.loading) {
-              FeedbackPanel({ kind: 'loading', title: '正在读取校园地点', message: '保留当前选择，读取完成后可生成路线。' })
-            } else if (this.placesError.length > 0) {
-              FeedbackPanel({ kind: 'error', title: '地点暂不可用', message: this.placesError,
-                actionLabel: '重试读取地点', onAction: () => this.loadPlaces() })
-            } else if (this.places.length < 2) {
-              FeedbackPanel({ kind: 'empty', title: '地点数据不足', message: '需要至少两个可用地点才能生成路线。',
-                actionLabel: '重新读取', onAction: () => this.loadPlaces() })
-            } else {
-              Row({ space: 12 }) {
-                Text('起点').fontSize(this.palette.bodySize).fontColor(this.palette.secondary).width(40)
-                Select(this.options()).selected(this.originIndex)
-                  .value(this.placeLabel(this.places[this.originIndex]) || '请选择起点')
-                  .fontColor(this.palette.ink).backgroundColor(this.palette.field)
-                  .optionBgColor(this.palette.surface).optionFontColor(this.palette.ink)
-                  .selectedOptionBgColor(this.palette.accentSoft).selectedOptionFontColor(this.palette.accent)
-                  .borderRadius(this.palette.controlRadius).layoutWeight(1).constraintSize({ minHeight: 48 })
-                  .onSelect((index: number) => {
-                    this.choosePlace(index, true);
-                  })
-              }.width('100%')
-
-              Row({ space: 12 }) {
-                Text('终点').fontSize(this.palette.bodySize).fontColor(this.palette.secondary).width(40)
-                Select(this.options()).selected(this.destinationIndex)
-                  .value(this.placeLabel(this.places[this.destinationIndex]) || '请选择终点')
-                  .fontColor(this.palette.ink).backgroundColor(this.palette.field)
-                  .optionBgColor(this.palette.surface).optionFontColor(this.palette.ink)
-                  .selectedOptionBgColor(this.palette.accentSoft).selectedOptionFontColor(this.palette.accent)
-                  .borderRadius(this.palette.controlRadius).layoutWeight(1).constraintSize({ minHeight: 48 })
-                  .onSelect((index: number) => {
-                    this.choosePlace(index, false);
-                  })
-              }.width('100%')
-
-              Text('手动选择起点，不读取当前位置。').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
-              if (this.places[this.originIndex] !== undefined) { this.EndpointSelection(true) }
-              if (this.places[this.destinationIndex] !== undefined) { this.EndpointSelection(false) }
-
-              Button(this.routeLoading ? '正在查询百度步行路线…' : '规划步行路线').width('100%').constraintSize({ minHeight: 48 })
-                .fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium).fontColor(this.palette.onAccent)
-                .backgroundColor(this.palette.accent).borderRadius(this.palette.controlRadius)
-                .enabled(!this.routeLoading && !this.candidateSaving && this.candidateEndpoint.length === 0)
-                .onClick(() => this.createRoute())
-            }
-
-            if (!this.loading && this.placesError.length === 0) {
-              EvidencePanel({ evidence: this.packageEvidence, active: this.active })
-            }
-
-            if (this.errorText.length > 0) {
-              FeedbackPanel({ kind: 'error', title: '路线尚未生成', message: this.errorText,
-                actionLabel: '重试生成路线', busy: this.routeLoading, onAction: () => this.createRoute() })
-            }
-          }.width('100%').padding(this.palette.cardInset).backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
-
-          this.PlacePicker()
-          RouteMap({ baseUrl: this.baseUrl, token: this.token, active: this.mapActive(),
-            route: this.route, origin: this.previewPlace(this.places[this.originIndex] ?? null, true),
-            destination: this.previewPlace(this.places[this.destinationIndex] ?? null, false) })
-
-          if (this.route !== null) {
-            Text(`百度步行路线 · 约 ${this.route.total_minutes} 分钟 · ${this.route.distance_meters ?? 0} 米`)
-              .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%').wordBreak(WordBreak.BREAK_WORD)
-            if (this.route.steps.length > 0) {
-              InfoDisclosure({ title: '查看分段步行指引', message: this.walkingInstructions(this.route.steps) })
-            }
-            InfoDisclosure({ title: '路线与开放时间说明', message: '路线与预计步行时间来自百度地图；请核对现场通行情况。手动选择起终点，不读取当前位置。开放时间为参考资料，临时闭馆请另行核对。' })
-            EvidencePanel({ evidence: this.route.evidence ?? [], active: this.active })
-            this.PlaceEvidence(this.route.origin)
-            this.PlaceEvidence(this.route.destination)
-          } else if (!this.loading && !this.routeLoading && this.errorText.length === 0 && this.placesError.length === 0 && this.places.length >= 2) {
-            InfoDisclosure({ title: '地图与路线说明', message: '拖动或缩放查看校园地图，选择两个不同地点后查询百度步行路线。预计时间请以现场道路与通行情况为准。' })
+        Column({ space: 12 }) {
+          if (this.choosingEndpoint.length > 0) {
+            this.EndpointList()
+          } else if (this.selectedCandidateIndex >= 0) {
+            this.CandidatePreview(this.candidates[this.selectedCandidateIndex])
+          } else if (this.candidateEndpoint.length > 0) {
+            this.CandidateList()
+          } else if (this.route !== null && !this.routeFormExpanded) {
+            this.RouteResultHeader(this.route)
+          } else {
+            this.CourseContext()
+            this.RouteForm()
           }
+          if (this.choosingEndpoint.length === 0 && (this.candidateEndpoint.length === 0 || this.selectedCandidateIndex >= 0)) {
+            if (this.candidateEndpoint.length === 0 && this.route === null && this.mapActive()) {
+              Text(this.routeLoading ? '正在生成步行路线' : '地图预览 · 尚未生成路线')
+                .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
+            }
+            RouteMap({ baseUrl: this.baseUrl, token: this.token, active: this.mapActive(),
+              preview: this.selectedCandidateIndex >= 0, mapHeight: this.selectedCandidateIndex >= 0 ? 290 : 365,
+              route: this.route,
+              origin: this.selectedCandidateIndex >= 0 && this.candidateEndpoint === 'destination' ? null :
+                this.previewPlace(this.places[this.originIndex] ?? null, true),
+              destination: this.selectedCandidateIndex >= 0 && this.candidateEndpoint === 'origin' ? null :
+                this.previewPlace(this.places[this.destinationIndex] ?? null, false) })
+            if (this.selectedCandidateIndex >= 0 && this.candidateError.length > 0) {
+              FeedbackPanel({ kind: 'error', title: '入口尚未保存', message: this.candidateError })
+            }
+          }
+          if (this.candidateEndpoint.length === 0 && this.choosingEndpoint.length === 0) { this.RouteDetails() }
         }.width('100%').alignItems(HorizontalAlign.Start).justifyContent(FlexAlign.Start)
-          .padding({ left: 18, right: 18, top: 4, bottom: 32 })
+          .padding({ left: 16, right: 16, top: 8, bottom: 22 })
       }.layoutWeight(1).width('100%').align(Alignment.TopStart)
+      if (this.selectedCandidateIndex >= 0) {
+        Column() {
+          Button(this.candidateSaving ? '正在保存…' : '保存此入口').width('100%').constraintSize({ minHeight: 48 })
+            .fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium).fontColor(this.palette.onAccent)
+            .backgroundColor(this.palette.accent).borderRadius(this.palette.controlRadius)
+            .enabled(!this.candidateSaving && (!this.candidateConflict() || this.candidateAcknowledged))
+            .onClick(() => this.confirmCandidate())
+        }.width('100%').padding({ left: 16, right: 16, top: 8, bottom: 10 }).backgroundColor(this.palette.canvas)
+      }
     }.width('100%').height('100%').alignItems(HorizontalAlign.Start)
       .justifyContent(FlexAlign.Start).backgroundColor(this.palette.bg)
   }

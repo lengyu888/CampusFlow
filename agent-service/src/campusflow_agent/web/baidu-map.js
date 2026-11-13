@@ -7,6 +7,9 @@
   const retry = document.getElementById("map-retry");
   // Account maps wait for the authenticated parent to provide a browser AK.
   const managed = new URLSearchParams(window.location.search).get("managed") === "1";
+  // In the HarmonyOS Web component, v4 can signal tiles loaded while its canvas is blank.
+  const useRasterMap = managed && /\bArkWeb\//i.test(navigator.userAgent);
+  const sdkVersion = useRasterMap ? "3.0" : "4.0";
   let state = {active: !managed && window.self === window.top, route: null, origin: null, destination: null};
   let sdk = null, map = null, config = null, loading = null, renderVersion = 0;
   let accountConfig = null, sdkBrowserAk = null, requiresReload = false;
@@ -66,7 +69,7 @@
       const timer = setTimeout(() => finish(false), 12000);
       window[callback] = () => finish(true);
       script.onerror = () => finish(false);
-      script.src = `https://api.map.baidu.com/api?v=4.0&ak=${encodeURIComponent(ak)}&callback=${callback}`;
+      script.src = `https://api.map.baidu.com/api?v=${sdkVersion}&ak=${encodeURIComponent(ak)}&callback=${callback}`;
       script.async = true;
       document.head.append(script);
     });
@@ -108,7 +111,14 @@
     if (!routeLayer) return;
     routeLayer.remove();
     routeLayer = null;
+    mapElement.setAttribute("aria-label", "百度校园交互地图");
     map.clearOverlays();
+  }
+  function updateRouteLine(line, points) {
+    line.setAttribute("points", points.map((point) => {
+      const {x, y} = map.pointToPixel(point);
+      return `${x},${y}`;
+    }).join(" "));
   }
   function drawRouteLine(points) {
     const ns = "http://www.w3.org/2000/svg";
@@ -116,12 +126,9 @@
     layer.setAttribute("class", "map-route");
     layer.setAttribute("aria-hidden", "true");
     const line = document.createElementNS(ns, "polyline");
-    line.setAttribute("points", points.map((point) => {
-      const {x, y} = map.pointToPixel(point);
-      return `${x},${y}`;
-    }).join(" "));
+    updateRouteLine(line, points);
     layer.append(line);
-    mapElement.append(layer);
+    mapElement.after(layer);
     return layer;
   }
   function drawRouteAfterPaint() {
@@ -136,12 +143,25 @@
           mark(points[0], "起点");
           mark(points[points.length - 1], "终点");
           routeLayer = drawRouteLine(points);
+          mapElement.setAttribute("aria-label", "百度校园交互地图，已绘制步行路线");
           show();
         } catch {
           map.clearOverlays();
           show("地图暂时无法显示，请重试。", true);
         }
       });
+    });
+  }
+  function queueRasterProjection() {
+    if (!isActive() || !fittedRoute || routeFrame) return;
+    if (!routeLayer) { drawRouteAfterPaint(); return; }
+    const line = routeLayer.firstElementChild;
+    const points = fittedRoute;
+    // A canceled ArkWeb gesture can omit moveend. Keep the visible overlays
+    // and update their projection instead of clearing them on movestart.
+    routeFrame = requestAnimationFrame(() => {
+      routeFrame = 0;
+      if (isActive() && points === fittedRoute && mapSize()) updateRouteLine(line, points);
     });
   }
   function queueRender() {
@@ -163,10 +183,11 @@
     const size = mapSize();
     if (size === layoutSize) return;
     layoutSize = size;
-    hideRoute();
+    if (!useRasterMap || !size) hideRoute();
     if (!size) return;
-    map?.checkResize();
+    map?.checkResize?.();
     if (waitingForLayout) queueRender();
+    else if (useRasterMap) queueRasterProjection();
     else drawRouteAfterPaint();
   }
   function fitRoute(path, version) {
@@ -178,6 +199,13 @@
       fittedRoute = path;
       drawRouteAfterPaint();
     };
+    if (useRasterMap) {
+      // v3 sets a non-animated viewport without a completion callback. The SVG
+      // projection waits for the paint frames and follows subsequent camera events.
+      map.setViewport(path, {margins, enableAnimation: false});
+      fitted();
+      return;
+    }
     viewportTimer = setTimeout(() => {
       if (!current()) return;
       // Some SDK builds skip completion for an already fitted camera.
@@ -237,25 +265,8 @@
     try {
       if (!map) {
         map = new sdk.Map("map");
-        map.addEventListener("zoomstart", () => {
-          if (!isActive()) return;
-          zooming = true;
-          hideRoute();
-        });
-        map.addEventListener("zoomend", () => {
-          zooming = false;
-          drawRouteAfterPaint();
-        });
-        map.addEventListener("movestart", () => {
-          if (!isActive()) return;
-          moving = true;
-          hideRoute();
-        });
-        map.addEventListener("moveend", () => {
-          moving = false;
-          drawRouteAfterPaint();
-        });
-      } else if (resized) map.checkResize();
+        bindRouteProjectionEvents();
+      } else if (resized) map.checkResize?.();
       map.enableDragging();
       map.enableScrollWheelZoom(true);
       map.clearOverlays();
@@ -267,11 +278,11 @@
       }
       const selected = [state.origin?.location, state.destination?.location].filter(validPoint);
       if (selected.length) {
-        if (validPoint(state.origin?.location)) mark(state.origin.location, "起点");
-        if (validPoint(state.destination?.location)) mark(state.destination.location, "终点");
+        if (validPoint(state.origin?.location)) mark(state.origin.location, state.preview ? "预览" : "起点");
+        if (validPoint(state.destination?.location)) mark(state.destination.location, state.preview ? "预览" : "终点");
         if (selected.length === 1) map.centerAndZoom(toPoint(selected[0]), 17);
         else map.setViewport(selected.map(toPoint), {margins: [64, 36, 48, 36]});
-        show(state.route ? "当前路线不可显示，请重新规划路线。" : "请选择起点和终点后规划步行路线。");
+        show(state.route ? "当前路线不可显示，请重新规划路线。" : "");
       } else {
         show("正在确认当前校园位置…");
         locateCampus(version);
@@ -281,6 +292,32 @@
       map?.clearOverlays();
       show("地图暂时无法显示，请重试。", true);
     }
+  }
+  function bindRouteProjectionEvents() {
+    if (useRasterMap) {
+      for (const event of ["movestart", "moving", "moveend", "zoomend", "tilesloaded"]) {
+        map.addEventListener(event, queueRasterProjection);
+      }
+      return;
+    }
+    map.addEventListener("zoomstart", () => {
+      if (!isActive()) return;
+      zooming = true;
+      hideRoute();
+    });
+    map.addEventListener("zoomend", () => {
+      zooming = false;
+      drawRouteAfterPaint();
+    });
+    map.addEventListener("movestart", () => {
+      if (!isActive()) return;
+      moving = true;
+      hideRoute();
+    });
+    map.addEventListener("moveend", () => {
+      moving = false;
+      drawRouteAfterPaint();
+    });
   }
   function pause() {
     invalidateRender();
@@ -331,7 +368,7 @@
         // Clone across the bridge so caller mutations cannot resurrect a stale route.
         const copy = JSON.parse(JSON.stringify(value ?? {}));
         next = {active: copy.active === true, route: copy.route ?? null,
-          origin: copy.origin ?? null, destination: copy.destination ?? null};
+          origin: copy.origin ?? null, destination: copy.destination ?? null, preview: copy.preview === true};
       } catch { next = {active: false, route: null, origin: null, destination: null}; }
       if (JSON.stringify(next) === JSON.stringify(state)) return;
       state = next;

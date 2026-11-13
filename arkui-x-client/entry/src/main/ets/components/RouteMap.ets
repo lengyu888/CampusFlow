@@ -11,6 +11,8 @@ export struct RouteMap {
   @Watch('tokenChanged') @Prop token: string = '';
   @Watch('stateChanged') @Prop active: boolean = true;
   @Watch('stateChanged') @Prop route: CampusRoute | null = null;
+  @Watch('stateChanged') @Prop preview: boolean = false;
+  @Prop mapHeight: number = 400;
   @Watch('stateChanged') @Prop origin: CampusDataPlace | null = null;
   @Watch('stateChanged') @Prop destination: CampusDataPlace | null = null;
   @State private documentUrl: string = '';
@@ -102,7 +104,7 @@ export struct RouteMap {
     try {
       if (!trustedMapDocument(this.controller.getUrl(), this.baseUrl)) { this.ready = false; return; }
       const initialize = config === null ? '' : mapConfigScript(config);
-      this.controller.runJavaScript(initialize + mapStateScript({ active: true, route: this.route,
+      this.controller.runJavaScript(initialize + mapStateScript({ active: true, preview: this.preview, route: this.route,
         origin: this.origin, destination: this.destination })).catch(() => {});
     } catch { this.ready = false; }
   }
@@ -119,7 +121,7 @@ export struct RouteMap {
     Column({ space: 8 }) {
       if (this.documentUrl.length > 0) {
         Web({ src: this.documentUrl, controller: this.controller })
-          .width('100%').height(400)
+          .width('100%').height(this.mapHeight)
           .javaScriptAccess(true).domStorageAccess(false).fileAccess(false).geolocationAccess(false)
           .onPageBegin(() => { this.invalidateDocument(); })
           .onPageEnd((event) => { if (event) { this.pageFinished(event.url); } })

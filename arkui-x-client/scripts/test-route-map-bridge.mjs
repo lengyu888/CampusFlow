@@ -13,7 +13,7 @@ const route = () => ({ package_id:'hdu', package_version:'v1',origin:place('a'),
   coordinate_system:'bd09ll',polyline:[{lat:30.3,lng:120.3},{lat:30.4,lng:120.4}],distance_meters:123,duration_seconds:121,
   queried_at:'2026-11-05T00:00:00Z',total_minutes:3,estimated_distance_meters:123,path:[],steps:[],note:'百度步行',is_estimate:true });
 test('map document URL comes only from normalized current service, never credentials or arbitrary navigation', () => {
-  assert.equal(bridge.routeMapUrl('HTTP://127.0.0.1:8000/'), 'http://127.0.0.1:8000/static/baidu-map.html?v=3&managed=1');
+  assert.equal(bridge.routeMapUrl('HTTP://127.0.0.1:8000/'), 'http://127.0.0.1:8000/static/baidu-map.html?v=6&managed=1');
   for(const value of ['javascript:alert(1)','https://u:p@host','https://host/?token=x','https://host/#x','https://host/../x']) assert.equal(bridge.routeMapUrl(value),'');
   const url=bridge.routeMapUrl('https://host/prefix');
   assert.equal(bridge.trustedMapDocument(url,'https://host/prefix'),true);

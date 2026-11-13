@@ -1,6 +1,6 @@
 html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; font: 14px/1.5 system-ui, sans-serif; color: #1d3048; background: #edf3f8; }
-#map { position: relative; width: 100%; height: 100%; }
-.map-route { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 6; pointer-events: none; transform: translateZ(0); }
+#map { position: relative; isolation: isolate; width: 100%; height: 100%; }
+.map-route { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 1; pointer-events: none; }
 .map-route polyline { fill: none; stroke: #2563eb; stroke-width: 6; stroke-opacity: .9; stroke-linecap: round; stroke-linejoin: round; }
 #map-status { position: absolute; z-index: 2; top: 12px; left: 12px; right: 12px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; border: 1px solid #dce5ef; border-radius: 12px; background: rgb(255 255 255 / 96%); box-shadow: 0 3px 16px rgb(24 43 78 / 10%); }
 #map-status[hidden], #map-retry[hidden] { display: none; }

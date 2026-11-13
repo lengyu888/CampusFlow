@@ -3,6 +3,7 @@ import { normalizeServiceBaseUrl } from './SessionPersistence';
 
 export interface RouteMapState {
   active: boolean;
+  preview?: boolean;
   route: CampusRoute | null;
   origin: CampusDataPlace | null;
   destination: CampusDataPlace | null;
@@ -25,7 +26,7 @@ export function supportedMapCampus(school: string, campus: string): boolean {
 
 export function routeMapUrl(baseUrl: string): string {
   const base = normalizeServiceBaseUrl(baseUrl);
-  return base === null ? '' : `${base}/static/baidu-map.html?v=3&managed=1`;
+  return base === null ? '' : `${base}/static/baidu-map.html?v=6&managed=1`;
 }
 
 export function trustedMapDocument(url: string, baseUrl: string): boolean {
@@ -93,6 +94,7 @@ function mapRoute(route: CampusRoute | null): CampusRoute | null {
 export function mapStateScript(state: RouteMapState): string {
   const value: RouteMapState = { active: state.active, route: state.active ? mapRoute(state.route) : null,
     origin: state.active ? mapPlace(state.origin) : null, destination: state.active ? mapPlace(state.destination) : null };
+  if (state.active && state.preview === true) { value.preview = true; }
   const json = JSON.stringify(value).replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
   return `if(window.CampusFlowMap){window.CampusFlowMap.setState(${json});}`;
 }

@@ -27,6 +27,27 @@ export function hasPlaceLocation(place: CampusDataPlace): boolean {
   return validCampusGeoPoint(place.location) || validPlaceSelection(place.selection, place.place_id);
 }
 
+function normalizedPlaceText(value: string): string {
+  return value.trim().toLowerCase().replace(/[\s（）()·—\-]+/g, '');
+}
+
+export function matchesCampusPlace(place: CampusDataPlace, query: string): boolean {
+  const terms = query.trim().split(/\s+/).map((term: string) => normalizedPlaceText(term));
+  const label = normalizedPlaceText([place.name, ...place.aliases, place.zone].join(' '));
+  return terms.every((term: string) => label.includes(term));
+}
+
+export function conflictingParcelBrand(place: CampusDataPlace, mapName: string): boolean {
+  const label = normalizedPlaceText([place.name, ...place.aliases].join(' '));
+  const candidate = normalizedPlaceText(mapName);
+  const parcelTerms = /快递|驿站|物流|邮政|自提|丰巢|兔喜/;
+  if (!parcelTerms.test(label) || !parcelTerms.test(candidate)) { return false; }
+  const brands = ['菜鸟', '京东', '顺丰', '中通', '圆通', '申通', '韵达', '邮政', '极兔', '兔喜', '丰巢'];
+  const expected = brands.filter((brand: string) => label.includes(brand));
+  const actual = brands.filter((brand: string) => candidate.includes(brand));
+  return expected.length > 0 && actual.length > 0 && !actual.some((brand: string) => expected.includes(brand));
+}
+
 // Candidate credentials remain in the private picker. Only public place data reaches the map.
 export function candidatePreviewPlace(place: CampusDataPlace, candidate: CampusPlaceCandidate): CampusDataPlace {
   return { place_id: place.place_id, name: candidate.name, category: place.category, zone: place.zone,

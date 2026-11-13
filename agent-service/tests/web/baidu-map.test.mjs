@@ -16,6 +16,7 @@ function environment(config = {configured: true, browser_ak: 'fixture-public-ak'
   const dom = new JSDOM('<div id="map"></div><section id="map-status"><span id="map-message"></span><button id="map-retry">重试</button></section>',
     {url: options.url ?? 'http://localhost/static/baidu-map.html', runScripts: 'outside-only', pretendToBeVisual: true});
   const {window} = dom, requests = [], maps = [], searches = [], timers = new Map();
+  if (options.userAgent) Object.defineProperty(window.navigator, 'userAgent', {value: options.userAgent});
   Object.defineProperties(window.document.getElementById('map'), {
     clientWidth: {value: 340}, clientHeight: {value: 400},
   });
@@ -106,13 +107,13 @@ function environment(config = {configured: true, browser_ak: 'fixture-public-ak'
     LocalSearch: class {constructor(city, options) {this.city = city; this.options = options; searches.push(this);}
       search(query) {this.query = query;} getStatus() {return 0;}}
   };
-  async function loadSdk() {
+  async function loadSdk(version = '4.0') {
     await settle();
     const script = window.document.querySelector('script[src]');
     assert.ok(script, 'configured active map should request SDK');
     const url = new URL(script.src);
     assert.equal(url.origin + url.pathname, 'https://api.map.baidu.com/api');
-    assert.equal(url.searchParams.get('v'), '4.0');
+    assert.equal(url.searchParams.get('v'), version);
     assert.equal(url.searchParams.has('type'), false);
     window.BMap = sdk;
     window[url.searchParams.get('callback')]();
@@ -156,6 +157,59 @@ test('changing an already loaded managed browser key hides the old document', as
   assert.equal(f.window.document.getElementById('map').hidden, true);
   assert.equal(f.window.document.querySelectorAll('script[src]').length, 1);
   assert.match(f.message(), /重新打开/);
+});
+
+test('managed ArkWeb draws the route and keeps it visible even when a gesture has no end event', async t => {
+  const f = environment(undefined, {
+    url: 'https://service.test/static/baidu-map.html?v=4&managed=1',
+    userAgent: 'Mozilla/5.0 Chrome/132.0 ArkWeb/6.1.0.120',
+    deferViewport: true,
+  });
+  t.after(() => f.dom.window.close());
+  f.bridge.setConfig(accountConfig);
+  f.bridge.setState(routeState);
+  await f.loadSdk('3.0');
+
+  const [map] = f.maps;
+  assertRoadLine(f);
+  assert.equal(roadLines(f)[0].parentElement.previousElementSibling.id, 'map');
+  assert.match(f.window.document.getElementById('map').getAttribute('aria-label'), /已绘制步行路线/);
+  const [start, end] = map.overlays;
+  assert.deepEqual([start.label.text, end.label.text], ['起点', '终点']);
+  map.emit('movestart');
+  await settle();
+  assertRoadLine(f);
+  assert.equal(map.overlays.length, 2);
+  map.pixelOffset = {x: 10, y: 20};
+  map.emit('moveend');
+  await settle();
+  assertRoadLine(f, [110, 220, 210, 120]);
+  map.emit('zoomstart');
+  assertRoadLine(f, [110, 220, 210, 120]);
+  map.pixelScale = 2;
+  map.emit('zoomend');
+  await settle();
+  assertRoadLine(f, [210, 420, 410, 220]);
+
+  f.bridge.setState({...routeState, route: null});
+  assert.equal(map.overlays.length, 0);
+  await settle();
+  assert.equal(map.overlays.length, 2);
+  f.bridge.clear();
+  assert.equal(map.overlays.length, 0);
+});
+
+test('a candidate preview shows only its pin and does not show route instructions', async t => {
+  const f = environment(undefined, {url: 'https://service.test/static/baidu-map.html?managed=1'});
+  t.after(() => f.dom.window.close());
+  f.bridge.setConfig(accountConfig);
+  f.bridge.setState({active: true, preview: true, origin: null, destination});
+  await f.loadSdk();
+  const [map] = f.maps;
+  assert.equal(map.overlays.length, 1);
+  assert.equal(map.overlays[0].label.text, '预览');
+  assert.equal(map.center.lng, pointB.lng);
+  assert.equal(f.message(), '');
 });
 function assertRoadLine(f, expected = [100, 200, 200, 100]) {
   const lines = roadLines(f);
@@ -461,9 +515,9 @@ test('prefixed service loads static resources under the same prefix', () => {
   const html = readFileSync(new URL('../../src/campusflow_agent/web/baidu-map.html', import.meta.url), 'utf8');
   const dom = new JSDOM(html, {url: pageUrl});
   assert.equal(dom.window.document.querySelector('link[rel="stylesheet"]').href,
-    'https://campus.example/prefix/static/baidu-map.css?v=3');
+    'https://campus.example/prefix/static/baidu-map.css?v=4');
   assert.equal(dom.window.document.querySelector('script[src]').src,
-    'https://campus.example/prefix/static/baidu-map.js?v=3');
+    'https://campus.example/prefix/static/baidu-map.js?v=8');
   dom.window.close();
 });
 

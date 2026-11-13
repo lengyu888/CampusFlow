@@ -129,6 +129,8 @@ struct Index {
   @State private campusDataRevision: number = 0;
   @State private profileInnerActive: boolean = false;
   @State private planInnerActive: boolean = false;
+  @State private routeInnerActive: boolean = false;
+  @State private routeBackRevision: number = 0;
   private focusOrigin: AppNavigationState | null = null;
   @State private contentOpacity: number = 1;
   @State private contentOffset: number = 0;
@@ -566,6 +568,10 @@ struct Index {
       this.planBackRevision++;
       return true;
     }
+    if (this.activeTab === 6 && this.routeInnerActive) {
+      this.routeBackRevision++;
+      return true;
+    }
     if (hasBack(this.navigation)) {
       this.goBack();
       return true;
@@ -970,6 +976,7 @@ struct Index {
         routeScope: this.token.length > 0 ? campusRouteScope(historyScope(this.serviceBaseUrl(), this.user.user_id), this.user.school, this.user.campus) : '',
         school: this.user.school ?? '', campus: this.user.campus ?? '',
         routeContextKey: `${this.navigation.root}`, courseIntent: this.currentCourseRoute(), active: this.activeTab === 6 && this.voiceForeground,
+        backRevision: this.routeBackRevision, onInnerNavigationChanged: (open) => this.routeInnerActive = open,
         onBack: () => this.goBack() })
         .visibility(this.activeTab === 6 ? Visibility.Visible : Visibility.Hidden)
       CampusServicesPage({ baseUrl: this.serviceBaseUrl(), token: this.token, active: this.activeTab === 7 && this.voiceForeground,

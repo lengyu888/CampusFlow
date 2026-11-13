@@ -10,7 +10,7 @@ const helpers = new Function('normalizeServiceBaseUrl',clean(read('utils/RouteMa
 const source = read('components/RouteMap');
 const controller=source.slice(0,source.indexOf('\n  build()')).replace(/^import [^\n]+;\r?\n/gm,'').replace(/^@Component\r?\n/gm,'')
  .replace(/@(State|Prop)\s+|@Watch\('[^']+'\)\s*/g,'').replace('export struct RouteMap','class RouteMap')+'\n}';
-const managedUrl = base => `${base}/static/baidu-map.html?v=3&managed=1`;
+const managedUrl = base => `${base}/static/baidu-map.html?v=6&managed=1`;
 const config = {browser_ak:'BROWSER_FIXTURE',configured:true,route_configured:true,city:'杭州',campus_query:'校区'};
 function setup(fetchConfig=async()=>config){const calls=[],fetches=[],loads=[];let url=managedUrl('https://service');
  class Controller { getUrl(){return url;} loadUrl(next){loads.push(next);url=next;} runJavaScript(script){calls.push(script);return Promise.resolve('');} onActive(){} onInactive(){} }
