@@ -1539,7 +1539,7 @@ export struct PlanCenterPage {
         .fontSize(this.palette.bodySize).fontColor(value ? this.palette.onAccent : this.palette.accent)
         .backgroundColor(value ? this.palette.accent : this.palette.accentSoft).borderRadius(this.palette.controlRadius)
         .enabled(!this.writesBlocked()).onClick(() => change(!value))
-      Text(value ? '若与课程重叠，预览会列出具体课程和时段，仍需你再次确认。' : '默认避开课程；适合课内完成的任务可以单独开启。')
+      Text(value ? '课表重叠需在预览中确认。' : '默认避开课程。')
         .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
     }.width('100%').alignItems(HorizontalAlign.Start)
   }
@@ -1557,8 +1557,8 @@ export struct PlanCenterPage {
       }
       if (this.pendingCaptureIntent !== null) {
         Column({ space: 4 }) {
-          Text(`首页建议 ${this.pendingCaptureIntent.date} ${this.pendingCaptureIntent.time}，留 ${this.pendingCaptureIntent.durationMinutes ?? 0} 分钟。`)
-            .fontSize(this.palette.metaSize).fontColor(this.palette.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
+          Text(`建议时段 ${this.pendingCaptureIntent.date} ${this.pendingCaptureIntent.time} · ${this.pendingCaptureIntent.durationMinutes ?? 0} 分钟`)
+            .fontSize(this.palette.bodySize).fontColor(this.palette.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
           Button('使用时段，保留标题').constraintSize({ minHeight: 44 }).fontSize(this.palette.metaSize)
             .fontColor(this.palette.accent).backgroundColor(Color.Transparent).padding(0).enabled(!this.writesBlocked())
             .onClick(() => this.applyCaptureSuggestion())
@@ -1585,10 +1585,12 @@ export struct PlanCenterPage {
           .onChange((value) => { this.title = value; this.stageTaskDraft(); })
         if (this.captureOriginalText.length > 0) {
           Column({ space: 5 }) {
-            Text(`原句 ${this.captureOriginalText}`).fontSize(this.palette.metaSize)
-              .fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+            if (this.captureOriginalText !== this.title) {
+              Text(`原句 ${this.captureOriginalText}`).fontSize(this.palette.bodySize)
+                .fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+            }
             ForEach(this.captureIssues, (issue: QuickCaptureIssue) => {
-              Text(issue.message).fontSize(this.palette.metaSize).fontColor(this.palette.warning).width('100%').wordBreak(WordBreak.BREAK_WORD)
+              Text(issue.message).fontSize(this.palette.bodySize).fontColor(this.palette.warning).width('100%').wordBreak(WordBreak.BREAK_WORD)
             }, (issue: QuickCaptureIssue, index: number) => `${index}-${issue.code}`)
             Button('请助手核对').constraintSize({ minHeight: 44 }).fontSize(this.palette.metaSize)
               .fontColor(this.palette.accent).backgroundColor(Color.Transparent).padding(0)
@@ -1622,7 +1624,7 @@ export struct PlanCenterPage {
           Row({ space: 6 }) {
             Text('时间与时长').fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium).fontColor(this.palette.ink).layoutWeight(1)
             Text(this.draftTaskTime || (this.draftTaskDate.length > 0 ? '全天' : '未定时'))
-              .fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
+              .fontSize(this.palette.bodySize).fontColor(this.palette.secondary)
             AppIcon({ name: 'chevron', iconSize: 16, color: this.palette.accent }).rotate({ angle: this.captureTimeExpanded ? 90 : 0 })
           }.width('100%')
         }.width('100%').constraintSize({ minHeight: 44 }).padding(0).backgroundColor(Color.Transparent)
@@ -1646,7 +1648,7 @@ export struct PlanCenterPage {
               .borderRadius(this.palette.controlRadius).accessibilityText('时长，分钟')
               .onChange((value: string) => { this.durationText = value; this.stageTaskDraft(); })
           }.width('100%')
-          Text('时间采用北京时间').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
+          Text('北京时间').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
         }
       }.width('100%').alignItems(HorizontalAlign.Start).padding(this.palette.cardInset)
         .backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
@@ -1669,13 +1671,17 @@ export struct PlanCenterPage {
   @Builder
   private TaskFormFooter() {
     Column({ space: 6 }) {
+      if (this.title.trim().length === 0 || this.draftMessage === '已保存到本机。') {
       Row({ space: 6 }) {
-        Text(this.title.trim().length === 0 ? '填写内容后可预览' : '核对后再添加')
-          .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).layoutWeight(1)
+        if (this.title.trim().length === 0) {
+          Text('填写内容后可预览').fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
+        }
+        Blank()
         if (this.draftMessage === '已保存到本机。') {
           Text('草稿已保存').fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
         }
       }.width('100%')
+      }
       Button(this.draftTaskDate.length === 0 ? '预览无日期待办' : '预览待办').width('100%').constraintSize({ minHeight: 48 })
         .fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium)
         .fontColor(this.title.trim().length > 0 && !this.writesBlocked() ? this.palette.onAccent : this.palette.disabledContent)
@@ -1689,9 +1695,9 @@ export struct PlanCenterPage {
   @Builder
   private EditField(label: string, value: string, placeholder: string, change: (value: string) => void) {
     Column({ space: 8 }) {
-      Text(label).fontSize(this.palette.bodySize).fontColor(this.palette.quiet).width('100%')
+      Text(label).fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium).fontColor(this.palette.ink).width('100%')
       TextInput({ text: value, placeholder: placeholder }).constraintSize({ minHeight: 48 }).width('100%').fontSize(this.palette.bodySize)
-        .fontColor(this.palette.ink).backgroundColor(this.palette.surface).borderRadius(this.palette.controlRadius)
+        .fontColor(this.palette.ink).backgroundColor(this.palette.field).borderRadius(this.palette.controlRadius)
         .border({ width: 1, color: this.palette.outline }).onChange(change)
     }.width('100%')
   }
@@ -1702,16 +1708,14 @@ export struct PlanCenterPage {
       if (this.editTaskId.length === 0) {
         Text('这份编辑已完成或已放弃，返回任务详情可重新编辑。').fontSize(this.palette.bodySize).fontColor(this.palette.quiet).width('100%')
       } else {
-        Text('返回会保留草稿。时间使用北京时间；修改前后内容会在下一步完整展示。')
-          .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
+        InfoDisclosure({ title: '编辑说明', message: '时间使用北京时间。返回会保留草稿，预览会列出改动。' })
         this.EditField('任务名称', this.editTaskTitle, '1–120 字', (value: string) => this.editTaskTitle = value)
         this.EditField('开始时间', this.editTaskStart, '例如 2026-10-20 18:30，留空待安排', (value: string) => this.editTaskStart = value)
         this.EditField('结束时间', this.editTaskEnd, '例如 2026-10-20 19:30，可留空', (value: string) => this.editTaskEnd = value)
         this.EditField('地点', this.editTaskLocation, '可留空', (value: string) => this.editTaskLocation = value)
         this.CoursePermission(this.editTaskAllowDuringCourse, (value: boolean) => this.editTaskAllowDuringCourse = value)
         this.EditField('提前提醒（分钟）', this.editTaskReminder, '0 表示开始时；留空不设置', (value: string) => this.editTaskReminder = value)
-        Text('这里保存提醒设置；系统通知实际送达仍取决于平台支持与通知权限。')
-          .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
+        InfoDisclosure({ title: '提醒说明', message: '系统提醒需设备支持并开启通知权限。' })
         Button('预览任务更改').width('100%').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
           .fontColor(this.palette.onAccent).backgroundColor(this.palette.accent).borderRadius(this.palette.controlRadius)
           .enabled(!this.writesBlocked()).onClick(() => this.previewTaskEdit())
@@ -1728,8 +1732,7 @@ export struct PlanCenterPage {
       if (this.editPlanId.length === 0) {
         Text('这份编辑已完成或已放弃，返回计划详情可重新编辑。').fontSize(this.palette.bodySize).fontColor(this.palette.quiet).width('100%')
       } else {
-        Text('仅编辑计划信息，现有阶段与子任务不变。返回会保留草稿。')
-          .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
+        InfoDisclosure({ title: '编辑说明', message: '只编辑计划信息。返回会保留草稿。' })
         this.EditField('计划名称', this.editPlanTitle, '1–120 字', (value: string) => this.editPlanTitle = value)
         Text('计划说明').fontSize(this.palette.bodySize).fontColor(this.palette.quiet).width('100%')
         TextArea({ text: this.editPlanSummary, placeholder: '最多 500 字，可留空' }).width('100%').constraintSize({ minHeight: 120 })
@@ -1813,7 +1816,7 @@ export struct PlanCenterPage {
       Row({ space: 8 }) { this.TaskFilter('全部', 'all')
         this.TaskFilter('待完成', 'pending')
         this.TaskFilter('已完成', 'completed') }.width('100%').padding(3).backgroundColor(this.palette.field).borderRadius(12)
-      Text('日期条件 · 与状态、搜索同时生效').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
+      Text('按日期筛选').fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium).fontColor(this.palette.ink).width('100%')
       Row({ space: 8 }) { this.QueryDate('不限日期', 'all')
         this.QueryDate('日历所选', 'day') }.width('100%')
       Row({ space: 8 }) { this.QueryDate('日期范围', 'range')
@@ -1987,7 +1990,7 @@ export struct PlanCenterPage {
         if (this.projectedTasks() !== null) {
           this.LoadSummary(() => this.dayLoad(this.previewLoadDate()), '候选前')
           this.LoadSummary(() => this.candidateLoad(), '确认后预计')
-          Text('以上只比较当前这份候选；预览不会改动任务，确认时仍会核对最新状态。').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
+          Text('确认时将核对最新安排。').fontSize(this.palette.bodySize).fontColor(this.palette.secondary).width('100%')
         }
         PlanningActionPanel({ state: this.actionState, active: this.active && !this.mutationBusy && !this.replanWriteBlocked && !this.draftStorageBusy,
           retryIntent: this.actionController?.retryIntent() ?? '', onConfirm: (acks: CourseAcknowledgement[]) => this.confirmPlanningAction(acks),
@@ -2001,10 +2004,10 @@ export struct PlanCenterPage {
             Text(`${detail.reference.course.date} · ${detail.reference.course.start_time}–${detail.reference.course.end_time} · 北京时间`).fontSize(this.palette.bodySize).fontColor(this.palette.accent).width('100%').wordBreak(WordBreak.BREAK_WORD)
             Text(`地点：${detail.reference.course.location || '未提供'}`).fontSize(this.palette.bodySize).fontColor(this.palette.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
             Text(`教师：${detail.reference.course.teacher || '未提供'}`).fontSize(this.palette.bodySize).fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
-            Text(this.timetableState !== 'ready' ? '最新课表尚未核对；下方为打开时的只读快照。' : this.courseCurrent(detail.reference) ?
-              '来自当前完整课表；此处只读，编辑请进入课表维护。' : '课表版本已变化；此处保留原课程供核对，请返回日程重新选择。')
-              .fontSize(this.palette.bodySize).fontColor(this.timetableState === 'ready' && this.courseCurrent(detail.reference) ? this.palette.secondary : this.palette.warning).width('100%').wordBreak(WordBreak.BREAK_WORD)
-            Text(`相同完整记录中的第 ${detail.reference.occurrence} 条`).fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
+            if (this.timetableState !== 'ready' || !this.courseCurrent(detail.reference)) {
+              Text(this.timetableState !== 'ready' ? '课表待核对，当前显示上次记录。' : '课表已变化，请返回日程重新选择。')
+                .fontSize(this.palette.bodySize).fontColor(this.palette.warning).width('100%').wordBreak(WordBreak.BREAK_WORD)
+            }
             EvidencePanel({ evidence: detail.evidence, active: this.active && frame.key === this.topDetailKey() })
             Button('打开课表维护').width('100%').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
               .fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft).onClick(() => this.onOpenTimetable())
@@ -2027,7 +2030,7 @@ export struct PlanCenterPage {
             }
             if (task.status !== 'completed') {
               Column() {
-                AppActionRow({ title: '开始专注', subtitle: '可选计时，结束后再确认完成', icon: 'bolt',
+                AppActionRow({ title: '开始专注', icon: 'bolt',
                   actionEnabled: this.active, onAction: () => this.focusRequested(task) })
               }.width('100%').backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius).clip(true)
             }
@@ -2115,8 +2118,7 @@ export struct PlanCenterPage {
       }
       if (this.recoveredDraft !== null) {
         Column({ space: 8 }) {
-          Text('有一份未提交的待办草稿').fontSize(this.palette.bodySize).fontColor(this.palette.ink).width('100%')
-          Text('恢复只填回输入；原日期保留，核对后再保存。').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
+          Text('有未提交的待办草稿').fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium).fontColor(this.palette.ink).width('100%')
           Row({ space: 8 }) {
             Button('恢复草稿').layoutWeight(1).constraintSize({ minHeight: 44 }).fontSize(this.palette.bodySize)
               .fontColor(this.palette.onAccent).backgroundColor(this.palette.accent).borderRadius(this.palette.controlRadius)

@@ -25,7 +25,7 @@ export struct AppPageHeader {
           .accessibilityText(this.backLabel).enabled(this.backEnabled).onClick(() => this.onBack())
       }
       Column({ space: 2 }) {
-        Text(this.title).fontSize(22).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
+        Text(this.title).fontSize(21).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
           .width('100%').wordBreak(WordBreak.BREAK_WORD)
         if (this.subtitle.length > 0) {
           Text(this.subtitle).fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
@@ -41,7 +41,7 @@ export struct AppPageHeader {
               AppIcon({ name: this.actionIcon, iconSize: 21, color: this.palette.accent })
             }
             if (this.actionLabel.length > 0) {
-              Text(this.actionLabel).fontSize(this.palette.bodySize).fontColor(this.palette.accent)
+              Text(this.actionLabel).fontSize(this.palette.metaSize).fontWeight(FontWeight.Medium).fontColor(this.palette.accent)
             }
           }
         }.constraintSize({ minWidth: 44, minHeight: 44 }).padding({ left: 10, right: 10 })
@@ -51,6 +51,7 @@ export struct AppPageHeader {
       }
     }.width('100%').constraintSize({ minHeight: 56 })
       .padding({ left: this.showBack ? 4 : this.palette.pageInset, right: 10, top: 4, bottom: 4 })
-      .backgroundColor(this.palette.canvas)
+      .backgroundColor(this.palette.surface)
+      .border({ width: { bottom: 0.5 }, color: this.palette.line })
   }
 }

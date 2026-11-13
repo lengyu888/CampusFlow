@@ -2,7 +2,6 @@ import { validatedActionReceipt } from '../utils/ActionReliability';
 import { CourseReview, CourseOverlap, CourseAcknowledgement, PendingAction, PlanningTaskDraft } from '../model/ApiModels';
 import { courseCandidates, validCoursePolicy } from '../utils/CourseReview';
 import { formatPlanDateTime } from '../utils/PlanPresentation';
-import { AppTheme } from '../theme/AppTheme';
 import { ThemePalette, themePalette } from '../theme/ThemePalette';
 
 @Component
@@ -30,8 +29,8 @@ export struct CourseReviewPanel {
         Column({ space: 10 }) {
           Text(this.title(review)).fontSize(this.palette.bodySize).fontColor(this.palette.ink).fontWeight(FontWeight.Medium).width('100%')
           Text(review.revoke_only ? '关闭课内许可后，原时段仍需调整' :
-            this.action.status === 'confirmed' && validatedActionReceipt(this.action) !== null ? '本次已确认课内安排；课表变化时会重新核对' : review.state === 'accepted' ? '已确认的课内安排' :
-            review.allow_during_course ? '这项任务可以课内完成，仍需核对以下重叠' : '这项任务未允许课内完成，请调整时间或任务设置')
+            this.action.status === 'confirmed' && validatedActionReceipt(this.action) !== null ? '已确认课内安排，课表变更后需核对' : review.state === 'accepted' ? '已确认课内安排' :
+            review.allow_during_course ? '允许课内完成，请核对重叠时段' : '未允许课内完成，请调整时间或任务设置')
             .fontSize(this.palette.bodySize).fontColor(this.palette.warning).width('100%').wordBreak(WordBreak.BREAK_WORD)
           Text(`${review.school} · ${review.campus} · 北京时间`).fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
           ForEach(review.overlaps, (overlap: CourseOverlap) => {
@@ -48,7 +47,7 @@ export struct CourseReviewPanel {
               .fontSize(this.palette.bodySize).fontColor(this.checked(review) ? this.palette.onAccent : this.palette.accent)
               .backgroundColor(this.checked(review) ? this.palette.accent : this.palette.accentSoft).borderRadius(this.palette.controlRadius)
               .enabled(this.reviewEnabled).onClick(() => this.onToggle(review))
-            Text('仅确认上面这项任务与所列课程的重叠；最后还需确认整份变更。')
+            Text('这一步只核对重叠，之后仍需确认整份方案。')
               .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
           }
         }.width('100%').padding(16).backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius).alignItems(HorizontalAlign.Start)

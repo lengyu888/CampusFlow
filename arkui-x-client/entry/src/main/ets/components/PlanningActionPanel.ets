@@ -7,7 +7,7 @@ import { canConfirmAction, validatedActionReceipt, receiptTaskId, receiptPlanId 
 import { formatPlanDateTime } from '../utils/PlanPresentation';
 import { TaskScheduleDetails } from './TaskScheduleDetails';
 import { FeedbackPanel } from './FeedbackPanel';
-import { AppTheme } from '../theme/AppTheme';
+import { InfoDisclosure } from './InfoDisclosure';
 import { ThemePalette, themePalette } from '../theme/ThemePalette';
 
 @Component
@@ -47,10 +47,10 @@ export struct PlanningActionPanel {
   @Builder
   private TaskFields(label: string, task: PlanningTaskDraft) {
     Column({ space: 8 }) {
-      Text(label).fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
+      Text(label).fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium).fontColor(this.palette.accent).width('100%')
       Text(task.title).fontSize(this.palette.bodySize).fontColor(this.palette.ink).fontWeight(FontWeight.Medium)
         .width('100%').wordBreak(WordBreak.BREAK_WORD)
-      Text(task.allow_during_course === true ? '可在上课时完成：已开启' : '可在上课时完成：未开启')
+      Text(task.allow_during_course === true ? '允许课内安排' : '避开课程')
         .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
       TaskScheduleDetails({ startAt: task.start_at, endAt: task.end_at, location: task.location, reminderMinutes: task.reminder_minutes })
     }.width('100%').alignItems(HorizontalAlign.Start).padding(16).backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
@@ -59,11 +59,12 @@ export struct PlanningActionPanel {
   @Builder
   private PlanFields(label: string, plan: PlanningPlanDraft) {
     Column({ space: 8 }) {
-      Text(label).fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
+      Text(label).fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium).fontColor(this.palette.accent).width('100%')
       Text(plan.title).fontSize(this.palette.bodySize).fontColor(this.palette.ink).fontWeight(FontWeight.Medium)
         .width('100%').wordBreak(WordBreak.BREAK_WORD)
-      Text(plan.summary.length > 0 ? plan.summary : '未设置说明').fontSize(this.palette.bodySize)
-        .fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+      if (plan.summary.length > 0) {
+        Text(plan.summary).fontSize(this.palette.bodySize).fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+      }
       Text(plan.target_date === null ? '未设截止日' : `截止日：${plan.target_date}`)
         .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
     }.width('100%').alignItems(HorizontalAlign.Start).padding(16).backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
@@ -134,10 +135,8 @@ export struct PlanningActionPanel {
               .enabled(this.active).onClick(this.onCheck)
           }
           if (this.state.phase === 'resolved' && validatedActionReceipt(action) !== null) {
-            Text(`执行时间：${formatPlanDateTime(action.receipt?.applied_at ?? null)}`)
-              .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
-            Text(`回执：${action.receipt?.receipt_id ?? ''}`).fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
-              .width('100%').wordBreak(WordBreak.BREAK_WORD)
+            InfoDisclosure({ title: '查看执行回执',
+              message: `执行时间 ${formatPlanDateTime(action.receipt?.applied_at ?? null)}\n回执编号 ${action.receipt?.receipt_id ?? ''}` })
             if (action.kind === 'plan' && action.action === 'delete') {
               Text(`已保留 ${action.receipt?.retained_task_ids.length ?? 0} 项独立待办。`).fontSize(this.palette.bodySize).fontColor(this.palette.secondary).width('100%')
             }

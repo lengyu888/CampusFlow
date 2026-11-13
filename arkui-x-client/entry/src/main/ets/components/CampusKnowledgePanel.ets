@@ -81,14 +81,9 @@ export struct CampusKnowledgePanel {
   private SourceDetail(hit: KnowledgeHit) {
     Column({ space: 8 }) {
       Text(`${hit.title} · ${hit.section}`).fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium).fontColor(this.palette.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
-      Text(`适用范围：${hit.school} · ${hit.campus}`).fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
-      Text(`整理核对日期：${hit.reviewed_at}`).fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
-      Text('原文发布日期：资料未提供；这份参考资料不代表实时状态。').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
-      Text('原文摘录').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
+      Text('原文摘录').fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium).fontColor(this.palette.secondary).width('100%')
       Text(hit.excerpt).fontSize(this.palette.bodySize).fontColor(this.palette.ink).width('100%').copyOption(CopyOptions.LocalDevice)
-      Text(hit.summary).fontSize(this.palette.bodySize).fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
-      Text(`原文链接（可长按复制）\n${hit.url}`).fontSize(this.palette.metaSize).fontColor(this.palette.accent)
-        .width('100%').wordBreak(WordBreak.BREAK_WORD).copyOption(CopyOptions.LocalDevice)
+      InfoDisclosure({ title: '资料适用范围', message: `${hit.school} · ${hit.campus}\n整理核对日期：${hit.reviewed_at}\n原文发布日期：资料未提供。内容不代表实时状态。` })
       EvidencePanel({ evidence: knowledgeEvidence(hit), active: this.active })
       Button('收起出处').constraintSize({ minHeight: 44 }).fontSize(this.palette.metaSize)
         .fontColor(this.palette.accent).backgroundColor(Color.Transparent).onClick(() => this.closeSource())
@@ -96,16 +91,13 @@ export struct CampusKnowledgePanel {
   }
   build() {
     Column({ space: 12 }) {
-      Text('查询校园指南').fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Bold).fontColor(this.palette.ink).width('100%')
-      Text('只查询参考资料，不含实时或个人数据；无需模型密钥。')
-        .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
       TextInput({ text: this.query, placeholder: '输入想了解的办事或使用问题' }).constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
         .fontColor(this.palette.ink).backgroundColor(this.palette.field).borderRadius(this.palette.controlRadius)
         .onChange((text: string) => this.query = text).accessibilityText('输入校园资料问题，最多200字')
       Button(this.loading ? '查询中…' : '查询官方资料').width('100%').constraintSize({ minHeight: 48 })
         .fontSize(this.palette.bodySize).fontColor(this.palette.onAccent).backgroundColor(this.palette.accent)
         .borderRadius(this.palette.controlRadius).enabled(!this.loading && this.active).onClick(() => this.search())
-      Button(this.examplesExpanded ? '收起示例问题' : '不知道怎么问？查看示例').width('100%').constraintSize({ minHeight: 44 })
+      Button(this.examplesExpanded ? '收起示例' : '查看示例').constraintSize({ minHeight: 44 })
         .fontSize(this.palette.metaSize).fontColor(this.palette.accent).backgroundColor(Color.Transparent)
         .accessibilityText(`示例问题，${this.examplesExpanded ? '已展开' : '已收起'}`)
         .onClick(() => animateTo({ duration: AppTheme.motion(160) }, () => this.examplesExpanded = !this.examplesExpanded))
@@ -127,17 +119,15 @@ export struct CampusKnowledgePanel {
       InfoDisclosure({ title: '资料覆盖范围', message: '查阅精选官方办事与使用指南，不查询实时开放、座位、考试或个人数据；无需模型密钥。' })
       if (this.message.length > 0) { FeedbackPanel({ kind: 'warning', title: '本次资料查询', message: this.message }) }
       if (this.result !== null) {
-        Text(`查询：${this.result.query}`).fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
         if (this.result.status !== 'found') {
           FeedbackPanel({ kind: 'empty', title: this.result.status === 'unsupported' ? '当前校区尚未收录' : '没有可靠命中', message: this.result.message })
         } else {
-          Text(this.result.message).fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
+          Text(`找到 ${this.result.hits.length} 份参考资料`).fontSize(this.palette.bodySize).fontColor(this.palette.secondary).width('100%')
           ForEach(this.result.hits, (hit: KnowledgeHit) => {
             Column({ space: 8 }) {
               Text(hit.title).fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium).fontColor(this.palette.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
               Text(hit.section).fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
               Text(hit.summary).fontSize(this.palette.bodySize).fontColor(this.palette.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
-              Text(`资料整理核对：${hit.reviewed_at}；不代表现行有效期。`).fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
               Button(this.sourceLoading === hit.source_id ? '读取中…' : '查看摘录与出处').constraintSize({ minHeight: 48 })
                 .fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft).enabled(this.sourceLoading !== hit.source_id)
                 .onClick(() => this.openSource(hit.source_id))

@@ -161,7 +161,7 @@ export struct TimetableEntryEditor {
         }
       }.width('100%')
       if (this.fieldError(field).length > 0) {
-        Text(this.fieldError(field)).fontSize(this.palette.metaSize).fontColor(this.palette.danger).width('100%')
+        Text(this.fieldError(field)).fontSize(this.palette.bodySize).fontColor(this.palette.danger).width('100%')
       }
     }.width('100%').alignItems(HorizontalAlign.Start)
   }
@@ -174,7 +174,6 @@ export struct TimetableEntryEditor {
         Button('沿用上一门信息').constraintSize({ minHeight: 48 }).width('100%').fontSize(this.palette.bodySize)
           .fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft).enabled(this.active && !this.busy)
           .onClick(() => this.onReuse())
-        Text('只复制到新表单，不会更改或再次加入上一门课程。').fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
       }
       if (this.firstError().length > 0) {
         Button('定位第一处错误').constraintSize({ minHeight: 48 }).width('100%').fontColor(this.palette.danger)
@@ -184,7 +183,7 @@ export struct TimetableEntryEditor {
       this.Field('上课日期 *', 'date', 'YYYY-MM-DD')
       this.Field('开始时间 *', 'start_time', '08:05')
       this.Field('结束时间 *', 'end_time', '09:40')
-      Text('使用北京时间、24 小时制；当天结束时间应晚于开始时间，也可直接手动输入。')
+      Text('北京时间，24 小时制')
         .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
       Button(this.optionalExpanded ? '收起补充信息' : '地点、教师与重复周次（选填）')
         .constraintSize({ minHeight: 48 }).width('100%').fontSize(this.palette.bodySize).fontColor(this.palette.accent)
@@ -205,9 +204,10 @@ export struct TimetableEntryEditor {
           }.width('100%')
         }
       }
-      Text(this.editing || !this.showRepeat ? '只修改选中的这一次；不会推测或展开原始系列课程。' :
-        this.repeatWeeks === 1 ? '默认仅添加一次，不自动生成整学期。' : `将生成 ${this.repeatWeeks} 个具体日期；单双周和节假日请逐条核对。`)
-        .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
+      if (!this.editing && this.showRepeat && this.repeatWeeks > 1) {
+        Text(`将添加 ${this.repeatWeeks} 次，请核对单双周和节假日。`)
+          .fontSize(this.palette.bodySize).fontColor(this.palette.secondary).width('100%')
+      }
       if (this.notice.length > 0) { Text(this.notice).fontSize(this.palette.metaSize).fontColor(this.palette.warning).width('100%') }
       Row({ space: 8 }) {
         if (!this.editing && this.showRepeat) {

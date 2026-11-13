@@ -2136,11 +2136,9 @@ export struct AgentPage {
         Text(this.hasPreparedReply(message.runId) ? '方案已生成，回复未完成' : '本轮未完成')
           .fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium).fontColor(this.palette.ink).layoutWeight(1)
       }.width('100%')
-      Text(this.hasPreparedReply(message.runId) ? '已有方案已核对，文字汇总未完成。请在下方查看方案的当前状态。' : message.content)
+      Text(this.hasPreparedReply(message.runId) ? '可直接核对下方方案。' : message.content)
         .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
-      if (this.hasPreparedReply(message.runId)) {
-        Text('先核对下方已有方案，无需重发原问题。').fontSize(this.palette.metaSize).fontColor(this.palette.accent).width('100%')
-      } else if (message.failedPrompt.length > 0 && this.prompt.length === 0) {
+      if (!this.hasPreparedReply(message.runId) && message.failedPrompt.length > 0 && this.prompt.length === 0) {
         Button('恢复原问题').constraintSize({ minHeight: 44 }).fontSize(this.palette.metaSize).fontColor(this.palette.accent)
           .backgroundColor(Color.Transparent).padding(0).enabled(!this.loading).onClick(() => this.restoreFailedInput(message))
       }
@@ -2150,8 +2148,8 @@ export struct AgentPage {
           .onClick(() => this.openRunDetails())
       }
       InfoDisclosure({ title: '如何继续？', message: this.hasPreparedReply(message.runId) ?
-        '方案已通过原提案状态查询核对，但这次回复没有完整完成。请先查看方案、时间与冲突，再决定是否确认。原问题仍保留，不会自动重发或确认；已完成、取消或失效的候选不会重新开放。' :
-        '原问题和已收到的片段保留在对话中，下方草稿不会被覆盖。先核对已有计划、提案和运行记录；需要重试时编辑问题后手动发送，不会自动重新执行。' })
+        '先核对方案、时间和冲突，再决定是否确认。原问题仍保留，无需重发。' :
+        '原问题、回复片段和草稿均保留。先核对已有方案或运行记录，再决定是否手动重试。' })
       if (message.failureCode === 'LOGIN_REQUIRED' || message.failureCode === 'MODEL_AUTH_INVALID' ||
         message.failureCode === 'MODEL_KEY_REQUIRED') {
         Text(message.failureCode === 'LOGIN_REQUIRED' ? '重新登录前，请先复制要保留的输入。' : '可在个人设置检查模型 API Key。')
@@ -2369,7 +2367,6 @@ export struct AgentPage {
     Column({ space: 12 }) {
       Text('模型与工具').fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium)
         .fontColor(this.palette.ink).width('100%')
-      Text(`当前：${this.selectedModelLabel()}`).fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
       if (this.modelsLoading) { Text('正在核对模型配置…').fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%') }
       if (this.modelsMessage.length > 0) { Text(this.modelsMessage).fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%') }
       if (this.modelCatalog !== null) {
@@ -2406,7 +2403,7 @@ export struct AgentPage {
           AppActionRow({ title: '本次运行详情', icon: 'info', divider: true, onAction: () => this.openRunDetails() })
         }
         AppActionRow({ title: this.runRecordsExpanded ? '收起最近运行' : '最近运行',
-          subtitle: '查看进度与恢复记录', icon: 'history', divider: true, onAction: () => this.toggleRunRecords() })
+          icon: 'history', divider: true, onAction: () => this.toggleRunRecords() })
         AppActionRow({ title: '语音使用说明', icon: 'microphone', divider: true,
           onAction: () => { this.explainedSpeechId = ''; this.voiceExplanationOpen = true; } })
         if (this.sessionMode === 'continue') {
@@ -2519,8 +2516,6 @@ export struct AgentPage {
         Button('收起').constraintSize({ minHeight: 44 }).padding({ left: 12, right: 0 }).fontSize(15)
           .fontColor(this.palette.accent).backgroundColor(Color.Transparent).onClick(() => this.toggleRunRecords())
       }.width('100%')
-      Text('最近 20 次 · 联网查看 · 恢复不会重发问题')
-        .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
       if (this.runState.listMessage.length > 0) {
         Text(this.runState.listMessage).fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
       }
@@ -2538,7 +2533,7 @@ export struct AgentPage {
             .backgroundColor(this.palette.accentSoft).borderRadius(this.palette.controlRadius)
             .enabled(!this.deletionBusy && (!this.loading || this.runState.runId === run.run_id))
             .onClick(() => this.runState.runId === run.run_id ? this.refreshRun() : this.recoverRun(run.run_id))
-        }.width('100%').alignItems(HorizontalAlign.Start).padding(12).backgroundColor(this.palette.surface).borderRadius(this.palette.controlRadius)
+        }.width('100%').alignItems(HorizontalAlign.Start).padding(12).backgroundColor(this.palette.field).borderRadius(this.palette.controlRadius)
       }, (run: RunSnapshot) => `${run.run_id}-${run.seq}`)
       Button('刷新运行记录').width('100%').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
         .fontColor(this.palette.accent).backgroundColor(Color.Transparent).enabled(!this.runState.listLoading)
@@ -2822,8 +2817,6 @@ export struct AgentPage {
             Column({ space: 8 }) {
               Text('今天想安排什么？').fontSize(26).fontWeight(FontWeight.Bold)
                 .fontColor(this.palette.ink).width('100%')
-              Text('查校园信息，或把目标安排进日程。')
-                .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
             }.width('100%').alignItems(HorizontalAlign.Start).padding({ top: 16, bottom: 4 })
             Column() {
               this.suggestion('安排一次复习', '结合课程，先生成待确认方案', 'calendar',
@@ -2911,7 +2904,7 @@ export struct AgentPage {
         }.width('100%').padding({ left: 20, right: 20, top: 8, bottom: 8 })
       }
       if (this.inputLength(this.prompt) > 8000) {
-        Text(`当前 ${this.inputLength(this.prompt)} 字，超过 8000 字上限，请精简后发送。原文仍保留在输入框中。`)
+        Text(`${this.inputLength(this.prompt)} / 8000 字，请精简后发送。`)
           .fontSize(this.palette.metaSize).fontColor(this.palette.danger).width('100%')
           .padding({ left: 18, right: 18, top: 6, bottom: 6 })
       }

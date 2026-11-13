@@ -1,4 +1,3 @@
-import { AppTheme } from '../theme/AppTheme';
 import { ThemePalette, themePalette } from '../theme/ThemePalette';
 import { formatPlanReminder, formatPlanTimeRange } from '../utils/PlanPresentation';
 
@@ -11,14 +10,21 @@ export struct TaskScheduleDetails {
   @Prop location: string | null = null;
   @Prop reminderMinutes: number | null = null;
 
+  @Builder
+  private DetailRow(label: string, value: string) {
+    Row({ space: 12 }) {
+      Text(label).fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width(42)
+      Text(value).fontSize(this.palette.bodySize).fontColor(this.palette.ink).layoutWeight(1).wordBreak(WordBreak.BREAK_WORD)
+    }.width('100%').alignItems(VerticalAlign.Top).padding({ top: 7, bottom: 7 })
+  }
+
   build() {
-    Column({ space: 4 }) {
-      Text(`时间：${formatPlanTimeRange(this.startAt, this.endAt)}`)
-        .fontSize(13).fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
-      Text(`地点：${this.location === null || this.location.trim().length === 0 ? '未设置' : this.location}`)
-        .fontSize(13).fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
-      Text(`提醒设置：${formatPlanReminder(this.reminderMinutes)}`)
-        .fontSize(13).fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+    Column() {
+      this.DetailRow('时间', formatPlanTimeRange(this.startAt, this.endAt))
+      Divider().color(this.palette.line).strokeWidth(0.5).margin({ left: 54 })
+      this.DetailRow('地点', this.location === null || this.location.trim().length === 0 ? '未设置' : this.location)
+      Divider().color(this.palette.line).strokeWidth(0.5).margin({ left: 54 })
+      this.DetailRow('提醒', formatPlanReminder(this.reminderMinutes))
     }.width('100%').alignItems(HorizontalAlign.Start)
   }
 }

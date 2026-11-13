@@ -276,18 +276,18 @@ export struct HistoryPage {
         FeedbackPanel({ kind: 'error', title: '历史记录未更新', message: this.errorText,
           actionLabel: this.pendingDeleteId.length > 0 ? '' : '重试读取', busy: this.loading || this.deleting, onAction: () => this.retryRead() })
       }
-      if (this.sourceText.length > 0) {
+      if (this.sourceText.length > 0 && (this.offlineOnly || this.sourceText.startsWith('本机'))) {
         Column() {
           InfoDisclosure({ title: this.offlineOnly ? '离线只读' :
             (this.sourceText.startsWith('本机') ? '本机副本 · 待同步' : '记录来源'), message: this.sourceText })
         }.width('100%').padding({ left: 20, right: 20, top: 4, bottom: 4 })
       }
       if (this.loading && (this.sessions.length > 0 || this.selected !== null)) {
-        Text('正在同步，已保存的内容仍可阅读…').fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
+        Text('正在同步…').fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
           .width('100%').padding({ left: 20, right: 20, bottom: 6 })
       }
       if (this.chatBusy) {
-        Text('助手还有运行或待核对的操作，处理后再切换或删除会话。').fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
+        Text('请先核对助手中的待处理操作。').fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
           .width('100%').padding({ left: 20, right: 20, bottom: 6 })
       }
       if (this.remoteDeleteBusy) {
@@ -369,7 +369,7 @@ export struct HistoryPage {
         Scroll() {
           Column({ space: 16 }) {
             Column({ space: 8 }) {
-              Text((this.selected as SessionSummary).title).fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium)
+              Text((this.selected as SessionSummary).title).fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Bold)
                 .fontColor(this.palette.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
               Row({ space: 8 }) {
                 Text((this.selected as SessionSummary).updated_at.substring(0, 10)).fontSize(this.palette.metaSize)
@@ -380,10 +380,6 @@ export struct HistoryPage {
                     .enabled(this.canContinue()).onClick(() => this.continueSession())
                 }
               }.width('100%')
-              Text('历史记录 · 只读').fontSize(this.palette.metaSize).fontColor(this.palette.muted).width('100%')
-              if (!this.offlineOnly) {
-                InfoDisclosure({ title: '继续会话说明', message: '继续前会核对服务端上下文。历史中的安排仅供阅读，不会恢复为待执行提案。' })
-              }
             }.width('100%').alignItems(HorizontalAlign.Start).padding(this.palette.cardInset)
               .backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
             if (this.messages.length === 0 && !this.loading && this.errorText.length === 0) {

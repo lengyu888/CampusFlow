@@ -294,7 +294,7 @@ export struct HomePage {
 
   @Builder
   private PlanProgressCard(plan: PlanSummary) {
-    Column({ space: 12 }) {
+    Column({ space: 8 }) {
       Row({ space: 12 }) {
         Column({ space: 4 }) {
           Text(plan.title).fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium)
@@ -308,11 +308,6 @@ export struct HomePage {
             .fontColor(plan.status === 'overdue' ? this.palette.danger : this.palette.quiet)
         }.alignItems(HorizontalAlign.End)
       }.width('100%').alignItems(VerticalAlign.Top)
-      if (plan.summary.length > 0) {
-        Text(plan.summary).fontSize(this.palette.metaSize).fontColor(this.palette.quiet)
-          .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
-          .wordBreak(WordBreak.BREAK_WORD)
-      }
       Row() {
         Row().height(4).width(`${plan.progress}%`).backgroundColor(this.palette.accent).borderRadius(2)
       }.width('100%').height(4).backgroundColor(this.palette.line).borderRadius(2)
@@ -361,7 +356,7 @@ export struct HomePage {
   @Builder
   private NextCard(row: () => AgendaRow | null) {
     if (row() !== null) {
-    Column({ space: 16 }) {
+    Column({ space: 12 }) {
       Row({ space: 12 }) {
         Text(row()!.startMs <= this.nowMs && row()!.endMs !== null && row()!.endMs! > this.nowMs ? '正在进行' : '接下来').fontSize(this.palette.metaSize)
           .fontWeight(FontWeight.Medium).fontColor(this.palette.quiet).layoutWeight(1)
@@ -391,7 +386,7 @@ export struct HomePage {
       Button({ type: ButtonType.Normal }) {
         Row({ space: 8 }) {
           AppIcon({ name: row()!.kind === 'course' ? 'route' : 'calendar', iconSize: 19, color: this.palette.accent })
-          Text(row()!.kind === 'course' ? '上课路线' : '查看任务详情').fontSize(this.palette.metaSize)
+          Text(row()!.kind === 'course' ? '上课路线' : '任务详情').fontSize(this.palette.bodySize)
             .fontColor(this.palette.accent).layoutWeight(1).wordBreak(WordBreak.BREAK_WORD)
           AppIcon({ name: 'chevron', iconSize: 16, color: this.palette.accent })
         }.width('100%')
@@ -423,8 +418,9 @@ export struct HomePage {
           Column({ space: 5 }) {
             Text(row.title).fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium)
               .fontColor(row.done ? this.palette.quiet : this.palette.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
-            Text(row.done ? '已完成' : (row.endMs === null ? '结束时间待核对' : (row.planId !== null ? '来自目标计划' : '待办事项')))
-              .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
+            if (row.endMs === null && !row.done) {
+              Text('待核对结束时间').fontSize(this.palette.metaSize).fontColor(this.palette.warning).width('100%')
+            }
             if (row.location.length > 0) {
               Text(row.location).fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
                 .wordBreak(WordBreak.BREAK_WORD)
@@ -514,15 +510,14 @@ export struct HomePage {
                 .fontSize(24).fontWeight(FontWeight.Bold).fontColor(this.palette.ink).width('100%')
                 .accessibilityText(`今日空档 ${this.freeTime().window!.startTime} 至 ${this.freeTime().window!.endTime}`)
               Text(this.freeTime().untimedCount > 0
-                ? `未计入 ${this.freeTime().untimedCount} 项未定时待办和临时安排。` : '临时安排未计入。')
-                .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%').wordBreak(WordBreak.BREAK_WORD)
+                ? `未计入临时安排及 ${this.freeTime().untimedCount} 项未定时待办` : '未计入临时安排')
+                .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
             }.width('100%').alignItems(HorizontalAlign.Start)
             Column({ space: 6 }) {
               Button('留 25 分钟复习').width('100%').constraintSize({ minHeight: 48 }).padding(10)
                 .fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium)
                 .fontColor(this.palette.onAccent).backgroundColor(this.palette.pressed)
                 .borderRadius(this.palette.controlRadius).onClick(() => this.useFreeTime())
-              Text('生成草稿，核对后保存。').fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
             }.width('100%').alignItems(HorizontalAlign.Start)
           } else {
             Text(this.freeTime().reason).fontSize(this.palette.metaSize).fontColor(this.palette.quiet)
@@ -540,14 +535,15 @@ export struct HomePage {
           }.width('100%').justifyContent(FlexAlign.SpaceBetween)
           if (this.bufferExpanded) {
             Column({ space: 8 }) {
-              Text('定时安排前后各留几分钟？通勤时间请另外考虑。')
-                .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%').wordBreak(WordBreak.BREAK_WORD)
+              Text('每项定时安排前后预留').fontSize(this.palette.bodySize).fontColor(this.palette.ink).width('100%')
               Row({ space: 6 }) {
                 this.BufferChoice(0)
                 this.BufferChoice(5)
                 this.BufferChoice(10)
                 this.BufferChoice(15)
               }.width('100%')
+              Text('通勤时间另计。')
+                .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
             }.width('100%').alignItems(HorizontalAlign.Start)
           }
         }
@@ -566,7 +562,7 @@ export struct HomePage {
     Column({ space: 8 }) {
       AppSectionHeader({ title: '执行与回顾' })
       Column() {
-        AppActionRow({ icon: 'bolt', title: '专注计时', subtitle: '为一项待办记录投入时间',
+        AppActionRow({ icon: 'bolt', title: '专注计时',
           detail: this.focusExpanded ? '收起' : '选择待办', chevron: false, divider: !this.focusExpanded,
           onAction: () => animateTo({ duration: AppTheme.motion(180), curve: Curve.EaseInOut }, () => {
             this.focusExpanded = !this.focusExpanded;
@@ -595,7 +591,7 @@ export struct HomePage {
           InfoDisclosure({ title: '专注说明', message: '开始前选择一项待办。专注结束后，再决定是否标记完成；其他任务也可从计划详情开始。' })
         }.width('100%').padding({ left: 16, right: 16 })
         }
-        AppActionRow({ icon: 'history', title: '今日回顾', subtitle: '查看完成情况与专注记录', divider: true,
+        AppActionRow({ icon: 'history', title: '今日回顾', divider: true,
           onAction: () => this.reviewRequested() })
         AppActionRow({ icon: 'calendar', title: '专注记录', onAction: () => this.onOpenFocusRecords() })
       }.width('100%').backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius).clip(true)
@@ -612,9 +608,9 @@ export struct HomePage {
       Column({ space: this.palette.sectionGap }) {
         Row({ space: 8 }) {
           Column({ space: 3 }) {
-            Text(this.dateLabel()).fontSize(this.palette.metaSize).fontColor(this.palette.quiet)
-              .width('100%').wordBreak(WordBreak.BREAK_WORD)
             Text('今日').fontSize(this.palette.pageTitle).fontWeight(FontWeight.Bold).fontColor(this.palette.ink).width('100%')
+            Text(this.dateLabel()).fontSize(this.palette.bodySize).fontColor(this.palette.secondary)
+              .width('100%').wordBreak(WordBreak.BREAK_WORD)
           }.alignItems(HorizontalAlign.Start).layoutWeight(1)
           Button({ type: ButtonType.Circle }) {
             AppIcon({ name: 'plus', iconSize: 22, color: this.palette.accent })
@@ -656,9 +652,8 @@ export struct HomePage {
               .wordBreak(WordBreak.BREAK_WORD)
           }
           if (this.groups().overdue.length > 0) {
-            Text(`待处理 · ${this.groups().overdue.length} 项`).fontSize(this.palette.bodySize)
+            Text(`已逾期 ${this.groups().overdue.length} 项`).fontSize(this.palette.bodySize)
               .fontWeight(FontWeight.Medium).fontColor(this.palette.warning).width('100%')
-            Text('原定结束时间已过，仍未完成。').fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
             this.TimelineList(() => this.groups().overdue)
           }
           if (this.groups().earlier.length > 0) {
@@ -720,7 +715,7 @@ export struct HomePage {
           Column() {
             this.QuickEntry('assistant', '请助手安排', () => this.onOpenAgent())
             Divider().color(this.palette.line).strokeWidth(0.5).margin({ left: 56, right: 16 })
-            AppActionRow({ icon: 'info', title: '使用指南', subtitle: '安排、执行与回顾',
+          AppActionRow({ icon: 'info', title: '使用指南',
               onAction: () => this.onOpenGuide() })
           }.width('100%').backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius).clip(true)
         }.width('100%')

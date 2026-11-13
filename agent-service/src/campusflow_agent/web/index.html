@@ -4,13 +4,14 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="CampusFlow 大学规划与执行 Agent" />
-    <title>CampusFlow · Campus Operating System</title>
+    <title>行简 · CampusFlow</title>
     <script src="/static/theme.js?v=1"></script>
     <link rel="stylesheet" href="/static/styles.css" />
     <link rel="stylesheet" href="/static/native.css?v=6" />
     <link rel="stylesheet" href="/static/redesign.css?v=5" />
     <link rel="stylesheet" href="/static/markdown.css?v=1" />
     <link rel="stylesheet" href="/static/themes.css?v=1" />
+    <link rel="stylesheet" href="/static/interface.css?v=3" />
   </head>
   <body>
     <div class="grain" aria-hidden="true"></div>
@@ -19,22 +20,17 @@
       <div class="gate-story">
         <a class="brand brand-light" href="/" aria-label="CampusFlow 首页">
           <span class="brand-mark">CF</span>
-          <span><strong>CampusFlow</strong><small>CAMPUS OPERATING SYSTEM</small></span>
+          <span><strong>行简</strong></span>
         </a>
         <div class="gate-copy">
-          <div class="section-index">STUDENT LIFE / ORCHESTRATED</div>
-          <h1>让每一天<br />从校园数据中<br /><em>自动生长</em></h1>
-          <p>连接你的课表、校区与目标。Agent 会理解时间和地点，把一句想法变成可执行的校园行动。</p>
+          <h1>课表、任务<br />和校园日常</h1>
+          <p>看今天的安排，也可以请助手帮你规划。</p>
         </div>
-        <div class="gate-orbit" aria-hidden="true"><span>COURSE</span><span>PLACE</span><span>PLAN</span></div>
-        <div class="gate-foot">HARMONYOS · ANDROID · AGENT</div>
       </div>
 
       <div class="auth-stage">
         <div class="auth-card">
-          <div class="auth-kicker">WELCOME / 01</div>
-          <h2 id="authTitle">登录你的校园空间</h2>
-          <p id="authSubtitle">继续使用你的课表、校区信息和 Agent 记忆。</p>
+          <h2 id="authTitle">登录</h2>
           <div class="auth-tabs" role="tablist">
             <button class="active" type="button" data-auth-tab="login">登录</button>
             <button type="button" data-auth-tab="register">创建账户</button>
@@ -43,7 +39,7 @@
           <form class="auth-form" id="loginForm">
             <label>邮箱<input name="email" type="email" autocomplete="email" required placeholder="student@example.com" /></label>
             <label>密码<input name="password" type="password" autocomplete="current-password" minlength="8" required placeholder="至少 8 位" /></label>
-            <button class="primary-action" type="submit"><span class="action-label">进入 CampusFlow</span><i>↗</i></button>
+            <button class="primary-action" type="submit"><span class="action-label">登录</span><i>↗</i></button>
           </form>
 
           <form class="auth-form" id="registerForm" hidden>
@@ -51,10 +47,9 @@
             <label>邮箱<input name="email" type="email" autocomplete="email" required placeholder="student@example.com" /></label>
             <label>密码<input name="password" type="password" autocomplete="new-password" minlength="8" required placeholder="至少 8 位" /></label>
             <label>DeepSeek API Key（可选）<input name="api_key" type="password" autocomplete="off" placeholder="可稍后在我的页面配置" /></label>
-            <p class="form-note">可先体验课表与规划，使用模型前再配置。填写后加密保存，平台管理员无法查看明文。</p>
-            <button class="primary-action" type="submit"><span class="action-label">创建我的校园空间</span><i>↗</i></button>
+            <p class="form-note">可稍后配置。密钥加密保存。</p>
+            <button class="primary-action" type="submit"><span class="action-label">创建账户</span><i>↗</i></button>
           </form>
-          <p class="privacy-line">密码使用 PBKDF2 加盐存储；API Key 使用独立主密钥加密；会话使用 HttpOnly Cookie。</p>
         </div>
       </div>
     </section>
@@ -63,7 +58,7 @@
       <header class="setup-header">
         <a class="brand" href="/" aria-label="CampusFlow 首页">
           <span class="brand-mark">CF</span>
-          <span><strong>CampusFlow</strong><small>FIRST RUN / SETUP</small></span>
+          <span><strong>首次配置</strong></span>
         </a>
         <div class="setup-meter"><i id="setupProgress"></i></div>
         <button class="line-button" id="setupLogoutButton" type="button">退出登录</button>
@@ -71,40 +66,29 @@
 
       <main class="setup-layout">
         <aside class="setup-rail">
-          <div class="section-index">PERSONAL CONTEXT</div>
-          <h1>把你的校园<br />装进 Agent</h1>
           <ol class="setup-steps" id="setupSteps">
-            <li class="active" data-step-indicator="1"><b>01</b><span>基础身份<small>学校、校区与学期</small></span></li>
-            <li data-step-indicator="2"><b>02</b><span>课表识别<small>上传、解析与确认</small></span></li>
-            <li data-step-indicator="3"><b>03</b><span>校园地图<small>生成地点数据包</small></span></li>
+            <li class="active" data-step-indicator="1"><b>1</b><span>校园信息</span></li>
+            <li data-step-indicator="2"><b>2</b><span>课表</span></li>
+            <li data-step-indicator="3"><b>3</b><span>地图</span></li>
           </ol>
-          <div class="vault-status"><span>✓</span><div><b>AI 凭据已连接</b><small id="setupKeyHint">加密保存在你的账户中</small></div></div>
-          <p class="setup-note">课表和地图会通过 DeepSeek Flash 识别；后续登录无需再次配置密钥。</p>
+          <div class="vault-status" id="setupModelStatus" hidden><div><b>识别模型</b><small id="setupKeyHint">检查配置中…</small></div></div>
         </aside>
 
         <section class="setup-canvas">
           <div class="setup-step" data-setup-step="1">
-            <div class="step-number">01 / PROFILE</div>
-            <h2>先确定你在哪里学习</h2>
-            <p class="step-lead">这些信息会决定课表时间、校园地点和后续 Skills 的数据范围。</p>
+            <h2>校园信息</h2>
             <div class="profile-grid">
               <label>学校<input id="schoolInput" value="杭州电子科技大学" maxlength="100" /></label>
               <label>校区<input id="campusInput" value="下沙校区" maxlength="100" /></label>
               <label class="wide">当前学期<input id="semesterInput" value="2026-2027 第一学期" maxlength="80" /></label>
             </div>
-            <div class="context-preview">
-              <span>即将创建</span>
-              <strong>杭州电子科技大学 · 下沙校区</strong>
-              <p>后续可在“我的”中调整，变更校区后需要重新确认地图数据包。</p>
-            </div>
+
           </div>
 
           <div class="setup-step" data-setup-step="2" hidden>
-            <div class="step-number">02 / TIMETABLE</div>
-            <h2>连接你的课表</h2>
-            <p class="step-lead">推荐粘贴 HDUHelp 订阅链接自动同步，也可以继续使用图片识别。</p>
+            <h2>导入课表</h2>
             <form class="setup-subscription-card" id="setupSubscriptionForm">
-              <div><span>HDUHELP / ICALENDAR</span><b>订阅课表</b><small>token 将加密保存，页面和日志不会回显完整链接</small></div>
+              <div><b>订阅课表</b><small>订阅链接加密保存。</small></div>
               <label>订阅链接<input id="setupSubscriptionUrl" type="password" autocomplete="off" placeholder="https://neo.hduhelp.com/…?token=…" required /></label>
               <button class="primary-action" id="setupSubscriptionButton" type="submit"><span class="action-label">读取订阅</span><i>↗</i></button>
               <p id="setupSubscriptionStatus">尚未连接</p>
@@ -117,18 +101,17 @@
               </label>
               <div class="image-preview" id="timetablePreview"><span>课表预览</span></div>
             </div>
-            <button class="analyze-button" id="parseTimetableButton" type="button" disabled><span>使用 Flash 解析课表</span><i>VISION ↗</i></button>
+            <button class="analyze-button" id="parseTimetableButton" type="button" disabled><span>识别课表</span></button>
             <div class="parse-status" id="timetableStatus">等待上传</div>
             <div class="data-review" id="timetableReview" hidden>
-              <div class="review-heading"><div><span>解析结果</span><h3 id="timetableSummary">0 门课程</h3></div><small>可以直接修改或删除识别错误的记录</small></div>
+              <div class="review-heading"><div><h3 id="timetableSummary">0 门课程</h3></div><small>请核对并修正识别结果。</small></div>
               <div class="timetable-table" id="timetableTable"></div>
             </div>
           </div>
 
           <div class="setup-step" data-setup-step="3" hidden>
-            <div class="step-number">03 / CAMPUS PACK</div>
-            <h2>把校园地图变成可查询地点</h2>
-            <p class="step-lead">地图会被转换为地点目录。二维码不会被读取，图片中的文字也不会被当作系统指令。</p>
+            <h2>识别校园地图</h2>
+            <p class="step-lead">上传平面图，提取校园地点。</p>
             <div class="upload-grid">
               <label class="drop-zone" for="mapFile">
                 <input id="mapFile" type="file" accept="image/png,image/jpeg,image/webp,image/gif" />
@@ -136,10 +119,10 @@
               </label>
               <div class="image-preview map-preview" id="mapPreview"><span>地图预览</span></div>
             </div>
-            <button class="analyze-button" id="parseMapButton" type="button" disabled><span>生成校园数据包</span><i>VISION ↗</i></button>
+            <button class="analyze-button" id="parseMapButton" type="button" disabled><span>识别地图</span></button>
             <div class="parse-status" id="mapStatus">等待上传</div>
             <div class="data-review" id="mapReview" hidden>
-              <div class="review-heading"><div><span>校区识别</span><h3 id="campusMapName">尚未识别</h3></div><small id="placeCount">0 个地点</small></div>
+              <div class="review-heading"><div><h3 id="campusMapName">尚未识别</h3></div><small id="placeCount">0 个地点</small></div>
               <div class="place-cloud" id="placeCloud"></div>
             </div>
           </div>
@@ -154,7 +137,7 @@
 
     <div class="app-shell" id="appView" hidden>
       <header class="topbar app-topbar">
-        <a class="brand" href="/" aria-label="CampusFlow 首页"><span class="brand-mark">CF</span><span><strong>CampusFlow</strong><small>CAMPUS, IN MOTION</small></span></a>
+        <a class="brand" href="/" aria-label="CampusFlow 首页"><span class="brand-mark">CF</span><span><strong>行简</strong></span></a>
         <div class="system-state" id="systemState"><span class="pulse"></span><span>正在检查服务</span></div>
         <div class="topbar-actions"><button class="line-button quiet" id="historyButton" type="button">历史会话</button><button class="user-chip" id="userChip" type="button"><span id="userInitial">U</span><b id="userName">User</b></button><button class="line-button quiet" id="logoutButton" type="button">退出</button></div>
       </header>
@@ -162,23 +145,23 @@
       <div class="app-body">
         <nav class="app-nav" aria-label="主导航">
           <button class="active" type="button" data-app-tab="today"><i>⌂</i><span>今日</span></button>
-          <button type="button" data-app-tab="agent"><i>✦</i><span>Agent</span></button>
-          <button type="button" data-app-tab="plans"><i>✓</i><span>规划</span></button>
-          <button type="button" data-app-tab="skills"><i>◇</i><span>Skills</span></button>
+          <button type="button" data-app-tab="agent"><i>✦</i><span>助手</span></button>
+          <button type="button" data-app-tab="plans"><i>✓</i><span>计划</span></button>
+          <button type="button" data-app-tab="skills"><i>◇</i><span>能力</span></button>
           <button type="button" data-app-action="settings"><i>○</i><span>我的</span></button>
         </nav>
 
         <div class="app-stage">
           <section class="app-surface today-surface" data-app-surface="today">
-            <div class="today-hero"><div><span class="section-index">TODAY / CAMPUS PULSE</span><h1 id="todayGreeting">早上好</h1><p id="todayDate">正在载入今天…</p></div><button class="primary-action" type="button" data-open-agent data-prompt="请结合我的课表，为今天生成一份可执行的学习安排。"><span>让 Agent 安排今天</span><i>↗</i></button></div>
+            <div class="today-hero"><div><h1 id="todayGreeting">早上好</h1><p id="todayDate">正在载入今天…</p></div><button class="primary-action" type="button" data-open-agent data-prompt="请结合我的课表，为今天生成一份可执行的学习安排。"><span>请助手安排今天</span><i>↗</i></button></div>
             <div class="today-grid">
-              <section class="day-timeline dashboard-card"><div class="card-heading"><span>01 / SCHEDULE</span><h2>今日节奏</h2><b id="todayCourseCount">0 节课</b></div><div class="today-course-list" id="todayCourseList"></div></section>
+              <section class="day-timeline dashboard-card"><div class="card-heading"><h2>今日课表</h2><b id="todayCourseCount">0 节课</b></div><div class="today-course-list" id="todayCourseList"></div></section>
               <aside class="today-side">
-                <section class="dashboard-card next-focus"><span>UP NEXT</span><h2 id="nextCourseTitle">今天没有课程</h2><p id="nextCourseMeta">适合安排一段完整的自主学习时间。</p><button type="button" data-open-agent data-prompt="根据我的近期课程，推荐今天最值得优先复习的内容和地点。">获取下一步建议 →</button></section>
-                <section class="dashboard-card context-health"><span>CONNECTED CONTEXT</span><div><strong id="todayPlaceCount">—</strong><small>校园地点</small></div><div><strong id="todayHistoryCount">—</strong><small>历史会话</small></div><div><strong>SAFE</strong><small>账户凭据</small></div></section>
+                <section class="dashboard-card next-focus"><span>接下来</span><h2 id="nextCourseTitle">今天没有课程</h2><p id="nextCourseMeta">适合安排一段完整的自主学习时间。</p><button type="button" data-open-agent data-prompt="根据我的近期课程，推荐今天最值得优先复习的内容和地点。">询问助手</button></section>
+                <section class="dashboard-card context-health"><span>校园与会话</span><div><strong id="todayPlaceCount">—</strong><small>校园地点</small></div><div><strong id="todayHistoryCount">—</strong><small>历史会话</small></div></section>
               </aside>
             </div>
-            <div class="suggestion-strip"><span>AGENT SIGNAL</span><p id="todaySuggestion">正在结合你的课程和校园信息生成今日建议…</p><button type="button" data-open-agent data-prompt="查看我的课表和校园地点，为我生成一个今天就能完成的小目标。">开始行动</button></div>
+            <div class="suggestion-strip"><span>学习建议</span><p id="todaySuggestion">正在读取课表…</p><button type="button" data-open-agent data-prompt="查看我的课表和校园地点，为我生成一个今天就能完成的小目标。">请助手安排</button></div>
           </section>
 
           <section class="app-surface" data-app-surface="agent" hidden>
@@ -227,16 +210,16 @@
           </section>
 
           <section class="app-surface plans-surface" data-app-surface="plans" hidden>
-            <div class="surface-heading"><div><span>PLANS / EXECUTION</span><h1>规划与行动</h1></div><p>把长期目标拆成里程碑和今天可完成的时间块，每一步都可追踪。</p></div>
+            <div class="surface-heading"><h1>计划</h1></div>
             <div class="planning-stats">
               <article><span>整体进度</span><strong id="planProgress">0%</strong><i><b id="planProgressBar"></b></i></article>
-              <article><span>全部待办</span><strong id="planTaskCount">0</strong><small>个执行项</small></article>
-              <article><span>今日到期</span><strong id="planDueToday">0</strong><small>需要关注</small></article>
-              <article><span>已完成</span><strong id="planCompleted">0</strong><small>持续积累</small></article>
+              <article><span>全部待办</span><strong id="planTaskCount">0</strong></article>
+              <article><span>今日到期</span><strong id="planDueToday">0</strong></article>
+              <article><span>已完成</span><strong id="planCompleted">0</strong></article>
             </div>
             <div class="plan-board">
               <section class="task-center">
-                <div class="plan-section-head"><div><span>ACTIVE TASKS</span><h2>执行清单</h2></div><div class="task-filters"><button class="active" type="button" data-task-filter="all">全部</button><button type="button" data-task-filter="pending">进行中</button><button type="button" data-task-filter="completed">已完成</button></div></div>
+                <div class="plan-section-head"><h2>待办</h2><div class="task-filters"><button class="active" type="button" data-task-filter="all">全部</button><button type="button" data-task-filter="pending">进行中</button><button type="button" data-task-filter="completed">已完成</button></div></div>
                 <form class="quick-task-form" id="quickTaskForm">
                   <input id="quickTaskTitle" maxlength="120" placeholder="快速添加一个待办…" required />
                   <input id="quickTaskTime" type="datetime-local" aria-label="开始时间" />
@@ -246,23 +229,23 @@
                 <div class="plan-list" id="planList"></div>
               </section>
               <aside class="goal-stack-panel">
-                <div class="phase-stamp">GOALS</div><h2>目标与里程碑</h2><p>让 Agent 结合课表检查冲突，并生成需要你确认的完整计划。</p>
+                <h2>目标计划</h2>
                 <div class="goal-list" id="planGoals"></div>
-                <button class="primary-action" type="button" data-open-agent data-prompt="请结合我的课表，把本周学习目标拆成包含里程碑、时间块和提醒的完整计划，并先生成待确认提案。"><span>用 Agent 制定计划</span><i>↗</i></button>
+                <button class="primary-action" type="button" data-open-agent data-prompt="请结合我的课表，把本周学习目标拆成包含里程碑、时间块和提醒的完整计划，并先生成待确认提案。"><span>请助手制定计划</span><i>↗</i></button>
               </aside>
             </div>
           </section>
 
           <section class="app-surface skills-surface" data-app-surface="skills" hidden>
-            <div class="surface-heading"><div><span>OFFICIAL / SKILL LIBRARY</span><h1>校园 Skills</h1></div><p>只安装你需要的能力。每项数据权限、版本和运行记录都清楚可见。</p></div>
+            <div class="surface-heading"><h1>能力管理</h1></div>
             <div class="skill-toolbar">
               <label class="skill-search"><span>搜索能力</span><input id="skillSearch" type="search" placeholder="课表、地点、DDL…" /></label>
               <label><span>能力分类</span><select id="skillCategory"><option value="">全部分类</option><option>学习效率</option><option>校园生活</option><option>任务管理</option><option>成长复盘</option></select></label>
               <div class="skill-stats"><span><strong id="skillInstalledCount">0</strong> 已安装</span><i></i><span><strong id="skillEnabledCount">0</strong> 运行中</span></div>
             </div>
-            <div class="skill-grid" id="skillGrid"><div class="skill-library-empty">正在连接官方 Skills 库…</div></div>
+            <div class="skill-grid" id="skillGrid"><div class="skill-library-empty">正在读取能力…</div></div>
             <section class="skill-audit-panel">
-              <div class="plan-section-head"><div><span>ACTIVITY / AUDIT</span><h2>最近活动</h2></div><p>安装、权限开关和 Agent 调用都会留下记录。</p></div>
+              <div class="plan-section-head"><h2>最近活动</h2></div>
               <div class="skill-audit-list" id="skillAuditList"><div class="skill-library-empty">暂无活动记录</div></div>
             </section>
           </section>
@@ -270,19 +253,19 @@
       </div>
 
       <aside class="history-drawer" id="historyDrawer" hidden>
-        <div class="history-head"><div><span>CONVERSATION ARCHIVE</span><h2>历史会话</h2></div><button id="historyCloseButton" type="button" aria-label="关闭历史会话">×</button></div>
+        <div class="history-head"><h2>历史会话</h2><button id="historyCloseButton" type="button" aria-label="关闭历史会话">×</button></div>
         <label class="history-search">搜索<input id="historySearch" type="search" placeholder="搜索标题或消息内容" /></label>
         <div class="history-list" id="historyList"></div>
-        <button class="primary-action history-new" id="newSessionButton" type="button"><span>新建 Agent 会话</span><i>＋</i></button>
+        <button class="primary-action history-new" id="newSessionButton" type="button"><span>新建会话</span><i>＋</i></button>
       </aside>
       <div class="drawer-scrim" id="drawerScrim" hidden></div>
       <aside class="skill-drawer" id="skillDrawer" hidden aria-labelledby="skillDrawerName">
-        <div class="skill-drawer-head"><div><span id="skillDrawerCategory">OFFICIAL SKILL</span><small id="skillDrawerVersion">VERSION</small></div><button id="skillDrawerClose" type="button" aria-label="关闭 Skill 详情">×</button></div>
+        <div class="skill-drawer-head"><div><span id="skillDrawerCategory">OFFICIAL SKILL</span><small id="skillDrawerVersion">VERSION</small></div><button id="skillDrawerClose" type="button" aria-label="关闭能力详情">×</button></div>
         <div class="skill-drawer-body">
           <div class="skill-detail-title"><span class="skill-symbol" id="skillDrawerSymbol">CF</span><div><h2 id="skillDrawerName">Skill</h2><p id="skillDrawerAuthor">CampusFlow Official</p></div></div>
           <p class="skill-detail-description" id="skillDrawerDescription"></p>
-          <section><span class="skill-detail-label">CAPABILITIES / 能力</span><div class="skill-capabilities" id="skillDrawerCapabilities"></div></section>
-          <section><span class="skill-detail-label">PERMISSIONS / 数据权限</span><p class="skill-permission-note">安装前需逐项确认。写入类权限只生成待确认提案，不会静默执行。</p><div class="skill-permissions" id="skillDrawerPermissions"></div></section>
+          <section><h3 class="skill-detail-label">能力</h3><div class="skill-capabilities" id="skillDrawerCapabilities"></div></section>
+          <section><h3 class="skill-detail-label">数据权限</h3><p class="skill-permission-note">逐项核对权限。写入操作仍需确认提案。</p><div class="skill-permissions" id="skillDrawerPermissions"></div></section>
           <div class="skill-install-note" id="skillInstallNote">请确认全部权限后安装</div>
         </div>
         <div class="skill-drawer-actions">
@@ -299,32 +282,28 @@
       <header class="topbar settings-topbar">
         <a class="brand" href="/" aria-label="CampusFlow 首页">
           <span class="brand-mark">CF</span>
-          <span><strong>CampusFlow</strong><small>ACCOUNT / CONTROL ROOM</small></span>
+          <span><strong>我的</strong></span>
         </a>
-        <div class="system-state online"><span class="pulse"></span><span>账户配置中心</span></div>
-        <button class="line-button" id="settingsBackButton" type="button">← 返回 CampusFlow</button>
+        <button class="line-button" id="settingsBackButton" type="button">返回</button>
       </header>
       <main class="settings-layout">
         <aside class="settings-rail">
           <div class="settings-identity"><span id="settingsInitial">U</span><div><b id="settingsName">User</b><small id="settingsEmail">user@example.com</small></div></div>
-          <div class="section-index">ACCOUNT SURFACES</div>
           <nav class="settings-nav">
-            <button class="active" type="button" data-settings-tab="profile"><span>01</span>个人配置</button>
-            <button type="button" data-settings-tab="data"><span>02</span>学习数据</button>
-            <button id="adminTabButton" type="button" data-settings-tab="admin" hidden><span>03</span>用户管理</button>
+            <button class="active" type="button" data-settings-tab="profile">个人设置</button>
+            <button type="button" data-settings-tab="data">校园数据</button>
+            <button id="adminTabButton" type="button" data-settings-tab="admin" hidden>用户管理</button>
           </nav>
-          <div class="settings-rail-note"><b>PRIVACY BY DESIGN</b><p>API Key 只显示尾号，更新后立即重新加密。任何页面都不会回显完整密钥。</p></div>
         </aside>
 
         <section class="settings-canvas">
           <div class="settings-panel" data-settings-panel="profile">
-            <div class="settings-heading"><div><span>01 / PROFILE</span><h1>个人配置</h1></div><p>这些信息会成为 Agent 理解你校园生活的长期上下文。</p></div>
+            <div class="settings-heading"><h1>个人设置</h1></div>
             <section class="theme-settings" aria-labelledby="themeHeading">
               <h2 id="themeHeading">外观</h2>
-              <p>即时切换并保存在本机，不改变当前页面或未保存的输入。</p>
               <div class="theme-choices" role="group" aria-label="选择应用主题">
-                <button type="button" class="theme-choice" data-theme-choice="ios-blue" aria-pressed="false"><span class="theme-sample theme-sample-blue" aria-hidden="true"><i></i><i></i></span><strong>清透蓝</strong><small>轻盈明亮，清晰聚焦</small></button>
-                <button type="button" class="theme-choice" data-theme-choice="paper-green" aria-pressed="true"><span class="theme-sample theme-sample-green" aria-hidden="true"><i></i><i></i></span><strong>纸页绿</strong><small>温和纸色，安静阅读</small></button>
+                <button type="button" class="theme-choice" data-theme-choice="ios-blue" aria-pressed="false"><span class="theme-sample theme-sample-blue" aria-hidden="true"><i></i><i></i></span><strong>清透蓝</strong></button>
+                <button type="button" class="theme-choice" data-theme-choice="paper-green" aria-pressed="true"><span class="theme-sample theme-sample-green" aria-hidden="true"><i></i><i></i></span><strong>纸页绿</strong></button>
               </div>
               <p id="themeStatus" role="status" aria-live="polite"></p>
             </section>
@@ -335,7 +314,7 @@
               <label>校区<input id="settingsCampus" name="campus" maxlength="100" /></label>
               <label class="wide">当前学期<input id="settingsSemester" name="semester" maxlength="80" /></label>
               <div class="key-setting wide">
-                <div><span>DEEPSEEK CREDENTIAL</span><h3 id="settingsKeyState">已安全连接</h3><p>输入新 Key 可替换现有凭据；留空则保持不变。</p></div>
+                <div><h3 id="settingsKeyState">已安全连接</h3><p>留空保留当前密钥。</p></div>
                 <label>更新 API Key<input id="settingsApiKey" name="api_key" type="password" autocomplete="off" placeholder="留空以保留当前密钥" /></label>
               </div>
               <button class="primary-action settings-save" type="submit"><span class="action-label">保存配置</span><i>↗</i></button>
@@ -343,7 +322,7 @@
             <form class="settings-form" id="baiduMapSettingsForm" aria-labelledby="baiduMapSettingsTitle">
               <div class="wide">
                 <h2 id="baiduMapSettingsTitle">百度地图配置</h2>
-                <p>浏览器端 AK 用于显示地图，服务端 AK 用于搜索地点和规划路线。留空保留当前配置。</p>
+                <p>浏览器端显示地图，服务端搜索地点和算路。留空保留当前配置。</p>
               </div>
               <label>浏览器端 AK<input id="baiduBrowserAk" type="password" maxlength="128" autocomplete="off" disabled /><span id="baiduBrowserStatus"></span></label>
               <label>服务端 AK<input id="baiduServerAk" type="password" maxlength="128" autocomplete="off" disabled /><span id="baiduServerStatus"></span></label>
@@ -355,12 +334,11 @@
           </div>
 
           <div class="settings-panel" data-settings-panel="data" hidden>
-            <div class="settings-heading"><div><span>02 / PERSONAL DATA</span><h1>学习数据</h1></div><p>查看 Agent 当前连接的课表与校园地图数据。</p></div>
+            <div class="settings-heading"><h1>校园数据</h1></div>
             <section class="hduhelp-connect-card">
               <div class="hduhelp-connect-copy">
-                <span>HDUHELP CONNECT / PERSONAL ACCESS TOKEN</span>
-                <h2>连接你的杭电校园档案</h2>
-                <p id="hduHelpConnectionState">填写个人访问令牌即可同步；令牌仅加密保存，不会提交杭电密码。</p>
+                <h2>杭电校园档案</h2>
+                <p id="hduHelpConnectionState">使用令牌或官方 OAuth 连接。</p>
               </div>
               <div class="hduhelp-resource-grid" id="hduHelpResourceList">
                 <span>学籍</span><span>成绩 / GPA</span><span>考试</span><span>校园卡</span><span>图书馆预约</span>
@@ -371,28 +349,28 @@
                   <input id="hduHelpPatInput" type="password" autocomplete="off" spellcheck="false" placeholder="hduhelp_pat_…" required />
                   <button class="primary-action" type="submit"><span class="action-label">连接并同步</span><i>↗</i></button>
                 </div>
-                <small>令牌只发送到本机 CampusFlow 后端，并以密文保存。</small>
+                <small>令牌由行简后端加密保存。</small>
               </form>
               <div class="hduhelp-connect-actions">
-                <button class="line-button" id="connectHduHelpButton" type="button">或使用官方 OAuth</button>
+                <button class="line-button" id="connectHduHelpButton" type="button">官方 OAuth</button>
                 <button class="line-button hduhelp-data-button" id="viewHduHelpDataButton" type="button" hidden>查看校园档案</button>
                 <button class="line-button" id="syncHduHelpButton" type="button" hidden>同步数据</button>
                 <button class="line-button danger" id="disconnectHduHelpButton" type="button" hidden>断开并删除</button>
               </div>
               <div class="hduhelp-data-panel" id="hduHelpDataPanel" hidden>
                 <div class="hduhelp-data-heading">
-                  <div><span>CONNECTED CAMPUS PROFILE</span><h3>我的校园档案</h3></div>
+                  <h3>已同步档案</h3>
                   <p id="hduHelpDataSummary">正在整理已同步的数据…</p>
                 </div>
                 <div class="hduhelp-section-grid" id="hduHelpDataSections"></div>
                 <div class="hduhelp-prompt-area">
-                  <div><strong>问问 Agent</strong><span>点击后带入会话，可继续修改</span></div>
+                  <div><strong>问助手</strong></div>
                   <div class="hduhelp-prompt-list" id="hduHelpPromptList"></div>
                 </div>
               </div>
             </section>
             <section class="subscription-control">
-              <div class="subscription-control-copy"><span>LIVE CALENDAR / HDUHELP</span><h2>课表订阅</h2><p id="scheduleSubscriptionState">连接订阅后，可随时从 HDUHelp 拉取最新课程。完整链接只会加密保存。</p></div>
+              <div class="subscription-control-copy"><h2>课表订阅</h2><p id="scheduleSubscriptionState">从 HDUHelp 同步课程，链接加密保存。</p></div>
               <form id="scheduleSubscriptionForm">
                 <input id="scheduleSubscriptionUrl" type="password" autocomplete="off" placeholder="粘贴 HDUHelp 订阅链接" required />
                 <button class="primary-action" type="submit"><span class="action-label">连接并同步</span><i>↗</i></button>
@@ -405,7 +383,7 @@
             <section class="campus-data-hub">
               <div class="campus-package-card">
                 <div class="campus-package-heading">
-                  <div><span>CAMPUS DATA PACKAGE</span><h2 id="campusPackageName">正在连接校区数据包</h2></div>
+                  <div><h2 id="campusPackageName">正在连接校区数据包</h2></div>
                   <b id="campusPackageVersion">—</b>
                 </div>
                 <p id="campusPackageDescription">加载建筑别名、开放时间、步行关系与校园通知。</p>
@@ -417,9 +395,8 @@
                 <div class="campus-notice-preview" id="campusNoticeList"></div>
               </div>
               <div class="campus-correction-card">
-                <span>COMMUNITY CORRECTION</span>
-                <h2>发现数据有变化？</h2>
-                <p>提交后进入待审核队列，不会直接覆盖其他用户的数据。</p>
+                <h2>校园数据纠错</h2>
+                <p>建议提交后由管理员审核。</p>
                 <form id="campusCorrectionForm">
                   <div class="correction-row">
                     <label>类型<select id="correctionTargetType"><option value="place">地点</option><option value="notice">通知</option><option value="route">步行关系</option></select></label>
@@ -434,8 +411,8 @@
               </div>
             </section>
             <section class="campus-place-selection" id="campusPlaceSelectionPanel" aria-labelledby="campusPlaceSelectionTitle">
-              <div class="data-title"><span>CAMPUS NAVIGATION</span><h2 id="campusPlaceSelectionTitle">校园地点确认</h2></div>
-              <p>先检索候选并查看名称、地址和地图位置，再点击“确认此地点”。入口仅保存到当前账号，之后规划路线时自动复用。</p>
+              <div class="data-title"><h2 id="campusPlaceSelectionTitle">校园地点确认</h2></div>
+              <p>核对候选的位置后确认。已保存入口用于此账号的路线规划。</p>
               <form id="campusPlaceSearchForm" class="campus-place-search">
                 <label>校园地点<select id="campusPlaceSelect" aria-label="要确认的校园地点"></select></label>
                 <label>检索词<input id="campusPlaceQuery" maxlength="120" autocomplete="off" placeholder="留空使用地点名称，可补充入口关键词" /></label>
@@ -450,13 +427,13 @@
               <button class="primary-action" id="campusPlaceConfirmButton" type="button" disabled>确认此地点</button>
             </section>
             <div class="data-stats"><article><strong id="settingsCourseCount">—</strong><span>课程记录</span></article><article><strong id="settingsPlaceCount">—</strong><span>校园地点</span></article><article><strong id="settingsSemesterCard">—</strong><span>当前学期</span></article></div>
-            <div class="data-columns"><section><div class="data-title"><span>COURSES</span><h2>已连接课表</h2></div><div class="context-list" id="settingsCourseList"></div></section><section><div class="data-title"><span>PLACES</span><h2>校园地点样本</h2></div><div class="context-list" id="settingsPlaceList"></div></section></div>
-            <button class="line-button data-edit-button" id="editOnboardingButton" type="button">重新配置课表与地图 ↗</button>
+            <div class="data-columns"><section><div class="data-title"><h2>已连接课表</h2></div><div class="context-list" id="settingsCourseList"></div></section><section><div class="data-title"><h2>校园地点样本</h2></div><div class="context-list" id="settingsPlaceList"></div></section></div>
+            <button class="line-button data-edit-button" id="editOnboardingButton" type="button">重新配置课表与地图</button>
           </div>
 
           <div class="settings-panel" data-settings-panel="admin" hidden>
-            <div class="settings-heading"><div><span>03 / ADMIN CONSOLE</span><h1>注册用户</h1></div><p>平台运营视图仅展示账户状态和数据规模，不展示任何 API Key 内容。</p></div>
-            <div class="admin-summary"><strong id="adminUserCount">—</strong><span>REGISTERED ACCOUNTS</span><small>密钥明文可见：0</small></div>
+            <div class="settings-heading"><h1>注册用户</h1></div>
+            <div class="admin-summary"><strong id="adminUserCount">—</strong><span>个账户</span></div>
             <div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>用户</th><th>角色</th><th>校园</th><th>数据</th><th>AI 凭据</th><th>注册时间</th></tr></thead><tbody id="adminUserRows"></tbody></table></div>
           </div>
         </section>
@@ -468,7 +445,7 @@
     <script src="/static/vendor/marked-18.1.1.umd.js" defer></script>
     <script src="/static/vendor/purify-3.4.17.min.js" defer></script>
     <script src="/static/markdown.js?v=2" defer></script>
-    <script src="/static/app.js?v=17" defer></script>
-    <script src="/static/motion.js?v=1" defer></script>
+    <script src="/static/app.js?v=19" defer></script>
+    <script src="/static/motion.js?v=2" defer></script>
   </body>
 </html>

@@ -140,21 +140,22 @@ export struct CampusPage {
           Text(this.weatherNumbers()).fontSize(this.palette.bodySize).fontColor(this.palette.quiet).width('100%')
             .wordBreak(WordBreak.BREAK_WORD)
         } else {
-          Text('暂无可用天气预报，请展开来源查看覆盖范围或获取状态。')
+          Text('暂无可用预报')
             .fontSize(this.palette.bodySize).fontColor(this.palette.quiet).width('100%').wordBreak(WordBreak.BREAK_WORD)
         }
         Text(`${this.forecast.location_label} · ${this.forecast.date}`).fontSize(this.palette.metaSize)
           .fontColor(this.palette.quiet).width('100%').wordBreak(WordBreak.BREAK_WORD)
         Row() {
-          Text('城市预报，不读取设备位置').fontSize(this.palette.metaSize).fontColor(this.palette.quiet).layoutWeight(1)
-            .wordBreak(WordBreak.BREAK_WORD)
-          Button(this.weatherExpanded ? '收起来源' : '来源').constraintSize({ minHeight: 44 }).fontSize(this.palette.metaSize)
+          Button(this.weatherExpanded ? '收起来源' : '预报来源').constraintSize({ minHeight: 44 }).fontSize(this.palette.metaSize)
             .padding({ left: 8, right: 0 }).fontColor(this.palette.accent).backgroundColor(Color.Transparent)
             .onClick(() => animateTo({ duration: AppTheme.motion(160) }, () => this.weatherExpanded = !this.weatherExpanded))
         }.width('100%')
-        if (this.weatherExpanded) { EvidencePanel({ evidence: this.forecast.evidence, active: this.active }) }
+        if (this.weatherExpanded) {
+          Text('城市预报，无需设备位置。').fontSize(this.palette.bodySize).fontColor(this.palette.secondary).width('100%')
+          EvidencePanel({ evidence: this.forecast.evidence, active: this.active, initiallyExpanded: true })
+        }
       }
-    }.width('100%').alignItems(HorizontalAlign.Start).padding({ left: 20, right: 20, top: 8, bottom: 12 })
+    }.width('100%').alignItems(HorizontalAlign.Start).padding(this.palette.cardInset)
       .backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
   }
 
@@ -186,9 +187,9 @@ export struct CampusPage {
         Column({ space: 10 }) {
           AppSectionHeader({ title: '常用服务' })
           Column() {
-            this.Entry('calendar', '我的课表', '课程安排与订阅', () => this.onOpenTimetable())
+            this.Entry('calendar', '我的课表', '', () => this.onOpenTimetable())
             this.EntryDivider()
-            this.Entry('route', '校园导航', '选地点，查看路线', () => this.onOpenRoute())
+            this.Entry('route', '校园导航', '', () => this.onOpenRoute())
             this.EntryDivider()
             this.Entry('classroom', '校园实时服务', '教室、电费、图书馆与校园卡', () => this.onOpenServices())
           }.width('100%').backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
@@ -205,17 +206,17 @@ export struct CampusPage {
             CampusKnowledgePanel({ baseUrl: this.baseUrl, token: this.token, campusScope: this.campusIdentity(), active: this.active && this.knowledgeExpanded })
               .visibility(this.knowledgeExpanded ? Visibility.Visible : Visibility.None)
             this.EntryDivider()
-            this.Entry('skills', '能力管理', '查看用途与权限', () => this.onOpenSkills())
+            this.Entry('skills', '能力管理', '', () => this.onOpenSkills())
             this.EntryDivider()
             this.Entry('person', '数据与连接', '账号、课表与模型设置', () => this.onOpenProfile())
             this.EntryDivider()
-            this.Entry('assistant', '问问助手', '结合课表规划',
+            this.Entry('assistant', '问问助手', '',
               () => this.onOpenAgent('根据我的课表，帮我看看今天需要注意的校园安排。请说明信息来源。'))
           }.width('100%').backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
             .clip(true)
         }.width('100%').alignItems(HorizontalAlign.Start)
         this.WeatherCard()
-        InfoDisclosure({ title: '信息来源与使用说明', message: '校园信息以已连接的数据源为准。天气为城市级预报，不读取设备位置；时间安排须预览确认后执行。' })
+        InfoDisclosure({ title: '校园数据说明', message: '校园信息来自已连接的数据源。助手给出的时间安排须经预览确认。' })
       }.width('100%').alignItems(HorizontalAlign.Start)
         .padding({ left: this.palette.pageInset, right: this.palette.pageInset, top: 20, bottom: 32 })
     }.width('100%').height('100%').backgroundColor(this.palette.canvas).scrollBar(BarState.Off).align(Alignment.TopStart)

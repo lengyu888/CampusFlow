@@ -31,9 +31,9 @@ function probe(builder) {
       if (name === 'Button' && key === 'onClick') buttons.get(active).click = args[0];
     };
   } });
-  const Page = new Function('Text', 'Column', 'Row', 'If', 'Button', 'HorizontalAlign', 'FontWeight', 'WordBreak',
+  const Page = new Function('Text', 'Column', 'Row', 'If', 'Button', 'HorizontalAlign', 'TextAlign', 'FontWeight', 'WordBreak',
     'AppIllustration', 'ViewPU', 'formatPlanDateTime', stripTypeScriptTypes(`class Probe { ${names.map(name => method(source, name)).join('\n')} }`) + ';return Probe;')(
-      widget('Text'), widget('Column'), widget('Row'), widget('If'), widget('Button'), { Start: '' }, { Medium: '' },
+      widget('Text'), widget('Column'), widget('Row'), widget('If'), widget('Button'), { Start: '' }, { Center: '' }, { Medium: '' },
       { BREAK_WORD: '' }, class {}, { create() {} }, value => value);
   const page = new Page();
   const invoke = (index, initial) => {
@@ -99,7 +99,7 @@ test('actual compiled focus callbacks follow ticking, pause, resume, target and 
   const update = extra => { p.page.state = { ...p.page.state, local: local(extra) }; p.refresh(); };
   update({ localState: 'running', elapsedMs: 5000, canPause: true, canEnd: true });
   update({ localState: 'running', elapsedMs: 60000, targetMs: 60000, canPause: true, canEnd: true });
-  assert.ok(p.text().includes('1:00')); assert.ok(p.text().includes('已到设定时长，计时继续；何时结束由你决定。'));
+  assert.ok(p.text().includes('1:00')); assert.ok(p.text().includes('已达到目标时长，计时继续。'));
   update({ localState: 'paused', elapsedMs: 60000, canResume: true, canEnd: true });
   assert.ok(p.text().includes('已暂停 · 暂停期间不累计')); assert.ok(!p.buttonLabels().includes('暂停'));
   assert.ok(p.buttonLabels().includes('继续这条记录'));
@@ -115,7 +115,7 @@ test('actual compiled detail callbacks follow running to paused/ended and delete
   const p = probe('Detail'); p.page.state.record = focusRecord(); p.mount();
   const selected = []; p.page.askDelete = record => selected.push(record.revision);
   p.page.state = { ...p.page.state, record: focusRecord(undefined, { state: 'paused', revision: 2, confirmed_elapsed_ms: 5000 }) };
-  p.refresh(); assert.ok(p.text().includes('0:05')); assert.ok(p.text().includes('已同步 · 已暂停 · 已确认片段，不代表有效学习时长'));
+  p.refresh(); assert.ok(p.text().includes('0:05')); assert.ok(p.text().includes('已同步 · 已暂停'));
   assert.ok(p.buttonLabels().includes('继续这条已暂停记录')); p.click('删除这条已同步记录');
   p.page.state = { ...p.page.state, record: focusRecord(undefined, { state: 'ended', revision: 3, confirmed_elapsed_ms: 9000 }) };
   p.refresh(); assert.ok(p.text().includes('0:09')); assert.ok(!p.buttonLabels().includes('继续这条已暂停记录'));

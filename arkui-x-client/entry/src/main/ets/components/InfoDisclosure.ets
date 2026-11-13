@@ -13,8 +13,8 @@ export struct InfoDisclosure {
     Column({ space: 0 }) {
       Button({ type: ButtonType.Normal }) {
         Row({ space: 8 }) {
-          AppIcon({ name: 'info', iconSize: 16, color: this.palette.quiet })
-          Text(this.title).fontSize(this.palette.metaSize).fontColor(this.palette.quiet)
+          AppIcon({ name: 'info', iconSize: 16, color: this.palette.accent })
+          Text(this.title).fontSize(this.palette.metaSize).fontWeight(FontWeight.Medium).fontColor(this.palette.secondary)
             .layoutWeight(1).textAlign(TextAlign.Start).wordBreak(WordBreak.BREAK_WORD)
           AppIcon({ name: 'chevron', iconSize: 14, color: this.palette.quiet })
             .rotate({ angle: this.expanded ? 90 : 0 })
@@ -26,9 +26,11 @@ export struct InfoDisclosure {
           this.expanded = !this.expanded;
         }))
       if (this.expanded && this.message.length > 0) {
-        Text(this.message).fontSize(this.palette.metaSize).lineHeight(21)
+        Text(this.message).fontSize(this.palette.bodySize).lineHeight(25)
           .fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
-          .padding({ left: 24, right: 8, bottom: 12 })
+          .padding({ left: 12, right: 12, top: 10, bottom: 10 })
+          .backgroundColor(this.palette.field).borderRadius(this.palette.controlRadius)
+          .margin({ bottom: 8 })
       }
     }.width('100%').alignItems(HorizontalAlign.Start)
   }

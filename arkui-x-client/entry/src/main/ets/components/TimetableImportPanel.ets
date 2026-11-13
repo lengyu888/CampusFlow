@@ -113,17 +113,22 @@ export struct TimetableImportPanel {
 
   @Builder
   private ReviewRow(row: ImportReviewRow) {
-    Column({ space: 8 }) {
-      Text(`源第 ${row.sourceIndex + 1} 行 · ${this.label(row.category)}${row.excluded ? ' · 已明确排除' : row.selected ? ' · 将加入' : ' · 待核对'}`)
-        .fontSize(this.palette.metaSize).fontColor(row.excluded ? this.palette.quiet : row.selected ? this.palette.accent : this.palette.warning).width('100%')
-      Text(row.input.title.length > 0 ? row.input.title : '尚无课程名称').fontSize(this.palette.bodySize)
-        .fontWeight(FontWeight.Medium).fontColor(this.palette.ink).width('100%')
-      Text(`${row.input.date || '未提供日期'}  ${row.input.start_time || '未提供开始'}–${row.input.end_time || '未提供结束'}`)
-        .fontSize(this.palette.bodySize).fontColor(this.palette.ink).width('100%')
-      Text(`地点：${row.input.location || '未填写'} · 教师：${row.input.teacher || '未填写'}`)
-        .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
-      Button(this.sourceDetails.includes(row.sourceIndex) ? '收起源时间字段' : '查看源时间字段')
-        .constraintSize({ minHeight: 48 }).width('100%').fontSize(this.palette.metaSize).fontColor(this.palette.quiet)
+    Column({ space: 7 }) {
+      Row({ space: 8 }) {
+        Text(row.input.title.length > 0 ? row.input.title : '未填写课程名称').fontSize(this.palette.bodySize)
+          .fontWeight(FontWeight.Medium).fontColor(this.palette.ink).layoutWeight(1).wordBreak(WordBreak.BREAK_WORD)
+        Text(row.excluded ? '已排除' : row.selected ? '将加入' : this.label(row.category))
+          .fontSize(this.palette.metaSize).fontColor(row.excluded ? this.palette.quiet : row.selected ? this.palette.accent : this.palette.warning)
+      }.width('100%').alignItems(VerticalAlign.Top)
+      Text(row.input.date && row.input.start_time && row.input.end_time ?
+        `${row.input.date}  ${row.input.start_time}–${row.input.end_time}` : '日期或时间待修正')
+        .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
+      if (row.input.location || row.input.teacher) {
+        Text([row.input.location, row.input.teacher].filter((value: string) => value.length > 0).join(' · '))
+          .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
+      }
+      Button(this.sourceDetails.includes(row.sourceIndex) ? '收起原始记录' : `原始记录 · 第 ${row.sourceIndex + 1} 行`)
+        .constraintSize({ minHeight: 44 }).padding({ left: 0, right: 8 }).fontSize(this.palette.metaSize).fontColor(this.palette.accent)
         .backgroundColor(Color.Transparent).onClick(() => {
           this.sourceDetails = this.sourceDetails.includes(row.sourceIndex) ? this.sourceDetails.filter((index: number) => index !== row.sourceIndex) : this.sourceDetails.concat([row.sourceIndex]);
         })
@@ -132,11 +137,11 @@ export struct TimetableImportPanel {
           .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
         Text(`原结束：${row.original.source_time.end_value ?? '未提供'}；时区：${row.original.source_time.end_tzid ?? '未声明'}；类型：${row.original.source_time.end_value_type ?? '未声明'}`)
           .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
-        Text('上方可加入的课程日期与时间统一按北京时间显示。').fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
+        Text('校对后按北京时间显示。').fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
+        ForEach(row.sourceIssues, (issue: ScheduleImportIssue) => {
+          Text(issue.message).fontSize(this.palette.metaSize).fontColor(this.palette.warning).width('100%')
+        }, (_issue: ScheduleImportIssue, index: number) => `source-${row.sourceIndex}-${index}`)
       }
-      ForEach(row.sourceIssues, (issue: ScheduleImportIssue) => {
-        Text(`来源提示：${issue.message}`).fontSize(this.palette.metaSize).fontColor(this.palette.warning).width('100%')
-      }, (_issue: ScheduleImportIssue, index: number) => `source-${row.sourceIndex}-${index}`)
       ForEach(row.issues, (issue: TimetableIssue) => {
         Text(issue.message).fontSize(this.palette.metaSize).fontColor(this.palette.warning).width('100%')
       }, (_issue: TimetableIssue, index: number) => `issue-${row.sourceIndex}-${index}`)
@@ -145,14 +150,11 @@ export struct TimetableImportPanel {
           .fontSize(this.palette.metaSize).fontColor(this.palette.warning).width('100%')
       }, (other: ImportOverlap) => `${other.kind}-${other.index}`)
       if (row.needsSourceReview) {
-        Text('原记录不能按原样导入。修正后仅作为上方这一次课程，不代表已展开原系列或完整跨日事件。')
+        Text('修正后仅加入本次课程。原系列及跨日记录需单独核对。')
           .fontSize(this.palette.metaSize).fontColor(this.palette.warning).width('100%')
         Button('已核对，按这一次课程重建').constraintSize({ minHeight: 48 }).width('100%').fontSize(this.palette.bodySize)
           .fontColor(this.palette.warning).backgroundColor(this.palette.warningSoft).enabled(!this.busy && this.active && this.editingSource < 0)
           .onClick(() => this.reviewSource(row.sourceIndex))
-      }
-      if (row.category === 'duplicate') {
-        Text('六个字段完全相同，默认不重复加入；不同教师不会合并。').fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
       }
       if (!row.excluded && row.category === 'overlap' && !row.selected) {
         Button('保留以上重叠，加入这条').constraintSize({ minHeight: 48 }).width('100%').fontSize(this.palette.bodySize)
@@ -175,9 +177,7 @@ export struct TimetableImportPanel {
       Text(`核对 ${this.rows.length} 条源记录`).fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Bold).fontColor(this.palette.ink).width('100%')
       Text(`可加入 ${this.classification().addCount} · 重复 ${this.classification().duplicateCount} · 重叠 ${this.classification().overlapCount} · 需修正 ${this.classification().invalidCount} · 已排除 ${this.classification().excludedCount}`)
         .fontSize(this.palette.bodySize).fontColor(this.palette.ink).width('100%')
-      Text('先核对并加入草稿，确认保存后才更新课表。')
-        .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
-      InfoDisclosure({ title: '导入与草稿说明', message: '逐行核对后才加入本地草稿，不按名称覆盖旧课。未加入的预览与选择只在本页内存中；退出应用后需重新读取。' })
+      InfoDisclosure({ title: '导入与草稿说明', message: '确认保存后才更新课表。完全重复的记录默认跳过，教师不同的记录会保留。退出后需重新读取尚未加入草稿的记录。' })
       ForEach(this.warnings, (warning: TimetableIssue) => {
         Text(warning.message).fontSize(this.palette.metaSize).fontColor(this.palette.warning).width('100%')
       }, (_warning: TimetableIssue, index: number) => `warning-${index}`)

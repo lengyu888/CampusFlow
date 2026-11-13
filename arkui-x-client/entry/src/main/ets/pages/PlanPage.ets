@@ -114,7 +114,6 @@ export struct PlanPage {
       Column({ space: this.palette.sectionGap }) {
         Column({ space: 4 }) {
           Text('计划').fontSize(this.palette.pageTitle).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
-          Text('课程与待办').fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
         }.width('100%').alignItems(HorizontalAlign.Start)
 
         Column({ space: 12 }) {
@@ -164,7 +163,7 @@ export struct PlanPage {
               Text(`${this.selectedCourses().length} 节课`).fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
             }.width('100%')
             if (this.selectedCourses().length === 0) {
-              Text('当天没有课程安排').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
+              Text('当天没有课程').fontSize(this.palette.bodySize).fontColor(this.palette.secondary).width('100%')
             } else {
               ForEach(this.selectedCourses(), (course: TimetableEntry) => {
                 Row({ space: 10 }) {

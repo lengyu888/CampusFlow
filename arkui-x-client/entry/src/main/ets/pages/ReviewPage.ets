@@ -310,29 +310,29 @@ export struct ReviewPage {
 
   @Builder
   private Overview() {
-    Column() {
-      Row({ space: 12 }) {
-        AppIcon({ name: 'check', iconSize: 19, color: this.palette.accent })
-        Text('本期完成').fontSize(this.palette.bodySize).fontColor(this.palette.secondary).layoutWeight(1)
-        Text(`${this.state.snapshot?.totals.current_completed_count ?? 0} 项`).fontSize(22).fontWeight(FontWeight.Medium).fontColor(this.palette.ink)
-      }.width('100%').constraintSize({ minHeight: 52 })
-        .accessibilityText(`本期完成，${this.state.snapshot?.totals.current_completed_count ?? 0} 项。按完成时间归期，只计当前仍完成的事项。`)
-      Divider().color(this.palette.line).strokeWidth(0.5).margin({ left: 31 })
-      Row({ space: 12 }) {
-        AppIcon({ name: 'history', iconSize: 19, color: this.palette.accent })
-        Text('已同步专注').fontSize(this.palette.bodySize).fontColor(this.palette.secondary).layoutWeight(1)
-        Text(this.duration(this.state.snapshot?.totals.confirmed_elapsed_ms ?? 0)).fontSize(22).fontWeight(FontWeight.Medium)
-          .fontColor(this.palette.ink).constraintSize({ maxWidth: '58%' }).textAlign(TextAlign.End).wordBreak(WordBreak.BREAK_WORD)
-      }.width('100%').constraintSize({ minHeight: 52 })
+    Column({ space: 14 }) {
+      Column({ space: 6 }) {
+        Text('已同步专注').fontSize(this.palette.bodySize).fontColor(this.palette.secondary).width('100%')
+        Text(this.duration(this.state.snapshot?.totals.confirmed_elapsed_ms ?? 0)).fontSize(32).fontWeight(FontWeight.Medium)
+          .fontColor(this.palette.accent).width('100%').wordBreak(WordBreak.BREAK_WORD)
+      }.width('100%').alignItems(HorizontalAlign.Start)
         .accessibilityText(`已同步专注，${this.duration(this.state.snapshot?.totals.confirmed_elapsed_ms ?? 0)}。仅计已确认片段，不代表有效学习时长。`)
-      Divider().color(this.palette.line).strokeWidth(0.5).margin({ left: 31 })
-      Row({ space: 12 }) {
-        AppIcon({ name: 'calendar', iconSize: 19, color: this.palette.accent })
-        Text('当前待安排').fontSize(this.palette.bodySize).fontColor(this.palette.secondary).layoutWeight(1)
-        Text(`${this.state.snapshot?.totals.current_unscheduled_count ?? 0} 项`).fontSize(22).fontWeight(FontWeight.Medium).fontColor(this.palette.ink)
-      }.width('100%').constraintSize({ minHeight: 52 })
-        .accessibilityText(`当前待安排，${this.state.snapshot?.totals.current_unscheduled_count ?? 0} 项。当前无开始时间的待办，不代表历史期末状态。`)
-    }.width('100%').padding({ left: 16, right: 16, top: 4, bottom: 4 }).alignItems(HorizontalAlign.Start)
+      Divider().color(this.palette.line).strokeWidth(0.5)
+      Row({ space: 14 }) {
+        Column({ space: 5 }) {
+          Text('本期完成').fontSize(this.palette.bodySize).fontColor(this.palette.secondary).width('100%')
+          Text(`${this.state.snapshot?.totals.current_completed_count ?? 0} 项`)
+            .fontSize(22).fontWeight(FontWeight.Medium).fontColor(this.palette.ink).width('100%')
+        }.layoutWeight(1).alignItems(HorizontalAlign.Start)
+          .accessibilityText(`本期完成，${this.state.snapshot?.totals.current_completed_count ?? 0} 项。按完成时间归期，只计当前仍完成的事项。`)
+        Column({ space: 5 }) {
+          Text('当前待安排').fontSize(this.palette.bodySize).fontColor(this.palette.secondary).width('100%')
+          Text(`${this.state.snapshot?.totals.current_unscheduled_count ?? 0} 项`)
+            .fontSize(22).fontWeight(FontWeight.Medium).fontColor(this.palette.ink).width('100%')
+        }.layoutWeight(1).alignItems(HorizontalAlign.Start)
+          .accessibilityText(`当前待安排，${this.state.snapshot?.totals.current_unscheduled_count ?? 0} 项。当前无开始时间的待办，不代表历史期末状态。`)
+      }.width('100%').alignItems(VerticalAlign.Top)
+    }.width('100%').padding(this.palette.cardInset).alignItems(HorizontalAlign.Start)
       .backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
   }
   @Builder
@@ -343,7 +343,6 @@ export struct ReviewPage {
   @Builder
   private Sources(snapshot: ReviewSnapshot) {
     Column({ space: 10 }) {
-      Text('统计明细').fontSize(this.palette.sectionTitle).fontColor(this.palette.ink).width('100%')
       this.SourceToggle('本期完成事项', 'completed', snapshot.completed_tasks.length)
       this.SourceToggle('当前待安排', 'unscheduled', snapshot.unscheduled_tasks.length)
       this.SourceToggle('完成时间未记录', 'unattributed', snapshot.unattributed_completed_tasks.length)
@@ -399,7 +398,7 @@ export struct ReviewPage {
         AppIcon({ name: 'book', iconSize: 20, color: this.palette.accent })
         Column({ space: 4 }) {
           Text('回顾笔记').fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium).fontColor(this.palette.ink).width('100%')
-          Text('仅保存在本机').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
+          Text('仅存本机').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
         }.layoutWeight(1).alignItems(HorizontalAlign.Start)
         if (this.noteDirty || this.noteMessage.length > 0 || this.noteText.length > 0 || this.discardNoteText !== null) {
           Text(this.noteDirty ? '未保存' : '本期笔记').fontSize(this.palette.metaSize).fontColor(this.noteDirty ? this.palette.warning : this.palette.secondary)
@@ -452,7 +451,7 @@ export struct ReviewPage {
             }.width('100%')
           }.width('100%').padding(12).backgroundColor(this.palette.surface).borderRadius(this.palette.controlRadius)
         }, (record: DraftRecord) => `${record.ownerId}:${record.localRevision}`)
-        if (this.savedNotes.length === 0) { Text('尚未保存感受。留白也可以。').fontSize(this.palette.bodySize).fontColor(this.palette.secondary) }
+        if (this.savedNotes.length === 0) { Text('暂无已保存的笔记').fontSize(this.palette.bodySize).fontColor(this.palette.secondary) }
       }
       if (this.deleteNoteId.length > 0) {
         Text('只删除选中的已保存版本；尚未保存的新输入会保留。').fontSize(this.palette.bodySize).fontColor(this.palette.warning).width('100%')
@@ -477,7 +476,7 @@ export struct ReviewPage {
           this.summaryExpanded = !this.summaryExpanded;
         }))
       if (this.summaryExpanded) {
-      Text('选择统计，预览后放入助手；不会自动发送。').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
+      Text('选择要放入助手草稿的内容').fontSize(this.palette.bodySize).fontColor(this.palette.ink).width('100%')
       Row({ space: 8 }) { Checkbox({ name: 'completed' }).select(this.factCompleted).onChange((value: boolean) => this.factChanged('completed', value)); Text('本期完成事项数').layoutWeight(1).fontSize(this.palette.bodySize) }.width('100%').constraintSize({ minHeight: 48 })
       Row({ space: 8 }) { Checkbox({ name: 'unscheduled' }).select(this.factUnscheduled).onChange((value: boolean) => this.factChanged('unscheduled', value)); Text('当前待安排事项数').layoutWeight(1).fontSize(this.palette.bodySize) }.width('100%').constraintSize({ minHeight: 48 })
       Row({ space: 8 }) { Checkbox({ name: 'focus' }).select(this.factFocus).onChange((value: boolean) => this.factChanged('focus', value)); Text('已确认计时与待核对区间').layoutWeight(1).fontSize(this.palette.bodySize) }.width('100%').constraintSize({ minHeight: 48 })
@@ -524,16 +523,13 @@ export struct ReviewPage {
           }.width('100%').padding({ left: 12, right: 12, top: 12, bottom: 4 })
             .backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
           if (this.pageMessage.length > 0) { Text(this.pageMessage).fontSize(this.palette.bodySize).fontColor(this.palette.warning).width('100%') }
-          if (this.state.phase === 'loading') { FeedbackPanel({ kind: 'loading', title: '正在核对这段时间', message: '只读取任务与计时记录，不会调整你的安排。' }) }
+          if (this.state.phase === 'loading') { FeedbackPanel({ kind: 'loading', title: '正在读取回顾' }) }
           if (this.state.phase === 'error' || this.state.phase === 'stale') { FeedbackPanel({ kind: this.state.phase === 'stale' ? 'warning' : 'error', title: this.state.phase === 'stale' ? '目前显示上次读取的资料' : '暂时无法读取回看', message: this.state.message, actionLabel: '重新读取', onAction: () => this.controller?.refresh() }) }
           if (this.state.snapshot !== null) {
             Column({ space: 8 }) {
               AppSectionHeader({ title: '本期概览' })
               this.Overview()
             }.width('100%').alignItems(HorizontalAlign.Start)
-            if (this.state.snapshot.completed_tasks.length === 0 && this.state.snapshot.focus_intervals.length === 0) {
-              Text('本期暂无完成或专注记录。').fontSize(this.palette.bodySize).fontColor(this.palette.secondary).width('100%')
-            }
             Column({ space: 0 }) {
               Button({ type: ButtonType.Normal }) {
                 Row({ space: 12 }) {
@@ -565,7 +561,7 @@ export struct ReviewPage {
           if (this.localPendingRecordCount > 0) {
             Column({ space: 8 }) {
               Text(`本机还有 ${this.localPendingRecordCount} 条记录待同步`).fontSize(this.palette.bodySize).fontColor(this.palette.warning).width('100%')
-              Text('包括各个日期的本机记录，未加入上方本期时长。').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
+              Text('未计入本期已同步时长。').fontSize(this.palette.bodySize).fontColor(this.palette.secondary).width('100%')
               Button('查看本机专注记录').width('100%').constraintSize({ minHeight: 44 }).fontSize(this.palette.bodySize).fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft).borderRadius(this.palette.controlRadius).enabled(!this.noteBusy).onClick(() => this.navigate('focus'))
             }.width('100%').padding(16).backgroundColor(this.palette.warningSoft).borderRadius(this.palette.cardRadius)
           }

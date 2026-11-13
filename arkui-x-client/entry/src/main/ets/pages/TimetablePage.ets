@@ -490,22 +490,22 @@ export struct TimetablePage {
 
   @Builder
   private CourseCard(row: CourseRow, editable: boolean) {
-    Column({ space: 8 }) {
-      Text(`${row.index + 1}. ${row.entry.title}`).fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium)
+    Column({ space: 6 }) {
+      Text(row.entry.title).fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium)
         .fontColor(this.palette.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
       Text(`${row.entry.date}  ·  ${row.entry.start_time}–${row.entry.end_time}`)
-        .fontSize(this.palette.metaSize).fontColor(this.palette.accent).width('100%').wordBreak(WordBreak.BREAK_WORD)
+        .fontSize(this.palette.bodySize).fontColor(this.palette.accent).width('100%').wordBreak(WordBreak.BREAK_WORD)
       Text(`${row.entry.location || '地点未填写'}${row.entry.teacher.length > 0 ? ` · ${row.entry.teacher}` : ''}`)
         .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%').wordBreak(WordBreak.BREAK_WORD)
       if (editable) {
         Row({ space: 10 }) {
-          Button('编辑').layoutWeight(1).constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
-            .fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft)
+          Button('编辑').constraintSize({ minHeight: 44 }).fontSize(this.palette.bodySize)
+            .fontColor(this.palette.accent).backgroundColor(Color.Transparent)
             .enabled(!this.loading && this.editable()).accessibilityText(`编辑 ${row.entry.date} 的 ${row.entry.title}`)
             .onClick(() => this.editEntry(row.index))
-          Button(this.pendingDelete === row.index ? '确认移除' : '移除').layoutWeight(1)
-            .constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize).fontColor(this.palette.danger)
-            .backgroundColor(this.palette.surface).enabled(!this.loading && this.editable())
+          Button(this.pendingDelete === row.index ? '确认移除' : '移除')
+            .constraintSize({ minHeight: 44 }).fontSize(this.palette.bodySize).fontColor(this.palette.danger)
+            .backgroundColor(this.pendingDelete === row.index ? this.palette.dangerSoft : Color.Transparent).enabled(!this.loading && this.editable())
             .accessibilityText(`${this.pendingDelete === row.index ? '确认移除' : '移除'} ${row.entry.date} 的 ${row.entry.title}`)
             .onClick(() => {
               if (this.pendingDelete === row.index) { this.removeEntry(row.index); }
@@ -513,8 +513,8 @@ export struct TimetablePage {
             })
         }.width('100%')
         if (this.pendingDelete === row.index) {
-          Text('只从当前草稿移除；再次点“确认移除”生效。')
-            .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
+          Text('此操作只移除草稿中的这条课程。')
+            .fontSize(this.palette.bodySize).fontColor(this.palette.secondary).width('100%')
           Button('保留这条课程').constraintSize({ minHeight: 48 }).fontSize(this.palette.metaSize)
             .fontColor(this.palette.quiet).backgroundColor(Color.Transparent).enabled(!this.loading && this.editable())
             .onClick(() => this.pendingDelete = -1)
@@ -562,8 +562,7 @@ export struct TimetablePage {
         .fontColor(this.palette.ink).width('100%')
       this.FormField('HDUHelp 课表订阅链接', '粘贴 HTTPS 课表订阅链接', this.scheduleUrl, '',
         (value: string) => this.updateScheduleUrl(value), InputType.Password)
-      Text('链接可能含私人凭据，仅用于本次读取。这里只读取候选课程，不保存订阅链接，也不会自动同步。')
-        .fontSize(this.palette.metaSize).lineHeight(21).fontColor(this.palette.quiet).width('100%')
+      InfoDisclosure({ title: '订阅链接说明', message: '链接可能含私人凭据，仅用于本次预览。系统不会保存链接或自动同步。' })
       Button(this.loading && this.busyLabel === '正在读取课表预览…' ? '正在读取…' : '读取预览，不保存')
         .width('100%').constraintSize({ minHeight: 50 }).fontSize(this.palette.bodySize).fontColor(this.palette.onAccent)
         .backgroundColor(this.palette.accent).borderRadius(this.palette.controlRadius)
@@ -698,8 +697,7 @@ export struct TimetablePage {
           this.DraftRecovery()
           this.SavingFeedback()
           if (this.loading) {
-            FeedbackPanel({ kind: 'loading', title: this.previewBusy ? '读取导入候选' : this.view.phase === 'saving' ? '保存已确认课表' : '读取并核对课表',
-              message: '现有课表与草稿会保留，请稍候。' })
+            FeedbackPanel({ kind: 'loading', title: this.previewBusy ? '读取导入候选' : this.view.phase === 'saving' ? '保存已确认课表' : '读取并核对课表' })
             if (this.previewBusy) {
               Button('取消读取预览').width('100%').constraintSize({ minHeight: 48 })
                 .fontColor(this.palette.quiet).backgroundColor(this.palette.surface).onClick(() => this.cancelPreview())
@@ -709,10 +707,8 @@ export struct TimetablePage {
           if (this.notice.length > 0 && !this.reviewOpen) { Text(this.notice).fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%') }
           if (this.view.revision.length > 0) {
             Column({ space: 4 }) {
-              Text(this.reviewOpen ? '确认保存' : this.view.dirty ? '编辑草稿 · 尚未保存' : '账号课表')
+              Text(this.view.dirty ? '课表草稿未保存' : '已保存课表')
                 .fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium).fontColor(this.palette.ink).width('100%')
-              Text(this.view.dirty ? '核对整份课表后，再保存到账号。' : '添加或导入课程，再到规划中安排空闲时间。')
-                .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%').wordBreak(WordBreak.BREAK_WORD)
               EvidencePanel({ evidence: this.view.evidence ?? [], active: this.active })
               if (this.view.dirty) {
                 InfoDisclosure({ title: '草稿与来源', message: '以下来源对应已载入版本；当前未保存修改仅为本页草稿。' })
@@ -720,8 +716,8 @@ export struct TimetablePage {
             }.width('100%').alignItems(HorizontalAlign.Start).padding(this.palette.cardInset)
               .backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
             if (this.reviewOpen) {
-              FeedbackPanel({ kind: 'info', title: this.entries.length === 0 ? '即将清空账号课表' : `即将保存 ${this.entries.length} 次课程`,
-                message: '只更新课表，不修改校园资料、地图或订阅连接。保存前会核对版本；不会再次抓取导入链接。' })
+              FeedbackPanel({ kind: 'info', title: this.entries.length === 0 ? '即将清空账号课表' : `即将保存 ${this.entries.length} 次课程` })
+              InfoDisclosure({ title: '保存范围', message: '保存前会核对课表版本。本次只更新课表，不修改校园资料、地图和订阅连接，也不重新读取导入链接。' })
             } else if (this.editable()) {
               Row({ space: 4 }) {
                 Button('手动录入').layoutWeight(1).constraintSize({ minHeight: 44 }).fontSize(this.palette.bodySize)

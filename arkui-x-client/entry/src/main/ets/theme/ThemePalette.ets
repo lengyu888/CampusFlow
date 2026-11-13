@@ -27,7 +27,7 @@ export function themePalette(id: string): ThemePalette {
   return {
     id: blue ? 'ios-blue' : 'paper-green', name: blue ? '清透蓝' : '纸页绿',
     canvas: blue ? '#F2F2F7' : AppTheme.canvas, surface: blue ? '#FFFFFF' : AppTheme.surface,
-    ink: blue ? '#1C1C1E' : AppTheme.ink, secondary: blue ? '#63636E' : AppTheme.secondary,
+    ink: blue ? '#1C1C1E' : AppTheme.ink, secondary: blue ? '#565865' : AppTheme.secondary,
     accent: blue ? '#007AFF' : AppTheme.accent, accentSoft: blue ? '#EAF3FF' : AppTheme.accentSoft,
     onAccent: blue ? '#FFFFFF' : AppTheme.onAccent, line: blue ? '#E5E5EA' : AppTheme.line,
     outline: blue ? '#8E8E93' : AppTheme.outline, terracotta: blue ? '#C05600' : AppTheme.terracotta,
@@ -41,7 +41,7 @@ export function themePalette(id: string): ThemePalette {
     disabledContent: blue ? '#74747E' : AppTheme.disabledContent,
     disabledSurface: blue ? '#E5E5EA' : AppTheme.disabledSurface,
     bg: blue ? '#F2F2F7' : AppTheme.bg, field: blue ? '#F2F2F7' : AppTheme.field,
-    muted: blue ? '#8E8E93' : AppTheme.muted, quiet: blue ? '#63636E' : AppTheme.quiet,
+    muted: blue ? '#63636E' : AppTheme.muted, quiet: blue ? '#565865' : AppTheme.quiet,
     blue: blue ? '#007AFF' : AppTheme.blue, actionBlue: blue ? '#007AFF' : AppTheme.actionBlue,
     blueSoft: blue ? '#EAF3FF' : AppTheme.blueSoft,
     green: blue ? '#248A3D' : AppTheme.green, greenSoft: blue ? '#EAF7EE' : AppTheme.greenSoft,

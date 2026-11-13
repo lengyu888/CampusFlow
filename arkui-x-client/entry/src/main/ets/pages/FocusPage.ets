@@ -197,19 +197,19 @@ export struct FocusPage {
     return this.optionsExpanded ? '记录方式 · 收起' : this.offline ? '记录方式 · 仅本机' : '记录方式 · 联网';
   }
   private recordingModeNotice(): string {
-    return this.offline ? '需主动同步；暂无法核对其他设备的记录，冲突不会覆盖。' : '开始确认后计时，退到后台自动暂停。';
+    return this.offline ? '需主动同步，冲突不会覆盖其他设备的记录。' : '进入后台会自动暂停。';
   }
 
   @Builder
   private StartCard() {
     Column({ space: 12 }) {
       Text(this.taskTitle || '先选择一项待办').fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Medium).fontColor(this.palette.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
-      Text('记录投入时间，完成任务后再标记。').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
       if (this.taskId.trim().length > 0) {
       Column({ space: 6 }) {
-        Text('目标时长（选填）').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
         Row({ space: 8 }) {
-          TextInput({ text: this.targetText, placeholder: '不设目标' }).height(48).layoutWeight(1).fontSize(this.palette.bodySize).backgroundColor(this.palette.field)
+          Text('目标时长').fontSize(this.palette.bodySize).fontColor(this.palette.ink).layoutWeight(1)
+          TextInput({ text: this.targetText, placeholder: '选填' }).height(48).width(96).fontSize(this.palette.bodySize)
+            .backgroundColor(this.palette.field).borderRadius(this.palette.controlRadius)
             .accessibilityText('目标分钟，可不填写').onChange((value: string) => { this.targetText = value; this.inputMessage = ''; })
           Text('分钟').fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
         }.width('100%')
@@ -218,12 +218,14 @@ export struct FocusPage {
       AppActionRow({ title: '记录方式', detail: this.optionsExpanded ? '收起' : this.offline ? '仅本机' : '联网',
         onAction: () => this.toggleOptions() })
       if (this.optionsExpanded) {
-      Button(this.offline ? '仅本机记录 · 切换为联网' : '联网记录 · 切换为仅本机').width('100%').constraintSize({ minHeight: 48 })
+      Button(this.offline ? '改为联网记录' : '仅在本机记录').width('100%').constraintSize({ minHeight: 48 })
         .fontSize(this.palette.bodySize).backgroundColor(this.palette.accentSoft).fontColor(this.palette.accent).enabled(this.active).onClick(() => this.offline = !this.offline)
       }
-      Text(this.recordingModeNotice())
-        .fontSize(this.palette.metaSize).fontColor(this.offline ? this.palette.warning : this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
-      if (this.showClockNotice()) { Text('可靠计时能力尚未确认。点击开始会重新核对；无法取得可靠时钟时不会计时。').fontSize(this.palette.bodySize).fontColor(this.palette.warning).width('100%').wordBreak(WordBreak.BREAK_WORD) }
+      if (this.offline || this.optionsExpanded) {
+        Text(this.recordingModeNotice()).fontSize(this.palette.bodySize)
+          .fontColor(this.offline ? this.palette.warning : this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+      }
+      if (this.showClockNotice()) { Text('开始前会检查计时能力。检查未通过时将无法计时。').fontSize(this.palette.bodySize).fontColor(this.palette.warning).width('100%').wordBreak(WordBreak.BREAK_WORD) }
       Button('开始专注').width('100%').constraintSize({ minHeight: 48 }).fontColor(this.palette.onAccent).backgroundColor(this.palette.accent)
         .fontSize(this.palette.bodySize).borderRadius(this.palette.controlRadius).enabled(this.startAllowed()).onClick(() => this.startRequested())
       } else {
@@ -241,9 +243,10 @@ export struct FocusPage {
       Column({ space: 12 }) {
         Text(this.localTitle(this.state.local)).fontSize(this.palette.sectionTitle).fontColor(this.palette.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
         Text(this.localLabel(this.state.local)).fontSize(this.palette.bodySize).fontColor(this.state.local.saveState === 'error' ? this.palette.danger : this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
-        Text(this.duration(this.state.local.elapsedMs)).fontSize('42fp').fontWeight(FontWeight.Medium).fontColor(this.palette.ink).width('100%')
-        Text(`本机已核实时长${this.state.local.targetMs === null ? ' · 不设目标' : ` · 目标 ${Math.floor(this.state.local.targetMs / 60000)} 分钟`}`).fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
-        if (this.targetReached(this.state.local)) { Text('已到设定时长，计时继续；何时结束由你决定。').fontSize(this.palette.bodySize).fontColor(this.palette.accent).width('100%').wordBreak(WordBreak.BREAK_WORD) }
+        Text(this.duration(this.state.local.elapsedMs)).fontSize('42fp').fontWeight(FontWeight.Medium).fontColor(this.palette.ink).width('100%').textAlign(TextAlign.Center)
+        Text(this.state.local.targetMs === null ? '本机已核实时长' : `本机已核实时长 · 目标 ${Math.floor(this.state.local.targetMs / 60000)} 分钟`)
+          .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%').textAlign(TextAlign.Center)
+        if (this.targetReached(this.state.local)) { Text('已达到目标时长，计时继续。').fontSize(this.palette.bodySize).fontColor(this.palette.accent).width('100%').wordBreak(WordBreak.BREAK_WORD) }
         Text(this.synchronizedLabel(this.state.local)).fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
         if (this.state.local.unknownGapCount > 0) { Text(`还有 ${this.state.local.unknownGapCount} 段无法核实时长，不作补算。`).fontSize(this.palette.bodySize).fontColor(this.palette.warning).width('100%') }
         Row({ space: 12 }) {
@@ -277,7 +280,6 @@ export struct FocusPage {
     if (this.completionTaskId().length > 0) {
       Column({ space: 10 }) {
         Text('任务做完了吗？').fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Medium).fontColor(this.palette.ink).width('100%')
-        Text('专注已结束；任务状态由你确认。').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
         Button(this.completingTask ? '正在核对最新任务…' : '标记任务完成').width('100%').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
           .fontColor(this.palette.onAccent).backgroundColor(this.palette.accent).borderRadius(this.palette.controlRadius)
           .enabled(this.active && !this.completingTask).onClick(() => this.completeRequested())
@@ -292,12 +294,12 @@ export struct FocusPage {
         if (this.state.local?.recordId !== this.state.record.record_id) {
           Text(this.recordTitle(this.state.record)).fontSize(this.palette.sectionTitle).fontColor(this.palette.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
           Text(this.duration(this.state.record.confirmed_elapsed_ms)).fontSize('32fp').fontWeight(FontWeight.Medium).fontColor(this.palette.ink).width('100%')
-          Text(`${this.recordLabel(this.state.record)} · 已确认片段，不代表有效学习时长`).fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+          Text(this.recordLabel(this.state.record)).fontSize(this.palette.bodySize).fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
         }
         if (this.state.intervalError.length > 0 || this.state.unknownGaps.length > 0) {
           Text(this.state.intervalError || `还有 ${this.state.unknownGaps.length} 段待核对，不补算时长。`).fontSize(this.palette.bodySize).fontColor(this.palette.warning).width('100%').wordBreak(WordBreak.BREAK_WORD)
         }
-        Button(this.detailExpanded ? '收起已同步区间与核对依据' : '查看已同步区间与核对依据').width('100%').constraintSize({ minHeight: 44 }).fontSize(this.palette.metaSize).fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft).borderRadius(this.palette.controlRadius)
+        Button(this.detailExpanded ? '收起计时明细' : '查看计时明细').width('100%').constraintSize({ minHeight: 44 }).fontSize(this.palette.bodySize).fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft).borderRadius(this.palette.controlRadius)
           .onClick(() => { if (this.state.record !== null) { this.toggleRecordDetails(this.state.record.record_id); } })
         if (this.detailExpanded) {
         Text(`开始于 ${formatPlanDateTime(this.state.record.started_at)}${this.state.record.ended_at === null ? '' : `\n结束标注 ${formatPlanDateTime(this.state.record.ended_at)}`}`).fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
@@ -305,8 +307,12 @@ export struct FocusPage {
         if (this.state.intervalLoading) { Text('正在读取完整区间…').fontSize(this.palette.bodySize).fontColor(this.palette.secondary) }
         if (this.state.intervalError.length > 0) { Text(this.state.intervalError).fontSize(this.palette.bodySize).fontColor(this.palette.warning).width('100%').wordBreak(WordBreak.BREAK_WORD) }
         ForEach(this.visibleIntervals(), (interval: FocusInterval) => {
-          Text(`${formatPlanDateTime(interval.started_at)} 至 ${formatPlanDateTime(interval.ended_at)}\n本段 ${this.duration(interval.elapsed_ms)}`)
-            .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+          Column({ space: 4 }) {
+            Text(this.duration(interval.elapsed_ms)).fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium).fontColor(this.palette.ink).width('100%')
+            Text(`${formatPlanDateTime(interval.started_at)} 至 ${formatPlanDateTime(interval.ended_at)}`)
+              .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+          }.width('100%').alignItems(HorizontalAlign.Start).padding(10)
+            .backgroundColor(this.palette.field).borderRadius(this.palette.controlRadius)
         }, (interval: FocusInterval) => interval.interval_id)
         if (this.state.intervals.length > 20) {
           Text(`已核实区间 ${this.intervalPage + 1}/${Math.ceil(this.state.intervals.length / 20)} 页`).fontSize(this.palette.metaSize)

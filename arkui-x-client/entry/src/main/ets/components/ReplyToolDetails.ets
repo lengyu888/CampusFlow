@@ -29,7 +29,6 @@ export struct ReplyToolDetails {
 
   build() {
     Column({ space: 12 }) {
-      Text(`${this.tools.length} 项工具记录`).fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
       ForEach(this.tools, (item: ToolDisplaySummary) => {
         Column({ space: 7 }) {
           Row({ space: 8 }) {

@@ -561,19 +561,12 @@ export struct RoutePage {
   private CourseContext() {
     if (this.visibleCourse !== null) {
       Column({ space: 8 }) {
-        Text('来自课程安排').fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
         Text(this.visibleCourse.course.title).fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Medium)
           .fontColor(this.palette.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
         Text(`${this.visibleCourse.course.date} · ${this.visibleCourse.course.start_time}–${this.visibleCourse.course.end_time}`)
           .fontSize(this.palette.bodySize).fontColor(this.palette.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
-        Text(`${this.visibleCourse.school} · ${this.visibleCourse.campus}`).fontSize(this.palette.metaSize)
-          .fontColor(this.palette.quiet).width('100%').wordBreak(WordBreak.BREAK_WORD)
-        Text(`课程原地点：${this.visibleCourse.course.location || '未填写'}`).fontSize(this.palette.bodySize)
-          .fontColor(this.palette.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
-        if (this.visibleCourse.course.teacher.length > 0) {
-          Text(`教师：${this.visibleCourse.course.teacher}`).fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
-            .wordBreak(WordBreak.BREAK_WORD)
-        }
+        Text(this.visibleCourse.course.location || '课表未填写地点').fontSize(this.palette.bodySize)
+          .fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
         Text(this.matchMessage()).fontSize(this.palette.bodySize).fontColor(this.palette.quiet).width('100%').wordBreak(WordBreak.BREAK_WORD)
         if (this.courseMatch?.status === 'ambiguous' || this.courseMatch?.status === 'missing') {
           ForEach(this.candidatePlaces(), (place: CampusDataPlace) => {
@@ -583,7 +576,7 @@ export struct RoutePage {
           }, (place: CampusDataPlace) => place.place_id)
         }
         EvidencePanel({ evidence: this.visibleCourse.evidence, active: this.active })
-        InfoDisclosure({ title: '课程地点说明', message: '来源描述整份已保存课表；地图仅指向楼宇，不定位到教室或当前位置。' })
+        InfoDisclosure({ title: '课程与地点说明', message: `${this.visibleCourse.school} · ${this.visibleCourse.campus}${this.visibleCourse.course.teacher.length > 0 ? '\n教师：' + this.visibleCourse.course.teacher : ''}\n课表地点用于匹配楼宇，地图不定位到教室或当前位置。` })
       }.width('100%').alignItems(HorizontalAlign.Start).padding(this.palette.cardInset)
         .backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
     }
@@ -597,7 +590,8 @@ export struct RoutePage {
       Text(`参考开放时间：${place.open_hours.length > 0 ? place.open_hours : '未提供'}`)
         .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%').wordBreak(WordBreak.BREAK_WORD)
       EvidencePanel({ evidence: place.evidence ?? [], active: this.active })
-    }.width('100%').alignItems(HorizontalAlign.Start)
+    }.width('100%').alignItems(HorizontalAlign.Start).padding(this.palette.cardInset)
+      .backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
   }
 
   @Builder
@@ -703,7 +697,7 @@ export struct RoutePage {
     }.width('100%').alignItems(HorizontalAlign.Start).padding(this.palette.cardInset)
       .backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
     if (this.candidates.length > 0) {
-      Text(`候选入口 · ${this.candidates.length}`).fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
+      Text(`${this.candidates.length} 个候选入口`).fontSize(this.palette.bodySize).fontColor(this.palette.secondary)
       Column() {
         ForEach(this.candidates, (candidate: CampusPlaceCandidate, index: number) => {
           if (index > 0) { Divider().color(this.palette.line).margin({ left: 15, right: 15 }) }
@@ -791,15 +785,15 @@ export struct RoutePage {
         Divider().color(this.palette.line).margin({ left: 24 })
         this.EndpointRow(this.places[this.destinationIndex], false)
         if (this.routeActionLabel() === '按已保存入口规划') {
-          Text('路线将使用上方已保存的百度地点。').fontSize(this.palette.metaSize)
-            .fontColor(this.palette.warning).width('100%').padding({ bottom: 3 })
+          Text('本次使用已保存的百度入口。').fontSize(this.palette.bodySize)
+            .fontColor(this.palette.warning).width('100%').padding({ bottom: 4 })
         }
         Button(this.routeActionLabel())
           .width('100%').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium)
           .fontColor(this.palette.onAccent).backgroundColor(this.palette.accent).borderRadius(this.palette.controlRadius)
           .enabled(!this.routeLoading && !this.candidateSaving && this.originIndex >= 0 && this.destinationIndex >= 0)
           .onClick(() => this.performRouteAction())
-      }.width('100%').padding({ left: 15, right: 15, top: 6, bottom: 14 })
+      }.width('100%').padding({ left: this.palette.cardInset, right: this.palette.cardInset, top: 6, bottom: this.palette.cardInset })
         .backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
       if (this.errorText.length > 0) {
         FeedbackPanel({ kind: 'error', title: '路线尚未生成', message: this.errorText,
@@ -818,7 +812,7 @@ export struct RoutePage {
           .backgroundColor(this.palette.accentSoft).borderRadius(this.palette.controlRadius)
           .constraintSize({ minHeight: 44 }).onClick(() => this.routeFormExpanded = true)
       }.width('100%')
-      Text(`${route.distance_meters ?? 0} 米 · 百度步行路线`).fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
+      Text(`${route.distance_meters ?? 0} 米步行`).fontSize(this.palette.bodySize).fontColor(this.palette.secondary)
       Text(`${this.routedPlaceLabel(this.places[this.originIndex])} → ${this.routedPlaceLabel(this.places[this.destinationIndex])}`)
         .fontSize(this.palette.bodySize).fontColor(this.palette.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
     }.width('100%').alignItems(HorizontalAlign.Start).padding(this.palette.cardInset)
@@ -828,11 +822,14 @@ export struct RoutePage {
   @Builder
   private RouteDetails() {
     if (this.route !== null) {
-      if (this.route.steps.length > 0) {
-        InfoDisclosure({ title: '分段步行指引', message: this.walkingInstructions(this.route.steps) })
-      }
-      InfoDisclosure({ title: '路线说明', message: '步行时间仅供参考，请以现场通行情况为准。' })
-      EvidencePanel({ evidence: this.route.evidence ?? [], active: this.active })
+      Column({ space: 0 }) {
+        if (this.route.steps.length > 0) {
+          InfoDisclosure({ title: '分段步行指引', message: this.walkingInstructions(this.route.steps) })
+        }
+        InfoDisclosure({ title: '路线说明', message: '百度地图提供步行路线。实际通行和耗时以现场情况为准。' })
+        EvidencePanel({ evidence: this.route.evidence ?? [], active: this.active })
+      }.width('100%').padding({ left: this.palette.cardInset, right: this.palette.cardInset })
+        .backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
       this.PlaceEvidence(this.route.origin)
       this.PlaceEvidence(this.route.destination)
     } else if (this.mapActive()) {
@@ -876,7 +873,7 @@ export struct RoutePage {
           }
           if (this.candidateEndpoint.length === 0 && this.choosingEndpoint.length === 0) { this.RouteDetails() }
         }.width('100%').alignItems(HorizontalAlign.Start).justifyContent(FlexAlign.Start)
-          .padding({ left: 16, right: 16, top: 8, bottom: 22 })
+          .padding({ left: this.palette.pageInset, right: this.palette.pageInset, top: 8, bottom: 22 })
       }.layoutWeight(1).width('100%').align(Alignment.TopStart)
       if (this.selectedCandidateIndex >= 0) {
         Column() {
@@ -885,7 +882,8 @@ export struct RoutePage {
             .backgroundColor(this.palette.accent).borderRadius(this.palette.controlRadius)
             .enabled(!this.candidateSaving && (!this.candidateConflict() || this.candidateAcknowledged))
             .onClick(() => this.confirmCandidate())
-        }.width('100%').padding({ left: 16, right: 16, top: 8, bottom: 10 }).backgroundColor(this.palette.canvas)
+        }.width('100%').padding({ left: this.palette.pageInset, right: this.palette.pageInset, top: 8, bottom: 10 })
+          .backgroundColor(this.palette.surface).border({ width: { top: 1 }, color: this.palette.line })
       }
     }.width('100%').height('100%').alignItems(HorizontalAlign.Start)
       .justifyContent(FlexAlign.Start).backgroundColor(this.palette.bg)

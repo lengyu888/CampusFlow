@@ -367,8 +367,6 @@ export struct PlanningConflictsPanel {
     Column({ space: 12 }) {
       Text('课表与任务核对').fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Bold)
         .fontColor(this.palette.ink).width('100%')
-      Text('核对课程与未完成任务，确认后才改期。')
-        .fontSize(13).lineHeight(21).fontColor(this.palette.secondary).width('100%')
       InfoDisclosure({ title: '核对范围与改期规则', message: '这里只扫描未结束、时段完整的未完成任务；规则改期需你确认，不自动移动已接受的课内安排。以下时间均为北京时间。' })
       if (this.state.report !== null) {
         Text(this.summaryTitle())
@@ -432,8 +430,8 @@ export struct PlanningConflictsPanel {
       Button({ type: ButtonType.Normal }) {
         Column({ space: 6 }) {
           Row({ space: 8 }) {
-            Text(this.compactNeedsDetail() ? this.summaryTitle() : '本次无待处理的课程重叠')
-              .fontSize(this.palette.metaSize).fontWeight(FontWeight.Medium)
+            Text(this.compactNeedsDetail() ? this.summaryTitle() : '无待处理的课程重叠')
+              .fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium)
               .fontColor(this.needsResultCheck() || this.overlapCount('conflicts') + this.overlapCount('reviews') > 0 ? this.palette.warning : this.palette.secondary)
               .layoutWeight(1).textAlign(TextAlign.Start).wordBreak(WordBreak.BREAK_WORD)
             AppIcon({ name: 'chevron', iconSize: 14, color: this.palette.secondary })

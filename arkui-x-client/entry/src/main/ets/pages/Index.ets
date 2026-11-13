@@ -1038,7 +1038,7 @@ struct Index {
           AppIcon({ name: icon, iconSize: 22,
             color: this.selectedTab() === tab ? this.palette.accent : this.palette.secondary })
         }.width(48).height(26).justifyContent(FlexAlign.Center)
-        Text(label).fontSize(10).fontWeight(this.selectedTab() === tab ? FontWeight.Medium : FontWeight.Regular)
+        Text(label).fontSize(12).fontWeight(this.selectedTab() === tab ? FontWeight.Medium : FontWeight.Regular)
           .fontColor(this.selectedTab() === tab ? this.palette.accent : this.palette.secondary)
       }.constraintSize({ minHeight: 48 }).justifyContent(FlexAlign.Center)
     }.layoutWeight(1).constraintSize({ minHeight: 52 }).padding({ top: 4, bottom: 0 })

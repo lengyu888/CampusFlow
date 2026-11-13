@@ -20,7 +20,7 @@ export struct AppSectionHeader {
         }
       }.layoutWeight(1).alignItems(HorizontalAlign.Start)
       if (this.actionLabel.length > 0) {
-        Button(this.actionLabel).constraintSize({ minHeight: 44 }).fontSize(this.palette.metaSize)
+        Button(this.actionLabel).constraintSize({ minHeight: 44 }).fontSize(this.palette.metaSize).fontWeight(FontWeight.Medium)
           .fontColor(this.palette.accent).backgroundColor(Color.Transparent)
           .padding({ left: 8, right: 0 }).enabled(this.actionEnabled).onClick(() => this.onAction())
       }

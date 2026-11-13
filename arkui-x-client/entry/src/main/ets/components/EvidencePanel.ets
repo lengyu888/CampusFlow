@@ -3,6 +3,7 @@ import { normalizeEvidence, evidenceStatus, evidenceStatusLabel, evidenceKindLab
 import { AppTheme } from '../theme/AppTheme';
 import { ThemePalette, themePalette } from '../theme/ThemePalette';
 import { AppIcon } from './AppIcon';
+import { InfoDisclosure } from './InfoDisclosure';
 
 @Component
 export struct EvidencePanel {
@@ -52,11 +53,13 @@ export struct EvidencePanel {
             Text(`${item.label} · ${evidenceStatusLabel(evidenceStatus(item, this.now))}`)
               .fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium).fontColor(this.palette.ink)
               .width('100%').wordBreak(WordBreak.BREAK_WORD)
-            Text(`${evidenceKindLabel(item.kind)} · ${item.source_id}`).fontSize(this.palette.metaSize)
+            Text(evidenceKindLabel(item.kind)).fontSize(this.palette.metaSize)
               .fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
-            Text(`来源记录时间：${evidenceTime(item.updated_at)}`).fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
-            Text(item.expires_at === null ? '未提供自动到期时间，不代表实时有效。' : `缓存使用期限：${evidenceTime(item.expires_at)}`)
-              .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+            Text(`记录于 ${evidenceTime(item.updated_at)}`).fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
+            if (item.expires_at !== null) {
+              Text(`缓存期限 ${evidenceTime(item.expires_at)}`)
+                .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+            }
             if (item.note.length > 0) {
               Text(item.note).fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
             }
@@ -67,8 +70,9 @@ export struct EvidencePanel {
           }.width('100%').alignItems(HorizontalAlign.Start).padding(12)
             .backgroundColor(this.palette.field).borderRadius(12).border({ width: 1, color: this.palette.line })
         }, (item: DataEvidence, index: number) => `${item.source_id}-${index}-${this.sourceRevision}`)
-        Text('时间按上海时区展示；记录有效或缓存未到期，不等于现实情况一定未变。公开链接可长按复制。')
-          .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+        InfoDisclosure({ title: '时效与来源标识',
+          message: '时间按上海时区显示。缓存有效期间，实际情况也可能变化。公开链接可长按复制。\n' +
+            this.sources().map((item: DataEvidence) => `${item.label}  ${item.source_id}`).join('\n') })
       }
     }.width('100%').alignItems(HorizontalAlign.Start)
   }

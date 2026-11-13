@@ -111,7 +111,7 @@ export struct TaskStatusPanel {
       }, (_message: string, index: number) => `${item.operationId}-warning-${index}`)
       if (preview.course_review.overlaps.length > 0) {
         Text('重新核对课内安排').fontSize(this.palette.sectionTitle).fontColor(this.palette.warning).width('100%')
-        Text('过去的课内确认不代替这次恢复。请核对当前课程、任务和重叠时段。').fontSize(this.palette.bodySize).fontColor(this.palette.secondary).width('100%')
+        Text('恢复前请重新确认以下课程重叠。').fontSize(this.palette.bodySize).fontColor(this.palette.secondary).width('100%')
         Text(`${preview.course_review.school} · ${preview.course_review.campus} · 北京时间`).fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
         ForEach(this.overlaps(preview), (overlap: CourseOverlap, index: number) => {
           Column({ space: 4 }) {
@@ -153,7 +153,7 @@ export struct TaskStatusPanel {
       }.width('100%').padding({ left: 8, right: 20, top: 6, bottom: 6 }).backgroundColor(this.palette.surface)
       Scroll() {
         Column({ space: 16 }) {
-          Text('关闭此页不会取消已提交的操作。待核对记录会保留；只限制对应任务，其他任务仍可使用。').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+          InfoDisclosure({ title: '待核对操作说明', message: '关闭页面会保留已提交的操作。仅对应任务需先核对。' })
           if (this.state.message.length > 0) { Text(this.state.message).fontSize(this.palette.bodySize).fontColor(this.palette.warning).width('100%').wordBreak(WordBreak.BREAK_WORD) }
           ForEach(this.items(), (item: TaskStatusItem) => {
             Button({ type: ButtonType.Normal }) {

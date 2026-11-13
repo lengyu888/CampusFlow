@@ -43,16 +43,16 @@ export struct FeedbackPanel {
     Column({ space: 8 }) {
       Row({ space: 10 }) {
         if (this.kind === 'loading') {
-          LoadingProgress().width(22).height(22).color(this.palette.accent)
+          LoadingProgress().width(20).height(20).color(this.palette.accent)
         } else {
-          AppIcon({ name: this.icon(), iconSize: 22, color: this.color() })
+          AppIcon({ name: this.icon(), iconSize: 20, color: this.color() })
         }
         Text(this.title).fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium)
-          .fontColor(this.color()).layoutWeight(1).wordBreak(WordBreak.BREAK_WORD)
+          .fontColor(this.palette.ink).layoutWeight(1).wordBreak(WordBreak.BREAK_WORD)
       }.width('100%').alignItems(VerticalAlign.Top)
       if (this.message.length > 0) {
-        Text(this.message).fontSize(this.palette.metaSize).fontColor(this.color())
-          .width('100%').wordBreak(WordBreak.BREAK_WORD)
+        Text(this.message).fontSize(this.palette.metaSize).lineHeight(21).fontColor(this.palette.secondary)
+          .width('100%').wordBreak(WordBreak.BREAK_WORD).padding({ left: 30 })
       }
       if (this.actionLabel.length > 0) {
         Button({ type: ButtonType.Normal }) {

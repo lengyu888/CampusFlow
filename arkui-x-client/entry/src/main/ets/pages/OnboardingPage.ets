@@ -817,8 +817,7 @@ export struct OnboardingPage {
         .fontColor(this.palette.ink).width('100%')
       this.FormField('HDUHelp 课表订阅链接', '粘贴 HTTPS 课表订阅链接', this.scheduleUrl, '',
         (value: string) => this.updateScheduleUrl(value), InputType.Password)
-      Text('链接可能含私人凭据，仅用于本次读取，不会随首次配置保存。以后可从校园进入课表维护或校园连接。')
-        .fontSize(this.palette.metaSize).lineHeight(21).fontColor(this.palette.quiet).width('100%')
+      InfoDisclosure({ title: '订阅链接如何使用', message: '链接可能含私人凭据，仅用于这次读取。之后可在校园的课表维护页管理订阅。' })
       Button(this.loading && this.busyLabel === '正在读取课表预览…' ? '正在读取…' : '读取预览，不保存')
         .width('100%').constraintSize({ minHeight: 50 }).fontSize(this.palette.bodySize).fontColor(this.palette.onAccent)
         .backgroundColor(this.palette.accent).borderRadius(this.palette.controlRadius)
@@ -895,9 +894,6 @@ export struct OnboardingPage {
             }.width('100%')
             Text(this.step === 0 ? '校园与学期' : (this.step === 1 ? '添加课程' : '确认课表'))
               .fontSize(22).fontWeight(FontWeight.Bold).fontColor(this.palette.ink).width('100%')
-            Text(this.step === 0 ? '填写校园，方便安排课程与地点。' :
-              (this.step === 1 ? '手动录入或订阅导入，确认前均为草稿。' : '核对日期、时间和地点后保存。'))
-              .fontSize(this.palette.metaSize).lineHeight(21).fontColor(this.palette.quiet).width('100%')
             Row({ space: 6 }) {
               ForEach([0, 1, 2], (step: number) => {
                 Row().height(4).layoutWeight(1).borderRadius(2)
@@ -911,14 +907,12 @@ export struct OnboardingPage {
             Column({ space: 16 }) {
               Text('当前支持的校园').fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
               Text(this.school).fontSize(20).fontWeight(FontWeight.Bold).fontColor(this.palette.ink).width('100%')
-              Text(`${this.campus} · 内置校园地点参考数据`)
+              Text(this.campus)
                 .fontSize(this.palette.bodySize).fontColor(this.palette.quiet).width('100%')
               Divider().color(this.palette.line)
               this.FormField('学期 *', '例如：2026-2027 第一学期', this.semester, '',
                 (value: string) => this.updateSemester(value))
-              Text('下一步可订阅导入，也可手动录入一门课程。')
-                .fontSize(this.palette.metaSize).lineHeight(21).fontColor(this.palette.quiet).width('100%')
-              InfoDisclosure({ title: '首次配置需要什么？', message: '当前首次配置需确认校园、学期和至少一门真实课程。无需一次录完整个学期，之后可从校园 → 课表维护继续添加。模型连接、语音、提醒和 HDUHelp 数据授权均可稍后设置。' })
+              InfoDisclosure({ title: '首次配置需要什么？', message: '确认校园、学期和至少一门真实课程即可。可手动录入或订阅导入。模型、提醒和校园授权可稍后设置。' })
             }.width('100%').alignItems(HorizontalAlign.Start).padding(this.palette.cardInset)
               .backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
           } else if (this.step === 1) {
@@ -953,13 +947,12 @@ export struct OnboardingPage {
               Text(`${this.school} · ${this.campus}`).fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium)
                 .fontColor(this.palette.ink).width('100%')
               Text(this.semester).fontSize(this.palette.bodySize).fontColor(this.palette.quiet).width('100%')
-              Text(`即将保存 ${this.entries.length} 次课程，不会再次抓取或替换为另一份课表。`)
+              Text(`即将保存 ${this.entries.length} 次课程`)
                 .fontSize(this.palette.bodySize).lineHeight(22).fontColor(this.palette.quiet).width('100%')
               if (this.importedNotice.length > 0) {
                 Text(this.importedNotice).fontSize(this.palette.metaSize).lineHeight(21).fontColor(this.palette.quiet).width('100%')
               }
-              Text('这些课程将保存到当前账号，并用于助手规划；未提交草稿保存在本机并按账号隔离，退出账号会清除。')
-                .fontSize(this.palette.metaSize).lineHeight(20).fontColor(this.palette.quiet).width('100%')
+              InfoDisclosure({ title: '课程与草稿保存说明', message: '确认后，当前预览会保存到账号并用于助手规划。未提交草稿留在本机，退出账号会清除。' })
             }.width('100%').alignItems(HorizontalAlign.Start).padding(this.palette.cardInset)
               .backgroundColor(this.palette.accentSoft).borderRadius(this.palette.cardRadius)
             this.DraftList()

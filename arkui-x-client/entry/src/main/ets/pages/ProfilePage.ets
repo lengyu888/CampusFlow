@@ -771,7 +771,7 @@ export struct ProfilePage {
           .fontColor(item.emphasis ? this.palette.accent : this.palette.ink)
           .width('100%')
       }.width('100%').alignItems(HorizontalAlign.Start)
-        .padding(11).backgroundColor(this.palette.field).borderRadius(this.palette.controlRadius)
+        .padding({ top: 6, bottom: 6 })
     } else {
       Row() {
         Text(item.label).fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
@@ -795,7 +795,7 @@ export struct ProfilePage {
           .backgroundColor(Color.Transparent).borderRadius(this.palette.controlRadius)
           .accessibilityText('返回校园数据连接').onClick(() => this.closeHduHelpData())
         Text('校园档案').fontSize(22).fontWeight(FontWeight.Bold).fontColor(this.palette.ink).layoutWeight(1)
-        Button('重新读取').constraintSize({ minHeight: 44 }).fontSize(this.palette.bodySize).fontColor(this.palette.accent)
+        Button('刷新').constraintSize({ minHeight: 44 }).fontSize(this.palette.bodySize).fontColor(this.palette.accent)
           .backgroundColor(Color.Transparent).enabled(!this.hduHelpDataLoading).onClick(() => this.openHduHelpData())
       }.width('100%').padding({ left: 12, right: 16, top: 8, bottom: 8 })
 
@@ -813,12 +813,10 @@ export struct ProfilePage {
             FeedbackPanel({ kind: 'info', title: '暂无可展示的校园档案', message: '可返回连接设置，检查 HDUHelp 授权与同步状态。' })
           }
           if (this.archiveSections().length > 0) {
-            Text('账户、学籍与成绩').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
-
             ForEach(this.archiveSections(), (section: HDUHelpDisplaySection) => {
               Column({ space: 10 }) {
                 Column({ space: 3 }) {
-                  Text(section.title).fontSize(17).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
+                  Text(section.title).fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Medium).fontColor(this.palette.ink)
                   if (section.summary.length > 0) {
                     Text(section.summary).fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
                   }
@@ -830,7 +828,8 @@ export struct ProfilePage {
                 } else {
                   Text('同步记录 · 更新时间待核对').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
                 }
-                ForEach(section.items, (item: HDUHelpDisplayItem) => {
+                ForEach(section.items, (item: HDUHelpDisplayItem, index: number) => {
+                  if (index > 0) { Divider().color(this.palette.line).strokeWidth(0.5) }
                   this.dataItem(item)
                 }, (item: HDUHelpDisplayItem) => `${section.resource}-${item.label}`)
               }.width('100%').padding(this.palette.cardInset).backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
@@ -849,7 +848,6 @@ export struct ProfilePage {
             if (this.hduHelpPrompts.length > 0) {
               Column({ space: 11 }) {
                 Text('问问助手').fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Bold).fontColor(this.palette.ink).width('100%')
-                Text('基于已连接的数据继续完成任务').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
                 ForEach(this.hduHelpPrompts, (suggestion: HDUHelpSuggestedPrompt) => {
                   Button() {
                     Row({ space: 10 }) {
@@ -858,13 +856,13 @@ export struct ProfilePage {
                       AppIcon({ name: 'chevron', iconSize: 16, color: this.palette.accent })
                     }.width('100%')
                   }.width('100%').constraintSize({ minHeight: 48 }).padding({ left: 14, right: 14 })
-                    .backgroundColor(this.palette.accentSoft).borderRadius(12)
+                    .backgroundColor(Color.Transparent).borderRadius(this.palette.controlRadius)
                     .onClick(() => this.onOpenAgent(suggestion.prompt))
                 }, (suggestion: HDUHelpSuggestedPrompt) => suggestion.prompt_id)
               }.width('100%').padding(this.palette.cardInset).backgroundColor(this.palette.surface).borderRadius(18)
             }
           }
-        }.width('100%').padding({ left: 18, right: 18, bottom: 28 })
+        }.width('100%').padding({ left: this.palette.pageInset, right: this.palette.pageInset, bottom: 28 })
       }.layoutWeight(1).width('100%').align(Alignment.TopStart)
     }.width('100%').height('100%').alignItems(HorizontalAlign.Start)
       .justifyContent(FlexAlign.Start).backgroundColor(this.palette.bg)
@@ -876,7 +874,7 @@ export struct ProfilePage {
       AppActionRow({ title: title,
         icon: group === 'appearance' ? 'skills' : group === 'reminders' ? 'speaker' : group === 'model' ? 'assistant' :
           group === 'connections' ? 'classroom' : group === 'data' ? 'history' : group === 'learning' ? 'book' : 'person',
-        subtitle: group === 'appearance' || group === 'model' || group === 'baidu-map' || group === 'connections' ||
+        subtitle: group === 'appearance' || group === 'model' || group === 'connections' ||
           group === 'account' && this.accountDirty() ? summary() : '',
         onAction: () => this.toggleGroup(group) })
         .backgroundColor(this.palette.surface).borderRadius(this.section.length === 0 ? 0 : this.palette.cardRadius)
@@ -943,7 +941,7 @@ export struct ProfilePage {
       Column({ space: 10 }) {
         Column({ space: 7 }) {
           Row() {
-            Text('今日安排').fontSize(12).fontColor(themePalette(id).ink)
+            Row().width('45%').height(8).backgroundColor(themePalette(id).ink).borderRadius(4)
             Blank()
             Row().width(14).height(14).backgroundColor(themePalette(id).accent).borderRadius(7)
           }.width('100%')
@@ -956,8 +954,6 @@ export struct ProfilePage {
             .layoutWeight(1)
           if (this.palette.id === id) { AppIcon({ name: 'check', iconSize: 18, color: this.palette.accent }) }
         }.width('100%')
-        Text(description).fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
-          .wordBreak(WordBreak.BREAK_WORD)
       }.width('100%').alignItems(HorizontalAlign.Start)
     }.layoutWeight(1).padding(12).backgroundColor(this.palette.surface)
       .border({ width: this.palette.id === id ? 2 : 1, color: this.palette.id === id ? this.palette.accent : this.palette.line })
@@ -997,8 +993,6 @@ export struct ProfilePage {
               this.field('学校', this.school, (value) => this.school = value)
               this.field('校区', this.campus, (value) => this.campus = value)
               this.field('学期', this.semester, (value) => this.semester = value)
-              Text('课程与导入请进入课表维护。')
-                .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
               if (this.profileMessage.length > 0) {
                 FeedbackPanel({ kind: this.profileError ? 'error' : 'info', title: '账号资料', message: this.profileMessage })
               }
@@ -1017,10 +1011,8 @@ export struct ProfilePage {
           this.groupHeader('appearance', '外观与动效', () => `${this.palette.name} · 本机偏好`)
           if (this.section === 'appearance') {
             Column({ space: 16 }) {
-              Text('选择喜欢的外观').fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Medium)
+              Text('主题').fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Medium)
                 .fontColor(this.palette.ink).width('100%')
-              Text('即时生效，保存在这台设备。')
-                .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
               Row({ space: 12 }) {
                 this.themeChoice('ios-blue', '清透蓝', '轻盈明亮，清晰聚焦')
                 this.themeChoice('paper-green', '纸页绿', '温和纸色，安静阅读')
@@ -1039,22 +1031,18 @@ export struct ProfilePage {
           this.groupHeader('reminders', '语音与提醒', () => '语音使用方式与本机系统通知')
           if (this.section === 'reminders') {
             Column({ space: 12 }) {
-              Text('语音在助手中开启。识别文字先核对，再发送。')
-                .fontSize(this.palette.bodySize).fontColor(this.palette.ink).width('100%').wordBreak(WordBreak.BREAK_WORD)
-              Text('首次使用需麦克风和识别权限；播报可随时停止。').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
-              Text('提醒仅用于已确认的定时任务；锁屏不显示任务内容。')
-                .fontSize(this.palette.bodySize).fontColor(this.palette.quiet).width('100%')
               FeedbackPanel({ kind: this.reminderState.phase === 'error' ? 'error' : this.reminderBusy() ? 'loading' : 'info',
                 title: this.reminderState.enabled ? '本机提醒已启用' : '本机提醒状态', message: this.reminderState.message })
-              Text(`已受理 ${this.reminderState.scheduled} 项，未安排 ${this.reminderState.skipped} 项。`)
-                .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
+              if (this.reminderState.enabled || this.reminderState.scheduled > 0 || this.reminderState.skipped > 0) {
+                Text(`系统已受理 ${this.reminderState.scheduled} 项，未安排 ${this.reminderState.skipped} 项`)
+                  .fontSize(this.palette.bodySize).fontColor(this.palette.secondary).width('100%')
+              }
               if (this.reminderState.limited) {
                 Text('已达系统容量限制，后续提醒请刷新核对。')
                   .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
               }
-              Text('系统受理不等于已送达。')
-                .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
-              InfoDisclosure({ title: '提醒与语音说明', message: '识别与播报取决于设备和权限。提醒只安排设置了具体时间及提前分钟数的未完成任务；无时间、已过期或超过一年范围的任务不安排。近期提醒最多60项，部分系统上限更低。重新打开应用或刷新时核对后续提醒。通知设置、省电及系统调度可能影响送达。退出账号会尝试清理本机提醒，切换到后台不会取消。' })
+              InfoDisclosure({ title: '语音说明', message: '在助手中使用语音。首次使用需授权麦克风和语音识别，识别后可先核对文字再发送，播报可随时停止。' })
+              InfoDisclosure({ title: '提醒说明', message: '仅安排有具体时间和提前分钟数的未完成任务，最长一年。近期提醒最多 60 项，部分系统上限更低。系统受理不等于已送达，锁屏隐藏任务内容。打开应用或刷新时会核对后续提醒。退出账号会尝试清理本机提醒。' })
               if (!this.reminderState.enabled) {
                 Button('请求通知权限并启用提醒').width('100%').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
                   .fontColor(this.palette.onAccent).backgroundColor(this.palette.accent).borderRadius(this.palette.controlRadius)
@@ -1072,11 +1060,10 @@ export struct ProfilePage {
           this.groupHeader('model', '模型连接', () => this.newApiKey.length > 0 ? '有新密钥尚未保存' : `当前密钥 ${this.user.api_key_hint ?? '未配置'}`)
           if (this.section === 'model') {
             Column({ space: 16 }) {
-              Text(this.newApiKey.length > 0 ? '新密钥尚未保存。' : '留空保留现有连接。').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
+              Text(this.newApiKey.length > 0 ? '新密钥尚未保存' : `当前密钥 ${this.user.api_key_hint ?? '未配置'}`)
+                .fontSize(this.palette.bodySize).fontColor(this.palette.secondary).width('100%')
               this.field('新的 DeepSeek API Key', this.newApiKey, (value) => this.newApiKey = value, true)
-              Text('密钥加密保存；留空不更改现有密钥。')
-                .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
-              InfoDisclosure({ title: '密钥保存说明', message: '密钥只发送到当前配置的行简服务端并加密保存。这里只保存模型配置，不提交其他账号或校园草稿。' })
+              InfoDisclosure({ title: '密钥保存说明', message: '密钥仅发送到当前行简服务端，并加密保存。留空保留现有密钥。' })
               if (this.modelMessage.length > 0) {
                 FeedbackPanel({ kind: this.modelError ? 'error' : 'info', title: '模型配置', message: this.modelMessage })
               }
@@ -1105,8 +1092,7 @@ export struct ProfilePage {
                     .borderRadius(this.palette.controlRadius).enabled(!this.baiduMapBusy)
                     .onChange((value: string) => this.newBaiduServerKey = value)
                 }.width('100%').alignItems(HorizontalAlign.Start)
-                Text('留空保留现有配置。密钥由当前行简服务端加密保存。')
-                  .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).width('100%')
+                InfoDisclosure({ title: '地图密钥说明', message: '留空保留现有配置。密钥由当前行简服务端加密保存。' })
                 Button(this.baiduMapBusy ? '正在处理…' : '保存地图密钥').width('100%').constraintSize({ minHeight: 48 })
                   .fontSize(this.palette.bodySize).fontColor(this.palette.onAccent).backgroundColor(this.palette.accent)
                   .borderRadius(this.palette.controlRadius).enabled(!this.baiduMapBusy && !this.baiduMapNeedsCheck)
@@ -1137,17 +1123,13 @@ export struct ProfilePage {
           if (this.section === 'connections') {
         Column({ space: 12 }) {
           Row() {
-            Column({ space: 4 }) {
-              Text('HDUHelp').fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
-              Text('个人令牌或官方授权').fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
-            }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-            Blank()
+            Text('HDUHelp').fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Medium).fontColor(this.palette.ink).layoutWeight(1)
             Text(this.hduHelpConnectionLabel()).fontSize(this.palette.metaSize)
               .fontColor(this.hduHelp.connection_state === 'auth_invalid' ? this.palette.warning :
                 (this.hduHelpLoaded && this.hduHelp.configured ? this.palette.success : this.palette.muted))
           }.width('100%')
           if (this.hduHelpBusy) {
-            FeedbackPanel({ kind: 'loading', title: '正在核对校园连接', message: '请稍候，连接操作不会重复提交。' })
+            FeedbackPanel({ kind: 'loading', title: '正在核对校园连接' })
           }
           Button('刷新连接状态').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
             .fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft).enabled(!this.hduHelpBusy)
@@ -1196,9 +1178,8 @@ export struct ProfilePage {
             TextInput({ text: this.hduHelpPat, placeholder: 'hduhelp_pat_…' }).type(InputType.Password)
               .constraintSize({ minHeight: 48 }).backgroundColor(this.palette.field).borderRadius(this.palette.controlRadius)
               .enabled(!this.hduHelpBusy).onChange((value) => this.hduHelpPat = value)
-            Text('令牌发送到当前配置的行简服务端，并加密保存。').fontSize(this.palette.metaSize)
-              .fontColor(this.palette.secondary).width('100%')
-            Text('无需提供杭电密码。').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
+            Text('仅需访问令牌，无需杭电密码。').fontSize(this.palette.bodySize).fontColor(this.palette.secondary).width('100%')
+            InfoDisclosure({ title: '令牌保存说明', message: '令牌发送到当前行简服务端，并加密保存。' })
             Button('使用令牌连接并同步').width('100%').constraintSize({ minHeight: 48 }).fontColor(this.palette.onAccent)
               .backgroundColor(this.palette.accent).borderRadius(this.palette.controlRadius).enabled(this.hduHelpLoaded && !this.hduHelpBusy && !this.hduHelpDataLoading).onClick(() => this.connectHduHelpPat())
             Button('或使用官方 OAuth').width('100%').constraintSize({ minHeight: 48 }).fontColor(this.palette.accent)
@@ -1261,8 +1242,11 @@ export struct ProfilePage {
               Button('打开会话历史').width('100%').constraintSize({ minHeight: 48 }).fontSize(this.palette.bodySize)
                 .fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft).onClick(() => this.onOpenHistory())
               Text('本机草稿').fontSize(this.palette.bodySize).fontColor(this.palette.ink).width('100%')
-              Text(this.draftNotice || '未提交的输入只保存在这台设备。退出账号会清除，不包含密码或模型凭据。')
-                .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+              if (this.draftNotice.length > 0) {
+                Text(this.draftNotice).fontSize(this.palette.bodySize).fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
+              } else {
+                InfoDisclosure({ title: '草稿保存说明', message: '未提交的输入只保存在这台设备。退出账号会清除草稿。草稿不含密码和模型凭据。' })
+              }
               if (this.draftClearConfirm) {
                 Text('确定清除本机未提交草稿？账号内已经保存的安排不受影响。')
                   .fontSize(this.palette.bodySize).fontColor(this.palette.warning).width('100%')
@@ -1285,9 +1269,7 @@ export struct ProfilePage {
         if (this.user.role === 'admin' && this.section === 'admin') {
           Column({ space: 12 }) {
             Row() {
-              Text('用户管理').fontSize(17).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
-              Blank()
-              Text(`${this.adminUsers.length} 人`).fontSize(this.palette.metaSize).fontColor(this.palette.accent)
+              Text(`已注册 ${this.adminUsers.length} 人`).fontSize(this.palette.bodySize).fontColor(this.palette.secondary).width('100%')
             }.width('100%')
             if (this.adminLoading) { FeedbackPanel({ kind: 'loading', title: '正在读取用户列表' }) }
             if (this.adminMessage.length > 0) {

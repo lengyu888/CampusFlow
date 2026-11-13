@@ -32,10 +32,11 @@ export struct ConnectionCheckPanel {
         .enabled(this.active && this.state.phase !== 'checking').onClick(() => this.controller?.check())
       if (this.state.phase !== 'idle') {
         FeedbackPanel({ kind: this.state.phase === 'checking' ? 'loading' : this.state.phase === 'online' ? 'success' : 'warning',
-          title: connectionCheckTitle(this.state), message: connectionCheckMessage(this.state) })
+          title: connectionCheckTitle(this.state),
+          message: this.state.phase === 'checking' ? '' : connectionCheckMessage(this.state) })
       }
       if (this.state.phase !== 'idle' && this.state.phase !== 'online' && this.state.phase !== 'checking') {
-        InfoDisclosure({ title: '连接排查', message: '先确认电脑上的行简后端已经启动，并核对地址与端口。手机使用电脑的局域网地址；Phone 模拟器使用 127.0.0.1 时，还需建立对应端口映射。地址变更后请重新检查。网络失败不能单独证明是后端或映射故障。' })
+        InfoDisclosure({ title: '连接排查', message: '确认后端已启动，核对地址和端口。真机连接本地后端时使用电脑的局域网地址。Phone 模拟器使用 127.0.0.1 时需建立端口映射。' })
       }
     }.width('100%').alignItems(HorizontalAlign.Start)
   }

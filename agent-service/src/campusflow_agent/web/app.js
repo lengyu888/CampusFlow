@@ -7,10 +7,10 @@ const elements = {
   appView: $("#appView"),
   settingsView: $("#settingsView"),
   authTitle: $("#authTitle"),
-  authSubtitle: $("#authSubtitle"),
   loginForm: $("#loginForm"),
   registerForm: $("#registerForm"),
   setupProgress: $("#setupProgress"),
+  setupModelStatus: $("#setupModelStatus"),
   setupKeyHint: $("#setupKeyHint"),
   schoolInput: $("#schoolInput"),
   campusInput: $("#campusInput"),
@@ -277,10 +277,7 @@ function switchAuth(mode) {
   const register = mode === "register";
   elements.loginForm.hidden = register;
   elements.registerForm.hidden = !register;
-  elements.authTitle.textContent = register ? "创建你的校园空间" : "登录你的校园空间";
-  elements.authSubtitle.textContent = register
-    ? "三步连接学校、课表和校园地图。"
-    : "继续使用你的课表、校区信息和 Agent 记忆。";
+  elements.authTitle.textContent = register ? "创建账户" : "登录";
   $$('[data-auth-tab]').forEach((button) => {
     button.classList.toggle("active", button.dataset.authTab === mode);
   });
@@ -341,13 +338,14 @@ function showOnboarding() {
   elements.campusInput.value = state.user?.campus ?? elements.campusInput.value;
   elements.semesterInput.value = state.user?.semester ?? elements.semesterInput.value;
   elements.setupKeyHint.textContent = state.user?.api_key_hint
-    ? `账户凭据 ${state.user.api_key_hint}`
-    : "加密保存在你的账户中";
+    ? "已配置 DeepSeek Flash"
+    : "图片识别需要配置 DeepSeek API Key";
   showOnly("onboarding");
   renderSetupStep();
 }
 
 function renderSetupStep() {
+  if (elements.setupModelStatus) elements.setupModelStatus.hidden = state.setupStep === 1;
   $$('[data-setup-step]').forEach((panel) => {
     panel.hidden = Number(panel.dataset.setupStep) !== state.setupStep;
   });
@@ -685,25 +683,25 @@ async function loadTodayDashboard() {
     elements.todayHistoryCount.textContent = sessions.length;
     elements.todayCourseList.replaceChildren();
     if (courses.length) {
-      courses.forEach((course, index) => {
+      courses.forEach((course) => {
         const item = document.createElement("article");
-        item.innerHTML = `<time>${course.start_time}<small>${course.end_time}</small></time><i></i><div><span>0${index + 1} / COURSE</span><h3></h3><p></p></div>`;
+        item.innerHTML = `<time>${course.start_time}<small>${course.end_time}</small></time><i aria-hidden="true"></i><div><h3></h3><p></p></div>`;
         item.querySelector("h3").textContent = course.title;
         item.querySelector("p").textContent = `${course.location || "地点待定"}${course.teacher ? ` · ${course.teacher}` : ""}`;
         elements.todayCourseList.append(item);
       });
-      elements.todaySuggestion.textContent = `今天有 ${courses.length} 节课。建议在最后一节课后留出 30 分钟整理笔记，再开始新的学习任务。`;
+      elements.todaySuggestion.textContent = "最后一节课后，留 30 分钟整理笔记。";
     } else {
-      const emptyDay = contextListItem("今天没有排课", "可以安排一段 90–120 分钟的深度学习时间");
+      const emptyDay = contextListItem("今天没有排课", "");
       emptyDay.className = "day-empty";
       elements.todayCourseList.append(emptyDay);
-      elements.todaySuggestion.textContent = "今天是无课日。可以从最近课程中选择一个薄弱主题，安排一次完整的复习闭环。";
+      elements.todaySuggestion.textContent = "从最近的课程里选一项重点复习。";
     }
     const next = upcoming[0];
     elements.nextCourseTitle.textContent = next?.title ?? "近期没有课程";
     elements.nextCourseMeta.textContent = next
       ? `${next.date} · ${next.start_time} · ${next.location || "地点待定"}`
-      : "适合安排自主学习或完善本周计划。";
+      : "";
   } catch (error) {
     showToast(error.message, "error");
   }
@@ -1041,19 +1039,19 @@ function renderSkillLibrary() {
   elements.skillGrid.replaceChildren();
   const skills = filteredSkills();
   if (!skills.length) {
-    elements.skillGrid.innerHTML = '<div class="skill-library-empty"><b>没有匹配的 Skill</b><span>换一个关键词或分类试试。</span></div>';
+    elements.skillGrid.innerHTML = '<div class="skill-library-empty"><b>未找到匹配的能力</b><span>试试其他关键词或分类。</span></div>';
     return;
   }
-  skills.forEach((skill, index) => {
+  skills.forEach((skill) => {
     const card = document.createElement("article");
     card.className = `skill-card${skill.installed ? " installed" : ""}${skill.enabled ? " enabled" : ""}`;
     const top = document.createElement("div");
     top.className = "skill-card-top";
-    const number = document.createElement("span");
-    number.textContent = `${String(index + 1).padStart(2, "0")} · ${skill.category.toUpperCase()}`;
+    const category = document.createElement("span");
+    category.textContent = skill.category;
     const version = document.createElement("small");
     version.textContent = `v${skill.version}`;
-    top.append(number, version);
+    top.append(category, version);
     const identity = document.createElement("div");
     identity.className = "skill-card-identity";
     const symbol = document.createElement("i");
@@ -1063,23 +1061,16 @@ function renderSkillLibrary() {
     identity.append(symbol, title);
     const description = document.createElement("p");
     description.textContent = skill.description;
-    const capabilities = document.createElement("div");
-    capabilities.className = "skill-card-capabilities";
-    skill.capabilities.slice(0, 3).forEach((capability) => {
-      const badge = document.createElement("span");
-      badge.textContent = capability;
-      capabilities.append(badge);
-    });
     const footer = document.createElement("div");
     footer.className = "skill-card-footer";
     const statusLabel = document.createElement("b");
-    statusLabel.textContent = skill.enabled ? "运行中" : skill.installed ? "已停用" : "查看权限";
+    statusLabel.textContent = skill.enabled ? "已启用" : skill.installed ? "已停用" : "未安装";
     const open = document.createElement("button");
     open.type = "button";
-    open.textContent = skill.installed ? "管理 →" : "详情 →";
+    open.textContent = skill.installed ? "管理" : "查看详情";
     open.addEventListener("click", () => openSkillDrawer(skill.skill_id));
     footer.append(statusLabel, open);
-    card.append(top, identity, description, capabilities, footer);
+    card.append(top, identity, description, footer);
     elements.skillGrid.append(card);
   });
 }
@@ -1098,7 +1089,7 @@ async function loadSkillAudit() {
     const entries = await api("/api/v1/skills/audit");
     elements.skillAuditList.replaceChildren();
     if (!entries.length) {
-      elements.skillAuditList.innerHTML = '<div class="skill-library-empty">安装或运行 Skill 后，活动会显示在这里。</div>';
+      elements.skillAuditList.innerHTML = '<div class="skill-library-empty">暂无活动</div>';
       return;
     }
     entries.slice(0, 8).forEach((entry) => {
@@ -1121,13 +1112,13 @@ async function loadSkillAudit() {
 }
 
 async function loadSkills() {
-  elements.skillGrid.innerHTML = '<div class="skill-library-empty">正在连接官方 Skills 库…</div>';
+  elements.skillGrid.innerHTML = '<div class="skill-library-empty">正在读取能力…</div>';
   try {
     state.skills = await api("/api/v1/skills");
     renderSkillLibrary();
     await loadSkillAudit();
   } catch (error) {
-    elements.skillGrid.innerHTML = '<div class="skill-library-empty"><b>Skills 库暂时不可用</b><span>请稍后重试。</span></div>';
+    elements.skillGrid.innerHTML = '<div class="skill-library-empty"><b>暂时无法读取能力</b><span>请稍后重试。</span></div>';
     showToast(error.message, "error");
   }
 }
@@ -1142,8 +1133,8 @@ function updateSkillInstallReady() {
 
 function renderSkillDrawer(skill) {
   state.selectedSkill = skill;
-  elements.skillDrawerCategory.textContent = `${skill.category} · OFFICIAL`;
-  elements.skillDrawerVersion.textContent = `VERSION ${skill.version}`;
+  elements.skillDrawerCategory.textContent = skill.category;
+  elements.skillDrawerVersion.textContent = `版本 ${skill.version}`;
   elements.skillDrawerSymbol.textContent = skillSymbol(skill);
   elements.skillDrawerName.textContent = skill.name;
   elements.skillDrawerAuthor.textContent = `${skill.author} · 已验证发布者`;
@@ -2162,7 +2153,8 @@ function contextListItem(primary, secondary) {
   const detail = document.createElement("span");
   title.textContent = primary;
   detail.textContent = secondary;
-  item.append(title, detail);
+  item.append(title);
+  if (secondary) item.append(detail);
   return item;
 }
 
@@ -2171,7 +2163,7 @@ function renderScheduleSubscriptionStatus(status) {
   elements.syncSubscriptionButton.hidden = !status.configured;
   elements.disconnectSubscriptionButton.hidden = !status.configured;
   if (!status.configured) {
-    elements.scheduleSubscriptionState.textContent = "连接订阅后，可随时从 HDUHelp 拉取最新课程。完整链接只会加密保存。";
+    elements.scheduleSubscriptionState.textContent = "从 HDUHelp 同步课程，链接加密保存。";
     return;
   }
   const syncedAt = status.last_synced_at

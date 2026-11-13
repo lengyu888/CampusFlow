@@ -18,17 +18,17 @@ export struct AppActionRow {
   build() {
     Column() {
       Button({ type: ButtonType.Normal }) {
-        Row({ space: 12 }) {
+        Row({ space: 10 }) {
           if (this.icon.length > 0) {
             AppIcon({ name: this.icon, iconSize: 21, color: this.danger ? this.palette.danger : this.palette.accent })
               .width(28).height(28)
           }
-          Column({ space: 3 }) {
+          Column({ space: 4 }) {
             Text(this.title).fontSize(this.palette.bodySize).fontWeight(FontWeight.Medium)
               .fontColor(this.danger ? this.palette.danger : this.palette.ink)
               .width('100%').textAlign(TextAlign.Start).wordBreak(WordBreak.BREAK_WORD)
             if (this.subtitle.length > 0) {
-              Text(this.subtitle).fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
+              Text(this.subtitle).fontSize(this.palette.metaSize).lineHeight(20).fontColor(this.palette.secondary)
                 .width('100%').textAlign(TextAlign.Start).wordBreak(WordBreak.BREAK_WORD)
             }
           }.layoutWeight(1).alignItems(HorizontalAlign.Start)
@@ -40,8 +40,8 @@ export struct AppActionRow {
             AppIcon({ name: 'chevron', iconSize: 13, color: this.palette.muted })
           }
         }.width('100%')
-      }.width('100%').constraintSize({ minHeight: this.subtitle.length > 0 ? 64 : 52 })
-        .padding({ left: 16, right: 16, top: 12, bottom: 12 }).backgroundColor(Color.Transparent)
+      }.width('100%').constraintSize({ minHeight: this.subtitle.length > 0 ? 62 : 48 })
+        .padding({ left: 16, right: 16, top: 10, bottom: 10 }).backgroundColor(Color.Transparent)
         .borderRadius(0).enabled(this.actionEnabled).accessibilityText(`${this.title}${this.subtitle.length > 0 ? `，${this.subtitle}` : ''}${this.detail.length > 0 ? `，${this.detail}` : ''}`)
         .onClick(() => this.onAction())
       if (this.divider) {

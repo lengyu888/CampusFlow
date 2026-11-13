@@ -2,6 +2,7 @@ import { CampusDataStatus } from '../model/ApiModels';
 import { ThemePalette, themePalette } from '../theme/ThemePalette';
 import { campusStatusLabel, currentCampusStatus } from '../utils/CampusDataPresentation';
 import { evidenceTime } from '../utils/EvidencePresentation';
+import { InfoDisclosure } from './InfoDisclosure';
 
 @Component
 export struct CampusDataStatusView {
@@ -38,13 +39,16 @@ export struct CampusDataStatusView {
             })
         }
       }.width('100%')
-      if (this.status.updated_at !== null || this.status.state !== 'unavailable') {
-        Text(`数据更新于 ${evidenceTime(this.status.updated_at)}`).fontSize(this.palette.metaSize)
-          .fontColor(this.palette.secondary).width('100%').wordBreak(WordBreak.BREAK_WORD)
-      }
-      if (this.displayStatus().message.length > 0) {
+      if (this.displayStatus().message.length > 0 &&
+        (this.displayStatus().state === 'stale' || this.displayStatus().state === 'unavailable' || this.status.issue !== null)) {
         Text(this.displayStatus().message).fontSize(this.palette.metaSize).fontColor(this.palette.secondary)
           .width('100%').wordBreak(WordBreak.BREAK_WORD)
+      }
+      if (this.status.updated_at !== null || (this.status.issue === null &&
+        this.displayStatus().state !== 'stale' && this.displayStatus().state !== 'unavailable')) {
+        InfoDisclosure({ title: '更新时间与来源',
+          message: `数据更新于 ${evidenceTime(this.status.updated_at)}` +
+            (this.status.issue === null && this.displayStatus().state !== 'stale' ? `\n${this.displayStatus().message}` : '') })
       }
     }.width('100%').alignItems(HorizontalAlign.Start)
   }

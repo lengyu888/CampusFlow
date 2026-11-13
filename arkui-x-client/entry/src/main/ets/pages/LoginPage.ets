@@ -125,9 +125,8 @@ export struct LoginPage {
   build() {
     Scroll() {
       Column({ space: 20 }) {
-        Column({ space: 8 }) {
+        Column({ space: 4 }) {
           Text('行简').fontSize(this.palette.pageTitle).fontWeight(FontWeight.Bold).fontColor(this.palette.ink)
-          Text('安排今天，专心完成。').fontSize(this.palette.metaSize).fontColor(this.palette.quiet)
         }.width('100%').alignItems(HorizontalAlign.Start)
 
         Column({ space: 16 }) {
@@ -146,11 +145,11 @@ export struct LoginPage {
               .onChange((value: boolean) => this.rememberLogin = value)
             Column({ space: 3 }) {
               Text('保持登录').fontSize(this.palette.bodySize).fontColor(this.palette.ink).width('100%')
-              Text('使用系统安全存储，不保存密码').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
+              Text('安全存储登录状态').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
             }.layoutWeight(1)
           }.width('100%').constraintSize({ minHeight: 48 })
           if (this.restoreBusy) {
-            FeedbackPanel({ kind: 'loading', title: '正在恢复登录', message: '正在原服务核验账号，请稍候。' })
+            FeedbackPanel({ kind: 'loading', title: '正在恢复登录' })
           } else if (this.restoreNotice.length > 0) {
             FeedbackPanel({ kind: 'info', title: '登录状态', message: this.restoreNotice })
             if (this.canRetryRestore) {
@@ -160,8 +159,6 @@ export struct LoginPage {
             }
           }
           if (this.registerMode) {
-            Text('先确认校园与课表，再安排每天的待办。模型密钥可以稍后添加。')
-              .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
             Button(this.showModelConfig ? '收起模型配置（可选）' : '现在配置模型（可选）')
               .width('100%').constraintSize({ minHeight: 44 }).fontSize(this.palette.bodySize)
               .fontColor(this.palette.accent).backgroundColor(Color.Transparent)
@@ -169,13 +166,11 @@ export struct LoginPage {
             if (this.showModelConfig) {
               this.inputField('DeepSeek API Key（可选）', 'sk-…（服务端加密保存）', () => this.apiKey,
                 (value) => this.apiKey = value, InputType.Password)
-              Text('填写后会随注册保存；只做输入校验，不会在注册时调用模型。')
-                .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
             } else if (this.apiKey.trim().length > 0) {
-              Text('已填写模型密钥，将随注册保存；展开可修改或清空。')
+              Text('已填写密钥，将随注册保存。')
                 .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
             }
-            InfoDisclosure({ title: '模型配置有什么用？', message: '手动维护课表、待办和专注不需要模型密钥。助手对话与图片识别需要可用的模型配置，可在我的 → 模型连接中添加。密钥只发送到当前配置的行简服务端并加密保存。' })
+            InfoDisclosure({ title: '模型与密钥说明', message: '助手对话与图片识别需要模型密钥。可稍后在个人设置添加。注册时只校验输入。当前服务会加密保存密钥。' })
           }
           if (this.errorText.length > 0) {
             FeedbackPanel({ kind: 'error', title: '暂未完成', message: this.errorText })
@@ -208,9 +203,10 @@ export struct LoginPage {
             Button('离线查看本机对话').constraintSize({ minHeight: 48 }).width('100%')
               .fontSize(this.palette.bodySize).fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft)
               .enabled(!this.loading).onClick(() => this.onOpenLocalHistory())
-            Text('离线可查看已保存的对话及来源。解锁此设备的人可查看。退出账号会清除本机记录。')
+          Text('解锁此设备的人可查看。退出账号会清除本机记录。')
               .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
-          }.width('100%').alignItems(HorizontalAlign.Start)
+          }.width('100%').alignItems(HorizontalAlign.Start).padding(this.palette.cardInset)
+            .backgroundColor(this.palette.surface).borderRadius(this.palette.cardRadius)
         }
         if (this.cacheNotice.length > 0) {
           Text(this.cacheNotice).fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
@@ -229,10 +225,6 @@ export struct LoginPage {
               .fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft).enabled(!this.loading)
               .onClick(() => this.confirmCleanup = true)
           }
-        }
-        if (!this.registerMode) {
-          Text('登录后沿用账号配置，无需重复填写模型密钥。')
-            .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%').textAlign(TextAlign.Center)
         }
       }
       .width('100%')

@@ -1,0 +1,233 @@
+/* Readable cards and sheets built on the two existing application themes. */
+:root {
+  --interface-title: clamp(1.85rem, 1.4rem + 1.6vw, 2.7rem);
+  --interface-section: 1.2rem;
+  --interface-body: 1rem;
+  --interface-meta: .875rem;
+  --interface-inset: clamp(1rem, 3vw, 1.75rem);
+  --interface-gap: 1rem;
+}
+
+.gate-view { min-height: 100dvh; grid-template-columns: minmax(250px, 1fr) minmax(360px, 1fr); background: var(--cf-bg); }
+.gate-story {
+  min-height: auto;
+  justify-content: center;
+  gap: 32px;
+  padding: clamp(24px, 8vw, 120px);
+  color: var(--cf-ink);
+  background: var(--cf-accent-soft);
+  border-radius: 0;
+}
+.gate-story::before, .gate-story::after,
+.next-focus::after, .campus-package-card::after { content: none; }
+.gate-copy { padding: 0; }
+.gate-copy h1 { margin: 0 0 12px; font-size: clamp(2rem, 3.8vw, 3.7rem); line-height: 1.2; }
+.gate-copy p { color: var(--cf-muted); }
+.auth-stage { padding: var(--interface-inset); background: var(--cf-bg); }
+.auth-card { padding: clamp(22px, 4vw, 38px); box-shadow: none; }
+.auth-card h2 { margin: 0; font-size: var(--interface-title); }
+.auth-tabs { margin: 18px 0; }
+.auth-form { gap: 14px; }
+.auth-form label, .profile-grid label, .settings-form label { gap: 6px; color: var(--cf-ink); font-size: var(--interface-meta); }
+.auth-form input, .profile-grid input, .settings-form input { min-height: 46px; font-size: var(--interface-body); }
+.form-note { color: var(--cf-muted) !important; font-size: var(--interface-meta); }
+
+.app-shell, .settings-view { background: var(--cf-bg); }
+.app-nav button span { font-size: .75rem; white-space: nowrap; }
+.app-surface, .auth-card, .dashboard-card, .settings-panel, .setup-step { animation: none; }
+.system-state, .topbar-actions button, .settings-topbar .line-button { font-size: var(--interface-meta); }
+.settings-topbar { grid-template-columns: minmax(0, 1fr) auto; }
+.primary-action { border-radius: var(--cf-radius-control); box-shadow: none; font-size: var(--interface-meta); }
+.primary-action:hover { box-shadow: none; transform: none; }
+.primary-action > i { display: none; }
+.line-button, .ghost-action { min-height: 44px; }
+.today-hero h1, .surface-heading h1, .settings-heading h1, .setup-step h2 {
+  margin: 0;
+  font-size: var(--interface-title);
+  line-height: 1.16;
+}
+.surface-heading, .settings-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 var(--interface-gap);
+  padding: 0;
+  border: 0;
+}
+.today-hero p { margin-top: 7px; font-size: var(--interface-meta); }
+.today-hero .primary-action { width: auto; min-width: 0; }
+.today-grid { margin-top: 0; border: 0; }
+.today-surface, .plans-surface, .skills-surface { padding-top: var(--interface-inset); }
+.dashboard-card, .task-center, .goal-stack-panel, .skill-audit-panel,
+.planning-stats article, .setup-canvas, .setup-rail, .settings-rail, .settings-canvas,
+.theme-settings, .hduhelp-connect-card, .subscription-control, .campus-package-card, .campus-correction-card,
+.campus-place-selection, .data-columns section {
+  border: 1px solid var(--cf-line);
+  border-radius: var(--cf-radius-card);
+  color: var(--cf-ink);
+  background: var(--cf-surface);
+  box-shadow: none;
+}
+.day-timeline, .next-focus, .context-health { min-height: auto; padding: var(--interface-inset); }
+.card-heading { margin: 0; padding: 0 0 12px; }
+.card-heading h2, .next-focus h2, .plan-board h2, .data-title h2 { font-size: var(--interface-section); }
+.today-course-list { gap: 0; padding: 0; }
+.today-course-list > article { gap: 10px; grid-template-columns: 56px 8px minmax(0, 1fr); padding: 12px 0; }
+.today-course-list > article:last-child { border-bottom: 0; }
+.today-course-list > article > i { box-shadow: none; }
+.today-course-list time { font-size: var(--interface-meta); font-variant-numeric: tabular-nums; }
+.today-course-list time small, .today-course-list article div p { font-size: var(--interface-meta); }
+.today-course-list article div h3 { margin: 0 0 4px; font-size: var(--interface-body); }
+.today-course-list > article.day-empty { min-height: auto; place-content: normal; text-align: left; }
+#nextCourseMeta:empty { display: none; }
+.today-side { align-content: start; gap: var(--interface-gap); }
+.next-focus { background: var(--cf-accent-soft); }
+.next-focus > span, .context-health > span, .suggestion-strip > span {
+  color: var(--cf-muted);
+  font-size: var(--interface-meta);
+  letter-spacing: 0;
+  text-transform: none;
+}
+.next-focus h2 { margin: 8px 0; }
+.next-focus p { min-height: auto; margin: 0; color: var(--cf-muted); font-size: var(--interface-meta); }
+.next-focus button { min-height: 44px; margin-top: 4px; color: var(--cf-accent-strong); background: transparent; font-size: var(--interface-meta); }
+.context-health { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.context-health small, .suggestion-strip p { color: var(--cf-muted); font-size: var(--interface-meta); }
+.suggestion-strip { border-color: var(--cf-line); background: var(--cf-surface); }
+.suggestion-strip button { min-height: 44px; color: var(--cf-accent-strong); background: var(--cf-accent-soft); }
+
+.planning-stats { gap: 10px; }
+.planning-stats article { min-height: auto; padding: 12px 16px; }
+.planning-stats article > span { font-size: var(--interface-meta); }
+.planning-stats strong { margin: 6px 0 0; font-size: 1.65rem; font-variant-numeric: tabular-nums; }
+.planning-stats i { height: 4px; margin-top: 5px; }
+.plan-section-head { align-items: center; gap: 10px; }
+.task-filters { border-radius: 12px; }
+.task-filters button { min-height: 42px; border-radius: 8px; font-size: var(--interface-meta); }
+.quick-task-form input, .quick-task-form select, .skill-toolbar input, .skill-toolbar select { min-width: 0; min-height: 44px; font-size: var(--interface-body); }
+.plan-board > section, .plan-board > aside { padding: var(--interface-inset); }
+.plan-board .plan-empty { min-height: 100px; }
+.plan-board .plan-empty span, .plan-list article span { font-size: var(--interface-meta); }
+.goal-stack-panel .goal-card { color: var(--cf-ink); border-color: var(--cf-line) !important; background: var(--cf-surface-soft) !important; }
+.goal-stack-panel .goal-card p, .goal-stack-panel .goal-card small { color: var(--cf-muted) !important; font-size: var(--interface-meta); }
+.skill-toolbar { gap: 12px; border-radius: var(--cf-radius-card); }
+.skill-toolbar label, .skill-stats { font-size: var(--interface-meta); }
+.skill-card { min-height: auto !important; box-shadow: none !important; }
+.skill-grid .skill-card:hover { box-shadow: none !important; transform: none; }
+.skill-card-identity { margin-top: 12px; }
+.skill-grid .skill-card h2 { font-size: var(--interface-section); }
+.skill-grid .skill-card p, .skill-grid .skill-card small, .skill-audit-list { color: var(--cf-muted); font-size: var(--interface-meta); }
+.skill-card-top > span, .skill-card-footer b, .skill-card-footer button,
+.skill-audit-list b, .skill-audit-list span, .skill-library-empty { font-size: var(--interface-meta); letter-spacing: 0; }
+.skill-card-footer { padding-top: 4px; }
+.skill-card-footer button { min-height: 44px; color: var(--cf-accent-strong); }
+.skill-audit-list { background: var(--cf-line); }
+.skill-audit-list article { background: var(--cf-surface); }
+
+.history-head, .skill-drawer-head, .skill-drawer-body { padding: var(--interface-inset); }
+.history-drawer, .skill-drawer { border-color: var(--cf-line); }
+.history-head h2 { margin: 0; font-size: 1.35rem; }
+.history-search, .history-list { padding-inline: var(--interface-inset); }
+.history-search, .history-open time, .history-open small, .history-open p, .history-rename,
+.skill-drawer-head span, .skill-drawer-head small, .skill-detail-title p, .skill-permission-note,
+.skill-permissions small, .skill-install-note, .skill-capabilities span { font-size: var(--interface-meta); }
+.history-open b { font-family: inherit; font-size: var(--interface-body); }
+.history-open { min-height: 72px; }
+.history-rename { width: 52px; }
+.history-new { width: auto; }
+.skill-detail-label { margin-bottom: 8px; color: var(--cf-ink); font-size: var(--interface-body); letter-spacing: 0; text-transform: none; }
+.skill-drawer-actions { flex-wrap: wrap; }
+.chat-heading h2, .chat-dialog-heading h2 { font-size: var(--interface-section); }
+.chat-dialog .field-label, .chat-dialog legend { margin: 12px 0 6px; color: var(--cf-ink); font-size: var(--interface-meta); letter-spacing: 0; }
+.chat-dialog .intro, .chat-dialog .credential-card small, .chat-dialog .model-switcher small, .chat-dialog .session-meta,
+.reply-tool-heading span, .reply-tool-sources span, .reply-tool-sources p, .campus-route-note { font-size: var(--interface-meta); }
+.chat-dialog .quick-prompts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.chat-dialog .quick-prompts .field-label { display: block; grid-column: 1 / -1; }
+.chat-dialog .quick-prompts button { min-width: 0; min-height: 44px; white-space: normal; font-size: var(--interface-meta); }
+.model-switcher input:focus-visible + span { outline: 2px solid var(--cf-focus-ring); outline-offset: 2px; }
+
+.setup-layout { align-items: start; align-content: start; }
+.setup-rail { height: auto; margin: 0; padding: var(--interface-inset); }
+.setup-steps li { color: var(--cf-muted); }
+.setup-steps li span, .vault-status small, .parse-status, .review-heading small, .drop-zone small,
+.setup-subscription-card small, .setup-subscription-card p { font-size: var(--interface-meta); }
+.vault-status { margin-top: 12px; color: var(--cf-ink); background: var(--cf-surface-soft); }
+.setup-canvas { min-height: 0; padding: var(--interface-inset); }
+.setup-step { margin: 0; }
+.setup-step h2 { margin-bottom: 14px; }
+.profile-grid { margin-top: 14px; }
+.setup-actions { position: static; margin-top: 20px; padding: 14px 0 0; background: transparent; backdrop-filter: none; }
+.setup-actions button { min-width: 0; }
+.setup-subscription-card, .drop-zone, .image-preview, .data-review {
+  min-width: 0;
+  border-color: var(--cf-line);
+  background: var(--cf-surface-soft);
+  box-shadow: none;
+}
+.drop-zone, .image-preview { min-height: 132px; }
+.timetable-table { overflow-x: auto; }
+.timetable-table input, .timetable-table select { min-height: 44px; }
+.analyze-button { min-height: 44px; }
+
+.settings-layout { align-items: start; }
+.settings-canvas { padding: var(--interface-inset); }
+.settings-identity { margin-bottom: 10px; padding-bottom: 12px; }
+.settings-identity small, .settings-nav button, .theme-settings p, #themeStatus,
+.settings-form p, .settings-form label span, .settings-rail .line-button { font-size: var(--interface-meta); }
+.settings-form { margin-top: 18px; }
+.settings-form + .settings-form { margin-top: 24px; }
+.settings-form .settings-save { grid-column: 1 / -1; }
+.key-setting { background: var(--cf-surface-soft); }
+.theme-settings { padding: 14px; margin-bottom: 16px; }
+#themeStatus:empty { display: none; }
+.hduhelp-connect-card, .subscription-control { gap: 12px; padding: var(--interface-inset); }
+.hduhelp-connect-copy p, .hduhelp-data-heading p, .hduhelp-resource-grid span, .hduhelp-pat-form label,
+.hduhelp-pat-form small, .hduhelp-data-section p, .hduhelp-data-section dt, .hduhelp-data-section dd,
+.campus-place-selection p, .campus-place-search label, .campus-package-card p,
+.campus-package-metrics span, .campus-correction-card p, .campus-correction-card label { font-size: var(--interface-meta); }
+.hduhelp-pat-form, .hduhelp-data-section, .hduhelp-prompt-area { border-color: var(--cf-line); color: var(--cf-ink); background: var(--cf-surface-soft); }
+.hduhelp-data-section dt, .hduhelp-data-section dd { overflow-wrap: anywhere; white-space: normal; }
+.hduhelp-prompt-list button { min-height: 44px; border-color: var(--cf-line); color: var(--cf-accent-strong); background: var(--cf-surface); font-size: var(--interface-meta); }
+.hduhelp-prompt-list button:hover { background: var(--cf-accent-soft); transform: none; }
+.campus-package-card p, .campus-package-metrics span, .campus-notice-preview p { color: var(--cf-muted); }
+.campus-package-heading > b, .campus-package-metrics > div, .campus-notice-preview article {
+  border-color: var(--cf-line);
+  color: var(--cf-ink);
+  background: var(--cf-surface-soft);
+}
+.admin-table-wrap, .data-columns section { min-width: 0; }
+.admin-table th, .admin-table td { font-size: var(--interface-meta); }
+.toast { left: auto; font-size: var(--interface-meta); overflow-wrap: anywhere; transform: translateY(12px); }
+.toast.show { transform: translateY(0); }
+
+@media (max-width: 680px) {
+  .app-nav button, .app-nav button:last-child { min-width: 0; padding-inline: 5px; }
+  .gate-story { gap: 18px; padding: 22px var(--interface-inset); }
+  .gate-copy h1 br { display: none; }
+  .gate-copy h1 { margin-bottom: 6px; font-size: 1.7rem; }
+  .gate-copy p { font-size: var(--interface-meta); }
+  .auth-stage { min-height: auto; padding: 12px var(--interface-inset) 24px; }
+  .today-hero { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 0; }
+  .today-hero .primary-action { width: auto; min-width: 0; }
+  .suggestion-strip { grid-template-columns: minmax(0, 1fr); align-items: start; padding: 14px; }
+  .suggestion-strip button { justify-self: start; }
+  .task-center .plan-section-head { display: grid; }
+  .goal-stack-panel { order: 0; }
+  .quick-task-form { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  #quickTaskTitle, .quick-task-form button { grid-column: 1 / -1; }
+  .skill-toolbar { grid-template-columns: minmax(0, 1fr) minmax(0, .7fr); }
+  .skill-stats { grid-column: 1 / -1; min-height: 36px; }
+  .history-drawer, .skill-drawer { padding-bottom: env(safe-area-inset-bottom); }
+  .setup-header { padding-inline: var(--interface-inset); }
+  .setup-rail { padding: 8px; }
+  .setup-steps li { display: flex; justify-content: center; padding: 7px 5px; }
+  .setup-steps li b { width: 22px; height: 22px; }
+  .setup-steps li span { font-size: .75rem; }
+  .setup-rail .vault-status { padding: 8px 10px; }
+  .setup-rail .vault-status > div { display: flex; flex-wrap: wrap; gap: 4px 8px; }
+  .settings-nav button { min-height: 44px; }
+  .toast { left: 16px; right: 16px; }
+  .hduhelp-connect-actions { display: flex; }
+  .hduhelp-connect-actions > * { width: auto; flex: 1 1 auto; }
+  .campus-place-search label { flex-basis: 100%; }
+}

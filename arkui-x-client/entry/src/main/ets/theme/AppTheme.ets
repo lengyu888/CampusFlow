@@ -4,7 +4,7 @@ export class AppTheme {
   static readonly canvas: string = '#F6F4EF';
   static readonly surface: string = '#FFFEFB';
   static readonly ink: string = '#29352F';
-  static readonly secondary: string = '#626E65';
+  static readonly secondary: string = '#54635B';
   static readonly accent: string = '#416454';
   static readonly accentSoft: string = '#E7EEE6';
   static readonly onAccent: string = '#FFFEFB';
@@ -41,14 +41,14 @@ export class AppTheme {
   static readonly redSoft: string = AppTheme.dangerSoft;
   static readonly separator: string = AppTheme.line;
   static readonly pageInset: number = 20;
-  static readonly sectionGap: number = 24;
+  static readonly sectionGap: number = 20;
   static readonly cardInset: number = 16;
-  static readonly cardRadius: number = 18;
+  static readonly cardRadius: number = 16;
   static readonly controlRadius: number = 12;
   static readonly pageTitle: number = 30;
   static readonly sectionTitle: number = 18;
   static readonly bodySize: number = 17;
-  static readonly metaSize: number = 13;
+  static readonly metaSize: number = 14;
 
   static motion(duration: number = 220): number {
     return AppStorage.get<boolean>('reduceMotion') === true ? 0 : duration;
