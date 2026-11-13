@@ -18,4 +18,6 @@ export const presentation = new Function(...Object.keys(dependencies),
 export const assistantDraftKey = drafts.assistantDraftKey;
 export const courseCandidates = courseReview.courseCandidates;
 export const validCourseAcknowledgements = courseReview.validCourseAcknowledgements;
-export const conversationDependencies = { ...presentation, assistantDraftKey, courseCandidates, validCourseAcknowledgements };
+export const copyHistoryMessage = evidence.copyHistoryMessage;
+export const conversationDependencies = { ...presentation, assistantDraftKey, courseCandidates, validCourseAcknowledgements,
+  copyHistoryMessage };

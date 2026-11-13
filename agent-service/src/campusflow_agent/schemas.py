@@ -10,9 +10,13 @@ from pydantic import (
     ConfigDict,
     Field,
     SecretStr,
+    SerializerFunctionWrapHandler,
     StrictBool,
     StrictInt,
+    TypeAdapter,
+    ValidationError,
     field_validator,
+    model_serializer,
     model_validator,
 )
 
@@ -69,6 +73,9 @@ class ToolDisplaySummary(BaseModel):
     summary: str
 
     evidence: list[DataEvidence] = Field(default_factory=list)
+
+
+_history_tool_summaries = TypeAdapter(list[ToolDisplaySummary])
 
 
 class ToolTrace(BaseModel):
@@ -284,6 +291,31 @@ class HistoryMessage(BaseModel):
     role: Literal["user", "assistant"]
     content: str
     created_at: datetime
+    tools: list[ToolDisplaySummary] | None = None
+
+    @model_serializer(mode="wrap")
+    def _serialize(self, handler: SerializerFunctionWrapHandler):
+        result = handler(self)
+        if self.role != "assistant" or not self.tools:
+            result.pop("tools", None)
+        return result
+
+    def tool_summaries_json(self) -> str | None:
+        if self.role != "assistant" or not self.tools:
+            return None
+        return _history_tool_summaries.dump_json(self.tools).decode("utf-8")
+
+    @classmethod
+    def from_storage(cls, row: dict[str, Any]) -> HistoryMessage:
+        message = cls.model_validate(row)
+        encoded = row.get("tool_summaries_json")
+        if message.role == "assistant" and encoded is not None:
+            try:
+                message.tools = _history_tool_summaries.validate_json(encoded)
+            except ValidationError:
+                # A damaged optional summary must not hide the original message.
+                pass
+        return message
 
 
 class SessionSummary(BaseModel):

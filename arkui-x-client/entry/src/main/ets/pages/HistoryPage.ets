@@ -1,4 +1,4 @@
-import { HistoryMessage, SessionSummary } from '../model/ApiModels';
+import { HistoryMessage, SessionSummary, ToolDisplaySummary } from '../model/ApiModels';
 import { CampusFlowApi } from '../services/CampusFlowApi';
 import { localHistory } from '../services/LocalHistory';
 import { CampusFlowRequestError } from '../utils/AgentFeedback';
@@ -10,6 +10,8 @@ import { AppIcon } from '../components/AppIcon';
 import { FeedbackPanel } from '../components/FeedbackPanel';
 import { InfoDisclosure } from '../components/InfoDisclosure';
 import { AppPageHeader } from '../components/AppPageHeader';
+import { ReplyToolDetails } from '../components/ReplyToolDetails';
+import { copyHistoryMessage } from '../utils/EvidencePresentation';
 
 @Component
 export struct HistoryPage {
@@ -29,6 +31,8 @@ export struct HistoryPage {
   @State private sessions: SessionSummary[] = [];
   @State private selected: SessionSummary | null = null;
   @State private messages: HistoryMessage[] = [];
+  @State private detailSheetOpen: boolean = false;
+  @State private detailMessageIndex: number = -1;
   @State private loading: boolean = false;
   @State private errorText: string = '';
   @State private pendingDeleteId: string = '';
@@ -48,6 +52,7 @@ export struct HistoryPage {
   }
 
   aboutToDisappear(): void {
+    this.closeDetails();
     this.pageActive = false;
     this.requestRevision++;
   }
@@ -58,6 +63,7 @@ export struct HistoryPage {
 
   private async reload(): Promise<void> {
     if (!this.pageActive || this.deleting || this.remoteDeleteBusy) { return; }
+    this.closeDetails();
     this.lastAttempt = null; this.verifiedRemoteSessionId = '';
     const revision = ++this.requestRevision;
     this.errorText = '';
@@ -76,7 +82,7 @@ export struct HistoryPage {
       if (!this.current(revision)) { return; }
       this.sessions = sessions.filter((item: SessionSummary) => !localHistory.isRemoved(this.historyScope, item.session_id));
       this.sourceText = this.historyScope.length > 0
-        ? '服务端会话 · 打开后保存完整文字到本机，最多保留最近 20 个会话。'
+        ? '服务端会话 · 打开后可保存到本机，最多保留最近 20 个会话。'
         : '服务端会话 · 本机保存暂不可用。';
     } catch {
       if (!this.current(revision)) { return; }
@@ -89,6 +95,7 @@ export struct HistoryPage {
 
   private async openSession(session: SessionSummary): Promise<void> {
     if (!this.pageActive || this.deleting) { return; }
+    this.closeDetails();
     this.lastAttempt = session; this.verifiedRemoteSessionId = '';
     const revision = ++this.requestRevision;
     const accountRevision = this.accountRevision;
@@ -109,7 +116,8 @@ export struct HistoryPage {
     try {
       const messages = await new CampusFlowApi(this.baseUrl, this.token).history(session.session_id);
       if (!this.current(revision)) { return; }
-      this.messages = messages;
+      this.closeDetails();
+      this.messages = messages.map(copyHistoryMessage);
       this.selected = session;
       this.sourceText = '已读取服务端对话。';
       this.verifiedRemoteSessionId = messages.length > 0 ? session.session_id : '';
@@ -124,7 +132,7 @@ export struct HistoryPage {
           this.sourceText = '服务端已无此会话内容，本机副本已移除。';
           this.onSessionDeleted(session.session_id, accountRevision);
         } else {
-          const saved = await localHistory.save(this.historyScope, session, messages);
+          const saved = await localHistory.save(this.historyScope, session, this.messages);
           if (!this.current(revision)) { return; }
           this.sourceText = saved ? '服务端内容 · 完整对话已保存到本机，可断网回看。' : '服务端内容 · 已读取对话，但此会话未保存到本机。';
         }
@@ -141,6 +149,7 @@ export struct HistoryPage {
 
   private async deleteSession(session: SessionSummary): Promise<void> {
     if (this.deleting || this.chatBusy || this.remoteDeleteBusy) { return; }
+    this.closeDetails();
     const revision = ++this.requestRevision;
     const scope = this.historyScope;
     const accountRevision = this.accountRevision;
@@ -204,6 +213,7 @@ export struct HistoryPage {
 
   private goBack(): void {
     if (this.deleting) { return; }
+    this.closeDetails();
     this.requestRevision++;
     this.loading = false;
     this.errorText = '';
@@ -236,6 +246,23 @@ export struct HistoryPage {
     if (!this.restoreList || this.selected !== null) { return; }
     this.restoreList = false;
     this.listScroller.scrollTo({ xOffset: 0, yOffset: this.listOffset, animation: false });
+  }
+
+  private detailTools(): ToolDisplaySummary[] {
+    return this.messages[this.detailMessageIndex]?.tools ?? [];
+  }
+
+  private openDetails(index: number): void {
+    const message = this.messages[index];
+    if (!this.pageActive || this.selected === null || this.deleting || message?.role !== 'assistant' ||
+      (message.tools?.length ?? 0) === 0) { return; }
+    this.detailMessageIndex = index;
+    this.detailSheetOpen = true;
+  }
+
+  private closeDetails(): void {
+    this.detailSheetOpen = false;
+    this.detailMessageIndex = -1;
   }
 
   build() {
@@ -353,7 +380,7 @@ export struct HistoryPage {
                     .enabled(this.canContinue()).onClick(() => this.continueSession())
                 }
               }.width('100%')
-              Text('只读文字 · 不能从历史执行提案').fontSize(this.palette.metaSize).fontColor(this.palette.muted).width('100%')
+              Text('历史记录 · 只读').fontSize(this.palette.metaSize).fontColor(this.palette.muted).width('100%')
               if (!this.offlineOnly) {
                 InfoDisclosure({ title: '继续会话说明', message: '继续前会核对服务端上下文。历史中的安排仅供阅读，不会恢复为待执行提案。' })
               }
@@ -368,9 +395,16 @@ export struct HistoryPage {
                 if (message.role === 'user') {
                   Blank()
                 }
-                Column() {
+                Column({ space: 4 }) {
                   MessageContent({ content: message.content, isUser: message.role === 'user' })
-                }.padding({ left: 16, right: 16, top: 13, bottom: 13 })
+                  if (message.role === 'assistant' && (message.tools?.length ?? 0) > 0) {
+                    Button(`工具与来源 ${message.tools?.length ?? 0}`, { type: ButtonType.Normal })
+                      .constraintSize({ minHeight: 44 }).fontSize(this.palette.metaSize)
+                      .padding({ left: 8, right: 8 }).fontColor(this.palette.accent).backgroundColor(Color.Transparent)
+                      .accessibilityText(`查看这条回答的工具与数据来源，${message.tools?.length ?? 0} 项`)
+                      .onClick(() => this.openDetails(index))
+                  }
+                }.alignItems(HorizontalAlign.Start).padding({ left: 16, right: 16, top: 13, bottom: 13 })
                   .width(message.role === 'user' ? '90%' : '100%')
                   .backgroundColor(message.role === 'user' ? this.palette.accent : this.palette.surface)
                   .border({ width: message.role === 'user' ? 0 : 1, color: this.palette.line })
@@ -380,11 +414,33 @@ export struct HistoryPage {
                   Blank()
                 }
               }.width('100%')
-            }, (message: HistoryMessage, index: number) => `${index}-${message.created_at}`)
+            }, (message: HistoryMessage, index: number) => `${index}-${message.created_at}-${JSON.stringify(message.tools ?? [])}`)
           }.width('100%').padding({ left: 18, right: 18, top: 12, bottom: 24 })
         }.layoutWeight(1).width('100%').scrollBar(BarState.Off).align(Alignment.TopStart)
       }
     }.width('100%').height('100%').alignItems(HorizontalAlign.Start)
       .justifyContent(FlexAlign.Start).backgroundColor(this.palette.bg)
+      .bindSheet($$this.detailSheetOpen, this.DetailSheet(), {
+        height: '78%', preferType: SheetType.BOTTOM, showClose: false, backgroundColor: this.palette.canvas,
+        onDisappear: () => { if (!this.detailSheetOpen) { this.closeDetails(); } }
+      })
+  }
+
+  @Builder
+  private DetailSheet() {
+    Column() {
+      Row({ space: 10 }) {
+        Text('工具与数据来源').fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Bold).fontColor(this.palette.ink).layoutWeight(1)
+        Button('完成', { type: ButtonType.Normal }).constraintSize({ minWidth: 44, minHeight: 44 })
+          .fontSize(this.palette.bodySize).fontColor(this.palette.accent).backgroundColor(Color.Transparent).onClick(() => this.closeDetails())
+      }.width('100%').padding({ left: this.palette.pageInset, right: 12, bottom: 4 })
+      Scroll() {
+        Column({ space: 8 }) {
+          Text('回复时的工具记录').fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
+          ReplyToolDetails({ tools: this.detailTools() })
+        }.width('100%')
+      }.layoutWeight(1).width('100%').align(Alignment.TopStart)
+        .padding({ left: this.palette.pageInset, right: this.palette.pageInset, top: 6, bottom: 24 })
+    }.width('100%').height('100%').backgroundColor(this.palette.canvas)
   }
 }

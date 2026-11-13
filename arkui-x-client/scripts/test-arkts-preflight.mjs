@@ -29,6 +29,7 @@ function historyFixture(failure) {
   Object.assign(page, { deleting: false, chatBusy: false, remoteDeleteBusy: false, requestRevision: 0,
     historyScope: 'owner', accountRevision: 2, offlineOnly: false, baseUrl: 'https://example.test', token: 'synthetic',
     sessions: [session], selected: session, messages: ['saved'], pendingDeleteId: session.session_id,
+    closeDetails: () => {},
     current: revision => revision === page.requestRevision,
     onSessionDeleted: (...args) => calls.push(['deleted', ...args]), onDeleteBusyChange: busy => calls.push(['busy', busy]) });
   return { page, calls, session };

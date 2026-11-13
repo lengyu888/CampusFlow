@@ -27,6 +27,7 @@ from .schemas import (
     PlanningTask,
     PlanSummary,
     SessionSummary,
+    ToolDisplaySummary,
 )
 
 
@@ -110,7 +111,8 @@ class CampusStore:
                     session_id TEXT NOT NULL,
                     role TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
                     content TEXT NOT NULL,
-                    created_at TEXT NOT NULL
+                    created_at TEXT NOT NULL,
+                    tool_summaries_json TEXT
                 );
 
                 CREATE INDEX IF NOT EXISTS idx_conversation_messages_thread
@@ -169,7 +171,8 @@ class CampusStore:
                 ON planning_tasks(user_id, status, start_at);
                 """
             )
-            self._migrate_session_status()
+            self._connection.execute("BEGIN IMMEDIATE")
+            self._migrate_conversation_schema(self._connection)
 
         from .course_policy import ensure_schema
         from .session_service import ensure_session_schema
@@ -178,20 +181,25 @@ class CampusStore:
         with self._connection:
             ensure_session_schema(self._connection)
 
-    def _migrate_session_status(self) -> None:
-        """为旧数据库补齐会话状态列，保证升级后历史目录仍可用。"""
-        if self._connection is None:
-            return
+    @staticmethod
+    def _migrate_conversation_schema(connection: sqlite3.Connection) -> None:
         columns = {
             row["name"]
-            for row in self._connection.execute(
+            for row in connection.execute(
                 "PRAGMA table_info(conversation_sessions)"
             )
         }
         if "status" not in columns:
-            self._connection.execute(
+            connection.execute(
                 "ALTER TABLE conversation_sessions "
                 "ADD COLUMN status TEXT NOT NULL DEFAULT 'active'"
+            )
+        columns = {
+            row["name"] for row in connection.execute("PRAGMA table_info(conversation_messages)")
+        }
+        if "tool_summaries_json" not in columns:
+            connection.execute(
+                "ALTER TABLE conversation_messages ADD COLUMN tool_summaries_json TEXT"
             )
 
     def set_user_context(
@@ -612,11 +620,14 @@ class CampusStore:
         role: str,
         content: str,
         model_name: str | None = None,
+        *,
+        tools: list[ToolDisplaySummary] | None = None,
     ) -> None:
         message = HistoryMessage(
             role=role,
             content=content,
             created_at=datetime.now(UTC),
+            tools=tools if role == "assistant" else None,
         )
         if self._connection is not None:
             now = message.created_at.isoformat()
@@ -654,10 +665,10 @@ class CampusStore:
                 self._connection.execute(
                     """
                     INSERT INTO conversation_messages (
-                        user_id, session_id, role, content, created_at
-                    ) VALUES (?, ?, ?, ?, ?)
+                        user_id, session_id, role, content, created_at, tool_summaries_json
+                    ) VALUES (?, ?, ?, ?, ?, ?)
                     """,
-                    (user_id, session_id, role, content, now),
+                    (user_id, session_id, role, content, now, message.tool_summaries_json()),
                 )
             return
         with self._lock:
@@ -684,14 +695,14 @@ class CampusStore:
             with self._lock:
                 rows = self._connection.execute(
                     """
-                    SELECT role, content, created_at
+                    SELECT role, content, created_at, tool_summaries_json
                     FROM conversation_messages
                     WHERE user_id = ? AND session_id = ?
                     ORDER BY message_id
                     """,
                     (user_id, session_id),
                 ).fetchall()
-            return [HistoryMessage(**dict(row)) for row in rows]
+            return [HistoryMessage.from_storage(dict(row)) for row in rows]
         with self._lock:
             return list(self._history.get((user_id, session_id), []))
 

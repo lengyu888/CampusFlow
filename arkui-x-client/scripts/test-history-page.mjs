@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { stripThemeTypeScriptTypes as stripTypeScriptTypes } from './helpers/theme-fixture.mjs';
 import { test } from 'node:test';
+import { copyHistoryMessage } from './helpers/conversation-fixture.mjs';
 
 const helperSource = readFileSync(new URL('../entry/src/main/ets/utils/AgentFeedback.ets', import.meta.url), 'utf8')
   .replace(/^import \{[^\n]+\} from '\.\.\/model\/ApiModels';\r?\n/, '');
@@ -20,7 +21,7 @@ const controllerSource = source.slice(0, buildStart)
   .replace(/^@Component\r?\n/m, '')
   .replace(/@(Prop|State)\s+|@Watch\('[^']+'\)\s*/g, '')
   .replace('export struct HistoryPage', 'class HistoryPage') + '\n}\n';
-const createController = new Function('CampusFlowApi', 'localHistory', 'CampusFlowRequestError', 'AppTheme', 'Curve', 'Scroller',
+const createController = new Function('CampusFlowApi', 'localHistory', 'CampusFlowRequestError', 'AppTheme', 'Curve', 'Scroller', 'copyHistoryMessage',
   stripTypeScriptTypes(controllerSource) + '\nreturn HistoryPage;');
 const navigationSource = readFileSync(new URL('../entry/src/main/ets/utils/AppNavigation.ets', import.meta.url), 'utf8');
 const navigation = await import(`data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(navigationSource)).toString('base64')}`);
@@ -43,9 +44,9 @@ const createIndex = (...args) => {
   return createIndexFactory(...args, drafts, TaskStatusController, () => statusIds.complete, ...Object.values(focusEntryFixture().dependencies), ...navNames.map(name => navigation[name]));
 };
 const storeSource = readFileSync(new URL('../entry/src/main/ets/utils/LocalHistoryStore.ets', import.meta.url), 'utf8')
-  .replace(/^import .* from '\.\.\/model\/ApiModels';\r?\n/m, '');
-const { LocalHistoryStore, historyScope } =
-  await import(`data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(storeSource)).toString('base64')}`);
+  .replace(/^import .*;\r?\n/gm, '').replace(/^export /gm, '');
+const { LocalHistoryStore, historyScope } = new Function('copyHistoryMessage', stripTypeScriptTypes(storeSource) +
+  '\nreturn { LocalHistoryStore, historyScope };')(copyHistoryMessage);
 
 function session(id) {
   return { session_id: id, title: `会话 ${id}`, model_name: 'deepseek-flash', last_message: '已保存的回答',
@@ -109,7 +110,7 @@ function harness({ handlers = {}, cached = [], removed = [], local = {} } = {}) 
   };
   const Controller = createController(Api, store, CampusFlowRequestError,
     { motion: (duration) => duration }, { EaseOut: 'fixture-ease-out' },
-    class { scrollTo(value) { this.position = value; } currentOffset() { return { yOffset: 0 }; } });
+    class { scrollTo(value) { this.position = value; } currentOffset() { return { yOffset: 0 }; } }, copyHistoryMessage);
   const page = new Controller();
   page.baseUrl = 'http://fixture.invalid';
   page.token = 'test-only';
@@ -118,6 +119,28 @@ function harness({ handlers = {}, cached = [], removed = [], local = {} } = {}) 
   page.getUIContext = () => ({ animateTo: (_options, callback) => callback() });
   return { page, apiCalls, localCalls, creations, deleted, entries, scope };
 }
+
+test('history detail selects tools by the specific reply, including offline history', async () => {
+  const summary = session('cached');
+  const history = messages('相同的回答');
+  history[0].tools = [{ label: '不得显示', state: 'success', summary: '用户消息' }];
+  history[1].tools = [{ label: '课表', state: 'success', summary: '两节课' }];
+  history.push({ ...history[1], tools: [{ label: '天气', state: 'success', summary: '晴' }] });
+  const h = harness({ cached: [{ summary, history }] });
+  h.page.offlineOnly = true;
+  await h.page.openSession(summary);
+  h.page.openDetails(0);
+  assert.equal(h.page.detailSheetOpen, false);
+  h.page.openDetails(1);
+  assert.equal(h.page.detailTools()[0].label, '课表');
+  h.page.closeDetails();
+  h.page.openDetails(2);
+  assert.equal(h.page.detailTools()[0].label, '天气');
+  h.page.goBack();
+  assert.equal(h.page.detailSheetOpen, false);
+  assert.deepEqual(h.page.detailTools(), []);
+  assert.deepEqual(h.apiCalls, []);
+});
 
 test('offline reload, open and removal never construct an API and remove only the local copy', async () => {
   const summary = session('cached');

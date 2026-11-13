@@ -1,4 +1,4 @@
-import { DataEvidence, WeatherForecast, CampusDataPlace } from '../model/ApiModels';
+import { DataEvidence, WeatherForecast, CampusDataPlace, HistoryMessage, ToolDisplaySummary } from '../model/ApiModels';
 
 function evidenceTimestamp(value: string | null): number {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,6})?(Z|[+-]\d{2}:\d{2})$/.test(value)) { return NaN; }
@@ -52,6 +52,23 @@ export function normalizeEvidence(items?: DataEvidence[]): DataEvidence[] {
   });
   if (items.length > 32) { result.push(unknownEvidence('来源超过本页展示上限，其余来源尚未核验。')); }
   return result;
+}
+
+export function copyHistoryMessage(message: HistoryMessage): HistoryMessage {
+  const copy: HistoryMessage = { role: message.role, content: message.content, created_at: message.created_at };
+  if (message.role !== 'assistant' || !Array.isArray(message.tools)) { return copy; }
+  const tools: ToolDisplaySummary[] = [];
+  message.tools.forEach((item: ToolDisplaySummary) => {
+    if (item === null || typeof item !== 'object' || typeof item.label !== 'string' || !item.label.trim() ||
+      typeof item.summary !== 'string' || !['success', 'empty', 'error', 'unavailable', 'pending', 'unverified', 'demo'].includes(item.state)) {
+      return;
+    }
+    const display: ToolDisplaySummary = { label: item.label.trim(), state: item.state, summary: item.summary };
+    if (Array.isArray(item.evidence) && item.evidence.length > 0) { display.evidence = normalizeEvidence(item.evidence); }
+    tools.push(display);
+  });
+  if (tools.length > 0) { copy.tools = tools; }
+  return copy;
 }
 
 export function evidenceStatus(item: DataEvidence, now: number = Date.now()): string {

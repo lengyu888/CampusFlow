@@ -55,7 +55,8 @@ test('source lookup replacement, close and disposal invalidate in-flight reads w
 test('Campus and Agent use the shared evidence component without claiming live university page checks',()=>{
  assert.match(read('pages/CampusPage'),/CampusKnowledgePanel\(\{ baseUrl: this.baseUrl, token: this.token, campusScope: this.campusIdentity\(\), active: this.active && this.knowledgeExpanded \}\)/);
  assert.match(source,/查看摘录与出处/);assert.match(source,/EvidencePanel\(\{ evidence: this.result.evidence/);
- assert.match(read('pages/AgentPage'),/EvidencePanel\(\{ evidence: item.evidence \?\? \[\], active: this.voiceActive/);
+ assert.match(read('pages/AgentPage'),/ReplyToolDetails\(\{ tools:/);
+ assert.match(read('components/ReplyToolDetails'),/EvidencePanel\(\{ evidence: item.evidence \?\? \[\], active: this.active/);
 });
 
 

@@ -9,7 +9,8 @@ import { InfoDisclosure } from '../components/InfoDisclosure';
 import { AppActionRow } from '../components/AppActionRow';
 import { AppTheme } from '../theme/AppTheme';
 import { ThemePalette, themePalette } from '../theme/ThemePalette';
-import { EvidencePanel } from '../components/EvidencePanel';
+import { ReplyToolDetails } from '../components/ReplyToolDetails';
+import { copyHistoryMessage } from '../utils/EvidencePresentation';
 import { validModelCatalog, modelUnavailableReason, modelLabel } from '../utils/ModelCatalog';
 import { AppIcon } from '../components/AppIcon';
 import { TaskScheduleDetails } from '../components/TaskScheduleDetails';
@@ -38,6 +39,7 @@ interface ConversationEntry {
   restored?: boolean;
   revision?: number;
   sessionId?: string;
+  historyTime?: string;
 }
 
 interface DecisionFeedback {
@@ -147,7 +149,9 @@ export struct AgentPage {
       tools: [], failedPrompt: '', failureCode: '' }
   ];
   @State private decisionFeedback: DecisionFeedback[] = [];
-  @State private collapsedToolIds: string[] = [];
+  @State private detailSheetOpen: boolean = false;
+  @State private detailMessageId: string = '';
+  @State private detailRunId: string = '';
   private nextMessageId: number = 0;
   @State private pendingActions: PendingAction[] = [];
   @State private proposalOrigins: ProposalOrigin[] = [];
@@ -213,6 +217,7 @@ export struct AgentPage {
   }
 
   aboutToDisappear(): void {
+    this.closeDetails();
     this.flushDraft();
     this.draftUnsubscribe?.(); this.draftUnsubscribe = null;
     this.pageActive = false;
@@ -288,11 +293,12 @@ export struct AgentPage {
       if (!this.sessionRequestCurrent(revision, lease, account, scope)) { return; }
       this.enterConversation(target.length === 0 ? `arkuix-${this.newRunId()}` : target, context);
       this.switchConfirmOpen = false;
-      this.sessionNotice = context === null ? '已开始新对话，原会话输入保留在本机。' : '已读取服务端文字上下文；旧缓存提案不会恢复为可执行操作。';
-      const recoverId = context === null ? targetRun : context.active_run?.run_id ?? '';
+      this.sessionNotice = context === null ? '已开始新对话，原会话输入保留在本机。' : '已读取服务端对话。';
+      const activeRunId = context?.active_run?.run_id ?? '';
+      const recoverId = activeRunId || targetRun;
       if (recoverId.length > 0) {
         this.restoredRunIds = this.restoredRunIds.concat([recoverId]);
-        if (context?.active_run !== null && context?.active_run !== undefined || targetWasActive) {
+        if (recoverId === activeRunId || targetWasActive) {
           this.liveRecoveredRunIds = this.liveRecoveredRunIds.concat([recoverId]);
         }
         await this.runController().recover(recoverId);
@@ -310,19 +316,21 @@ export struct AgentPage {
   }
 
   private enterConversation(id: string, context: SessionContext | null): void {
+    this.closeDetails();
     this.cancelVoice(); this.voiceExplanationOpen = false;
     this.runInteraction?.dispose(); this.runInteraction = null;
     this.conversationRevision++; this.contextReadRevision++;
     this.sessionId = id; this.sessionTitle = context?.summary.title ?? '';
     this.contextRevision = context?.context_revision ?? ''; this.sessionMode = context === null ? 'new' : 'continue';
-    this.savedMessages = context?.messages.map((item: HistoryMessage): HistoryMessage => ({ role: item.role, content: item.content, created_at: item.created_at })) ?? [];
+    this.savedMessages = context?.messages.map(copyHistoryMessage) ?? [];
     this.messages = this.savedMessages.map((item: HistoryMessage, index: number): ConversationEntry => ({
-      id: `history-${id}-${index}`, role: item.role, content: item.content, tools: [], failedPrompt: '', failureCode: '', sessionId: id
+      id: `history-${id}-${index}`, role: item.role, content: item.content, tools: copyHistoryMessage(item).tools ?? [],
+      failedPrompt: '', failureCode: '', sessionId: id, historyTime: item.created_at
     }));
     this.pendingActions = []; this.proposalOrigins = []; this.decisionFeedback = []; this.decisionId = '';
     this.invalidatedProposalIds = []; this.notifiedReceiptIds = []; this.expandedReceiptIds = []; this.expandedProposalIds = [];
     this.decisionOperations = []; this.adjustingProposalId = ''; this.adjustmentText = ''; this.adjustmentReady = false;
-    this.cacheNotice = ''; this.collapsedToolIds = []; this.courseAckProposalId = '';
+    this.cacheNotice = ''; this.courseAckProposalId = '';
     this.selectedCourseAcks = []; this.permissionChoices = []; this.permissionProposalId = '';
     this.messageAnchors = []; this.proposalAnchors = []; this.pendingJumpId = ''; this.focusedProposalId = '';
     this.unreadMessages = 0; this.followLatest = true; this.scrollForNewMessage = true;
@@ -357,15 +365,30 @@ export struct AgentPage {
     const previous = this.messages.slice().reverse(); const used: string[] = [];
     const rebuilt: ConversationEntry[] = [];
     for (let index = context.messages.length - 1; index >= 0; index--) {
-      const item = context.messages[index];
-      const matched = previous.find((entry: ConversationEntry) => !used.includes(entry.id) &&
+      const item = copyHistoryMessage(context.messages[index]);
+      const matching = previous.filter((entry: ConversationEntry) => !used.includes(entry.id) &&
         entry.role === item.role && entry.content === item.content && entry.incomplete !== true &&
+        (entry.historyTime === undefined || entry.historyTime === item.created_at) &&
         (entry.sessionId === undefined || entry.sessionId === this.sessionId));
-      if (matched !== undefined) { used.push(matched.id); rebuilt.unshift(matched); }
-      else { rebuilt.unshift({ id: `history-${this.sessionId}-${index}-${context.context_revision}`, role: item.role,
-        content: item.content, tools: [], failedPrompt: '', failureCode: '', sessionId: this.sessionId }); }
+      const uniqueText = context.messages.filter((entry: HistoryMessage) =>
+        entry.role === item.role && entry.content === item.content).length === 1;
+      const matched = uniqueText ? matching[0] :
+        matching.find((entry: ConversationEntry) => entry.historyTime === item.created_at) ?? matching[0];
+      if (matched !== undefined) {
+        used.push(matched.id);
+        // Text-only servers can preserve live details only where the answer can be identified.
+        const unambiguous = uniqueText || matched.historyTime === item.created_at;
+        const tools = item.tools ?? (unambiguous ? matched.tools : []);
+        const changed = JSON.stringify(matched.tools) !== JSON.stringify(tools);
+        rebuilt.unshift({ id: matched.id, role: matched.role, content: matched.content, tools: tools,
+          failedPrompt: matched.failedPrompt, failureCode: matched.failureCode, runId: matched.runId,
+          incomplete: matched.incomplete, restored: matched.restored, sessionId: matched.sessionId,
+          historyTime: item.created_at, revision: (matched.revision ?? 0) + (changed ? 1 : 0) });
+      } else { rebuilt.unshift({ id: `history-${this.sessionId}-${index}-${context.context_revision}`, role: item.role,
+        content: item.content, tools: item.tools ?? [], failedPrompt: '', failureCode: '', sessionId: this.sessionId,
+        historyTime: item.created_at }); }
     }
-    this.savedMessages = context.messages.map((item: HistoryMessage): HistoryMessage => ({ role: item.role, content: item.content, created_at: item.created_at }));
+    this.savedMessages = context.messages.map(copyHistoryMessage);
     // Match surviving answer bubbles by exact text/role so their live proposals keep the same anchor.
     // Never turn history text into actions; unmatched local pending results remain visibly separate.
     const live = this.messages.filter((entry: ConversationEntry) => !used.includes(entry.id) &&
@@ -586,6 +609,7 @@ export struct AgentPage {
       this.removeDeletedRunSession(this.deletedSessionId);
       return;
     }
+    this.closeDetails();
     this.cancelVoice();
     this.runInteraction?.dispose();
     this.runInteraction = null;
@@ -634,6 +658,9 @@ export struct AgentPage {
     const removedMessages = this.messages.filter((item: ConversationEntry) => item.sessionId === sessionId);
     const messageIds = removedMessages.map((item: ConversationEntry) => item.id);
     const runIds = removedMessages.map((item: ConversationEntry) => item.runId ?? '');
+    if (messageIds.includes(this.detailMessageId) || this.detailRunId.length > 0 && runIds.includes(this.detailRunId)) {
+      this.closeDetails();
+    }
     const proposalIds = this.proposalOrigins.filter((origin: ProposalOrigin) => messageIds.includes(origin.messageId))
       .map((origin: ProposalOrigin) => origin.proposalId);
     this.messages = this.messages.filter((item: ConversationEntry) => item.sessionId !== sessionId);
@@ -685,8 +712,7 @@ export struct AgentPage {
         model_name: run.model, last_message: Array.from(history[history.length - 1].content).slice(0, 200).join(''),
         message_count: history.length, created_at: history[0].created_at, updated_at: history[history.length - 1].created_at
       };
-      const messages: HistoryMessage[] = history.map((item: HistoryMessage): HistoryMessage =>
-        ({ role: item.role, content: item.content, created_at: item.created_at }));
+      const messages = history.map(copyHistoryMessage);
       const saved = await localHistory.save(this.historyScope, summary, messages);
       if (!this.canSaveRunHistory(run.session_id, revision, historyRevision)) { return; }
       if (run.session_id === this.sessionId) { this.savedMessages = messages; }
@@ -751,6 +777,7 @@ export struct AgentPage {
   }
 
   private modelConnectionChanged(): void {
+    this.closeDetails();
     this.sessionRequestRevision++; this.sessionLoading = false;
     this.conversationRevision++; this.contextReadRevision++; this.contextRevision = ''; this.decisionId = ''; this.cancelVoice();
     // A controller must not reuse the previous connection or credential on a later retry.
@@ -807,6 +834,7 @@ export struct AgentPage {
       this.chatScroller.scrollTo({ xOffset: 0, yOffset: 0, animation: false });
     } else {
       this.optionsExpanded = false;
+      this.runRecordsExpanded = false;
       this.restoreOptionsOffset = this.optionsReturnOffset;
     }
   }
@@ -820,7 +848,6 @@ export struct AgentPage {
       id: `message-${this.nextMessageId}`, role: role, content: content, tools: tools,
       failedPrompt: failedPrompt, failureCode: failureCode
     }]);
-    if (role === 'assistant') { this.collapsedToolIds = this.collapsedToolIds.concat([`message-${this.nextMessageId}`]); }
     return `message-${this.nextMessageId}`;
   }
 
@@ -953,6 +980,7 @@ export struct AgentPage {
   private voiceActivityChanged(): void {
     // Index keeps hidden tabs mounted. Also stop when the Ability enters background.
     if (!this.voiceActive) {
+      this.closeDetails();
       this.sessionRequestRevision++; this.sessionLoading = false;
       this.flushDraft();
       this.scrollForNewMessage = false;
@@ -1130,13 +1158,12 @@ export struct AgentPage {
       JSON.stringify(previous.tools) === JSON.stringify(tools)) { return id; }
     const entry: ConversationEntry = { id: id, role: role, content: content, tools: tools,
       failedPrompt: '', failureCode: '', runId: runId, incomplete: incomplete,
-      restored: this.restoredRunIds.includes(runId), revision: (previous?.revision ?? 0) + 1,
+      restored: this.restoredRunIds.includes(runId), revision: (previous?.revision ?? 0) + 1, historyTime: previous?.historyTime,
       sessionId: this.runState.snapshot?.session_id ?? this.runState.request?.session_id ?? '' };
     this.scrollForNewMessage = this.voiceActive && (role === 'user' || this.followLatest);
     if (previous === undefined) {
       if (role !== 'user' && !this.scrollForNewMessage) { this.unreadMessages++; }
       this.messages = this.messages.concat([entry]);
-      if (role === 'assistant') { this.collapsedToolIds = this.collapsedToolIds.concat([id]); }
     } else {
       this.messages = this.messages.map((item: ConversationEntry) => item.id === id ? entry : item);
     }
@@ -1149,6 +1176,7 @@ export struct AgentPage {
     this.runState = state;
     this.settleRunDraft(state);
     if (state.errorCode === 'RUN_DELETED') {
+      this.closeDetails();
       state.recent = state.recent.filter((run: RunSnapshot) => run.run_id !== state.runId);
       const sessionId = state.snapshot?.session_id ?? state.request?.session_id ?? '';
       this.removeDeletedRunSession(sessionId);
@@ -1328,6 +1356,7 @@ export struct AgentPage {
     if (this.userId.length > 0 && selected !== undefined && selected.session_id !== this.sessionId) {
       this.requestRunConversation(selected.session_id, runId); return;
     }
+    this.runRecordsExpanded = false;
     if (selected !== undefined && ['queued', 'running'].includes(selected.status)) { this.liveRecoveredRunIds = this.liveRecoveredRunIds.concat([runId]); }
     this.cancelVoice();
     this.restoredRunIds = this.restoredRunIds.includes(runId) ? this.restoredRunIds : this.restoredRunIds.concat([runId]);
@@ -1844,33 +1873,38 @@ export struct AgentPage {
     }
   }
 
-  private toolStateLabel(state: string): string {
-    switch (state) {
-      case 'running': return '读取中';
-      case 'success': return '已返回';
-      case 'empty': return '暂无数据';
-      case 'error': return '调用失败';
-      case 'unavailable': return '暂不可用';
-      case 'pending': return '待确认';
-      case 'demo': return '演示数据';
-      default: return '未核验';
-    }
+  private replyDetails(): ConversationEntry | undefined {
+    return this.messages.find((item: ConversationEntry) => item.id === this.detailMessageId &&
+      item.role === 'assistant' && item.tools.length > 0);
   }
 
-  private toolStateColor(state: string): string {
-    if (state === 'error') {
-      return this.palette.danger;
-    }
-    if (state === 'unavailable' || state === 'unverified' || state === 'demo') {
-      return this.palette.warning;
-    }
-    return this.palette.secondary;
-  }
-
-  private toggleToolResults(messageId: string): void {
+  private openReplyDetails(messageId: string): void {
+    if (!this.voiceActive || this.deletionBusy || !this.messages.some((item: ConversationEntry) =>
+      item.id === messageId && item.role === 'assistant' && item.tools.length > 0)) { return; }
     this.scrollForNewMessage = false;
-    this.collapsedToolIds = this.collapsedToolIds.includes(messageId) ?
-      this.collapsedToolIds.filter((id: string) => id !== messageId) : this.collapsedToolIds.concat([messageId]);
+    this.detailMessageId = messageId;
+    this.detailRunId = '';
+    this.detailSheetOpen = true;
+  }
+
+  private openRunDetails(): void {
+    if (!this.voiceActive || this.deletionBusy || this.runState.runId.length === 0) { return; }
+    this.scrollForNewMessage = false;
+    this.detailMessageId = '';
+    this.detailRunId = this.runState.runId;
+    this.detailSheetOpen = true;
+  }
+
+  private closeDetails(): void {
+    this.detailSheetOpen = false;
+    this.detailMessageId = '';
+    this.detailRunId = '';
+    this.runProgressExpanded = false;
+  }
+
+  private showRunRecovery(): boolean {
+    return this.runState.runId.length > 0 && (this.runState.canRetryStart || this.runState.phase === 'unknown' ||
+      this.runState.phase === 'checking' || this.runState.phase === 'cancelling');
   }
 
   private hasConversation(): boolean {
@@ -2072,29 +2106,26 @@ export struct AgentPage {
   }
 
   @Builder
-  private ToolResults(message: ConversationEntry) {
-    Column({ space: 8 }) {
-      if (message.tools.length > 0) {
-        Button({ type: ButtonType.Normal }) {
-          Text(`读取与操作记录 · ${message.tools.length} 项 · ${this.collapsedToolIds.includes(message.id) ? '展开' : '收起'}`)
-            .fontSize(this.palette.metaSize).fontColor(this.palette.accent).width('100%').textAlign(TextAlign.Start)
-        }.width('100%').constraintSize({ minHeight: 48 }).padding(0).backgroundColor(Color.Transparent)
-          .onClick(() => this.toggleToolResults(message.id))
-        if (!this.collapsedToolIds.includes(message.id)) {
-          ForEach(message.tools, (item: ToolDisplaySummary) => {
-            Column({ space: 4 }) {
-              Row({ space: 8 }) {
-                Text(item.label).fontSize(this.palette.metaSize).fontWeight(FontWeight.Medium).fontColor(this.palette.ink).layoutWeight(1)
-                Text(this.toolStateLabel(item.state)).fontSize(this.palette.metaSize).fontColor(this.toolStateColor(item.state))
-              }.width('100%')
-              Text(item.summary).fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
-              EvidencePanel({ evidence: item.evidence ?? [], active: this.voiceActive })
-            }.width('100%').alignItems(HorizontalAlign.Start).padding(10)
-              .backgroundColor(this.palette.field).borderRadius(10)
-          }, (_item: ToolDisplaySummary, index: number) => `${message.id}-tool-${index}`)
-        }
-      }
-    }.width('100%').alignItems(HorizontalAlign.Start)
+  private DetailSheet() {
+    Column() {
+      Row({ space: 10 }) {
+        Text(this.detailMessageId.length > 0 ? '工具与数据来源' : '运行详情')
+          .fontSize(this.palette.sectionTitle).fontWeight(FontWeight.Bold).fontColor(this.palette.ink).layoutWeight(1)
+        Button('完成', { type: ButtonType.Normal }).constraintSize({ minWidth: 44, minHeight: 44 })
+          .fontSize(this.palette.bodySize).fontColor(this.palette.accent).backgroundColor(Color.Transparent)
+          .onClick(() => this.closeDetails())
+      }.width('100%').padding({ left: this.palette.pageInset, right: 12, bottom: 4 })
+      Scroll() {
+        Column({ space: 12 }) {
+          if (this.replyDetails() !== undefined) {
+            ReplyToolDetails({ tools: this.replyDetails()?.tools ?? [], active: this.voiceActive })
+          } else if (this.detailRunId.length > 0 && this.detailRunId === this.runState.runId) {
+            this.RunPanel()
+          }
+        }.width('100%').alignItems(HorizontalAlign.Start)
+          .padding({ left: this.palette.pageInset, right: this.palette.pageInset, top: 6, bottom: 24 })
+      }.layoutWeight(1).width('100%').align(Alignment.TopStart)
+    }.width('100%').height('100%').alignItems(HorizontalAlign.Start).backgroundColor(this.palette.canvas)
   }
 
   @Builder
@@ -2112,6 +2143,11 @@ export struct AgentPage {
       } else if (message.failedPrompt.length > 0 && this.prompt.length === 0) {
         Button('恢复原问题').constraintSize({ minHeight: 44 }).fontSize(this.palette.metaSize).fontColor(this.palette.accent)
           .backgroundColor(Color.Transparent).padding(0).enabled(!this.loading).onClick(() => this.restoreFailedInput(message))
+      }
+      if (message.runId === this.runState.runId && this.runState.runId.length > 0 && this.runState.errorCode !== 'RUN_DELETED') {
+        Button('查看运行详情', { type: ButtonType.Normal }).constraintSize({ minHeight: 44 })
+          .fontSize(this.palette.metaSize).fontColor(this.palette.accent).backgroundColor(Color.Transparent).padding(0)
+          .onClick(() => this.openRunDetails())
       }
       InfoDisclosure({ title: '如何继续？', message: this.hasPreparedReply(message.runId) ?
         '方案已通过原提案状态查询核对，但这次回复没有完整完成。请先查看方案、时间与冲突，再决定是否确认。原问题仍保留，不会自动重发或确认；已完成、取消或失效的候选不会重新开放。' :
@@ -2366,6 +2402,9 @@ export struct AgentPage {
         .backgroundColor(this.palette.surface).enabled(!this.modelsLoading).onClick(() => this.loadModels())
       InfoDisclosure({ title: '模型使用说明', message: '能力以服务配置为准，配置可用不代表已完成真实评测。切换仅影响后续消息。' })
       Column() {
+        if (this.runState.runId.length > 0 && this.runState.errorCode !== 'RUN_DELETED') {
+          AppActionRow({ title: '本次运行详情', icon: 'info', divider: true, onAction: () => this.openRunDetails() })
+        }
         AppActionRow({ title: this.runRecordsExpanded ? '收起最近运行' : '最近运行',
           subtitle: '查看进度与恢复记录', icon: 'history', divider: true, onAction: () => this.toggleRunRecords() })
         AppActionRow({ title: '语音使用说明', icon: 'microphone', divider: true,
@@ -2514,36 +2553,25 @@ export struct AgentPage {
     } else {
       Row() {
         if (message.role === 'user') { Blank() }
-        Column({ space: 12 }) {
+        Column({ space: message.role === 'user' ? 8 : 6 }) {
           if (message.restored === true && message.role === 'user') {
             Text('恢复的运行 · 原问题').fontSize(this.palette.metaSize).fontColor(this.palette.onAccent).width('100%')
           }
           if (message.role === 'assistant') {
-            Row({ space: 8 }) {
-              AppIcon({ name: 'assistant', iconSize: 20, color: this.palette.accent })
+            Row({ space: 6 }) {
+              AppIcon({ name: 'assistant', iconSize: 16, color: this.palette.accent })
               Text('行简').fontSize(this.palette.metaSize).fontWeight(FontWeight.Medium)
-                .fontColor(this.palette.quiet).layoutWeight(1)
-              Button({ type: ButtonType.Normal }) {
-                Row({ space: 6 }) {
-                  AppIcon({ name: this.voiceState.speakingMessageId === message.id ? 'stop' : 'speaker',
-                    iconSize: 20, color: this.palette.accent })
-                  Text(this.voiceState.speakingMessageId === message.id ? '停止' : '播报')
-                    .fontSize(this.palette.metaSize).fontColor(this.palette.accent)
-                }
-              }.constraintSize({ minHeight: 44, minWidth: 64 }).padding({ left: 8, right: 0, top: 4, bottom: 4 })
-                .backgroundColor(Color.Transparent).borderRadius(this.palette.controlRadius)
-                .accessibilityText(this.voiceState.speakingMessageId === message.id ? '停止播报这条回答' : '播报这条回答正文')
-                .enabled(message.incomplete !== true && (this.speechPending() && this.voiceState.speakingMessageId === message.id ||
-                  !this.loading && !this.deletionBusy && this.decisionId.length === 0 && !this.capturePending()))
-                .onClick(() => this.speakReply(message))
-            }.width('100%')
+                .fontColor(this.palette.secondary)
+            }
           }
           if (message.incomplete === true && message.content.length > 0) {
             Text(this.loading && this.runState.runId === message.runId ? '正在生成…' : '未完成的回答片段')
               .fontSize(this.palette.metaSize).fontColor(this.palette.warning).width('100%')
           }
           if (message.content.length > 0) { MessageContent({ content: message.content, isUser: message.role === 'user' }) }
-          if (message.role === 'assistant' && message.tools.length > 0) { this.ToolResults(message) }
+          if (message.role === 'assistant' && (message.tools.length > 0 || message.content.length > 0 && message.incomplete !== true)) {
+            this.ReplyActions(message)
+          }
           ForEach(this.failuresForReply(message), (failure: ConversationEntry) => { this.RequestFailure(failure) },
             (failure: ConversationEntry) => failure.id)
         }.alignItems(HorizontalAlign.Start)
@@ -2555,6 +2583,32 @@ export struct AgentPage {
             : { topLeft: 18, topRight: 18, bottomLeft: 4, bottomRight: 18 })
         if (message.role !== 'user') { Blank() }
       }.width('100%')
+    }
+  }
+
+  @Builder
+  private ReplyActions(message: ConversationEntry) {
+    Row({ space: 5 }) {
+      if (message.tools.length > 0) {
+        Button({ type: ButtonType.Normal }) {
+          Row({ space: 5 }) {
+            AppIcon({ name: 'info', iconSize: 15, color: this.palette.accent })
+            Text(`工具与来源 ${message.tools.length}`).fontSize(this.palette.metaSize).fontColor(this.palette.accent)
+          }.padding({ left: 9, right: 9, top: 5, bottom: 5 }).backgroundColor(this.palette.accentSoft).borderRadius(9)
+        }.constraintSize({ minHeight: 44 }).padding(0).backgroundColor(Color.Transparent)
+          .accessibilityText(`查看这条回答的工具与数据来源，${message.tools.length} 项`)
+          .onClick(() => this.openReplyDetails(message.id))
+      }
+      if (message.content.length > 0 && message.incomplete !== true) {
+        Button({ type: ButtonType.Normal }) {
+          AppIcon({ name: this.voiceState.speakingMessageId === message.id ? 'stop' : 'speaker',
+            iconSize: 19, color: this.palette.secondary })
+        }.width(44).height(44).padding(0).backgroundColor(Color.Transparent).borderRadius(22)
+          .accessibilityText(this.voiceState.speakingMessageId === message.id ? '停止播报这条回答' : '播报这条回答正文')
+          .enabled(this.speechPending() && this.voiceState.speakingMessageId === message.id ||
+            !this.loading && !this.deletionBusy && this.decisionId.length === 0 && !this.capturePending())
+          .onClick(() => this.speakReply(message))
+      }
     }
   }
 
@@ -2764,7 +2818,6 @@ export struct AgentPage {
           if (this.adjustingProposalId.length > 0) { this.AdjustmentEditor() }
           this.DraftRecovery()
           if (this.runRecordsExpanded) { this.RunRecords() }
-          if (this.runState.runId.length > 0) { this.RunPanel() }
           if (!this.hasConversation()) {
             Column({ space: 8 }) {
               Text('今天想安排什么？').fontSize(26).fontWeight(FontWeight.Bold)
@@ -2796,11 +2849,17 @@ export struct AgentPage {
                 this.rememberMessageAnchor(message.id, Number(newArea.position.y));
               })
           }, (message: ConversationEntry) => `${message.id}-${message.revision ?? 0}`)
-          if (this.loading) {
+          if (this.loading || this.showRunRecovery()) {
             Row({ space: 10 }) {
-              LoadingProgress().width(20).height(20).color(this.palette.accent)
-              Text(this.runState.snapshot !== null ? this.runStatusLabel(this.runState.snapshot) : '正在提交请求…')
-                .fontSize(this.palette.metaSize).fontColor(this.palette.quiet)
+              if (this.loading) { LoadingProgress().width(18).height(18).color(this.palette.accent) }
+              Text(this.showRunRecovery() && !this.loading ? '本次运行待核对' :
+                this.runState.snapshot !== null ? this.runStatusLabel(this.runState.snapshot) : '正在提交请求…')
+                .fontSize(this.palette.metaSize).fontColor(this.palette.quiet).layoutWeight(1).wordBreak(WordBreak.BREAK_WORD)
+              if (this.runState.runId.length > 0) {
+                Button('运行详情', { type: ButtonType.Normal }).constraintSize({ minHeight: 44 })
+                  .fontSize(this.palette.metaSize).fontColor(this.palette.accent).backgroundColor(Color.Transparent)
+                  .onClick(() => this.openRunDetails())
+              }
             }.width('100%')
           }
           if (this.promptSuggestions.length > 0) { this.SuggestedPrompt() }
@@ -2902,6 +2961,11 @@ export struct AgentPage {
         .border({ width: { top: 0.5 }, color: this.palette.line })
     }.width('100%').height('100%').alignItems(HorizontalAlign.Start)
       .justifyContent(FlexAlign.Start).backgroundColor(this.palette.surface)
+      .bindSheet($$this.detailSheetOpen, this.DetailSheet(), {
+        height: '78%', preferType: SheetType.BOTTOM, showClose: false,
+        backgroundColor: this.palette.canvas,
+        onDisappear: () => { if (!this.detailSheetOpen) { this.closeDetails(); } }
+      })
       .onAreaChange((_oldArea: Area, newArea: Area) => {
         const height = Number(newArea.height);
         if (height > 0 && height !== this.availableHeight) {

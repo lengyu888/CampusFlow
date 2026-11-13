@@ -9,13 +9,14 @@ export struct EvidencePanel {
   @StorageLink('campusflowThemePalette') private palette: ThemePalette = themePalette('paper-green');
   @Watch('sourcesChanged') @Prop evidence: DataEvidence[] = [];
   @Watch('activeChanged') @Prop active: boolean = true;
+  @Prop initiallyExpanded: boolean = false;
   @State private expanded: boolean = false;
   @State private now: number = Date.now();
   @State private sourceRevision: number = 0;
   private timer: number = -1;
   private alive: boolean = false;
 
-  aboutToAppear(): void { this.alive = true; this.activeChanged(); }
+  aboutToAppear(): void { this.expanded = this.initiallyExpanded; this.alive = true; this.activeChanged(); }
   aboutToDisappear(): void { this.alive = false; this.stopClock(); }
   private stopClock(): void { if (this.timer >= 0) { clearInterval(this.timer); this.timer = -1; } }
   private activeChanged(): void {

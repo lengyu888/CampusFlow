@@ -909,7 +909,9 @@ class AgentService:
             if persist_history:
                 self.store.append_history(user_id, session_id, "user", message, model_name)
                 self.store.append_history(
-                    user_id, session_id, "assistant", direct_route.message, model_name
+                    user_id, session_id, "assistant", direct_route.message, model_name,
+                    tools=[present_tool_trace(trace, direct_route.pending_actions)
+                           for trace in direct_route.tool_traces],
                 )
             return direct_route
 
@@ -992,7 +994,10 @@ class AgentService:
                 self.skill_store.record_tool_run(user_id, trace.tool_name)
 
         if persist_history:
-            self.store.append_history(user_id, session_id, "assistant", answer, model_name)
+            self.store.append_history(
+                user_id, session_id, "assistant", answer, model_name,
+                tools=[present_tool_trace(trace, pending) for trace in traces],
+            )
         return AgentReply(message=answer, tool_traces=traces, pending_actions=pending)
 
     @staticmethod

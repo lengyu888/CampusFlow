@@ -47,7 +47,8 @@ const elements = {
   composer: $("#composer"),
   messageInput: $("#messageInput"),
   sendButton: $("#sendButton"),
-  traceList: $("#traceList"),
+  agentControlButton: $("#agentControlButton"),
+  agentControlDialog: $("#agentControlDialog"),
   systemState: $("#systemState"),
   userInitial: $("#userInitial"),
   userName: $("#userName"),
@@ -187,10 +188,10 @@ const state = {
   campusMap: null,
   sessionId: createSessionId(),
   sending: false,
-  hasTraces: false,
   settingsContext: null,
   appTab: "today",
   sessions: [],
+  historyReadRevision: 0,
   planning: null,
   taskFilter: "all",
   skills: [],
@@ -249,6 +250,10 @@ function showToast(message, kind = "info") {
 }
 
 function showOnly(view) {
+  if (view !== "app") {
+    closeReplyDetails();
+    if (elements.agentControlDialog?.open) elements.agentControlDialog.close();
+  }
   elements.authView.hidden = view !== "auth";
   elements.onboardingView.hidden = view !== "onboarding";
   elements.appView.hidden = view !== "app";
@@ -622,6 +627,7 @@ function showApp() {
 }
 
 function switchAppTab(tab) {
+  if (tab !== "agent") closeReplyDetails();
   state.appTab = tab;
   syncCampusRouteMaps();
   syncCampusPlaceSelection();
@@ -1300,7 +1306,7 @@ function appendMessage(role, content, options = {}) {
   article.className = `message ${role}${options.loading ? " loading" : ""}`;
   const meta = document.createElement("div");
   meta.className = "meta";
-  meta.textContent = role === "user" ? `${state.user?.display_name ?? "YOU"} / 任务输入` : `AGENT / ${modelLabel()}`;
+  meta.textContent = role === "user" ? "你" : "助手";
   const bubble = document.createElement("div");
   bubble.className = "bubble";
   if (options.loading) {
@@ -1514,7 +1520,7 @@ function campusPlaceDisplayName(place) {
   return typeof shortName === "string" && shortName.trim() ? shortName : place.name;
 }
 
-function renderCampusRoute(route, context = null) {
+function renderCampusRoute(route, context = null, container = elements.messages) {
   if (context && (context.owner !== state.user?.user_id || context.sessionId !== state.sessionId)) return;
   if (!route?.origin || !route.destination) return;
   const realRoute = route.provider === "baidu" && route.coordinate_system === "bd09ll";
@@ -1582,40 +1588,137 @@ function renderCampusRoute(route, context = null) {
   note.className = "campus-route-note";
   note.textContent = realRoute ? `百度地图预计步行路线，实际通行以现场情况为准。${route.note ?? ""}` : route.note ?? "历史路线数据";
   card.append(head, metrics, map, steps, note);
-  elements.messages.append(card);
-  scrollMessages();
+  container.append(card);
+  if (container === elements.messages) scrollMessages();
 }
 
-function ensureTraceArea() {
-  if (!state.hasTraces) {
-    elements.traceList.replaceChildren();
-    state.hasTraces = true;
+const replyToolStates = new Map([
+  ["success", "已完成"], ["empty", "暂无结果"], ["error", "查询失败"],
+  ["unavailable", "暂不可用"], ["pending", "待确认"], ["unverified", "未核验"], ["demo", "演示数据"],
+]);
+const replyEvidenceStates = new Map([
+  ["fresh", "记录有效"], ["stale", "已过期"], ["unverified", "未核验"],
+  ["missing", "暂无数据"], ["error", "读取失败"], ["demo", "演示数据"],
+]);
+const replyEvidenceTimeFormat = new Intl.DateTimeFormat("zh-CN", {
+  dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Shanghai",
+});
+let openReplyDetails = null;
+
+function isCurrentReplyContext(context) {
+  return context.owner === state.user?.user_id && context.sessionId === state.sessionId;
+}
+
+function closeReplyDetails() {
+  if (openReplyDetails?.open) openReplyDetails.close();
+}
+
+function replyEvidenceTimestamp(value) {
+  if (typeof value !== "string" || !/^(\d{4}-\d{2}-\d{2})T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/.test(value)) return NaN;
+  const date = value.slice(0, 10);
+  const day = new Date(`${date}T00:00:00Z`);
+  if (!Number.isFinite(day.valueOf()) || day.toISOString().slice(0, 10) !== date || value.slice(11, 13) === "24") return NaN;
+  return Date.parse(value);
+}
+
+function replyEvidenceStatus(evidence, updated, expires, now) {
+  if (evidence.kind === "demo") return "demo";
+  if (evidence.status !== "fresh") return replyEvidenceStates.has(evidence.status) ? evidence.status : "unverified";
+  if (!Number.isFinite(updated) || updated > now + 300000) return "unverified";
+  if (evidence.expires_at != null && (!Number.isFinite(expires) || expires <= updated)) return "unverified";
+  return expires <= now ? "stale" : "fresh";
+}
+
+function buildReplyTool(display) {
+  const verified = typeof display?.label === "string" && display.label.trim() &&
+    typeof display.summary === "string" && display.summary.trim() && replyToolStates.has(display.state);
+  const item = document.createElement("li");
+  const heading = document.createElement("div");
+  heading.className = "reply-tool-heading";
+  const name = document.createElement("h3");
+  name.textContent = verified ? display.label : "工具调用";
+  const status = document.createElement("span");
+  status.textContent = replyToolStates.get(verified ? display.state : "unverified");
+  heading.append(name, status);
+  const summary = document.createElement("p");
+  summary.textContent = verified ? display.summary : "服务未提供可核验的工具摘要。";
+  item.append(heading, summary);
+  if (verified && Array.isArray(display.evidence)) {
+    const sources = document.createElement("ul");
+    sources.className = "reply-tool-sources";
+    sources.setAttribute("aria-label", "数据来源");
+    for (const evidence of display.evidence) {
+      if (typeof evidence?.label !== "string" || !evidence.label.trim()) continue;
+      const source = document.createElement("li");
+      const label = document.createElement("strong");
+      label.textContent = evidence.label;
+      const details = document.createElement("span");
+      const updated = replyEvidenceTimestamp(evidence.updated_at);
+      const expires = replyEvidenceTimestamp(evidence.expires_at);
+      details.textContent = [
+        replyEvidenceStates.get(replyEvidenceStatus(evidence, updated, expires, Date.now())),
+        Number.isFinite(updated) ? `记录于 ${replyEvidenceTimeFormat.format(updated)}（上海）` : "",
+      ].filter(Boolean).join(" · ");
+      source.append(label);
+      if (details.textContent) source.append(details);
+      if (typeof evidence.note === "string" && evidence.note.trim()) {
+        const note = document.createElement("p");
+        note.textContent = evidence.note;
+        source.append(note);
+      }
+      sources.append(source);
+    }
+    if (sources.childElementCount) item.append(sources);
   }
+  return item;
 }
 
-function safeJson(value) {
-  try {
-    return JSON.stringify(value, null, 2);
-  } catch {
-    return String(value);
-  }
-}
-
-function renderToolTrace(trace) {
-  ensureTraceArea();
-  const card = document.createElement("details");
-  card.className = "trace-card";
-  const summary = document.createElement("summary");
-  const kind = document.createElement("span");
-  kind.className = "trace-kind";
-  kind.textContent = "TOOL";
-  const name = document.createElement("span");
-  name.textContent = trace.tool_name;
-  summary.append(kind, name);
-  const details = document.createElement("pre");
-  details.textContent = safeJson({ arguments: trace.arguments, result: trace.result, tool_call_id: trace.tool_call_id });
-  card.append(summary, details);
-  elements.traceList.prepend(card);
+function appendReplyDetails(message, context, tools, routes = []) {
+  if (!Array.isArray(tools) || !tools.length) return;
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "chat-small-button reply-details-button";
+  button.setAttribute("aria-haspopup", "dialog");
+  const title = routes.length ? "步行路线与来源" : "工具与来源";
+  button.textContent = `${title} · ${tools.length} 项`;
+  button.addEventListener("click", () => {
+    if (!message.isConnected || !isCurrentReplyContext(context) || openReplyDetails?.open) return;
+    const dialog = document.createElement("dialog");
+    dialog.className = "chat-dialog";
+    dialog.setAttribute("aria-label", title);
+    const header = document.createElement("div");
+    header.className = "chat-dialog-heading";
+    const heading = document.createElement("h2");
+    heading.textContent = title;
+    const close = document.createElement("button");
+    close.type = "button";
+    close.className = "chat-small-button";
+    close.textContent = "关闭";
+    close.autofocus = true;
+    close.addEventListener("click", closeReplyDetails);
+    header.append(heading, close);
+    const content = document.createElement("div");
+    content.className = "chat-dialog-content";
+    const list = document.createElement("ol");
+    list.className = "reply-tool-list";
+    list.append(...tools.map(buildReplyTool));
+    dialog.append(header, content);
+    document.body.append(dialog);
+    for (const route of routes) renderCampusRoute(route, context, content);
+    content.append(list);
+    openReplyDetails = dialog;
+    dialog.addEventListener("close", () => {
+      dialog.remove();
+      for (const frame of dialog.querySelectorAll("iframe.campus-baidu-map")) {
+        clearManagedCampusMap(frame);
+        campusRouteMaps.delete(frame);
+      }
+      if (openReplyDetails === dialog) openReplyDetails = null;
+      if (button.isConnected && isCurrentReplyContext(context)) button.focus();
+    }, {once: true});
+    dialog.showModal();
+  });
+  message.append(button);
 }
 
 function actionDescription(action) {
@@ -1634,13 +1737,12 @@ function actionDescription(action) {
   return lines.join("\n") || "确认后写入演示事务存储。";
 }
 
-function renderPendingAction(action) {
-  ensureTraceArea();
+function renderPendingAction(action, message) {
   const card = document.createElement("section");
   card.className = "action-card";
   const label = document.createElement("div");
   label.className = "action-label";
-  label.textContent = `PENDING / ${action.kind === "plan" ? "PLAN" : action.action.toUpperCase()}`;
+  label.textContent = action.kind === "plan" ? "待确认计划" : "待确认操作";
   const title = document.createElement("h3");
   title.textContent = action.title;
   const description = document.createElement("p");
@@ -1653,10 +1755,7 @@ function renderPendingAction(action) {
     background: "var(--cf-accent, #416454)" });
   button.addEventListener("click", () => confirmAction(action.proposal_id, card, button, label));
   card.append(label, title, description, button);
-  // An actionable proposal belongs in the readable conversation, not an offscreen trace column.
-  const message = appendMessage("assistant", "请核对以下提案，确认后才会写入：");
   message.querySelector(".bubble").append(card);
-  elements.messages.scrollTop = elements.messages.scrollHeight;
 }
 
 async function confirmAction(proposalId, card, button, label) {
@@ -1665,7 +1764,7 @@ async function confirmAction(proposalId, card, button, label) {
   try {
     const payload = await api(`/api/v1/actions/${encodeURIComponent(proposalId)}/confirm`, { method: "POST" });
     card.classList.add("confirmed");
-    label.textContent = "CONFIRMED / 已写入";
+    label.textContent = "已写入";
     button.textContent = "已确认";
     showToast(payload.message || "操作已确认");
     await loadPlans();
@@ -1722,32 +1821,35 @@ async function sendMessage(message) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        session_id: state.sessionId,
+        session_id: routeContext.sessionId,
         model: selectedModel(),
         message,
       }),
     });
     loading.remove();
-    appendMessage("assistant", payload.message);
-    payload.tool_traces.forEach((trace) => {
-      renderToolTrace(trace);
-      if (trace.tool_name === "plan_campus_route") renderCampusRoute(trace.result, routeContext);
-    });
-    payload.pending_actions.forEach(renderPendingAction);
+    if (!isCurrentReplyContext(routeContext)) return;
+    const response = appendMessage("assistant", payload.message);
+    payload.pending_actions?.forEach((action) => renderPendingAction(action, response));
+    const traces = Array.isArray(payload.tool_traces) ? payload.tool_traces : [];
+    const routes = traces.filter((trace) => trace?.tool_name === "plan_campus_route" && trace.result?.origin && trace.result.destination)
+      .map((trace) => trace.result);
+    appendReplyDetails(response, routeContext, traces.map((trace) => trace?.display), routes);
+    scrollMessages();
     setServiceState(true, "Agent 服务在线");
   } catch (error) {
     loading.remove();
+    if (!isCurrentReplyContext(routeContext)) return;
     appendMessage("assistant", `本次任务未完成：${error.message}`);
     showToast(error.message, "error");
   } finally {
     // 以服务端状态覆盖占位会话；此处该会话应已被标记为完成。
-    await refreshSessions();
+    if (state.user?.user_id === routeContext.owner) await refreshSessions();
     state.sending = false;
     elements.sendButton.disabled = false;
     elements.messageInput.disabled = false;
-    elements.messageInput.value = "";
+    if (isCurrentReplyContext(routeContext)) elements.messageInput.value = "";
     resizeComposer();
-    elements.messageInput.focus();
+    if (isCurrentReplyContext(routeContext) && state.appTab === "agent") elements.messageInput.focus();
   }
 }
 
@@ -1757,14 +1859,13 @@ function resizeComposer() {
 }
 
 function resetSession(notify = true) {
+  closeReplyDetails();
   clearCampusRouteMaps();
   state.sessionId = createSessionId();
   syncCampusPlaceSelection();
-  state.hasTraces = false;
   setSessionId();
-  elements.messages.innerHTML = '<div class="empty-state" id="emptyState"><div class="orb"><span></span><span></span><span></span></div><p class="eyebrow">NEW CONTEXT</p><h3>新会话已就绪</h3><p>个人课表和校园数据继续可用，对话上下文与执行轨迹已经清空。</p></div>';
+  elements.messages.innerHTML = '<div class="empty-state chat-empty-state" id="emptyState"><h3>开始新对话</h3><p>可以问课表、校园地点，或请助手帮你做计划。</p></div>';
   elements.emptyState = $("#emptyState");
-  elements.traceList.innerHTML = '<div class="trace-empty">尚无工具调用<br /><span>新会话不会继承上一轮对话</span></div>';
   closeHistory();
   switchAppTab("agent");
   if (notify) showToast("已创建独立会话");
@@ -1779,6 +1880,7 @@ function openHistory() {
 }
 
 function closeHistory() {
+  state.historyReadRevision++;
   elements.historyDrawer.hidden = true;
   elements.drawerScrim.hidden = true;
 }
@@ -1841,12 +1943,15 @@ async function loadHistory(query = "") {
 }
 
 async function openSession(sessionId) {
+  const context = {owner: state.user?.user_id, sessionId};
+  const revision = ++state.historyReadRevision;
   try {
     const history = await api(`/api/v1/sessions/${encodeURIComponent(sessionId)}/history`);
+    if (context.owner !== state.user?.user_id || revision !== state.historyReadRevision) return;
+    closeReplyDetails();
     const session = state.sessions.find((item) => item.session_id === sessionId);
     state.sessionId = sessionId;
     syncCampusPlaceSelection();
-    state.hasTraces = false;
     if (session?.model_name) {
       const modelInput = $(`input[name="model"][value="${session.model_name}"]`);
       if (modelInput) modelInput.checked = true;
@@ -1855,13 +1960,18 @@ async function openSession(sessionId) {
     setSessionId();
     clearCampusRouteMaps();
     elements.messages.replaceChildren();
-    history.forEach((message) => appendMessage(message.role, message.content));
-    elements.traceList.innerHTML = '<div class="trace-empty">已恢复对话文本<br /><span>新的工具调用会继续显示在这里</span></div>';
+    for (const message of history) {
+      const article = appendMessage(message.role, message.content);
+      if (message.role === "assistant") appendReplyDetails(article, context, message.tools);
+    }
+    scrollMessages();
     closeHistory();
     switchAppTab("agent");
     showToast(`已恢复 ${history.length} 条消息`);
   } catch (error) {
-    showToast(error.message, "error");
+    if (context.owner === state.user?.user_id && revision === state.historyReadRevision) {
+      showToast(error.message, "error");
+    }
   }
 }
 
@@ -2926,6 +3036,7 @@ elements.credentialCard.addEventListener("click", openSettings);
 elements.settingsBackButton.addEventListener("click", showApp);
 elements.historyButton.addEventListener("click", openHistory);
 elements.agentHistoryButton.addEventListener("click", openHistory);
+elements.agentControlButton.addEventListener("click", () => elements.agentControlDialog.showModal());
 elements.historyCloseButton.addEventListener("click", closeHistory);
 elements.drawerScrim.addEventListener("click", closeHistory);
 elements.historySearch.addEventListener("input", () => {
@@ -3003,11 +3114,13 @@ $$('input[name="model"]').forEach((radio) => radio.addEventListener("change", ()
   showToast(`已切换至 ${modelLabel()}`);
 }));
 $$('[data-prompt]').forEach((button) => button.addEventListener("click", () => {
+  if (elements.agentControlDialog.open) elements.agentControlDialog.close();
   elements.messageInput.value = button.dataset.prompt;
   resizeComposer();
   elements.messageInput.focus();
 }));
 $$('[data-route-origin][data-route-destination]').forEach((button) => button.addEventListener("click", () => {
+  if (elements.agentControlDialog.open) elements.agentControlDialog.close();
   sendMessage(`从${button.dataset.routeOrigin}到${button.dataset.routeDestination}怎么走？请生成地图路线图。`);
 }));
 elements.newSessionButton.addEventListener("click", resetSession);

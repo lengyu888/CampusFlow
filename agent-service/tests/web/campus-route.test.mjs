@@ -27,7 +27,7 @@ function environment(user = {user_id: 'owner', school: '杭州电子科技大学
     const elements = {messages: document.getElementById('messages'), appView: document.getElementById('appView')};
     function clearEmptyState() {} function scrollMessages() {}
     async function api(path, options) { return window.fixtureApi(path, options); }
-    ${app.slice(start, app.indexOf('function ensureTraceArea('))}
+    ${app.slice(start, app.indexOf('const replyToolStates'))}
     window.renderRoute = renderCampusRoute;
     window.hideMaps = () => {state.appTab = 'today'; if (typeof syncCampusRouteMaps === 'function') syncCampusRouteMaps();};
     window.changeOwner = () => {state.user = {...state.user, user_id: 'another'}; if (typeof syncCampusRouteMaps === 'function') syncCampusRouteMaps();};`);

@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from .schemas import HistoryMessage, RunSnapshot, SessionContext, SessionSummary
+from .schemas import HistoryMessage, RunSnapshot, SessionContext, SessionSummary, ToolDisplaySummary
 
 if TYPE_CHECKING:
     from .store import CampusStore
@@ -61,25 +61,28 @@ class SessionService:
         self.check_alive_inner(user_id, session_id)
         summary = None
         if self.store._connection is not None:
-            row = self.connection.execute(
+            session_row = self.connection.execute(
                 "SELECT * FROM conversation_sessions WHERE user_id=? AND session_id=?",
                 (user_id, session_id),
             ).fetchone()
             rows = [
                 dict(row)
                 for row in self.connection.execute(
-                    "SELECT message_id,role,content,created_at FROM conversation_messages "
+                    "SELECT message_id,role,content,created_at,tool_summaries_json "
+                    "FROM conversation_messages "
                     "WHERE user_id=? AND session_id=? ORDER BY message_id",
                     (user_id, session_id),
                 )
             ]
-            messages = [HistoryMessage.model_validate(row) for row in rows]
-            if row is not None and messages:
-                summary = SessionSummary(**dict(row), message_count=len(messages))
+            messages = [HistoryMessage.from_storage(row) for row in rows]
+            for row in rows:
+                row.pop("tool_summaries_json")
+            if session_row is not None and messages:
+                summary = SessionSummary(**dict(session_row), message_count=len(messages))
         else:
             messages = list(self.store._history.get((user_id, session_id), []))
             rows = [
-                {"message_id": index, **message.model_dump(mode="json")}
+                {"message_id": index, **message.model_dump(mode="json", exclude={"tools"})}
                 for index, message in enumerate(messages)
             ]
             if messages:
@@ -195,15 +198,17 @@ class SessionService:
         return value
 
     def append_pair_inner(
-        self, user_id: str, session_id: str, message: str, answer: str, model: str
+        self, user_id: str, session_id: str, message: str, answer: str, model: str,
+        tools: list[ToolDisplaySummary] | None = None,
     ) -> None:
         self.check_alive_inner(user_id, session_id)
         now = datetime.now(UTC).isoformat()
+        reply = HistoryMessage(role="assistant", content=answer, created_at=now, tools=tools)
         if self.store._connection is None:
             self.store._history.setdefault((user_id, session_id), []).extend(
                 [
                     HistoryMessage(role="user", content=message, created_at=now),
-                    HistoryMessage(role="assistant", content=answer, created_at=now),
+                    reply,
                 ]
             )
             return
@@ -215,19 +220,22 @@ class SessionService:
             (user_id, session_id, self.store._session_title(message), model, answer, now, now),
         )
         self.connection.executemany(
-            "INSERT INTO conversation_messages(user_id,session_id,role,content,created_at) "
-            "VALUES(?,?,?,?,?)",
+            "INSERT INTO conversation_messages("
+            "user_id,session_id,role,content,created_at,tool_summaries_json) VALUES(?,?,?,?,?,?)",
             [
-                (user_id, session_id, "user", message, now),
-                (user_id, session_id, "assistant", answer, now),
+                (user_id, session_id, "user", message, now, None),
+                (user_id, session_id, "assistant", answer, now, reply.tool_summaries_json()),
             ],
         )
 
-    def append_checked(self, frozen: FrozenSession, message: str, answer: str, model: str) -> None:
+    def append_checked(
+        self, frozen: FrozenSession, message: str, answer: str, model: str,
+        tools: list[ToolDisplaySummary] | None = None,
+    ) -> None:
         with self.store._lock, self.connection:
             self.connection.execute("BEGIN IMMEDIATE")
             self.validate_inner(frozen.user_id, frozen.session_id, frozen.context_revision)
-            self.append_pair_inner(frozen.user_id, frozen.session_id, message, answer, model)
+            self.append_pair_inner(frozen.user_id, frozen.session_id, message, answer, model, tools)
 
     def delete_inner(self, user_id: str, session_id: str) -> None:
         self.connection.execute(

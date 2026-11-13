@@ -148,17 +148,16 @@ test('browser restart resumes only the saved receipt lookup, never a new mutatio
   restarted.dom.window.close();
 });
 
-test('action proposals are placed inside the conversation, not the hidden mobile trace panel', () => {
-  const dom = new JSDOM('<main id="messages"></main><aside id="trace" style="display:none"></aside>', {runScripts: 'outside-only'});
+test('action proposals stay with their existing assistant response', () => {
+  const dom = new JSDOM('<main id="messages"></main>', {runScripts: 'outside-only'});
   const append = app.slice(app.indexOf('function appendMessage('), app.indexOf('function campusRouteMapAllowed('));
   const proposal = app.slice(app.indexOf('function actionDescription('), app.indexOf('async function confirmAction('));
-  dom.window.eval(`const state = {user: {display_name: '合成同学'}};
-    const elements = {messages: document.querySelector('#messages'), traceList: document.querySelector('#trace')};
-    function ensureTraceArea() {} function clearEmptyState() {} function scrollMessages() {}
-    function modelLabel() { return 'FLASH'; } function confirmAction() {}
+  dom.window.eval(`const elements = {messages: document.querySelector('#messages')};
+    function clearEmptyState() {} function scrollMessages() {} function confirmAction() {}
     ${append} ${proposal}`);
-  dom.window.renderPendingAction({proposal_id: operationId, title: '<img src=x>', action: 'create', kind: 'task', reason: '核对后才写入'});
-  assert.equal(dom.window.document.querySelector('#messages .action-card button').textContent, '确认执行此操作');
-  assert.equal(dom.window.document.querySelector('#trace .action-card'), null);
+  const reply = dom.window.appendMessage('assistant', '请核对这项安排。');
+  dom.window.renderPendingAction({proposal_id: operationId, title: '<img src=x>', action: 'create', kind: 'task', reason: '核对后才写入'}, reply);
+  assert.equal(reply.querySelector('.action-card button').textContent, '确认执行此操作');
+  assert.equal(dom.window.document.querySelectorAll('.message.assistant').length, 1);
   assert.equal(dom.window.document.querySelector('#messages img'), null); dom.window.close();
 });

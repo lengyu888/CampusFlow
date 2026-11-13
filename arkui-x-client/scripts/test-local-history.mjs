@@ -6,12 +6,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { stripThemeTypeScriptTypes as stripTypeScriptTypes } from './helpers/theme-fixture.mjs';
 import { test } from 'node:test';
+import { copyHistoryMessage } from './helpers/conversation-fixture.mjs';
 
 // Exercise production ArkTS logic with injected storage, not copied cache logic.
 const storeSource = readFileSync(new URL('../entry/src/main/ets/utils/LocalHistoryStore.ets', import.meta.url), 'utf8')
-  .replace(/^import .* from '\.\.\/model\/ApiModels';\r?\n/m, '');
-const { LocalHistoryStore, historyScope, MAX_LOCAL_HISTORY_BYTES } =
-  await import(`data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(storeSource)).toString('base64')}`);
+  .replace(/^import .*;\r?\n/gm, '').replace(/^export /gm, '');
+const { LocalHistoryStore, historyScope, MAX_LOCAL_HISTORY_BYTES } = new Function('copyHistoryMessage', stripTypeScriptTypes(storeSource) +
+  '\nreturn { LocalHistoryStore, historyScope, MAX_LOCAL_HISTORY_BYTES };')(copyHistoryMessage);
 const scopeA = historyScope('http://campus.invalid:8000', 'account-a');
 const scopeB = historyScope('http://campus.invalid:8000', 'account-b');
 
@@ -117,6 +118,33 @@ test('structured credentials, tool traces, actions and extra fields never enter 
   assert.doesNotMatch(driver.text, /private-token|private-key|private-tool-result|executable-proposal|pending_actions/);
   assert.deepEqual(Object.keys(JSON.parse(driver.text).sessions[0].messages[0]).sort(),
     ['content', 'created_at', 'role']);
+});
+
+test('restart retains separate sources on equal-text replies and deletion removes just that snapshot', async () => {
+  const { store, driver } = await setup();
+  const item = conversation();
+  const second = conversation('other', 2);
+  const schedule = { label: '读取课表', state: 'success', summary: '两节课', arguments: { raw: 'secret' },
+    evidence: [{ source_id: 'schedule', label: '测试课表', kind: 'user', status: 'fresh',
+      updated_at: item.summary.updated_at, expires_at: null, url: 'https://example.org/?token=secret', note: '', raw: 'secret' }] };
+  item.messages[0].tools = [schedule];
+  item.messages[1].tools = [schedule];
+  item.messages.push(...structuredClone(second.messages));
+  item.messages[3].tools = [{ label: '查询天气', state: 'success', summary: '晴' }];
+  assert.equal(await save(store, item), true);
+  assert.equal(await save(store, second), true);
+  assert.doesNotMatch(driver.text, /secret|arguments/);
+  const restarted = new LocalHistoryStore(driver);
+  await restarted.initialize();
+  const history = restarted.messages(scopeA, item.summary.session_id);
+  assert.deepEqual(history.map(message => message.tools?.[0].label), [undefined, '读取课表', undefined, '查询天气']);
+  assert.equal(history[1].tools[0].evidence[0].url, null);
+  history[1].tools[0].evidence[0].label = '外部修改';
+  assert.equal(restarted.messages(scopeA, item.summary.session_id)[1].tools[0].evidence[0].label, '测试课表');
+  await restarted.removeSession(scopeA, item.summary.session_id);
+  assert.doesNotMatch(driver.text, /测试课表|查询天气/);
+  assert.equal(restarted.messages(scopeA, item.summary.session_id), undefined);
+  assert.ok(restarted.messages(scopeA, second.summary.session_id));
 });
 
 test('invalid messages reject the entire snapshot rather than silently deleting content', async () => {

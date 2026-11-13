@@ -1,4 +1,5 @@
 import { HistoryMessage, SessionSummary } from '../model/ApiModels';
+import { copyHistoryMessage } from './EvidencePresentation';
 
 export const MAX_LOCAL_HISTORY_BYTES: number = 2 * 1024 * 1024;
 export const MAX_LOCAL_HISTORY_SESSIONS: number = 20;
@@ -69,8 +70,7 @@ function cleanMessages(values: HistoryMessage[]): HistoryMessage[] | undefined {
       !validDate(value.created_at)) {
       return undefined;
     }
-    // Do not serialize tokens, raw tools, proposals or arbitrary response properties.
-    messages.push({ role: value.role, content: value.content, created_at: value.created_at });
+    messages.push(copyHistoryMessage(value));
   }
   return messages;
 }

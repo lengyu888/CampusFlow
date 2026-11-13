@@ -1591,8 +1591,11 @@ def create_app(
                 frozen_history=frozen.messages,
                 persist_history=False,
             )
+            for trace in reply.tool_traces:
+                trace.display = present_tool_trace(trace, reply.pending_actions)
             run_service.sessions.append_checked(
-                frozen, request.message, reply.message, request.model
+                frozen, request.message, reply.message, request.model,
+                [trace.display for trace in reply.tool_traces if trace.display is not None],
             )
         except SessionError:
             raise
@@ -1621,8 +1624,6 @@ def create_app(
         except Exception as exc:
             raise _deepseek_exception(exc) from exc
 
-        for trace in reply.tool_traces:
-            trace.display = present_tool_trace(trace, reply.pending_actions)
         return ChatResponse(
             session_id=request.session_id,
             message=reply.message,

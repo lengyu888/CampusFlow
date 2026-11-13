@@ -149,7 +149,38 @@ test('each proposal stays with the first answer returning its ID, including dupl
   assert.equal(page.proposalOrigins.length, 3);
   page.replaceAction({ ...pending('a'), status: 'confirmed' });
   assert.equal(page.actionsForMessage(answers[0].id)[0].status, 'confirmed');
-  assert.ok(answers.every(m => page.collapsedToolIds.includes(m.id)), 'tool evidence starts compact');
+  assert.equal(page.detailSheetOpen, false, 'receiving answers does not open a details sheet');
+});
+
+test('tool details are scoped to the selected reply and close when leaving the assistant', async () => {
+  const { page } = await harness();
+  const first = page.appendMessage('assistant', '相同回答', [{ label: '读取课表', state: 'success', summary: '两节课' }]);
+  const second = page.appendMessage('assistant', '相同回答', [{ label: '查询天气', state: 'empty', summary: '暂无数据' }]);
+  const textOnly = page.appendMessage('assistant', '历史回答');
+  page.openReplyDetails(textOnly);
+  assert.equal(page.detailSheetOpen, false);
+  page.openReplyDetails(first);
+  assert.equal(page.replyDetails().tools[0].label, '读取课表');
+  page.closeDetails();
+  page.openReplyDetails(second);
+  assert.equal(page.replyDetails().tools[0].label, '查询天气');
+  page.voiceActive = false;
+  page.voiceActivityChanged();
+  assert.equal(page.detailSheetOpen, false);
+  assert.equal(page.replyDetails(), undefined);
+});
+
+test('successful runs stay out of the chat and uncertain runs keep a recovery entry', async () => {
+  const { page } = await harness();
+  page.runState = { ...page.runState, runId: 'run-1', phase: 'terminal' };
+  assert.equal(page.showRunRecovery(), false);
+  page.runState = { ...page.runState, phase: 'unknown' };
+  assert.equal(page.showRunRecovery(), true);
+  page.openRunDetails();
+  assert.equal(page.detailRunId, 'run-1');
+  assert.equal(page.detailSheetOpen, true);
+  page.closeDetails();
+  assert.equal(page.detailRunId, '');
 });
 
 test('attention summary distinguishes pending decisions from uncertain writes even after a terminal status read', async () => {

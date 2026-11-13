@@ -448,7 +448,8 @@ class RunService:
 
     def _append_history(self, user_id: str, snapshot: RunSnapshot, response: ChatResponse) -> None:
         self.sessions.append_pair_inner(
-            user_id, snapshot.session_id, snapshot.message, response.message, snapshot.model
+            user_id, snapshot.session_id, snapshot.message, response.message, snapshot.model,
+            [trace.display for trace in response.tool_traces if trace.display is not None],
         )
 
     def _finish(

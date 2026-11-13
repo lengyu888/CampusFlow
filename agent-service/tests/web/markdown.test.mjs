@@ -173,6 +173,6 @@ test("actual appendMessage renders new and restored assistant replies but keeps 
   const loading = dom.window.appendMessage("assistant", "", { loading: true });
   assert.equal(loading.querySelectorAll(".typing > span").length, 3);
   assert.equal(loading.querySelectorAll(".markdown-content").length, 0);
-  assert.match(appSource, /history\.forEach\(\(message\) => appendMessage\(message\.role, message\.content\)\)/);
+  assert.match(appSource, /for \(const message of history\) \{\s+const article = appendMessage\(message\.role, message\.content\)/);
   dom.window.close();
 });

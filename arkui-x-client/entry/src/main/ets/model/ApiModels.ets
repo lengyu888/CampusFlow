@@ -375,6 +375,7 @@ export interface HistoryMessage {
   role: string;
   content: string;
   created_at: string;
+  tools?: ToolDisplaySummary[] | null;
 }
 
 export interface SessionSummary {

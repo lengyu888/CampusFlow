@@ -7,7 +7,7 @@ import { test } from 'node:test';
 
 async function helperModule(name) {
   const source = readFileSync(new URL(`../entry/src/main/ets/utils/${name}.ets`, import.meta.url), 'utf8')
-    .replace(/^import \{[\s\S]*?\} from '(?:\.\.\/model\/ApiModels|\.\/OnboardingTimetable)';\r?\n/gm, '');
+    .replace(/^import \{[\s\S]*?\} from '(?:\.\.\/model\/ApiModels|\.\/(?:OnboardingTimetable|EvidencePresentation))';\r?\n/gm, '');
   return import(`data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(source)).toString('base64')}`);
 }
 const timetable = await helperModule('OnboardingTimetable');

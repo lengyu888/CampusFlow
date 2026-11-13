@@ -18,7 +18,7 @@ from campusflow_agent.api import create_app
 from campusflow_agent.config import Settings
 from campusflow_agent.key_vault import ApiKeyVault
 from campusflow_agent.run_service import RunError, RunService
-from campusflow_agent.schemas import AgentRunRequest
+from campusflow_agent.schemas import AgentRunRequest, ToolTrace
 from campusflow_agent.session_service import SessionError, SessionService
 from campusflow_agent.store import CampusStore
 
@@ -426,6 +426,79 @@ async def test_http_legacy_late_reply_cannot_revive_deleted_session(http_scene):
         "/api/v1/chat", json={"session_id": "s", "message": "重试"}, headers=headers
     )
     assert old_chat.status_code == 410 and len(agent.calls) == 1
+
+
+async def test_history_preserves_each_reply_source_across_transports_and_deletion(
+    http_scene, monkeypatch
+):
+    client, app, store, agent, users = http_scene
+    uid, headers = users[0]
+    other_uid, other_headers = users[1]
+    secret = "raw-tool-payload-must-not-persist-in-history"
+    source_values = iter([("课表来源", "get_schedule"), ("天气来源", "get_weather"),
+                          ("另一账号来源", "get_weather"), ("另一会话来源", "get_weather")])
+
+    async def reply(**_kwargs):
+        label, tool = next(source_values)
+        return AgentReply(message="相同回答", tool_traces=[
+            ToolTrace(
+                tool_call_id="raw-call-id",
+                tool_name=tool,
+                arguments={"private": secret},
+                status="success",
+                result={
+                    "available": False,
+                    "private": secret,
+                    "evidence": [{
+                        "source_id": "local:sample",
+                        "label": label,
+                        "kind": "remote",
+                        "status": "fresh",
+                        "updated_at": "2026-11-13T08:15:00+08:00",
+                        "url": f"https://example.invalid/path?secret={secret}",
+                        "private": secret,
+                    }],
+                },
+            )
+        ])
+
+    monkeypatch.setattr(agent, "run", reply)
+    monkeypatch.setattr(agent, "chat", reply)
+    start = await client.post(
+        "/api/v1/agent-runs", json=new_request().model_dump(mode="json"), headers=headers
+    )
+    assert start.status_code == 200
+    run_id = start.json()["run_id"]
+    assert (await finish(app.state.run_service, uid, run_id)).status == "succeeded"
+
+    for session, auth in (("s", headers), ("s", other_headers), ("second", headers)):
+        response = await client.post(
+            "/api/v1/chat", json={"session_id": session, "message": "继续安排"}, headers=auth
+        )
+        assert response.status_code == 200, response.text
+
+    path = "/api/v1/sessions/s"
+    history_response = await client.get(f"{path}/history", headers=headers)
+    history = history_response.json()
+    assert [item["content"] for item in history] == ["继续安排", "相同回答"] * 2
+    assert [item["tools"][0]["evidence"][0]["label"] for item in history[1::2]] == [
+        "课表来源", "天气来源"
+    ]
+    assert all("tools" not in item for item in history[::2])
+    assert secret not in history_response.text and "raw-call-id" not in history_response.text
+    assert history[1]["tools"][0]["evidence"][0]["url"] is None
+    context = (await client.get(f"{path}/context", headers=headers)).json()
+    assert context["messages"] == history
+    assert [item.tools for item in CampusStore(store.database_path).get_history(uid, "s")] == [
+        item.tools for item in store.get_history(uid, "s")
+    ]
+
+    assert (await client.delete(path, headers=headers)).status_code == 204
+    assert (await client.get(f"{path}/history", headers=headers)).json() == []
+    assert (await client.get(f"{path}/context", headers=headers)).status_code == 410
+    assert (await client.get(f"/api/v1/agent-runs/{run_id}", headers=headers)).status_code == 410
+    assert store.get_history(other_uid, "s")[1].tools[0].evidence[0].label == "另一账号来源"
+    assert store.get_history(uid, "second")[1].tools[0].evidence[0].label == "另一会话来源"
 
 
 async def test_http_legacy_cas_rejects_stale_and_parallel_completion(http_scene):

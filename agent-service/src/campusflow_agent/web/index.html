@@ -8,7 +8,7 @@
     <script src="/static/theme.js?v=1"></script>
     <link rel="stylesheet" href="/static/styles.css" />
     <link rel="stylesheet" href="/static/native.css?v=6" />
-    <link rel="stylesheet" href="/static/redesign.css?v=4" />
+    <link rel="stylesheet" href="/static/redesign.css?v=5" />
     <link rel="stylesheet" href="/static/markdown.css?v=1" />
     <link rel="stylesheet" href="/static/themes.css?v=1" />
   </head>
@@ -182,20 +182,22 @@
           </section>
 
           <section class="app-surface" data-app-surface="agent" hidden>
-            <div class="workspace">
-        <aside class="control-panel panel">
-          <div class="section-index">01 / CONNECTION</div>
-          <h1>把目标交给<br /><em>执行型</em> Agent</h1>
+            <div class="workspace chat-workspace">
+        <dialog class="chat-dialog" id="agentControlDialog" aria-labelledby="agentControlTitle">
+          <div class="chat-dialog-heading">
+            <h2 id="agentControlTitle">对话设置</h2>
+            <form method="dialog"><button type="submit" class="chat-small-button">关闭</button></form>
+          </div>
+          <div class="chat-dialog-content">
           <p class="intro" id="contextLine">正在载入你的校园上下文…</p>
-          <div class="field-label">DeepSeek Credential</div>
-          <button class="credential-card" id="credentialCard" type="button"><span class="credential-dot"></span><span><b>Secure Vault</b><small id="credentialHint">已配置 · 点击管理</small></span><i>↗</i></button>
+          <div class="field-label">模型凭据</div>
+          <button class="credential-card" id="credentialCard" type="button"><span class="credential-dot"></span><span><b>DeepSeek</b><small id="credentialHint">已配置 · 点击管理</small></span><i aria-hidden="true">↗</i></button>
           <fieldset class="model-switcher">
             <legend>模型路由</legend>
             <label><input type="radio" name="model" value="deepseek-v4-pro" checked /><span><b>V4 PRO</b><small>复杂规划 · 更强推理</small></span></label>
             <label><input type="radio" name="model" value="deepseek-flash" /><span><b>FLASH</b><small>快速对话 · 成本更低</small></span></label>
           </fieldset>
-          <div class="session-meta"><span>SESSION</span><code id="sessionId"></code></div>
-          <button class="session-history-button" id="agentHistoryButton" type="button">浏览历史会话 <span>↗</span></button>
+          <div class="session-meta"><span>会话编号</span><code id="sessionId"></code></div>
           <div class="quick-prompts">
             <div class="field-label">快速场景</div>
             <button type="button" data-prompt="请根据我2026-10-01的课表和校园地图，帮我安排当天的复习地点与时间。">基于已导入课表规划</button>
@@ -203,23 +205,24 @@
             <button class="route-preset" type="button" data-route-origin="六教" data-route-destination="菜鸟驿站"><span>路线图</span> 六教 → 菜鸟驿站</button>
             <button type="button" data-prompt="为我创建一个两小时的复习事务，先生成待确认提案。">生成事务提案</button>
           </div>
-        </aside>
+          </div>
+        </dialog>
 
         <section class="chat-panel panel">
-          <div class="chat-heading"><div><span class="section-index">02 / DIALOGUE</span><h2>任务会话</h2></div><div class="model-badge" id="modelBadge">V4 PRO</div></div>
-          <div class="messages" id="messages" aria-live="polite">
-            <div class="empty-state" id="emptyState"><div class="orb"><span></span><span></span><span></span></div><p class="eyebrow">PERSONAL CAMPUS CONTEXT</p><h3>从你的课表开始</h3><p>Agent 已连接你确认过的课程和校园地点，可以据此检查冲突、选择地点并生成行动计划。</p></div>
+          <div class="chat-heading"><h2>助手</h2><div class="chat-heading-actions">
+            <span class="model-badge" id="modelBadge">V4 PRO</span>
+            <button class="chat-small-button" id="agentHistoryButton" type="button">历史</button>
+            <button class="chat-small-button" id="agentControlButton" type="button" aria-haspopup="dialog">设置</button>
+          </div></div>
+          <div class="messages" id="messages" role="log" aria-label="对话记录">
+            <div class="empty-state chat-empty-state" id="emptyState"><h3>开始对话</h3><p>可以问课表、校园地点，或请助手帮你做计划。</p></div>
           </div>
           <form class="composer" id="composer">
-            <textarea id="messageInput" rows="1" maxlength="8000" placeholder="例如：根据周四的课表帮我安排两小时复习…"></textarea>
-            <div class="composer-footer"><span><kbd>Enter</kbd> 发送 · <kbd>Shift</kbd> + <kbd>Enter</kbd> 换行</span><button id="sendButton" type="submit"><span>发送任务</span><i>↗</i></button></div>
+            <textarea id="messageInput" rows="1" maxlength="8000" aria-label="消息" placeholder="输入消息…"></textarea>
+            <div class="composer-footer"><span><kbd>Enter</kbd> 发送 · <kbd>Shift</kbd> + <kbd>Enter</kbd> 换行</span><button id="sendButton" type="submit"><span>发送</span><i aria-hidden="true">↑</i></button></div>
           </form>
         </section>
 
-        <aside class="trace-panel panel">
-          <div class="section-index">03 / TRACE</div><h2>执行轨迹</h2><p class="trace-intro">查看 Agent 使用了哪些个人数据，以及哪些操作仍在等待确认。</p>
-          <div class="trace-list" id="traceList"><div class="trace-empty">尚无工具调用<br /><span>尝试询问已导入课表或校园地点</span></div></div>
-        </aside>
             </div>
           </section>
 
@@ -465,7 +468,7 @@
     <script src="/static/vendor/marked-18.1.1.umd.js" defer></script>
     <script src="/static/vendor/purify-3.4.17.min.js" defer></script>
     <script src="/static/markdown.js?v=2" defer></script>
-    <script src="/static/app.js?v=15" defer></script>
+    <script src="/static/app.js?v=17" defer></script>
     <script src="/static/motion.js?v=1" defer></script>
   </body>
 </html>

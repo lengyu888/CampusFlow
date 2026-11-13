@@ -208,7 +208,7 @@ export struct LoginPage {
             Button('离线查看本机对话').constraintSize({ minHeight: 48 }).width('100%')
               .fontSize(this.palette.bodySize).fontColor(this.palette.accent).backgroundColor(this.palette.accentSoft)
               .enabled(!this.loading).onClick(() => this.onOpenLocalHistory())
-            Text('仅查看已保存的文字，不会登录或发送请求。解锁此设备的人可查看；退出账号会清除本机记录。')
+            Text('离线可查看已保存的对话及来源。解锁此设备的人可查看。退出账号会清除本机记录。')
               .fontSize(this.palette.metaSize).fontColor(this.palette.secondary).width('100%')
           }.width('100%').alignItems(HorizontalAlign.Start)
         }

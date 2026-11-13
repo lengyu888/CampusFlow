@@ -85,6 +85,33 @@ test('wrong owner, empty history and context errors cannot replace current conve
  h.page.changePrompt('当前输入');h.page.requestConversation('session-b');await h.page.switchConversation();assert.equal(h.page.sessionId,'session-a');assert.equal(h.page.prompt,'当前输入');
  }
 });
+test('continuing and refreshing a history session keeps tool summaries on the corresponding equal-text replies', async () => {
+ const remote = context('session-a');
+ const later = { ...remote.messages[1], created_at: '2028-10-20T08:01:00+08:00' };
+ remote.messages[1].tools = [{ label: '读取课表', state: 'success', summary: '两节课' }];
+ later.tools = [{ label: '查询天气', state: 'success', summary: '晴' }];
+ remote.messages.push(later);
+ const h = await fixture();
+ h.page.enterConversation('session-a', remote);
+ const selected = h.page.messages[1].id;
+ h.page.applyContextMessages(remote);
+ h.page.openReplyDetails(selected);
+ assert.equal(h.page.replyDetails().tools[0].label, '读取课表');
+ assert.equal(h.page.messages[2].tools[0].label, '查询天气');
+ assert.deepEqual(h.page.pendingActions, []);
+});
+test('equal legacy replies cannot inherit ambiguous tools from a recovered run', async () => {
+ const remote = context('session-a');
+ const later = { ...remote.messages[1], created_at: '2028-10-20T08:01:00+08:00' };
+ const h = await fixture();
+ h.page.enterConversation('session-a', remote);
+ const original = h.page.messages[1].id;
+ h.page.upsertRunMessage(id, 'assistant', later.content, [{ label: '来源待定位', state: 'success', summary: '仅运行记录' }]);
+ remote.messages.push(later);
+ h.page.applyContextMessages(remote);
+ assert.equal(h.page.messages[1].id, original);
+ assert.deepEqual(h.page.messages.slice(1).map(item => item.tools), [[], []]);
+});
 test('latest requested session supersedes an outstanding read and either prop order is coalesced',async()=>{
  const a=deferred();const h=await fixture({sessionContext:async value=>value==='session-b'?a.promise:context(value)});
  h.page.requestedSessionId='session-b';h.page.sessionRequested();h.page.resumeRevision=1;h.page.sessionRequested();await tick();assert.equal(h.page.sessionLoading,true);
@@ -119,6 +146,22 @@ test('first-turn running recovery uses owned run when context is not yet created
  const h=await fixture({sessionContext:async()=>{throw error('SESSION_NOT_FOUND',404)},agentRun:async()=>runSnapshot(req,null,{status:'running'})});
  h.page.requestRunConversation('session-b',id);await h.page.switchConversation();assert.equal(h.page.sessionId,'session-b');assert.equal(h.page.runState.snapshot.run_id,id);
  assert.equal(h.calls.some(x=>x.name==='startAgentRun'),false);assert.equal(h.page.loading,true);
+});
+test('switching to a completed recent run reads its original tools without resending the conversation', async () => {
+ const completed = context('session-b');
+ const request = { run_id: id, session_id: 'session-b', model: 'deepseek-v4-pro', message: '原问题' };
+ const run = runSnapshot(request, { message: '原回答', pending_actions: [], tool_traces: [
+   { tool_name: 'get_schedule', status: 'success', display: { label: '读取课表', state: 'success', summary: '两节课' } }
+ ] });
+ const h = await fixture({ sessionContext: async () => completed, agentRun: async () => run,
+   history: async () => completed.messages });
+ h.page.requestRunConversation('session-b', id);
+ await h.page.switchConversation();
+ await tick();
+ assert.deepEqual(h.page.messages.map(item => item.content), ['原问题', '原回答']);
+ assert.equal(h.page.messages[1].tools[0]?.label, '读取课表');
+ assert.deepEqual(h.calls.filter(call => call.name === 'agentRun').map(call => call.args), [[id]]);
+ assert.equal(h.calls.some(call => call.name === 'startAgentRun'), false);
 });
 test('unknown proposal blocks switching and survives restart for GET-only recovery',async()=>{
  const a=pending();const h=await fixture({confirmAction:async()=>{throw error('REQUEST_TIMEOUT',504)}});select(h,a);await h.page.decide(a,true);

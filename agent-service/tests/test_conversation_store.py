@@ -1,5 +1,7 @@
 import sqlite3
 
+from campusflow_agent.schemas import ToolDisplaySummary
+from campusflow_agent.session_service import SessionService
 from campusflow_agent.store import CampusStore
 
 
@@ -40,7 +42,7 @@ def test_session_status_switches_from_pending_to_active() -> None:
     assert store.list_sessions("user-1")[0].status == "active"
 
 
-def test_legacy_database_gains_session_status_column(tmp_path) -> None:
+def test_legacy_database_gains_status_and_optional_tool_summaries(tmp_path) -> None:
     database_path = str(tmp_path / "legacy.db")
     connection = sqlite3.connect(database_path)
     connection.executescript(
@@ -75,6 +77,11 @@ def test_legacy_database_gains_session_status_column(tmp_path) -> None:
         """,
         ("user-1", "legacy", "旧会话", "deepseek-v4-pro", "旧消息", stamp, stamp),
     )
+    connection.execute(
+        "INSERT INTO conversation_messages (user_id, session_id, role, content, created_at) "
+        "VALUES (?, ?, ?, ?, ?)",
+        ("user-1", "legacy", "assistant", "旧消息", stamp),
+    )
     connection.commit()
     connection.close()
 
@@ -83,3 +90,36 @@ def test_legacy_database_gains_session_status_column(tmp_path) -> None:
 
     assert sessions[0].session_id == "legacy"
     assert sessions[0].status == "active"
+    assert "tools" not in store.get_history("user-1", "legacy")[0].model_dump()
+
+    service = SessionService(store, store._connection)
+    previous_revision = service.context("user-1", "legacy").context_revision
+    # Metadata changes leave the dialogue revision stable and malformed metadata degrades
+    # to the original text. A later valid response persists and survives reopening SQLite.
+    with store._connection:
+        store._connection.execute(
+            "UPDATE conversation_messages SET tool_summaries_json='{' WHERE message_id=1"
+        )
+    assert service.context("user-1", "legacy").context_revision == previous_revision
+    assert store.get_history("user-1", "legacy")[0].content == "旧消息"
+    assert store.get_history("user-1", "legacy")[0].tools is None
+
+    summary = ToolDisplaySummary(label="读取课表", state="success", summary="读取两节课")
+    store.append_history("user-1", "legacy", "assistant", "新消息", tools=[summary])
+    reopened = CampusStore(database_path)
+    old, new = reopened.get_history("user-1", "legacy")
+    assert old.tools is None
+    assert new.tools == [summary]
+
+    with reopened._connection:
+        reopened._connection.execute(
+            "UPDATE conversation_messages SET tool_summaries_json=? WHERE message_id=1",
+            (new.tool_summaries_json(),),
+        )
+    assert service.context("user-1", "legacy").messages[0].tools == [summary]
+    current_revision = service.context("user-1", "legacy").context_revision
+    with reopened._connection:
+        reopened._connection.execute(
+            "UPDATE conversation_messages SET tool_summaries_json=NULL WHERE message_id=1"
+        )
+    assert service.context("user-1", "legacy").context_revision == current_revision
