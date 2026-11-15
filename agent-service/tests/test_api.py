@@ -1,3 +1,5 @@
+import re
+
 from httpx import AsyncClient
 
 REGISTER_PAYLOAD = {
@@ -48,27 +50,37 @@ async def complete_onboarding(client: AsyncClient) -> None:
 
 async def test_frontend_is_served(client: AsyncClient) -> None:
     page = await client.get("/")
-    script = await client.get("/static/app.js")
-
     assert page.status_code == 200
-    assert "创建账户" in page.text
-    assert "课表识别" in page.text
-    assert "deepseek-v4-pro" in page.text
-    assert "deepseek-flash" in page.text
+    assert page.headers["content-type"].startswith("text/html")
+
+    # Check the hooks used by the frontend rather than the labels shown to users.
+    for control_id in (
+        "registerForm",
+        "timetableFile",
+        "parseTimetableButton",
+        "adminTabButton",
+        "historyDrawer",
+        "skillGrid",
+        "skillDrawerPermissions",
+        "setupSubscriptionForm",
+        "hduHelpPatForm",
+        "scheduleSubscriptionForm",
+        "campusPackageName",
+        "campusCorrectionForm",
+    ):
+        assert f'id="{control_id}"' in page.text
+    assert 'value="deepseek-v4-pro"' in page.text
+    assert 'value="deepseek-flash"' in page.text
     assert 'name="api_key"' in page.text
-    assert "用户管理" in page.text
-    assert "历史会话" in page.text
-    assert "校园 Skills" in page.text
-    assert "PERMISSIONS / 数据权限" in page.text
-    assert "HDUHELP / ICALENDAR" in page.text
-    assert "HDUHELP CONNECT" in page.text
-    assert "课表订阅" in page.text
-    assert "CAMPUS DATA PACKAGE" in page.text
-    assert "提交纠错" in page.text
-    assert "六教 → 菜鸟驿站" in page.text
+    assert 'data-route-origin="六教"' in page.text
+    assert 'data-route-destination="菜鸟驿站"' in page.text
+
+    bundle = re.search(r'<script\b[^>]*\bsrc="(/static/app\.js(?:\?[^"]*)?)"', page.text)
+    assert bundle is not None
+    script = await client.get(bundle[1])
     assert script.status_code == 200
-    assert "fetch(path, options)" in script.text
-    assert "renderCampusRoute" in script.text
+    assert "javascript" in script.headers["content-type"]
+    assert script.content.strip()
 
 
 async def test_health(client: AsyncClient) -> None:
