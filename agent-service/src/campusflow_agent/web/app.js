@@ -661,9 +661,144 @@ function formatCampusDate(date) {
   }).format(date);
 }
 
+const WEEKDAY_LABELS = ["日", "一", "二", "三", "四", "五", "六"];
+
+function localDateKey(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function dateFromKey(key) {
+  const [year, month, day] = key.split("-").map(Number);
+  return new Date(year, month - 1, day);
+}
+
+function clockMinutes(time) {
+  const [hours, minutes] = time.split(":").map(Number);
+  return hours * 60 + minutes;
+}
+
+function upcomingDayLabel(courseDate, localDate) {
+  if (courseDate === localDate) return "今天";
+  const target = dateFromKey(courseDate);
+  const dayGap = Math.round((target - dateFromKey(localDate)) / 86400000);
+  if (dayGap === 1) return "明天";
+  return new Intl.DateTimeFormat("zh-CN", { month: "numeric", day: "numeric", weekday: "short" }).format(target);
+}
+
+// A course keeps one colour everywhere it appears, so the week reads at a glance.
+// Colours follow the sorted list of course names, so the first six courses never share one.
+function courseHues(timetable) {
+  const titles = [...new Set(timetable.map((item) => item.title))].sort((left, right) => left.localeCompare(right, "zh-CN"));
+  return new Map(titles.map((title, index) => [title, (index % 6) + 1]));
+}
+
+// The header follows the real sky: its palette is the time of day and the sun or moon marks how far the day has run.
+function renderTodaySky(now) {
+  const hero = document.getElementById("todayHero");
+  if (!hero) return;
+  const minutes = now.getHours() * 60 + now.getMinutes();
+  const period = minutes < 300 ? "night" : minutes < 480 ? "dawn" : minutes < 1020 ? "day" : minutes < 1140 ? "dusk" : "night";
+  const progress = period === "night" ? ((minutes + 1440 - 1140) % 1440) / 600 : (minutes - 300) / 840;
+  hero.dataset.period = period;
+  hero.style.setProperty("--sky-progress", Math.min(1, Math.max(0, progress)).toFixed(3));
+}
+
+function renderWeekStrip() {
+  const strip = document.getElementById("weekStrip");
+  const view = state.todayView;
+  if (!strip || !view) return;
+  const today = dateFromKey(view.localDate);
+  const monday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - ((today.getDay() + 6) % 7));
+  strip.replaceChildren();
+  for (let index = 0; index < 7; index += 1) {
+    const day = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + index);
+    const key = localDateKey(day);
+    const count = view.timetable.filter((item) => item.date === key).length;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = `week-day${key === view.localDate ? " today" : ""}`;
+    button.dataset.date = key;
+    button.setAttribute("aria-pressed", String(key === view.selectedDate));
+    button.setAttribute("aria-label", `${day.getMonth() + 1}月${day.getDate()}日 周${WEEKDAY_LABELS[day.getDay()]}，${count} 节课`);
+    const weekday = document.createElement("small");
+    weekday.textContent = key === view.localDate ? "今天" : WEEKDAY_LABELS[day.getDay()];
+    const number = document.createElement("b");
+    number.textContent = day.getDate();
+    const dots = document.createElement("i");
+    for (let dot = 0; dot < Math.min(count, 4); dot += 1) dots.append(document.createElement("span"));
+    button.append(weekday, number, dots);
+    button.addEventListener("click", () => {
+      view.selectedDate = key;
+      renderWeekStrip();
+      renderDayCourses();
+    });
+    strip.append(button);
+  }
+}
+
+function renderDayCourses() {
+  const view = state.todayView;
+  if (!view) return;
+  const isToday = view.selectedDate === view.localDate;
+  const selected = dateFromKey(view.selectedDate);
+  const courses = view.timetable
+    .filter((item) => item.date === view.selectedDate)
+    .sort((left, right) => left.start_time.localeCompare(right.start_time));
+  const listTitle = document.getElementById("todayListTitle");
+  if (listTitle) {
+    listTitle.textContent = isToday ? "今日课表" : `${selected.getMonth() + 1}月${selected.getDate()}日 周${WEEKDAY_LABELS[selected.getDay()]}`;
+  }
+  elements.todayCourseCount.textContent = `${courses.length} 节课`;
+  elements.todayCourseList.replaceChildren();
+  if (!courses.length) {
+    const emptyDay = contextListItem(isToday ? "今天没有排课" : "这一天没有排课", "可以留给自习、运动或休息。");
+    emptyDay.className = "day-empty";
+    elements.todayCourseList.append(emptyDay);
+    return;
+  }
+  const nowLine = () => {
+    const line = document.createElement("div");
+    line.className = "now-line";
+    line.setAttribute("aria-hidden", "true");
+    const label = document.createElement("span");
+    label.textContent = view.localTime;
+    line.append(label);
+    return line;
+  };
+  let nextMarked = false;
+  let nowPlaced = !isToday;
+  courses.forEach((course) => {
+    const item = document.createElement("article");
+    item.innerHTML = `<time>${course.start_time}<small>${course.end_time}</small></time><div class="course-block"><h3></h3><p></p></div>`;
+    item.dataset.hue = view.hues.get(course.title) ?? 1;
+    item.querySelector("h3").textContent = course.title;
+    item.querySelector("p").textContent = `${course.location || "地点待定"}${course.teacher ? ` · ${course.teacher}` : ""}`;
+    // On today's list each lesson also says where the day stands: finished, in session, or next.
+    let courseState = "later";
+    if (isToday) {
+      if (course.end_time <= view.localTime) courseState = "past";
+      else if (course.start_time <= view.localTime) { courseState = "now"; nowPlaced = true; }
+      else {
+        if (!nowPlaced) { elements.todayCourseList.append(nowLine()); nowPlaced = true; }
+        if (!nextMarked) { courseState = "next"; nextMarked = true; }
+      }
+    }
+    item.dataset.state = courseState;
+    if (courseState === "now" || courseState === "next") {
+      const stateLabel = document.createElement("span");
+      stateLabel.className = "course-state";
+      stateLabel.textContent = courseState === "now" ? "正在上课" : "下一节";
+      item.querySelector("h3").append(stateLabel);
+    }
+    elements.todayCourseList.append(item);
+  });
+  if (!nowPlaced) elements.todayCourseList.append(nowLine());
+}
+
 async function loadTodayDashboard() {
   const now = new Date();
   const hour = now.getHours();
+  renderTodaySky(now);
   elements.todayGreeting.textContent = `${hour < 11 ? "早上" : hour < 18 ? "下午" : "晚上"}好，${state.user.display_name}`;
   elements.todayDate.textContent = `${formatCampusDate(now)} · ${state.user.campus ?? "校园"}`;
   try {
@@ -673,35 +808,55 @@ async function loadTodayDashboard() {
     ]);
     state.settingsContext = context;
     state.sessions = sessions;
-    const localDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-    const courses = (context.timetable ?? []).filter((item) => item.date === localDate);
-    const upcoming = (context.timetable ?? [])
-      .filter((item) => item.date >= localDate)
+    const timetable = context.timetable ?? [];
+    const localDate = localDateKey(now);
+    const localTime = `${String(hour).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+    const courses = timetable
+      .filter((item) => item.date === localDate)
+      .sort((left, right) => left.start_time.localeCompare(right.start_time));
+    const upcoming = timetable
+      .filter((item) => item.date > localDate || (item.date === localDate && item.start_time > localTime))
       .sort((left, right) => `${left.date} ${left.start_time}`.localeCompare(`${right.date} ${right.start_time}`));
-    elements.todayCourseCount.textContent = `${courses.length} 节课`;
+    const next = upcoming[0];
+    const current = courses.find((item) => item.start_time <= localTime && item.end_time > localTime);
+    const finished = courses.filter((item) => item.end_time <= localTime).length;
+
+    // Keep the day the user was browsing while the dashboard refreshes within the same date.
+    const previous = state.todayView;
+    state.todayView = {
+      timetable,
+      hues: courseHues(timetable),
+      localDate,
+      localTime,
+      selectedDate: previous?.localDate === localDate ? previous.selectedDate : localDate,
+    };
+    renderWeekStrip();
+    renderDayCourses();
+
     elements.todayPlaceCount.textContent = context.campus_map?.places?.length ?? 0;
     elements.todayHistoryCount.textContent = sessions.length;
-    elements.todayCourseList.replaceChildren();
-    if (courses.length) {
-      courses.forEach((course) => {
-        const item = document.createElement("article");
-        item.innerHTML = `<time>${course.start_time}<small>${course.end_time}</small></time><i aria-hidden="true"></i><div><h3></h3><p></p></div>`;
-        item.querySelector("h3").textContent = course.title;
-        item.querySelector("p").textContent = `${course.location || "地点待定"}${course.teacher ? ` · ${course.teacher}` : ""}`;
-        elements.todayCourseList.append(item);
-      });
-      elements.todaySuggestion.textContent = "最后一节课后，留 30 分钟整理笔记。";
-    } else {
-      const emptyDay = contextListItem("今天没有排课", "");
-      emptyDay.className = "day-empty";
-      elements.todayCourseList.append(emptyDay);
-      elements.todaySuggestion.textContent = "从最近的课程里选一项重点复习。";
+    const brief = document.getElementById("todayBrief");
+    if (brief) {
+      if (!courses.length) brief.textContent = "今天没有排课，适合安排一段完整的自主学习。";
+      else if (current) brief.textContent = `正在上「${current.title}」，${current.end_time} 下课。今天共 ${courses.length} 节课。`;
+      else if (next?.date === localDate && !finished) brief.textContent = `今天 ${courses.length} 节课，第一节 ${next.start_time}「${next.title}」。`;
+      else if (next?.date === localDate) brief.textContent = `今天 ${courses.length} 节课，已上完 ${finished} 节，下一节 ${next.start_time}「${next.title}」。`;
+      else brief.textContent = `今天的 ${courses.length} 节课都上完了。`;
     }
-    const next = upcoming[0];
+    elements.todaySuggestion.textContent = courses.length
+      ? "最后一节课后，留 30 分钟整理笔记。"
+      : "从最近的课程里选一项重点复习。";
     elements.nextCourseTitle.textContent = next?.title ?? "近期没有课程";
     elements.nextCourseMeta.textContent = next
-      ? `${next.date} · ${next.start_time} · ${next.location || "地点待定"}`
+      ? `${upcomingDayLabel(next.date, localDate)} ${next.start_time}–${next.end_time} · ${next.location || "地点待定"}`
       : "";
+    const countdown = document.getElementById("nextCountdown");
+    if (countdown) {
+      const gap = next?.date === localDate ? clockMinutes(next.start_time) - clockMinutes(localTime) : 0;
+      countdown.textContent = gap > 0
+        ? `${gap >= 60 ? `${Math.floor(gap / 60)} 小时${gap % 60 ? ` ${gap % 60} 分钟` : ""}` : `${gap} 分钟`}后开始`
+        : "";
+    }
   } catch (error) {
     showToast(error.message, "error");
   }
@@ -715,6 +870,7 @@ async function loadPlans() {
     state.planning = payload;
     elements.planProgress.textContent = `${payload.progress}%`;
     elements.planProgressBar.style.width = `${payload.progress}%`;
+    elements.planProgressBar.closest("article")?.style.setProperty("--progress", payload.progress);
     elements.planTaskCount.textContent = payload.total_tasks;
     elements.planDueToday.textContent = payload.due_today;
     elements.planCompleted.textContent = payload.completed_tasks;
@@ -1045,6 +1201,7 @@ function renderSkillLibrary() {
   skills.forEach((skill) => {
     const card = document.createElement("article");
     card.className = `skill-card${skill.installed ? " installed" : ""}${skill.enabled ? " enabled" : ""}`;
+    card.dataset.category = skill.category ?? "";
     const top = document.createElement("div");
     top.className = "skill-card-top";
     const category = document.createElement("span");
@@ -1282,6 +1439,9 @@ function setServiceState(online, label) {
   elements.systemState.classList.toggle("offline", !online);
   elements.systemState.lastElementChild.textContent = label;
 }
+
+// Same markup as the initial state in index.html; shown again for every new conversation.
+const CHAT_EMPTY_STATE = '<div class="empty-state chat-empty-state" id="emptyState"><span class="brand-mark" aria-hidden="true"></span><h3>今天想安排点什么？</h3><p>可以问课表、校园地点，或请助手帮你做计划。</p><div class="starter-grid"><button type="button" data-starter="请结合我的课表，为今天生成一份可执行的学习安排。"><b>安排今天</b><span>按课表空档排好学习时间</span></button><button type="button" data-starter="查询校园地图中有哪些教学楼和图书馆，并推荐一个适合自习的地点。"><b>找自习地点</b><span>从校园地图里挑一个合适的</span></button><button type="button" data-starter="为我创建一个两小时的复习事务，先生成待确认提案。"><b>新建复习待办</b><span>先生成提案，确认后写入</span></button><button type="button" data-starter="请结合我的课表，把本周学习目标拆成包含里程碑、时间块和提醒的完整计划，并先生成待确认提案。"><b>拆解本周目标</b><span>里程碑、时间块和提醒</span></button></div></div>';
 
 function clearEmptyState() {
   elements.emptyState?.remove();
@@ -1855,7 +2015,7 @@ function resetSession(notify = true) {
   state.sessionId = createSessionId();
   syncCampusPlaceSelection();
   setSessionId();
-  elements.messages.innerHTML = '<div class="empty-state chat-empty-state" id="emptyState"><h3>开始新对话</h3><p>可以问课表、校园地点，或请助手帮你做计划。</p></div>';
+  elements.messages.innerHTML = CHAT_EMPTY_STATE;
   elements.emptyState = $("#emptyState");
   closeHistory();
   switchAppTab("agent");
@@ -3111,6 +3271,13 @@ $$('[data-prompt]').forEach((button) => button.addEventListener("click", () => {
   resizeComposer();
   elements.messageInput.focus();
 }));
+elements.messages.addEventListener("click", (event) => {
+  const starter = event.target.closest("[data-starter]");
+  if (!starter) return;
+  elements.messageInput.value = starter.dataset.starter;
+  resizeComposer();
+  elements.messageInput.focus();
+});
 $$('[data-route-origin][data-route-destination]').forEach((button) => button.addEventListener("click", () => {
   if (elements.agentControlDialog.open) elements.agentControlDialog.close();
   sendMessage(`从${button.dataset.routeOrigin}到${button.dataset.routeDestination}怎么走？请生成地图路线图。`);

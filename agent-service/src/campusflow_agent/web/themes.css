@@ -1,49 +1,81 @@
-/* One component tree, two complete semantic palettes. Loaded last, no layout/DOM reset. */
+/* One component tree, two complete semantic palettes. Loaded before polish.css, no layout/DOM reset.
+   paper-green = 清新 (light, mint)   ios-blue = 高级 (dark, graphite and champagne)
+   The keys are unchanged so saved preferences keep working; only names and colours moved. */
 :root, :root[data-theme="paper-green"] {
-  --cf-bg: #f6f4ef; --cf-surface: #fffefb; --cf-surface-soft: #f1f2eb;
-  --cf-surface-strong: #e7eee6; --cf-ink: #29352f; --cf-muted: #626e65;
-  --cf-faint: #626e65; --cf-line: #dce2d8; --cf-accent: #416454;
-  --cf-accent-strong: #355445; --cf-accent-soft: #e7eee6;
-  --cf-success: #3d7054; --cf-warning: #886023; --cf-danger: #a4493e;
-  --cf-radius-control: 12px; --cf-radius-card: 16px; --cf-radius-shell: 24px;
-  --cf-focus-ring: #788578; --cf-chrome: rgb(255 254 251 / 94%);
-  --cf-shadow-sm: 0 1px 2px rgb(41 53 47 / 3%), 0 6px 18px rgb(41 53 47 / 4%);
-  --cf-shadow-lg: 0 24px 60px rgb(41 53 47 / 10%);
-  --deep: #29352f; --ink: var(--cf-ink); --paper: var(--cf-surface);
+  color-scheme: light;
+  --cf-bg: #f1f6f4; --cf-surface: #ffffff; --cf-surface-soft: #f2f7f5;
+  --cf-surface-strong: #dde9e4; --cf-field: #ffffff;
+  --cf-ink: #10221b; --cf-muted: #557067; --cf-faint: #557067; --cf-line: #dce7e2;
+  --cf-accent: #0b8468; --cf-accent-strong: #086a54; --cf-accent-soft: #dcf3ec; --cf-on-accent: #ffffff;
+  --cf-btn: linear-gradient(180deg, #0d8a6c 0%, #0a7a60 100%);
+  --cf-btn-shadow: inset 0 1px 0 rgb(255 255 255 / 24%), 0 6px 16px -4px rgb(11 132 104 / 42%);
+  --cf-block: #0b8468;
+  --cf-now: #f59f00; --cf-now-ink: #8a5300; --cf-now-soft: #fff1d6;
+  --cf-success: #17804a; --cf-warning: #8a5300; --cf-danger: #c5382c;
+  --cf-radius-control: 12px; --cf-radius-card: 20px; --cf-radius-shell: 26px;
+  --cf-focus-ring: #0b8468; --cf-chrome: rgb(255 255 255 / 74%); --cf-glass: rgb(255 255 255 / 80%);
+  --cf-page:
+    radial-gradient(880px 520px at 104% -12%, rgb(11 132 104 / 11%), transparent 62%),
+    radial-gradient(760px 520px at -12% 112%, rgb(72 150 255 / 9%), transparent 62%),
+    #f1f6f4;
+  --cf-highlight: inset 0 1px 0 rgb(255 255 255 / 85%);
+  --cf-shadow-sm: 0 1px 2px rgb(16 34 27 / 5%), 0 10px 24px -14px rgb(16 34 27 / 16%);
+  --cf-shadow-lg: 0 30px 70px -14px rgb(16 34 27 / 26%);
+  --cf-scrim: rgb(16 34 27 / 34%); --cf-grain: .05; --cf-grain-blend: multiply;
+  --h1-bg: #dcf5ea; --h1-ink: #12684a; --h1-bar: #2fae7b;
+  --h2-bg: #dfeeff; --h2-ink: #1e56a8; --h2-bar: #4b8df0;
+  --h3-bg: #fff0d2; --h3-ink: #8a5a00; --h3-bar: #f0a92b;
+  --h4-bg: #ffe3e8; --h4-ink: #a8324f; --h4-bar: #f06a8a;
+  --h5-bg: #ece6ff; --h5-ink: #5a3fb0; --h5-bar: #8b6cf0;
+  --h6-bg: #d9f3f5; --h6-ink: #0f6570; --h6-bar: #2bb3c0;
+  --sky-dawn: linear-gradient(120deg, #ffe1c2 0%, #ffcfc7 44%, #cfe0ff 100%); --sky-dawn-ink: #3a2430;
+  --sky-day: linear-gradient(120deg, #c4e6ff 0%, #d9f1f1 50%, #eef8d6 100%); --sky-day-ink: #0f2f3d;
+  --sky-dusk: linear-gradient(120deg, #3b2f7d 0%, #8a4a8f 52%, #f0906b 100%); --sky-dusk-ink: #ffffff;
+  --sky-night: linear-gradient(120deg, #101736 0%, #20245a 55%, #3b3175 100%); --sky-night-ink: #ffffff;
+  --deep: #10221b; --ink: var(--cf-ink); --paper: var(--cf-surface);
   --surface: var(--cf-surface); --line: var(--cf-line); --acid: var(--cf-accent);
   --blue: var(--cf-accent); --blue-soft: var(--cf-accent-soft); --blue-deep: var(--cf-accent-strong);
   --green: var(--cf-success); --orange: var(--cf-warning); --muted: var(--cf-muted);
 }
 :root[data-theme="ios-blue"] {
-  --cf-bg: #f2f2f7; --cf-surface: #fff; --cf-surface-soft: #f2f2f7;
-  --cf-surface-strong: #e5e5ea; --cf-ink: #1c1c1e; --cf-muted: #63636e;
-  --cf-faint: #63636e; --cf-line: #e5e5ea; --cf-accent: #007aff;
-  --cf-accent-strong: #005fcc; --cf-accent-soft: #eaf3ff;
-  --cf-success: #248a3d; --cf-warning: #c05600; --cf-danger: #d70015;
-  --cf-radius-control: 16px; --cf-radius-card: 24px; --cf-radius-shell: 32px;
-  --cf-focus-ring: #007aff; --cf-chrome: rgb(255 255 255 / 90%);
-  --cf-shadow-sm: 0 1px 2px rgb(28 28 30 / 3%), 0 6px 18px rgb(28 28 30 / 5%);
-  --cf-shadow-lg: 0 28px 70px rgb(28 28 30 / 12%);
-  --deep: #1c1c1e;
+  color-scheme: dark;
+  --cf-bg: #0d1014; --cf-surface: #151920; --cf-surface-soft: #1b2029;
+  --cf-surface-strong: #2b313c; --cf-field: #10141a;
+  --cf-ink: #eceef2; --cf-muted: #9ba4b3; --cf-faint: #9ba4b3; --cf-line: #272d37;
+  --cf-accent: #d9b97a; --cf-accent-strong: #ead09a; --cf-accent-soft: #2c271b; --cf-on-accent: #1b1509;
+  --cf-btn: linear-gradient(180deg, #e8cc92 0%, #cfae6c 100%);
+  --cf-btn-shadow: inset 0 1px 0 rgb(255 255 255 / 38%), 0 8px 20px -6px rgb(217 185 122 / 34%);
+  --cf-block: #d9b97a;
+  --cf-now: #f0a83a; --cf-now-ink: #f3c877; --cf-now-soft: #33280f;
+  --cf-success: #74d19b; --cf-warning: #f3c877; --cf-danger: #ff8d7e;
+  --cf-radius-control: 12px; --cf-radius-card: 20px; --cf-radius-shell: 26px;
+  --cf-focus-ring: #d9b97a; --cf-chrome: rgb(19 23 29 / 76%); --cf-glass: rgb(21 25 32 / 74%);
+  --cf-page:
+    radial-gradient(880px 520px at 104% -12%, rgb(217 185 122 / 11%), transparent 62%),
+    radial-gradient(820px 560px at -12% 112%, rgb(86 112 190 / 14%), transparent 62%),
+    #0d1014;
+  --cf-highlight: inset 0 1px 0 rgb(255 255 255 / 6%);
+  --cf-shadow-sm: 0 1px 2px rgb(0 0 0 / 36%), 0 14px 30px -16px rgb(0 0 0 / 70%);
+  --cf-shadow-lg: 0 34px 76px -12px rgb(0 0 0 / 76%);
+  --cf-scrim: rgb(0 0 0 / 58%); --cf-grain: .07; --cf-grain-blend: soft-light;
+  --h1-bg: #14302a; --h1-ink: #92e2c0; --h1-bar: #3fbf8c;
+  --h2-bg: #16283f; --h2-ink: #a3c8ff; --h2-bar: #5b9bf5;
+  --h3-bg: #33280f; --h3-ink: #f3cd82; --h3-bar: #f0a92b;
+  --h4-bg: #3a1c26; --h4-ink: #ffb3c2; --h4-bar: #f06a8a;
+  --h5-bg: #261f45; --h5-ink: #c8b9ff; --h5-bar: #8b6cf0;
+  --h6-bg: #10313a; --h6-ink: #92dde7; --h6-bar: #2bb3c0;
+  --sky-dawn: linear-gradient(120deg, #3a2a4d 0%, #8a4c5c 50%, #d98a5c 100%); --sky-dawn-ink: #ffffff;
+  --sky-day: linear-gradient(120deg, #12395e 0%, #1f6a96 55%, #4fa3bf 100%); --sky-day-ink: #ffffff;
+  --deep: #090b0e;
 }
 :focus-visible { outline-color: var(--cf-focus-ring); }
-.topbar, .app-topbar, .app-nav, .settings-topbar { background: var(--cf-chrome); }
-.brand-mark { box-shadow: none; }
-.message.user .bubble { background: var(--cf-accent); color: #fff; }
-.theme-settings { margin: 0 0 24px; padding: 20px; background: var(--cf-surface); border: 1px solid var(--cf-line); border-radius: var(--cf-radius-card); }
-.theme-settings h2 { margin: 0 0 6px; font-size: 18px; }
-.theme-settings > p { margin-bottom: 16px; color: var(--cf-muted); font-size: 13px; line-height: 1.6; }
 .theme-choices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-.theme-choice { display: grid; gap: 6px; min-width: 0; padding: 12px; border: 1px solid var(--cf-line); border-radius: var(--cf-radius-control); background: var(--cf-surface); text-align: left; }
-.theme-choice[aria-pressed="true"] { border: 2px solid var(--cf-accent); padding: 11px; }
-.theme-choice strong { font-size: 15px; }
-.theme-choice small { color: var(--cf-muted); font-size: 12px; }
-.theme-sample { display: grid; gap: 7px; padding: 12px; margin-bottom: 4px; border-radius: 10px; background: var(--sample-bg); }
+.theme-choice { display: grid; gap: 6px; min-width: 0; text-align: left; }
+.theme-sample { display: grid; gap: 7px; background: var(--sample-bg); }
 .theme-sample i { display: block; height: 7px; border-radius: 4px; background: var(--sample-accent); }
-.theme-sample i:last-child { width: 68%; opacity: .3; }
-.theme-sample-blue { --sample-bg: #f2f2f7; --sample-accent: #007aff; }
-.theme-sample-green { --sample-bg: #f6f4ef; --sample-accent: #416454; }
-#themeStatus { margin: 12px 0 0; font-size: 12px; color: var(--cf-muted); }
+.theme-sample i:last-child { width: 68%; opacity: .35; }
+.theme-sample-green { --sample-bg: #e9f4f0; --sample-accent: #0b8468; }
+.theme-sample-blue { --sample-bg: #151920; --sample-accent: #d9b97a; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; scroll-behavior: auto !important; }
 }

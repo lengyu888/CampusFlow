@@ -1,4 +1,5 @@
-/* Appearance is device-local. Never rebuild app DOM or write account data to change it. */
+/* Appearance is device-local. Never rebuild app DOM or write account data to change it.
+   The stored keys predate the palettes: paper-green is 清新 (light), ios-blue is 高级 (dark). */
 (() => {
   const key = 'campusflow.theme';
   const fallback = 'paper-green';
@@ -17,7 +18,7 @@
     });
     const status = document.getElementById('themeStatus');
     if (status) status.textContent = persisted
-      ? `当前为${current === 'ios-blue' ? '清透蓝' : '纸页绿'}，已保存在此浏览器。`
+      ? `当前为「${current === 'ios-blue' ? '高级' : '清新'}」，已保存在此浏览器。`
       : '主题已生效；此浏览器暂不允许保存偏好，关闭页面后可能需要重新选择。';
   }
 

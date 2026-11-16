@@ -5,13 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="CampusFlow 大学规划与执行 Agent" />
     <title>行简 · CampusFlow</title>
-    <script src="/static/theme.js?v=1"></script>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%232c6a4d'/%3E%3Cg fill='%23fff'%3E%3Crect x='8' y='7' width='4.2' height='18' rx='2.1'/%3E%3Crect x='13.9' y='7' width='4.2' height='11.8' rx='2.1'/%3E%3Crect x='19.8' y='13.2' width='4.2' height='11.8' rx='2.1'/%3E%3C/g%3E%3C/svg%3E" />
+    <script src="/static/theme.js?v=2"></script>
     <link rel="stylesheet" href="/static/styles.css" />
     <link rel="stylesheet" href="/static/native.css?v=6" />
     <link rel="stylesheet" href="/static/redesign.css?v=5" />
     <link rel="stylesheet" href="/static/markdown.css?v=1" />
-    <link rel="stylesheet" href="/static/themes.css?v=1" />
+    <link rel="stylesheet" href="/static/themes.css?v=3" />
     <link rel="stylesheet" href="/static/interface.css?v=3" />
+    <link rel="stylesheet" href="/static/polish.css?v=2" />
   </head>
   <body>
     <div class="grain" aria-hidden="true"></div>
@@ -22,6 +24,10 @@
           <span class="brand-mark">CF</span>
           <span><strong>行简</strong></span>
         </a>
+        <div class="gate-art" aria-hidden="true">
+          <span class="sky-orb"></span>
+          <div class="gate-sheet"><b>一</b><b>二</b><b>三</b><b>四</b><b>五</b><i data-hue="2"></i><i data-hue="1"></i><i data-hue="3"></i><i data-hue="5"></i><i data-hue="2"></i><i data-hue="4"></i><i data-hue="6"></i><i data-hue="1"></i><i data-hue="3"></i><i data-hue="5"></i><i data-hue="6"></i><i data-hue="4"></i></div>
+        </div>
         <div class="gate-copy">
           <h1>课表、任务<br />和校园日常</h1>
           <p>看今天的安排，也可以请助手帮你规划。</p>
@@ -136,32 +142,45 @@
     </section>
 
     <div class="app-shell" id="appView" hidden>
-      <header class="topbar app-topbar">
-        <a class="brand" href="/" aria-label="CampusFlow 首页"><span class="brand-mark">CF</span><span><strong>行简</strong></span></a>
-        <div class="system-state" id="systemState"><span class="pulse"></span><span>正在检查服务</span></div>
-        <div class="topbar-actions"><button class="line-button quiet" id="historyButton" type="button">历史会话</button><button class="user-chip" id="userChip" type="button"><span id="userInitial">U</span><b id="userName">User</b></button><button class="line-button quiet" id="logoutButton" type="button">退出</button></div>
-      </header>
-
-      <div class="app-body">
+      <aside class="app-side">
+        <a class="brand" href="/" aria-label="CampusFlow 首页"><span class="brand-mark">CF</span><span><strong>行简</strong><small>CampusFlow</small></span></a>
         <nav class="app-nav" aria-label="主导航">
-          <button class="active" type="button" data-app-tab="today"><i>⌂</i><span>今日</span></button>
-          <button type="button" data-app-tab="agent"><i>✦</i><span>助手</span></button>
-          <button type="button" data-app-tab="plans"><i>✓</i><span>计划</span></button>
-          <button type="button" data-app-tab="skills"><i>◇</i><span>能力</span></button>
-          <button type="button" data-app-action="settings"><i>○</i><span>我的</span></button>
-        </nav>
+        <button class="active" type="button" data-app-tab="today"><i aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M8 3v4M16 3v4M3.5 10h17M8 14.5h3.5"/></svg></i><span>今日</span></button>
+        <button type="button" data-app-tab="agent"><i aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M20 11.8a8 8 0 0 1-11.7 7.1L4 20l1.1-4.2A8 8 0 1 1 20 11.8Z"/><path d="M12 8.3l.95 2.55 2.55.95-2.55.95L12 15.3l-.95-2.55-2.55-.95 2.55-.95z"/></svg></i><span>助手</span></button>
+        <button type="button" data-app-tab="plans"><i aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M4 6.5 5.5 8 8 5.5M4 12.5 5.5 14 8 11.5M4 18.5 5.5 20 8 17.5M11.5 7H20M11.5 13H20M11.5 19H20"/></svg></i><span>计划</span></button>
+        <button type="button" data-app-tab="skills"><i aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><rect x="4" y="4" width="7" height="7" rx="2"/><rect x="4" y="13" width="7" height="7" rx="2"/><rect x="13" y="13" width="7" height="7" rx="2"/><path d="M16.5 4.5v6M13.5 7.5h6"/></svg></i><span>能力</span></button>
+        <button type="button" data-app-action="settings"><i aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><circle cx="12" cy="8.5" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0"/></svg></i><span>我的</span></button>
+      </nav>
+        <div class="side-foot">
+          <div class="system-state" id="systemState"><span class="pulse"></span><span>正在检查服务</span></div>
+          <button class="user-chip" id="userChip" type="button"><span id="userInitial">U</span><b id="userName">User</b></button>
+          <div class="topbar-actions"><button class="line-button quiet" id="historyButton" type="button">历史会话</button><button class="line-button quiet" id="logoutButton" type="button">退出</button></div>
+        </div>
+      </aside>
 
-        <div class="app-stage">
+      <div class="app-stage">
           <section class="app-surface today-surface" data-app-surface="today">
-            <div class="today-hero"><div><h1 id="todayGreeting">早上好</h1><p id="todayDate">正在载入今天…</p></div><button class="primary-action" type="button" data-open-agent data-prompt="请结合我的课表，为今天生成一份可执行的学习安排。"><span>请助手安排今天</span><i>↗</i></button></div>
+            <header class="today-hero" id="todayHero" data-period="day">
+              <span class="sky-orb" aria-hidden="true"></span>
+              <div class="today-hero-copy">
+                <p id="todayDate">正在载入今天…</p>
+                <h1 id="todayGreeting">早上好</h1>
+                <p class="today-brief" id="todayBrief"></p>
+              </div>
+              <button class="primary-action" type="button" data-open-agent data-prompt="请结合我的课表，为今天生成一份可执行的学习安排。"><span>请助手安排今天</span><i>↗</i></button>
+            </header>
             <div class="today-grid">
-              <section class="day-timeline dashboard-card"><div class="card-heading"><h2>今日课表</h2><b id="todayCourseCount">0 节课</b></div><div class="today-course-list" id="todayCourseList"></div></section>
+              <section class="day-timeline dashboard-card">
+                <div class="card-heading"><h2 id="todayListTitle">今日课表</h2><b id="todayCourseCount">0 节课</b></div>
+                <div class="week-strip" id="weekStrip" role="group" aria-label="选择本周日期"></div>
+                <div class="today-course-list" id="todayCourseList"></div>
+              </section>
               <aside class="today-side">
-                <section class="dashboard-card next-focus"><span>接下来</span><h2 id="nextCourseTitle">今天没有课程</h2><p id="nextCourseMeta">适合安排一段完整的自主学习时间。</p><button type="button" data-open-agent data-prompt="根据我的近期课程，推荐今天最值得优先复习的内容和地点。">询问助手</button></section>
+                <section class="dashboard-card next-focus"><span>接下来</span><h2 id="nextCourseTitle">今天没有课程</h2><p id="nextCourseMeta">适合安排一段完整的自主学习时间。</p><b class="next-countdown" id="nextCountdown"></b><button type="button" data-open-agent data-prompt="根据我的近期课程，推荐今天最值得优先复习的内容和地点。">询问助手</button></section>
+                <section class="dashboard-card suggestion-strip"><span>学习建议</span><p id="todaySuggestion">正在读取课表…</p><button type="button" data-open-agent data-prompt="查看我的课表和校园地点，为我生成一个今天就能完成的小目标。">请助手安排</button></section>
                 <section class="dashboard-card context-health"><span>校园与会话</span><div><strong id="todayPlaceCount">—</strong><small>校园地点</small></div><div><strong id="todayHistoryCount">—</strong><small>历史会话</small></div></section>
               </aside>
             </div>
-            <div class="suggestion-strip"><span>学习建议</span><p id="todaySuggestion">正在读取课表…</p><button type="button" data-open-agent data-prompt="查看我的课表和校园地点，为我生成一个今天就能完成的小目标。">请助手安排</button></div>
           </section>
 
           <section class="app-surface" data-app-surface="agent" hidden>
@@ -198,7 +217,7 @@
             <button class="chat-small-button" id="agentControlButton" type="button" aria-haspopup="dialog">设置</button>
           </div></div>
           <div class="messages" id="messages" role="log" aria-label="对话记录">
-            <div class="empty-state chat-empty-state" id="emptyState"><h3>开始对话</h3><p>可以问课表、校园地点，或请助手帮你做计划。</p></div>
+            <div class="empty-state chat-empty-state" id="emptyState"><span class="brand-mark" aria-hidden="true"></span><h3>今天想安排点什么？</h3><p>可以问课表、校园地点，或请助手帮你做计划。</p><div class="starter-grid"><button type="button" data-starter="请结合我的课表，为今天生成一份可执行的学习安排。"><b>安排今天</b><span>按课表空档排好学习时间</span></button><button type="button" data-starter="查询校园地图中有哪些教学楼和图书馆，并推荐一个适合自习的地点。"><b>找自习地点</b><span>从校园地图里挑一个合适的</span></button><button type="button" data-starter="为我创建一个两小时的复习事务，先生成待确认提案。"><b>新建复习待办</b><span>先生成提案，确认后写入</span></button><button type="button" data-starter="请结合我的课表，把本周学习目标拆成包含里程碑、时间块和提醒的完整计划，并先生成待确认提案。"><b>拆解本周目标</b><span>里程碑、时间块和提醒</span></button></div></div>
           </div>
           <form class="composer" id="composer">
             <textarea id="messageInput" rows="1" maxlength="8000" aria-label="消息" placeholder="输入消息…"></textarea>
@@ -249,7 +268,6 @@
               <div class="skill-audit-list" id="skillAuditList"><div class="skill-library-empty">暂无活动记录</div></div>
             </section>
           </section>
-        </div>
       </div>
 
       <aside class="history-drawer" id="historyDrawer" hidden>
@@ -300,10 +318,10 @@
           <div class="settings-panel" data-settings-panel="profile">
             <div class="settings-heading"><h1>个人设置</h1></div>
             <section class="theme-settings" aria-labelledby="themeHeading">
-              <h2 id="themeHeading">外观</h2>
-              <div class="theme-choices" role="group" aria-label="选择应用主题">
-                <button type="button" class="theme-choice" data-theme-choice="ios-blue" aria-pressed="false"><span class="theme-sample theme-sample-blue" aria-hidden="true"><i></i><i></i></span><strong>清透蓝</strong></button>
-                <button type="button" class="theme-choice" data-theme-choice="paper-green" aria-pressed="true"><span class="theme-sample theme-sample-green" aria-hidden="true"><i></i><i></i></span><strong>纸页绿</strong></button>
+              <h2 id="themeHeading">配色风格</h2>
+              <div class="theme-choices" role="group" aria-label="选择配色风格">
+                <button type="button" class="theme-choice" data-theme-choice="paper-green" aria-pressed="true"><span class="theme-sample theme-sample-green" aria-hidden="true"><i></i><i></i></span><strong>清新</strong><small>薄荷青，浅色</small></button>
+                <button type="button" class="theme-choice" data-theme-choice="ios-blue" aria-pressed="false"><span class="theme-sample theme-sample-blue" aria-hidden="true"><i></i><i></i></span><strong>高级</strong><small>石墨与香槟金，深色</small></button>
               </div>
               <p id="themeStatus" role="status" aria-live="polite"></p>
             </section>
@@ -445,7 +463,7 @@
     <script src="/static/vendor/marked-18.1.1.umd.js" defer></script>
     <script src="/static/vendor/purify-3.4.17.min.js" defer></script>
     <script src="/static/markdown.js?v=2" defer></script>
-    <script src="/static/app.js?v=19" defer></script>
+    <script src="/static/app.js?v=21" defer></script>
     <script src="/static/motion.js?v=2" defer></script>
   </body>
 </html>
