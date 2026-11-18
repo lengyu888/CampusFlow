@@ -54,6 +54,7 @@ const elements = {
   userName: $("#userName"),
   contextLine: $("#contextLine"),
   logoutButton: $("#logoutButton"),
+  settingsLogoutButton: $("#settingsLogoutButton"),
   userChip: $("#userChip"),
   historyButton: $("#historyButton"),
   agentHistoryButton: $("#agentHistoryButton"),
@@ -190,6 +191,7 @@ const state = {
   sending: false,
   settingsContext: null,
   appTab: "today",
+  todayView: null,
   sessions: [],
   historyReadRevision: 0,
   planning: null,
@@ -258,6 +260,7 @@ function showOnly(view) {
   elements.onboardingView.hidden = view !== "onboarding";
   elements.appView.hidden = view !== "app";
   elements.settingsView.hidden = view !== "settings";
+  if (view !== "app") syncTodayClock();
   document.body.style.overflow = ["app", "settings"].includes(view) ? "hidden" : "auto";
   syncCampusRouteMaps();
   syncCampusPlaceSelection();
@@ -321,10 +324,15 @@ async function logout() {
   state.mapImage = "";
   state.scheduleSubscriptionUrl = "";
   state.scheduleSubscription = null;
+  state.settingsContext = null;
+  resetTodayDashboard();
+  state.sessions = [];
   elements.setupSubscriptionForm.reset();
   elements.scheduleSubscriptionForm.reset();
   elements.settingsApiKey.value = "";
   resetSession(false);
+  elements.messageInput.value = "";
+  resizeComposer();
   state.appTab = "today";
   elements.loginForm.reset();
   elements.registerForm.reset();
@@ -635,10 +643,23 @@ function switchAppTab(tab) {
   $$('[data-app-surface]').forEach((surface) => {
     surface.hidden = surface.dataset.appSurface !== tab;
   });
+  syncTodayClock();
   if (tab === "today") loadTodayDashboard();
   if (tab === "plans") loadPlans();
   if (tab === "skills") loadSkills();
   if (tab === "agent") elements.messageInput.focus();
+}
+
+function fillComposerPrompt(prompt) {
+  if (!prompt) return;
+  const input = elements.messageInput;
+  if (input.value.trim() && input.value !== prompt) {
+    showToast("已保留未发送的草稿。清空输入框后可使用快捷问题。");
+  } else {
+    input.value = prompt;
+    resizeComposer();
+  }
+  input.focus();
 }
 
 function openAgentWithPrompt(prompt = "") {
@@ -646,64 +667,248 @@ function openAgentWithPrompt(prompt = "") {
     showApp();
   }
   switchAppTab("agent");
-  if (prompt) {
-    elements.messageInput.value = prompt;
-    resizeComposer();
-  }
-  elements.messageInput.focus();
+  fillComposerPrompt(prompt);
 }
 
-function formatCampusDate(date) {
-  return new Intl.DateTimeFormat("zh-CN", {
-    month: "long",
-    day: "numeric",
-    weekday: "long",
-  }).format(date);
+const WEEKDAY_LABELS = ["日", "一", "二", "三", "四", "五", "六"];
+const campusDateFormatter = new Intl.DateTimeFormat("zh-CN", {
+  timeZone: "Asia/Shanghai", month: "long", day: "numeric", weekday: "long",
+});
+const campusClockFormatter = new Intl.DateTimeFormat("en-GB", {
+  timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit",
+  hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+});
+const courseDayFormatter = new Intl.DateTimeFormat("zh-CN", {
+  timeZone: "UTC", month: "numeric", day: "numeric", weekday: "short",
+});
+
+function readCampusClock(now) {
+  const parts = Object.fromEntries(campusClockFormatter.formatToParts(now).map(({ type, value }) => [type, value]));
+  return {
+    date: [parts.year, parts.month, parts.day].join("-"),
+    time: [parts.hour, parts.minute].join(":"),
+    hour: Number(parts.hour),
+  };
+}
+
+function dateFromKey(key) {
+  return new Date(key + "T00:00:00Z");
+}
+
+function clockMinutes(time) {
+  const [hours, minutes] = time.split(":").map(Number);
+  return hours * 60 + minutes;
+}
+
+function upcomingDayLabel(courseDate, campusDate) {
+  if (courseDate === campusDate) return "今天";
+  const target = dateFromKey(courseDate);
+  const dayGap = (target - dateFromKey(campusDate)) / 86400000;
+  if (dayGap === 1) return "明天";
+  return courseDayFormatter.format(target);
+}
+
+// A course keeps one colour everywhere it appears, so the week reads at a glance.
+// Colours follow the sorted list of course names, so the first six courses never share one.
+function courseHues(timetable) {
+  const titles = [...new Set(timetable.map((item) => item.title))].sort((left, right) => left.localeCompare(right, "zh-CN"));
+  return new Map(titles.map((title, index) => [title, (index % 6) + 1]));
+}
+
+// The header follows the real sky: its palette is the time of day and the sun or moon marks how far the day has run.
+function renderTodaySky(minutes) {
+  const hero = document.getElementById("todayHero");
+  if (!hero) return;
+  const period = minutes < 300 ? "night" : minutes < 480 ? "dawn" : minutes < 1020 ? "day" : minutes < 1140 ? "dusk" : "night";
+  const progress = period === "night" ? ((minutes + 1440 - 1140) % 1440) / 600 : (minutes - 300) / 840;
+  hero.dataset.period = period;
+  hero.style.setProperty("--sky-progress", Math.min(1, Math.max(0, progress)).toFixed(3));
+}
+
+function renderWeekStrip() {
+  const strip = document.getElementById("weekStrip");
+  const view = state.todayView;
+  if (!strip || !view) return;
+  const today = dateFromKey(view.campusDate);
+  const monday = new Date(today);
+  monday.setUTCDate(today.getUTCDate() - ((today.getUTCDay() + 6) % 7));
+  const focusedDate = strip.contains(document.activeElement) ? document.activeElement.dataset.date : undefined;
+  strip.replaceChildren();
+  for (let index = 0; index < 7; index += 1) {
+    const day = new Date(monday);
+    day.setUTCDate(monday.getUTCDate() + index);
+    const key = day.toISOString().slice(0, 10);
+    const count = view.timetable.filter((item) => item.date === key).length;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = `week-day${key === view.campusDate ? " today" : ""}`;
+    button.dataset.date = key;
+    button.setAttribute("aria-pressed", String(key === view.selectedDate));
+    button.setAttribute("aria-label", `${day.getUTCMonth() + 1}月${day.getUTCDate()}日 周${WEEKDAY_LABELS[day.getUTCDay()]}，${count} 节课`);
+    const weekday = document.createElement("small");
+    weekday.textContent = key === view.campusDate ? "今天" : WEEKDAY_LABELS[day.getUTCDay()];
+    const number = document.createElement("b");
+    number.textContent = day.getUTCDate();
+    const dots = document.createElement("i");
+    for (let dot = 0; dot < Math.min(count, 4); dot += 1) dots.append(document.createElement("span"));
+    button.append(weekday, number, dots);
+    button.addEventListener("click", () => {
+      state.todayView.selectedDate = key;
+      for (const dateButton of strip.querySelectorAll("button")) {
+        dateButton.setAttribute("aria-pressed", String(dateButton === button));
+      }
+      renderDayCourses();
+    });
+    strip.append(button);
+    if (key === focusedDate) button.focus({ preventScroll: true });
+  }
+}
+
+function renderDayCourses() {
+  const view = state.todayView;
+  if (!view) return;
+  const isToday = view.selectedDate === view.campusDate;
+  const selected = dateFromKey(view.selectedDate);
+  const courses = view.timetable.filter((item) => item.date === view.selectedDate);
+  const listTitle = document.getElementById("todayListTitle");
+  if (listTitle) {
+    listTitle.textContent = isToday ? "今日课表" : `${selected.getUTCMonth() + 1}月${selected.getUTCDate()}日 周${WEEKDAY_LABELS[selected.getUTCDay()]}`;
+  }
+  elements.todayCourseCount.textContent = `${courses.length} 节课`;
+  elements.todayCourseList.replaceChildren();
+  if (!courses.length) {
+    const emptyDay = contextListItem(isToday ? "今天没有排课" : "这一天没有排课", "可以留给自习、运动或休息。");
+    emptyDay.className = "day-empty";
+    elements.todayCourseList.append(emptyDay);
+    return;
+  }
+  const nowLine = () => {
+    const line = document.createElement("div");
+    line.className = "now-line";
+    line.setAttribute("aria-hidden", "true");
+    const label = document.createElement("span");
+    label.textContent = view.campusTime;
+    line.append(label);
+    return line;
+  };
+  let nextMarked = false;
+  let nowPlaced = !isToday;
+  courses.forEach((course) => {
+    const item = document.createElement("article");
+    item.innerHTML = `<time>${course.start_time}<small>${course.end_time}</small></time><div class="course-block"><h3></h3><p></p></div>`;
+    item.dataset.hue = view.hues.get(course.title) ?? 1;
+    item.querySelector("h3").textContent = course.title;
+    item.querySelector("p").textContent = `${course.location || "地点待定"}${course.teacher ? ` · ${course.teacher}` : ""}`;
+    // On today's list each lesson also says where the day stands: finished, in session, or next.
+    let courseState = "later";
+    if (isToday) {
+      if (course.end_time <= view.campusTime) courseState = "past";
+      else if (course.start_time <= view.campusTime) { courseState = "now"; nowPlaced = true; }
+      else {
+        if (!nowPlaced) { elements.todayCourseList.append(nowLine()); nowPlaced = true; }
+        if (!nextMarked) { courseState = "next"; nextMarked = true; }
+      }
+    }
+    item.dataset.state = courseState;
+    if (courseState === "now" || courseState === "next") {
+      const stateLabel = document.createElement("span");
+      stateLabel.className = "course-state";
+      stateLabel.textContent = courseState === "now" ? "正在上课" : "下一节";
+      item.querySelector("h3").append(stateLabel);
+    }
+    elements.todayCourseList.append(item);
+  });
+  if (!nowPlaced) elements.todayCourseList.append(nowLine());
+}
+
+function refreshTodayDashboard(now, contextChanged = false) {
+  const { date, time, hour } = readCampusClock(now);
+  renderTodaySky(clockMinutes(time));
+  elements.todayGreeting.textContent = (hour < 11 ? "早上" : hour < 18 ? "下午" : "晚上") + "好，" + state.user.display_name;
+  elements.todayDate.textContent = campusDateFormatter.format(now) + " · " + (state.user.campus ?? "校园");
+
+  const view = state.todayView;
+  if (!view) return;
+  const dateChanged = view.campusDate !== date;
+  if (dateChanged) view.selectedDate = date;
+  view.campusDate = date;
+  view.campusTime = time;
+  if (dateChanged || contextChanged) renderWeekStrip();
+  if (dateChanged || contextChanged || view.selectedDate === date) renderDayCourses();
+
+  const courses = view.timetable.filter((item) => item.date === date);
+  // Timetable is sorted by date and time when it is loaded.
+  const next = view.timetable.find((item) => item.date > date || (item.date === date && item.start_time > time));
+  const current = courses.find((item) => item.start_time <= time && item.end_time > time);
+  const finished = courses.filter((item) => item.end_time <= time).length;
+  const brief = document.getElementById("todayBrief");
+  if (brief) {
+    if (!courses.length) brief.textContent = "今天没有排课，适合安排一段完整的自主学习。";
+    else if (current) brief.textContent = `正在上「${current.title}」，${current.end_time} 下课。今天共 ${courses.length} 节课。`;
+    else if (next?.date === date && !finished) brief.textContent = `今天 ${courses.length} 节课，第一节 ${next.start_time}「${next.title}」。`;
+    else if (next?.date === date) brief.textContent = `今天 ${courses.length} 节课，已上完 ${finished} 节，下一节 ${next.start_time}「${next.title}」。`;
+    else brief.textContent = `今天的 ${courses.length} 节课都上完了。`;
+  }
+  elements.todaySuggestion.textContent = courses.length
+    ? "最后一节课后，留 30 分钟整理笔记。"
+    : "从最近的课程里选一项重点复习。";
+  elements.nextCourseTitle.textContent = next?.title ?? "近期没有课程";
+  elements.nextCourseMeta.textContent = next
+    ? `${upcomingDayLabel(next.date, date)} ${next.start_time}–${next.end_time} · ${next.location || "地点待定"}`
+    : "";
+  const countdown = document.getElementById("nextCountdown");
+  if (countdown) {
+    const gap = next?.date === date ? clockMinutes(next.start_time) - clockMinutes(time) : 0;
+    countdown.textContent = gap > 0
+      ? `${gap >= 60 ? `${Math.floor(gap / 60)} 小时${gap % 60 ? ` ${gap % 60} 分钟` : ""}` : `${gap} 分钟`}后开始`
+      : "";
+  }
+}
+
+let todayClockTimer;
+function syncTodayClock() {
+  clearTimeout(todayClockTimer);
+  if (!state.user || document.hidden || elements.appView.hidden || state.appTab !== "today") return;
+  const now = new Date();
+  refreshTodayDashboard(now);
+  todayClockTimer = setTimeout(syncTodayClock, 60000 - now.getTime() % 60000);
+}
+
+function resetTodayDashboard() {
+  state.todayView = null;
+  document.getElementById("weekStrip")?.replaceChildren();
+  document.getElementById("todayBrief")?.replaceChildren();
+  document.getElementById("nextCountdown")?.replaceChildren();
+  elements.todayCourseList.replaceChildren();
+  elements.todayCourseCount.textContent = "0 节课";
+  elements.todayPlaceCount.textContent = "—";
+  elements.todayHistoryCount.textContent = "—";
+  elements.todaySuggestion.textContent = "正在读取课表…";
+  elements.nextCourseTitle.textContent = "正在读取课表…";
+  elements.nextCourseMeta.textContent = "";
 }
 
 async function loadTodayDashboard() {
-  const now = new Date();
-  const hour = now.getHours();
-  elements.todayGreeting.textContent = `${hour < 11 ? "早上" : hour < 18 ? "下午" : "晚上"}好，${state.user.display_name}`;
-  elements.todayDate.textContent = `${formatCampusDate(now)} · ${state.user.campus ?? "校园"}`;
+  const owner = state.user;
   try {
     const [context, sessions] = await Promise.all([
       state.settingsContext ?? api("/api/v1/me/context"),
       api("/api/v1/sessions"),
     ]);
+    if (owner !== state.user) return;
     state.settingsContext = context;
     state.sessions = sessions;
-    const localDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-    const courses = (context.timetable ?? []).filter((item) => item.date === localDate);
-    const upcoming = (context.timetable ?? [])
-      .filter((item) => item.date >= localDate)
-      .sort((left, right) => `${left.date} ${left.start_time}`.localeCompare(`${right.date} ${right.start_time}`));
-    elements.todayCourseCount.textContent = `${courses.length} 节课`;
+    const timetable = [...(context.timetable ?? [])].sort((left, right) =>
+      (left.date + " " + left.start_time).localeCompare(right.date + " " + right.start_time)
+    );
+    state.todayView = { ...state.todayView, timetable, hues: courseHues(timetable) };
     elements.todayPlaceCount.textContent = context.campus_map?.places?.length ?? 0;
     elements.todayHistoryCount.textContent = sessions.length;
-    elements.todayCourseList.replaceChildren();
-    if (courses.length) {
-      courses.forEach((course) => {
-        const item = document.createElement("article");
-        item.innerHTML = `<time>${course.start_time}<small>${course.end_time}</small></time><i aria-hidden="true"></i><div><h3></h3><p></p></div>`;
-        item.querySelector("h3").textContent = course.title;
-        item.querySelector("p").textContent = `${course.location || "地点待定"}${course.teacher ? ` · ${course.teacher}` : ""}`;
-        elements.todayCourseList.append(item);
-      });
-      elements.todaySuggestion.textContent = "最后一节课后，留 30 分钟整理笔记。";
-    } else {
-      const emptyDay = contextListItem("今天没有排课", "");
-      emptyDay.className = "day-empty";
-      elements.todayCourseList.append(emptyDay);
-      elements.todaySuggestion.textContent = "从最近的课程里选一项重点复习。";
+    if (state.appTab === "today" && !elements.appView.hidden) {
+      refreshTodayDashboard(new Date(), true);
     }
-    const next = upcoming[0];
-    elements.nextCourseTitle.textContent = next?.title ?? "近期没有课程";
-    elements.nextCourseMeta.textContent = next
-      ? `${next.date} · ${next.start_time} · ${next.location || "地点待定"}`
-      : "";
   } catch (error) {
-    showToast(error.message, "error");
+    if (owner === state.user) showToast(error.message, "error");
   }
 }
 
@@ -715,6 +920,7 @@ async function loadPlans() {
     state.planning = payload;
     elements.planProgress.textContent = `${payload.progress}%`;
     elements.planProgressBar.style.width = `${payload.progress}%`;
+    elements.planProgressBar.closest("article")?.style.setProperty("--progress", payload.progress);
     elements.planTaskCount.textContent = payload.total_tasks;
     elements.planDueToday.textContent = payload.due_today;
     elements.planCompleted.textContent = payload.completed_tasks;
@@ -1045,6 +1251,7 @@ function renderSkillLibrary() {
   skills.forEach((skill) => {
     const card = document.createElement("article");
     card.className = `skill-card${skill.installed ? " installed" : ""}${skill.enabled ? " enabled" : ""}`;
+    card.dataset.category = skill.category ?? "";
     const top = document.createElement("div");
     top.className = "skill-card-top";
     const category = document.createElement("span");
@@ -1282,6 +1489,9 @@ function setServiceState(online, label) {
   elements.systemState.classList.toggle("offline", !online);
   elements.systemState.lastElementChild.textContent = label;
 }
+
+// Same markup as the initial state in index.html; shown again for every new conversation.
+const CHAT_EMPTY_STATE = '<div class="empty-state chat-empty-state" id="emptyState"><span class="brand-mark" aria-hidden="true"></span><h3>今天想安排点什么？</h3><p>可以问课表、校园地点，或请助手帮你做计划。</p><div class="starter-grid"><button type="button" data-starter="请结合我的课表，为今天生成一份可执行的学习安排。"><b>安排今天</b><span>按课表空档排好学习时间</span></button><button type="button" data-starter="查询校园地图中有哪些教学楼和图书馆，并推荐一个适合自习的地点。"><b>找自习地点</b><span>从校园地图里挑一个合适的</span></button><button type="button" data-starter="为我创建一个两小时的复习事务，先生成待确认提案。"><b>新建复习待办</b><span>先生成提案，确认后写入</span></button><button type="button" data-starter="请结合我的课表，把本周学习目标拆成包含里程碑、时间块和提醒的完整计划，并先生成待确认提案。"><b>拆解本周目标</b><span>里程碑、时间块和提醒</span></button></div></div>';
 
 function clearEmptyState() {
   elements.emptyState?.remove();
@@ -1855,7 +2065,7 @@ function resetSession(notify = true) {
   state.sessionId = createSessionId();
   syncCampusPlaceSelection();
   setSessionId();
-  elements.messages.innerHTML = '<div class="empty-state chat-empty-state" id="emptyState"><h3>开始新对话</h3><p>可以问课表、校园地点，或请助手帮你做计划。</p></div>';
+  elements.messages.innerHTML = CHAT_EMPTY_STATE;
   elements.emptyState = $("#emptyState");
   closeHistory();
   switchAppTab("agent");
@@ -3023,6 +3233,8 @@ elements.loginForm.addEventListener("submit", (event) => { event.preventDefault(
 elements.registerForm.addEventListener("submit", (event) => { event.preventDefault(); submitAuth(elements.registerForm, "/api/v1/auth/register"); });
 elements.setupLogoutButton.addEventListener("click", logout);
 elements.logoutButton.addEventListener("click", logout);
+elements.settingsLogoutButton.addEventListener("click", logout);
+document.addEventListener("visibilitychange", syncTodayClock);
 elements.userChip.addEventListener("click", openSettings);
 elements.credentialCard.addEventListener("click", openSettings);
 elements.settingsBackButton.addEventListener("click", showApp);
@@ -3105,12 +3317,15 @@ $$('input[name="model"]').forEach((radio) => radio.addEventListener("change", ()
   elements.modelBadge.textContent = modelLabel();
   showToast(`已切换至 ${modelLabel()}`);
 }));
-$$('[data-prompt]').forEach((button) => button.addEventListener("click", () => {
+$$('[data-prompt]:not([data-open-agent])').forEach((button) => button.addEventListener("click", () => {
   if (elements.agentControlDialog.open) elements.agentControlDialog.close();
-  elements.messageInput.value = button.dataset.prompt;
-  resizeComposer();
-  elements.messageInput.focus();
+  fillComposerPrompt(button.dataset.prompt);
 }));
+elements.messages.addEventListener("click", (event) => {
+  const starter = event.target.closest("[data-starter]");
+  if (!starter) return;
+  fillComposerPrompt(starter.dataset.starter);
+});
 $$('[data-route-origin][data-route-destination]').forEach((button) => button.addEventListener("click", () => {
   if (elements.agentControlDialog.open) elements.agentControlDialog.close();
   sendMessage(`从${button.dataset.routeOrigin}到${button.dataset.routeDestination}怎么走？请生成地图路线图。`);
