@@ -28,6 +28,32 @@ def test_conversation_history_persists_across_store_instances(tmp_path) -> None:
     assert second.get_history("user-1", "thread-1") == []
 
 
+def test_custom_session_title_survives_continuation_and_database_reopen(tmp_path) -> None:
+    database_path = str(tmp_path / "campusflow.db")
+    store = CampusStore(database_path)
+    store.append_history("user-1", "thread-1", "user", "请安排本周课表", "deepseek-flash")
+    store.append_history("user-1", "thread-1", "assistant", "已核对课程。")
+    store.append_history("user-2", "thread-1", "user", "其他会话", "deepseek-flash")
+    assert store.list_sessions("user-1")[0].title == "课程安排规划"
+
+    title = "请保留我的标题：下周课表规划和复习安排（第一次讨论，待核对）"
+    renamed = store.rename_session("user-1", "thread-1", title)
+    assert renamed.title == title
+    assert store.list_sessions("user-1", "第一次讨论")[0].title == title
+    assert store.list_sessions("user-2")[0].title == "其他会话"
+    assert store.list_sessions("user-2", title) == []
+
+    sessions = SessionService(store, store._connection)
+    context = sessions.context("user-1", "thread-1")
+    frozen = sessions.prepare("user-1", "thread-1", "continue", context.context_revision)
+    sessions.append_checked(frozen, "继续讨论", "复习安排已补充。", "deepseek-flash")
+
+    reopened = CampusStore(database_path)
+    summary = reopened.list_sessions("user-1")[0]
+    assert summary.title == title
+    assert summary.message_count == 4
+
+
 def test_session_status_switches_from_pending_to_active() -> None:
     store = CampusStore()
 

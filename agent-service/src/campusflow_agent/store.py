@@ -727,12 +727,7 @@ class CampusStore:
             sql += " ORDER BY updated_at DESC"
             with self._lock:
                 rows = self._connection.execute(sql, parameters).fetchall()
-            sessions = []
-            for row in rows:
-                payload = dict(row)
-                payload["title"] = self._session_title(payload["title"])
-                sessions.append(SessionSummary(**payload))
-            return sessions
+            return [SessionSummary(**dict(row)) for row in rows]
 
         sessions: list[SessionSummary] = []
         with self._lock:
