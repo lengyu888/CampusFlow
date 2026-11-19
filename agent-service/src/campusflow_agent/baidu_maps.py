@@ -417,15 +417,12 @@ class BaiduMapsService:
                                          follow_redirects=False, trust_env=False) as client:
                 origin = await self._resolve(client, origin, deadline, ak)
                 destination = await self._resolve(client, destination, deadline, ak)
+                # A POI UID can make Baidu snap away from the selected entrance coordinates.
                 params = {
                     "origin": f"{origin.location.lat:.6f},{origin.location.lng:.6f}",
                     "destination": f"{destination.location.lat:.6f},{destination.location.lng:.6f}",
                     "coord_type": "bd09ll", "ret_coordtype": "bd09ll", "steps_info": 1,
                 }
-                if origin.baidu_uid:
-                    params["origin_uid"] = origin.baidu_uid
-                if destination.baidu_uid:
-                    params["destination_uid"] = destination.baidu_uid
                 data = await self._request(
                     client, _WALKING_PATH, params, deadline, ak,
                 )
@@ -482,7 +479,10 @@ class BaiduMapsService:
             raise BaiduMapsError("MAP_NO_ROUTE")
         if (_distance(origin.location, polyline[0]) > 300
                 or _distance(destination.location, polyline[-1]) > 300):
-            raise BaiduMapsError("MAP_UPSTREAM_ERROR")
+            raise BaiduMapsError(
+                "MAP_PLACE_UNRESOLVED",
+                message="百度返回的路线偏离所选入口，请更换入口后重试。",
+            )
         geometry_meters = sum(_distance(start, end)
                               for start, end in zip(polyline, polyline[1:], strict=False))
         if geometry_meters > distance * 2 + 100:

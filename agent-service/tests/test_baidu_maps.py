@@ -62,7 +62,8 @@ def test_baidu_response_uses_bd09_lat_lng_order_and_short_cache():
         assert request.url.params["destination"] == "30.321000,120.341000"
         assert request.url.params["coord_type"] == "bd09ll"
         assert request.url.params["ret_coordtype"] == "bd09ll"
-        assert request.url.params["origin_uid"] == "six"
+        assert "origin_uid" not in request.url.params
+        assert "destination_uid" not in request.url.params
         return httpx.Response(200, json=walking())
 
     provider = service(handler, baidu_map_place_overrides_json=overrides())
@@ -87,6 +88,32 @@ def test_baidu_response_uses_bd09_lat_lng_order_and_short_cache():
                                    package_version="1").polyline) == 3
 
 
+def test_walking_keeps_confirmed_entrance_when_baidu_poi_uid_would_move_it():
+    start, end = places()
+    start = start.model_copy(update={
+        "location": CampusGeoPoint(lat=30.321572, lng=120.350536), "baidu_uid": "clinic-poi",
+    })
+    end = end.model_copy(update={
+        "location": CampusGeoPoint(lat=30.316539, lng=120.349628), "baidu_uid": "campus-poi",
+    })
+
+    def handler(request):
+        assert request.url.path == "/directionlite/v1/walking"
+        if "origin_uid" in request.url.params or "destination_uid" in request.url.params:
+            # The provider snaps to another side of the campus when given the broad POI UID.
+            payload = walking("120.350536,30.321572;120.349684,30.320380")
+        else:
+            assert request.url.params["origin"] == "30.321572,120.350536"
+            assert request.url.params["destination"] == "30.316539,120.349628"
+            payload = walking("120.350536,30.321572;120.349628,30.316539")
+            payload["result"]["routes"][0]["distance"] = 724
+        return httpx.Response(200, json=payload)
+
+    route = service(handler).plan_route(start, end, package_id="hdu-xiasha", package_version="1")
+    assert route.polyline == [start.location, end.location]
+    assert route.destination.baidu_uid == "campus-poi"
+
+
 @pytest.mark.parametrize("path", ["", "120.34,30.32", "nan,30.32;120.341,30.321",
                                      "30.32,120.34;30.321,120.341",
                                      "116.4,39.9;116.401,39.901",
@@ -97,6 +124,16 @@ def test_invalid_or_unrelated_real_paths_are_rejected(path):
     with pytest.raises(BaiduMapsError) as failure:
         provider.plan_route(*places(), package_id="hdu-xiasha", package_version="1")
     assert failure.value.code in {"MAP_NO_ROUTE", "MAP_UPSTREAM_ERROR"}
+
+
+def test_route_that_still_snaps_away_from_entrance_prompts_reselection():
+    provider = service(
+        lambda request: httpx.Response(200, json=walking("120.34,30.32;120.341,30.325")),
+        baidu_map_place_overrides_json=overrides(),
+    )
+    with pytest.raises(BaiduMapsError, match="偏离所选入口") as failure:
+        provider.plan_route(*places(), package_id="hdu-xiasha", package_version="1")
+    assert failure.value.code == "MAP_PLACE_UNRESOLVED"
 
 
 def poi(name, uid="one", **values):
