@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; form-action 'none'; base-uri 'none'">
+  <title>行简 · 连接服务器</title>
+  <link rel="stylesheet" href="launcher.css">
+  <script defer src="launcher.js"></script>
+</head>
+<body>
+  <main>
+    <header><img class="mark" src="assets/app.ico" alt="" width="38" height="38"><div><strong>行简</strong><small>CampusFlow</small></div></header>
+    <h1>连接服务器</h1>
+    <p>使用手机端的服务地址和账号。</p>
+    <form id="connectionForm">
+      <label for="serverAddress">服务地址</label>
+      <input id="serverAddress" type="url" inputmode="url" required autocomplete="off" spellcheck="false" maxlength="2048" placeholder="http://47.93.112.200:8000" aria-describedby="transportHint">
+      <div class="connection-actions">
+        <span id="transportHint" hidden>HTTP 会明文传输登录与业务数据。</span>
+        <button type="submit" id="connectButton">连接</button>
+      </div>
+      <p id="connectionStatus" role="status" aria-live="polite"></p>
+    </form>
+  </main>
+</body>
+</html>

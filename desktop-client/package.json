@@ -1,0 +1,16 @@
+{
+  "name": "campusflow-desktop",
+  "version": "2.0.0",
+  "private": true,
+  "description": "CampusFlow desktop client for Windows",
+  "main": "main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test test/*.test.cjs",
+    "package:windows": "node scripts/package-windows.mjs"
+  },
+  "devDependencies": {
+    "@electron/packager": "20.3.0",
+    "electron": "45.3.1"
+  }
+}

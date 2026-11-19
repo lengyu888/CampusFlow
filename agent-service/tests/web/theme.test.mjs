@@ -13,6 +13,21 @@ function environment(saved) {
   return dom;
 }
 
+test('Windows restores and switches the same themes as the Web', () => {
+  const dom = new JSDOM(read('index.html'), { url: 'http://127.0.0.1:8000/', runScripts: 'outside-only' });
+  const { document, localStorage } = dom.window;
+  document.documentElement.dataset.platform = 'windows';
+  localStorage.setItem('campusflow.theme', 'ios-blue');
+  dom.window.eval(read('theme.js'));
+  document.dispatchEvent(new dom.window.Event('DOMContentLoaded'));
+  assert.equal(document.documentElement.dataset.theme, 'ios-blue');
+  assert.equal(document.querySelector('[data-theme-choice="ios-blue"]').getAttribute('aria-pressed'), 'true');
+  document.querySelector('[data-theme-choice="paper-green"]').click();
+  assert.equal(document.documentElement.dataset.theme, 'paper-green');
+  assert.equal(localStorage.getItem('campusflow.theme'), 'paper-green');
+  dom.window.close();
+});
+
 test('theme startup restores only a supported local preference before app initialization', () => {
   for (const [saved, wanted] of [[undefined, 'paper-green'], ['ios-blue', 'ios-blue'], ['unknown', 'paper-green']]) {
     const dom = environment(saved);

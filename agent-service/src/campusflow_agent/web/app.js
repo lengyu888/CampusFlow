@@ -40,6 +40,13 @@ const elements = {
   credentialCard: $("#credentialCard"),
   credentialHint: $("#credentialHint"),
   sessionId: $("#sessionId"),
+  chatHeadingTitle: $("#chatHeadingTitle"),
+  chatRenameButton: $("#chatRenameButton"),
+  sessionRenameDialog: $("#sessionRenameDialog"),
+  sessionRenameForm: $("#sessionRenameForm"),
+  sessionRenameInput: $("#sessionRenameInput"),
+  sessionRenameStatus: $("#sessionRenameStatus"),
+  sessionRenameCancel: $("#sessionRenameCancel"),
   newSessionButton: $("#newSessionButton"),
   modelBadge: $("#modelBadge"),
   messages: $("#messages"),
@@ -193,6 +200,10 @@ const state = {
   appTab: "today",
   todayView: null,
   sessions: [],
+  sessionsRevision: 0,
+  historySessions: [],
+  historyListRevision: 0,
+  historyReturnFocus: null,
   historyReadRevision: 0,
   planning: null,
   taskFilter: "all",
@@ -208,6 +219,18 @@ const state = {
 function createSessionId() {
   const id = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
   return `web-${id}`;
+}
+
+function desktopOperationId() {
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  bytes[6] = (bytes[6] & 15) | 64;
+  bytes[8] = (bytes[8] & 63) | 128;
+  const hex = [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+function windowsClient() {
+  return document.documentElement.dataset.platform === "windows" ? window.campusFlowDesktop : null;
 }
 
 async function responseError(response) {
@@ -235,8 +258,10 @@ async function responseError(response) {
 async function api(path, options = {}) {
   const response = await fetch(path, options);
   if (!response.ok) {
+    const payload = windowsClient() ? await response.clone().json().catch(() => null) : null;
     const error = new Error(await responseError(response));
     error.status = response.status;
+    if (payload) error.code = payload.detail?.code ?? payload.code;
     throw error;
   }
   if (response.status === 204) return null;
@@ -255,6 +280,7 @@ function showOnly(view) {
   if (view !== "app") {
     closeReplyDetails();
     if (elements.agentControlDialog?.open) elements.agentControlDialog.close();
+    if (elements.sessionRenameDialog?.open) elements.sessionRenameDialog.close();
   }
   elements.authView.hidden = view !== "auth";
   elements.onboardingView.hidden = view !== "onboarding";
@@ -301,7 +327,13 @@ async function submitAuth(form, endpoint) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
+    const desktop = document.documentElement.dataset.platform === "windows" ? window.campusFlowDesktop : null;
+    if (desktop) {
+      const saved = await desktop.session(payload.access_token, Boolean(form.querySelector("#windowsRemember")?.checked));
+      if (saved?.message) showToast(saved.message, "error");
+    }
     state.user = payload.user;
+    if (desktop?.historyUseOwner) await desktop.historyUseOwner(state.user.user_id).catch(() => {});
     if (state.user.onboarding_complete) showApp();
     else showOnboarding();
   } catch (error) {
@@ -317,7 +349,17 @@ async function logout() {
   } catch {
     // The local UI should still clear its volatile state if the session already expired.
   }
+  if (windowsClient()) {
+    try {
+      if (windowsClient().historyClear) await windowsClient().historyClear().catch(() => {});
+      const result = await windowsClient().clear();
+      if (result?.message) showToast(result.message, "error");
+    }
+    catch (error) { showToast(error.message, "error"); return; }
+  }
   state.user = null;
+  state.settingsContext = null;
+  state.planning = null;
   state.timetable = null;
   state.campusMap = null;
   state.timetableImage = "";
@@ -327,6 +369,7 @@ async function logout() {
   state.settingsContext = null;
   resetTodayDashboard();
   state.sessions = [];
+  state.historySessions = [];
   elements.setupSubscriptionForm.reset();
   elements.scheduleSubscriptionForm.reset();
   elements.settingsApiKey.value = "";
@@ -338,6 +381,7 @@ async function logout() {
   elements.registerForm.reset();
   switchAuth("login");
   showOnly("auth");
+  if (windowsClient()) document.dispatchEvent(new CustomEvent("campusflow:desktop-view", { detail: { tab: "logout", userId: null } }));
 }
 
 function showOnboarding() {
@@ -370,6 +414,7 @@ function renderSetupStep() {
     3: "确认并进入 CampusFlow",
   };
   elements.setupNextButton.querySelector(".action-label").textContent = labels[state.setupStep];
+  if (windowsClient()) window.scrollTo(0, 0);
 }
 
 function validateSetupStep() {
@@ -379,11 +424,35 @@ function validateSetupStep() {
     }
   }
   if (state.setupStep === 2 && !state.timetable?.entries?.length) {
-    throw new Error("请先上传、解析并确认课表。");
+    throw new Error(window.CampusFlowWindows ? "请先手动添加或导入至少一条课程。" : "请先上传、解析并确认课表。");
+  }
+  if (state.setupStep === 3 && window.CampusFlowWindows && !state.campusMap?.places?.length) {
+    const name = $("#windowsManualPlace").value.trim();
+    if (name) state.campusMap = { campus_name: elements.campusInput.value.trim(), places: [{ name, category: "其他" }], warnings: [] };
   }
   if (state.setupStep === 3 && !state.campusMap?.places?.length) {
     throw new Error("请先上传并确认校园地图地点。");
   }
+}
+
+function addWindowsSetupCourse(event) {
+  event.preventDefault();
+  if (!window.CampusFlowWindows || state.setupStep !== 2) return;
+  const form = event.currentTarget;
+  const entry = Object.fromEntries(new FormData(form));
+  entry.title = entry.title.trim();
+  entry.location = entry.location.trim();
+  if (!entry.title || entry.start_time >= entry.end_time) { showToast("请检查课程名称和起止时间。", "error"); return; }
+  const entries = state.timetable?.entries ?? [];
+  if (entries.length >= 500) { showToast("课表最多保存 500 条课程。", "error"); return; }
+  if (entries.some(course => course.date === entry.date && course.title === entry.title && course.start_time === entry.start_time && course.end_time === entry.end_time)) {
+    showToast("课表草稿已有这条课程。", "error"); return;
+  }
+  state.timetable = { ...state.timetable, entries: [...entries, entry] };
+  renderTimetable();
+  form.elements.title.value = "";
+  form.elements.title.focus();
+  showToast("已加入课表草稿");
 }
 
 async function advanceSetup() {
@@ -583,19 +652,24 @@ function renderCampusMap() {
 async function completeOnboarding() {
   setButtonBusy(elements.setupNextButton, true, "正在创建校园空间…");
   try {
+    const desktop = Boolean(window.CampusFlowWindows);
+    const timetable = state.timetable?.entries ?? [];
+    const body = {
+      school: elements.schoolInput.value.trim(), campus: elements.campusInput.value.trim(), semester: elements.semesterInput.value.trim(),
+      timetable, campus_map: state.campusMap,
+    };
+    if (desktop) {
+      const baseline = await api("/api/v1/onboarding");
+      body.expected_revision = baseline.revision;
+      body.operation_id = desktopOperationId();
+    }
     const payload = await api("/api/v1/onboarding", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        school: elements.schoolInput.value.trim(),
-        campus: elements.campusInput.value.trim(),
-        semester: elements.semesterInput.value.trim(),
-        timetable: state.timetable.entries,
-        campus_map: state.campusMap,
-      }),
+      body: JSON.stringify(body),
     });
     state.user = payload.user;
-    state.settingsContext = { timetable: state.timetable.entries, campus_map: state.campusMap };
+    state.settingsContext = { timetable, campus_map: state.campusMap };
     if (state.scheduleSubscriptionUrl) {
       try {
         const synced = await api("/api/v1/schedule-subscriptions", {
@@ -620,6 +694,22 @@ async function completeOnboarding() {
   }
 }
 
+async function loadWindowsOfficialCampus() {
+  const owner = state.user?.user_id;
+  const school = elements.schoolInput.value.trim();
+  const campus = elements.campusInput.value.trim();
+  try {
+    const data = await api(`/api/v1/onboarding/campus-data?${new URLSearchParams({ school, campus })}`);
+    if (owner !== state.user?.user_id || elements.onboardingView.hidden || state.setupStep !== 3 ||
+        school !== elements.schoolInput.value.trim() || campus !== elements.campusInput.value.trim()) return;
+    const places = data.places.map(({ name, category, zone, aliases }) => ({ name, category, zone, aliases }));
+    if (!places.length) throw new Error("当前校园资料暂无地点。可填写一个校园地点。");
+    state.campusMap = { campus_name: campus, places, warnings: [] };
+    renderCampusMap();
+    showToast(`已载入 ${places.length} 个校园地点`);
+  } catch (error) { if (owner === state.user?.user_id) showToast(error.message, "error"); }
+}
+
 function showApp() {
   showOnly("app");
   elements.userName.textContent = state.user.display_name;
@@ -634,20 +724,28 @@ function showApp() {
 
 function switchAppTab(tab) {
   if (tab !== "agent") closeReplyDetails();
+  const changed = state.appTab !== tab;
   state.appTab = tab;
   syncCampusRouteMaps();
   syncCampusPlaceSelection();
   $$('[data-app-tab]').forEach((button) => {
-    button.classList.toggle("active", button.dataset.appTab === tab);
+    const active = button.dataset.appTab === tab;
+    button.classList.toggle("active", active);
+    if (active) button.setAttribute("aria-current", "page");
+    else button.removeAttribute("aria-current");
   });
   $$('[data-app-surface]').forEach((surface) => {
     surface.hidden = surface.dataset.appSurface !== tab;
   });
+  if (changed && windowsClient()) $(".app-stage").scrollTop = 0;
   syncTodayClock();
   if (tab === "today") loadTodayDashboard();
-  if (tab === "plans") loadPlans();
+  if (tab === "plans" || (tab === "today" && windowsClient())) loadPlans();
   if (tab === "skills") loadSkills();
   if (tab === "agent") elements.messageInput.focus();
+  if (windowsClient()) {
+    document.dispatchEvent(new CustomEvent("campusflow:desktop-view", { detail: { tab, userId: state.user?.user_id ?? null } }));
+  }
 }
 
 function fillComposerPrompt(prompt) {
@@ -891,19 +989,17 @@ function resetTodayDashboard() {
 async function loadTodayDashboard() {
   const owner = state.user;
   try {
-    const [context, sessions] = await Promise.all([
+    const [context] = await Promise.all([
       state.settingsContext ?? api("/api/v1/me/context"),
-      api("/api/v1/sessions"),
+      refreshSessions(),
     ]);
     if (owner !== state.user) return;
     state.settingsContext = context;
-    state.sessions = sessions;
     const timetable = [...(context.timetable ?? [])].sort((left, right) =>
       (left.date + " " + left.start_time).localeCompare(right.date + " " + right.start_time)
     );
     state.todayView = { ...state.todayView, timetable, hues: courseHues(timetable) };
     elements.todayPlaceCount.textContent = context.campus_map?.places?.length ?? 0;
-    elements.todayHistoryCount.textContent = sessions.length;
     if (state.appTab === "today" && !elements.appView.hidden) {
       refreshTodayDashboard(new Date(), true);
     }
@@ -912,11 +1008,52 @@ async function loadTodayDashboard() {
   }
 }
 
+function desktopReminderKey(owner) {
+  return `campusflow.windows.background-reminders.${owner}`;
+}
+
+function desktopRemindersEnabled() {
+  return Boolean(state.user && localStorage.getItem(desktopReminderKey(state.user.user_id)) === "on");
+}
+
+async function syncDesktopReminders(tasks) {
+  const desktop = windowsClient();
+  if (!desktop?.reminders) return false;
+  const now = Date.now();
+  const reminders = tasks.filter(task => task.status === "pending" && task.start_at && task.reminder_minutes != null)
+    .map(task => ({ id: task.task_id, title: [...task.title].slice(0, 120).join(""), at: Date.parse(task.start_at) - task.reminder_minutes * 60000 }))
+    .filter(task => task.at > now && task.at <= now + 366 * 86400000)
+    .sort((left, right) => left.at - right.at).slice(0, 100);
+  return desktop.reminders(reminders, desktopRemindersEnabled());
+}
+
+async function setDesktopReminders(enabled) {
+  const owner = state.user?.user_id;
+  if (!owner) return false;
+  const tasks = enabled ? (await api("/api/v1/planning")).tasks : state.planning?.tasks ?? [];
+  if (state.user?.user_id !== owner) return false;
+  const key = desktopReminderKey(owner);
+  const original = desktopRemindersEnabled();
+  localStorage.setItem(key, enabled ? "on" : "off");
+  try {
+    if (await syncDesktopReminders(tasks)) return true;
+  } catch { /* Restore the visible setting if the desktop rejected the change. */ }
+  localStorage.setItem(key, original ? "on" : "off");
+  return false;
+}
+
+let planningLoadVersion = 0;
+
 async function loadPlans() {
+  const owner = state.user;
+  const version = ++planningLoadVersion;
+  const todayTasks = windowsClient() ? $("#windowsTodayTaskList") : null;
+  if (todayTasks && state.appTab === "today") todayTasks.textContent = "正在读取待办…";
   elements.planList.innerHTML = '<div class="plan-empty">正在读取执行计划…</div>';
   elements.planGoals.innerHTML = '<div class="goal-empty">正在载入目标…</div>';
   try {
     const payload = await api("/api/v1/planning");
+    if (owner !== state.user || version !== planningLoadVersion) return;
     state.planning = payload;
     elements.planProgress.textContent = `${payload.progress}%`;
     elements.planProgressBar.style.width = `${payload.progress}%`;
@@ -926,11 +1063,54 @@ async function loadPlans() {
     elements.planCompleted.textContent = payload.completed_tasks;
     renderPlanningTasks();
     renderPlanGoals(payload.plans);
+    if (window.CampusFlowWindows) renderDesktopTodayTasks(payload.tasks);
+    if (windowsClient()) void syncDesktopReminders(payload.tasks).catch(() => {});
   } catch (error) {
+    if (owner !== state.user || version !== planningLoadVersion) return;
+    if (todayTasks) todayTasks.textContent = "待办暂时无法读取。";
     elements.planList.innerHTML = '<div class="plan-empty">读取失败，请稍后重试。</div>';
     elements.planGoals.innerHTML = '<div class="goal-empty">目标载入失败</div>';
     showToast(error.message, "error");
   }
+}
+
+function renderDesktopTodayTasks(tasks) {
+  const date = new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Shanghai" });
+  const today = date.format(new Date());
+  const list = $("#windowsTodayTaskList");
+  list.replaceChildren();
+  const scheduled = tasks.filter(task => task.status === "pending" && task.start_at && date.format(new Date(task.start_at)) === today)
+    .sort((left, right) => Date.parse(left.start_at) - Date.parse(right.start_at));
+  if (!scheduled.length) list.textContent = "今天没有待完成的定时任务。";
+  for (const task of scheduled) {
+    const row = document.createElement("div");
+    row.className = "wf-row";
+    const title = document.createElement("div");
+    const name = document.createElement("strong");
+    name.textContent = task.title;
+    const time = document.createElement("small");
+    time.textContent = new Intl.DateTimeFormat("zh-CN", { timeStyle: "short", timeZone: "Asia/Shanghai" }).format(new Date(task.start_at));
+    title.append(name, time);
+    const complete = document.createElement("button");
+    complete.type = "button";
+    complete.className = "wf-button";
+    complete.textContent = "完成";
+    complete.addEventListener("click", () => setTaskCompleted(task, true, complete));
+    const actions = document.createElement("div");
+    actions.className = "wf-controls";
+    actions.append(desktopFocusButton(task), complete);
+    row.append(title, actions);
+    list.append(row);
+  }
+}
+
+function desktopFocusButton(task) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "wf-button desktop-task-focus";
+  button.textContent = "专注";
+  button.addEventListener("click", () => window.CampusFlowWindows?.focusTask?.(task.task_id, task.title));
+  return button;
 }
 
 function taskTimeLabel(task) {
@@ -970,7 +1150,14 @@ function renderPlanningTasks() {
     remove.className = "task-remove";
     remove.textContent = "删除";
     remove.addEventListener("click", () => removeTask(task, remove));
-    item.append(check, content, remove);
+    if (windowsClient() && task.status === "pending") {
+      const actions = document.createElement("div");
+      actions.className = "desktop-task-actions";
+      actions.append(desktopFocusButton(task), remove);
+      item.append(check, content, actions);
+    } else {
+      item.append(check, content, remove);
+    }
     elements.planList.append(item);
   });
 }
@@ -1031,8 +1218,9 @@ function taskStatusRecord(owner, task, completed) {
   if (!completed && !task.completion_operation_id) {
     throw new Error("此任务未保留可核验的完成回执，无法安全恢复。");
   }
-  if (!globalThis.crypto?.randomUUID) throw new Error("当前浏览器不支持安全操作标识，请升级浏览器。");
-  const request = { operation_id: crypto.randomUUID(), kind: completed ? "complete" : "restore",
+  const uuid = globalThis.crypto?.randomUUID?.bind(globalThis.crypto) ?? window.CampusFlowWindows?.uuid;
+  if (!uuid) throw new Error("当前浏览器不支持安全操作标识，请升级浏览器。");
+  const request = { operation_id: uuid(), kind: completed ? "complete" : "restore",
     expected_revision: task.task_version };
   if (!completed) request.source_operation_id = task.completion_operation_id;
   const intent = { owner, task_id: task.task_id, request };
@@ -1482,6 +1670,16 @@ function modelLabel(model = selectedModel()) {
 function setSessionId() {
   elements.sessionId.textContent = state.sessionId;
   elements.sessionId.title = state.sessionId;
+  renderActiveSessionTitle();
+}
+
+function renderActiveSessionTitle() {
+  if (!window.CampusFlowWindows) return;
+  const session = state.sessions.find(item => item.session_id === state.sessionId);
+  const title = session?.title || "新会话";
+  elements.chatHeadingTitle.textContent = title;
+  elements.chatHeadingTitle.title = title;
+  elements.chatRenameButton.hidden = !session || session.status === "pending";
 }
 
 function setServiceState(online, label) {
@@ -1521,6 +1719,26 @@ function appendMessage(role, content, options = {}) {
     bubble.textContent = content;
   }
   article.append(meta, bubble);
+  if (role === "assistant" && content && window.CampusFlowWindows && "speechSynthesis" in window) {
+    const speak = document.createElement("button");
+    speak.type = "button";
+    speak.className = "chat-small-button windows-speak";
+    speak.textContent = "朗读";
+    speak.addEventListener("click", () => {
+      if (speak.textContent === "停止朗读") { window.speechSynthesis.cancel(); return; }
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(bubble.innerText.slice(0, 12000));
+      utterance.lang = "zh-CN";
+      utterance.onstart = () => { speak.textContent = "停止朗读"; };
+      utterance.onend = () => { speak.textContent = "朗读"; };
+      utterance.onerror = (event) => {
+        speak.textContent = "朗读";
+        if (!["canceled", "interrupted"].includes(event.error)) showToast("当前 Windows 语音不可用。", "error");
+      };
+      window.speechSynthesis.speak(utterance);
+    });
+    article.append(speak);
+  }
   elements.messages.append(article);
   scrollMessages();
   return article;
@@ -1954,16 +2172,114 @@ function renderPendingAction(action, message) {
   button.textContent = "确认执行此操作";
   Object.assign(button.style, { minHeight: "44px", fontSize: "14px", color: "white",
     background: "var(--cf-accent, #416454)" });
-  button.addEventListener("click", () => confirmAction(action.proposal_id, card, button, label));
-  card.append(label, title, description, button);
+  card.append(label, title, description);
+  const acknowledgements = [];
+  if (window.CampusFlowWindows) {
+    button.className = "wf-button primary";
+    button.removeAttribute("style");
+    for (const warning of action.warnings ?? []) {
+      const hint = document.createElement("p");
+      hint.textContent = warning;
+      card.append(hint);
+    }
+    for (const review of action.course_reviews ?? []) {
+      if (!review.requires_acknowledgement) continue;
+      const field = document.createElement("label");
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      field.append(checkbox, document.createTextNode(` 核对并同意课内安排${review.overlaps?.length ? `（${review.overlaps.map(item => item.course.title).join("、")}）` : ""}`));
+      card.append(field);
+      acknowledgements.push({ checkbox, candidate_id: review.candidate_id, review_digest: review.review_digest });
+    }
+    const blocked = action.status !== "pending" || action.contract_version < 2 ||
+      Boolean(action.conflicts?.length || action.course_reviews?.some(review => review.state === "blocked"));
+    const sync = () => { button.disabled = blocked || acknowledgements.some(item => !item.checkbox.checked); };
+    acknowledgements.forEach(item => item.checkbox.addEventListener("change", sync));
+    sync();
+    addDesktopCoursePermissions(action, message, card, button, label);
+  }
+  button.addEventListener("click", () => confirmAction(action.proposal_id, card, button, label,
+    acknowledgements.map(({ candidate_id, review_digest }) => ({ candidate_id, review_digest }))));
+  card.append(button);
   message.querySelector(".bubble").append(card);
 }
 
-async function confirmAction(proposalId, card, button, label) {
+function addDesktopCoursePermissions(action, message, card, confirmButton, label) {
+  const possible = (action.course_reviews ?? []).filter(review => review.overlaps?.length);
+  if (action.status !== "pending" || action.course_policy_version !== 1 || !possible.length) return;
+  const area = document.createElement("details");
+  area.className = "wf-details desktop-course-permissions";
+  const summary = document.createElement("summary");
+  summary.textContent = "调整课内安排许可";
+  const fields = document.createElement("fieldset");
+  const legend = document.createElement("legend");
+  legend.textContent = "只会生成替代预览";
+  fields.append(legend);
+  const candidates = [action.payload?.task, ...(action.payload?.milestones ?? []).flatMap(milestone => milestone.tasks ?? [])];
+  const controls = possible.map(review => {
+    const field = document.createElement("label");
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.checked = review.allow_during_course;
+    const title = candidates.find(task => task?.candidate_id === review.candidate_id)?.title ?? action.title;
+    field.append(input, document.createTextNode(` 允许「${title}」与${review.overlaps.map(item => item.course.title).join("、")}重叠`));
+    fields.append(field);
+    return { review, input };
+  });
+  const update = document.createElement("button");
+  update.type = "button";
+  update.className = "wf-button";
+  update.textContent = "生成替代预览";
+  const status = document.createElement("p");
+  status.setAttribute("role", "status");
+  area.append(summary, fields, update, status);
+  card.append(area);
+  let pending;
+  update.addEventListener("click", async () => {
+    if (update.disabled || card.dataset.confirming === "true" || card.classList.contains("confirmed") || !card.isConnected) return;
+    pending ??= controls.filter(({ review, input }) => input.checked !== review.allow_during_course)
+      .map(({ review, input }) => ({ candidate_id: review.candidate_id, allow_during_course: input.checked }));
+    if (!pending.length) { pending = null; status.textContent = "先选择要修改的许可。"; return; }
+    const context = { owner: state.user?.user_id, sessionId: state.sessionId };
+    fields.disabled = true;
+    update.disabled = true;
+    confirmButton.disabled = true;
+    status.textContent = "正在生成预览…";
+    try {
+      const replacement = await api(`/api/v1/actions/${encodeURIComponent(action.proposal_id)}/course-permissions`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ choices: pending }), signal: AbortSignal.timeout(12000),
+      });
+      if (!card.isConnected || !isCurrentReplyContext(context)) return;
+      if (replacement.status !== "pending" || !replacement.proposal_id || replacement.proposal_id === action.proposal_id ||
+          !pending.every(choice => replacement.course_reviews?.some(review => review.candidate_id === choice.candidate_id &&
+            review.allow_during_course === choice.allow_during_course))) throw new Error("Invalid replacement preview");
+      label.textContent = "已替换";
+      confirmButton.hidden = true;
+      status.textContent = "已生成替代预览。请核对后确认。";
+      renderPendingAction(replacement, message);
+    } catch (error) {
+      if (!card.isConnected || !isCurrentReplyContext(context)) return;
+      status.textContent = error.status && error.status < 500
+        ? error.message : "尚未核实结果。可用原来的选择核对。";
+      update.textContent = "核对原许可设置";
+      update.disabled = false;
+    }
+  });
+}
+
+async function confirmAction(proposalId, card, button, label, acknowledgements = []) {
   button.disabled = true;
+  card.dataset.confirming = "true";
   button.textContent = "正在确认…";
   try {
-    const payload = await api(`/api/v1/actions/${encodeURIComponent(proposalId)}/confirm`, { method: "POST" });
+    const options = { method: "POST" };
+    if (window.CampusFlowWindows) {
+      options.headers = { "Content-Type": "application/json" };
+      options.body = JSON.stringify({ course_acknowledgements: acknowledgements });
+    }
+    const payload = await api(`/api/v1/actions/${encodeURIComponent(proposalId)}/confirm`, options);
+    if (window.CampusFlowWindows && (payload.action?.status !== "confirmed" || !payload.receipt)) throw new Error("尚未取得保存回执，请打开运行记录核对。");
     card.classList.add("confirmed");
     label.textContent = "已写入";
     button.textContent = "已确认";
@@ -1973,28 +2289,169 @@ async function confirmAction(proposalId, card, button, label) {
     button.disabled = false;
     button.textContent = "重新确认";
     showToast(error.message, "error");
+  } finally {
+    delete card.dataset.confirming;
   }
 }
 
 function upsertSession(session) {
+  state.sessionsRevision++;
   const index = state.sessions.findIndex((item) => item.session_id === session.session_id);
   if (index >= 0) {
     state.sessions[index] = { ...state.sessions[index], ...session };
   } else {
     state.sessions = [session, ...state.sessions];
   }
+  syncSessionSummary();
+  if (!elements.historyDrawer.hidden && !elements.historySearch.value.trim()) {
+    showHistorySessions(state.sessions);
+  }
+}
+
+function syncSessionSummary() {
   elements.todayHistoryCount.textContent = state.sessions.length;
-  if (!elements.historyDrawer.hidden) renderHistorySessions(state.sessions);
+  renderActiveSessionTitle();
+}
+
+async function readSessions(query = "") {
+  const owner = state.user;
+  const revision = query ? null : ++state.sessionsRevision;
+  const suffix = query ? `?query=${encodeURIComponent(query)}` : "";
+  const sessions = await api(`/api/v1/sessions${suffix}`);
+  if (!Array.isArray(sessions)) throw new Error("会话列表暂时无法读取。");
+  if (owner !== state.user) return null;
+  if (!query) {
+    if (revision !== state.sessionsRevision) return null;
+    state.sessions = sessions;
+    syncSessionSummary();
+  }
+  return sessions;
 }
 
 async function refreshSessions() {
   try {
-    state.sessions = await api("/api/v1/sessions");
-    elements.todayHistoryCount.textContent = state.sessions.length;
-    if (!elements.historyDrawer.hidden) renderHistorySessions(state.sessions);
+    const sessions = await readSessions();
+    if (sessions && !elements.historyDrawer.hidden && !elements.historySearch.value.trim()) showHistorySessions(sessions);
   } catch {
     // 保留本地占位会话，避免进行中的对话从历史目录里消失。
   }
+}
+
+const desktopRunLabels = {
+  queued: "等待开始", running: "正在处理", succeeded: "已完成", failed: "未完成",
+  cancelled: "已取消", budget_exceeded: "已达到本轮预算", interrupted: "已中断", timed_out: "已超时",
+};
+
+async function startDesktopRun(request, context, loading) {
+  const runId = desktopOperationId();
+  const label = loading.querySelector(".bubble");
+  const controls = document.createElement("div");
+  controls.className = "wf-controls";
+  const status = document.createElement("span");
+  status.setAttribute("role", "status");
+  status.textContent = "正在提交…";
+  const stop = document.createElement("button");
+  stop.className = "wf-button";
+  stop.type = "button";
+  stop.textContent = "停止运行";
+  stop.disabled = true;
+  stop.addEventListener("click", async () => {
+    stop.disabled = true;
+    try { await api(`/api/v1/agent-runs/${runId}/cancel`, { method: "POST" }); }
+    catch (error) { if (isCurrentReplyContext(context)) showToast(error.message, "error"); stop.disabled = false; }
+  });
+  controls.append(status, stop);
+  label.replaceChildren(controls);
+  let snapshot;
+  const sessionPath = `/api/v1/sessions/${encodeURIComponent(context.sessionId)}/context`;
+  let sessionContext;
+  try { sessionContext = await api(sessionPath); }
+  catch (error) { if (error.status !== 404) throw error; }
+  if (!isCurrentReplyContext(context)) return null;
+  if (sessionContext?.active_run) throw new Error("这条会话还有运行中的任务，请先在运行记录中核对。");
+  const mode = sessionContext ? { session_mode: "continue", expected_context_revision: sessionContext.context_revision } : { session_mode: "new" };
+  try {
+    snapshot = await api("/api/v1/agent-runs", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...request, ...mode, run_id: runId }),
+    });
+  } catch (error) {
+    if (error.status && error.status < 500) throw error;
+    snapshot = await api(`/api/v1/agent-runs/${runId}`);
+  }
+  stop.disabled = false;
+  while (["queued", "running"].includes(snapshot.status)) {
+    if (!isCurrentReplyContext(context)) return null;
+    status.textContent = desktopRunLabels[snapshot.status];
+    await new Promise(resolve => setTimeout(resolve, 900));
+    snapshot = await api(`/api/v1/agent-runs/${runId}`);
+  }
+  return snapshot;
+}
+
+function renderDesktopRun(snapshot, context) {
+  if (!isCurrentReplyContext(context)) return;
+  if (snapshot.status === "succeeded" && snapshot.result) {
+    renderChatResponse(snapshot.result, context);
+    return;
+  }
+  const status = desktopRunLabels[snapshot.status] || "运行未完成";
+  const reply = appendMessage("assistant", snapshot.partial_answer || snapshot.error_message || status);
+  const detail = document.createElement("p");
+  detail.className = "wf-alert";
+  detail.textContent = snapshot.error_message ? `${status} · ${snapshot.error_message}` : status;
+  reply.querySelector(".bubble").append(detail);
+  if (!Array.isArray(snapshot.prepared_actions)) return;
+  snapshot.prepared_actions.forEach(async (action) => {
+    try {
+      const current = await api(`/api/v1/actions/${encodeURIComponent(action.proposal_id)}`);
+      if (current.status === "pending" && reply.isConnected && isCurrentReplyContext(context)) renderPendingAction(current, reply);
+    } catch { /* Missing action state cannot be confirmed from a cached run. */ }
+  });
+}
+
+async function openDesktopRuns() {
+  const owner = state.user?.user_id;
+  if (!owner) return;
+  const dialog = $("#windowsRunsDialog");
+  const list = $("#windowsRunList");
+  list.textContent = "正在读取运行记录…";
+  dialog.showModal();
+  try {
+    const snapshots = await api("/api/v1/agent-runs?limit=20");
+    if (!dialog.open || owner !== state.user?.user_id) return;
+    list.replaceChildren();
+    if (!snapshots.length) list.textContent = "暂无运行记录。";
+    snapshots.forEach((item) => {
+      const row = document.createElement("div");
+      row.className = "wf-row";
+      const copy = document.createElement("div");
+      const title = document.createElement("strong");
+      const detail = document.createElement("small");
+      title.textContent = item.message.slice(0, 64);
+      detail.textContent = desktopRunLabels[item.status] || item.status;
+      copy.append(title, detail);
+      const open = document.createElement("button");
+      open.type = "button";
+      open.className = "wf-button";
+      open.textContent = "查看";
+      open.addEventListener("click", async () => {
+        open.disabled = true;
+        try {
+          const latest = await api(`/api/v1/agent-runs/${item.run_id}`);
+          if (!dialog.open || owner !== state.user?.user_id) return;
+          if (latest.status === "succeeded") {
+            dialog.close();
+            await openSession(item.session_id);
+          } else {
+            detail.textContent = [desktopRunLabels[latest.status], latest.partial_answer || latest.error_message].filter(Boolean).join(" · ");
+          }
+        } catch (error) { if (dialog.open) showToast(error.message, "error"); }
+        finally { open.disabled = false; }
+      });
+      row.append(copy, open);
+      list.append(row);
+    });
+  } catch (error) { if (dialog.open && owner === state.user?.user_id) list.textContent = error.message; }
 }
 
 async function sendMessage(message) {
@@ -2006,36 +2463,33 @@ async function sendMessage(message) {
   appendMessage("user", message);
   // 提问后立即写入本地会话目录：模型思考期间打开历史也能看到本次对话。
   const pendingAt = new Date().toISOString();
+  const previousSession = state.sessions.find(item => item.session_id === routeContext.sessionId);
   upsertSession({
     session_id: state.sessionId,
-    title: message.slice(0, 18),
+    title: previousSession?.title || message.slice(0, 18),
     model_name: selectedModel(),
     last_message: message,
-    message_count: 1,
-    created_at: pendingAt,
+    message_count: (previousSession?.message_count ?? 0) + 1,
+    created_at: previousSession?.created_at ?? pendingAt,
     updated_at: pendingAt,
-    status: "pending",
+    status: previousSession?.status ?? (previousSession ? "active" : "pending"),
   });
   const loading = appendMessage("assistant", "", { loading: true });
+  let remember = false;
   try {
-    const payload = await api("/api/v1/chat", {
+    const request = { session_id: routeContext.sessionId, model: selectedModel(), message };
+    const desktop = Boolean(window.CampusFlowWindows);
+    const payload = desktop ? await startDesktopRun(request, routeContext, loading) : await api("/api/v1/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        session_id: routeContext.sessionId,
-        model: selectedModel(),
-        message,
-      }),
+      body: JSON.stringify(request),
     });
     loading.remove();
-    if (!isCurrentReplyContext(routeContext)) return;
-    const response = appendMessage("assistant", payload.message);
-    payload.pending_actions?.forEach((action) => renderPendingAction(action, response));
-    const traces = Array.isArray(payload.tool_traces) ? payload.tool_traces : [];
-    const routes = traces.filter((trace) => trace?.tool_name === "plan_campus_route" && trace.result?.origin && trace.result.destination)
-      .map((trace) => trace.result);
-    appendReplyDetails(response, routeContext, traces.map((trace) => trace?.display), routes);
-    scrollMessages();
+    if (!payload || !isCurrentReplyContext(routeContext)) return;
+    if (desktop) {
+      renderDesktopRun(payload, routeContext);
+      remember = payload.status === "succeeded";
+    } else renderChatResponse(payload, routeContext);
     setServiceState(true, "Agent 服务在线");
   } catch (error) {
     loading.remove();
@@ -2044,7 +2498,10 @@ async function sendMessage(message) {
     showToast(error.message, "error");
   } finally {
     // 以服务端状态覆盖占位会话；此处该会话应已被标记为完成。
-    if (state.user?.user_id === routeContext.owner) await refreshSessions();
+    if (state.user?.user_id === routeContext.owner) {
+      await refreshSessions();
+      if (remember) void rememberDesktopSession(routeContext.sessionId, routeContext.owner);
+    }
     state.sending = false;
     elements.sendButton.disabled = false;
     elements.messageInput.disabled = false;
@@ -2052,6 +2509,16 @@ async function sendMessage(message) {
     resizeComposer();
     if (isCurrentReplyContext(routeContext) && state.appTab === "agent") elements.messageInput.focus();
   }
+}
+
+function renderChatResponse(payload, context) {
+  const response = appendMessage("assistant", payload.message);
+  payload.pending_actions?.forEach((action) => renderPendingAction(action, response));
+  const traces = Array.isArray(payload.tool_traces) ? payload.tool_traces : [];
+  const routes = traces.filter((trace) => trace?.tool_name === "plan_campus_route" && trace.result?.origin && trace.result.destination)
+    .map((trace) => trace.result);
+  appendReplyDetails(response, context, traces.map((trace) => trace?.display), routes);
+  scrollMessages();
 }
 
 function resizeComposer() {
@@ -2067,27 +2534,37 @@ function resetSession(notify = true) {
   setSessionId();
   elements.messages.innerHTML = CHAT_EMPTY_STATE;
   elements.emptyState = $("#emptyState");
-  closeHistory();
+  closeHistory(false);
   switchAppTab("agent");
   if (notify) showToast("已创建独立会话");
 }
 
 function openHistory() {
+  if (!elements.historyDrawer.hidden) return;
+  state.historyReturnFocus = document.activeElement;
   elements.historyDrawer.hidden = false;
   elements.drawerScrim.hidden = false;
   elements.historySearch.value = "";
+  if (state.sessions.length) showHistorySessions(state.sessions);
+  else elements.historyList.innerHTML = '<div class="history-empty">正在载入会话…</div>';
   loadHistory();
-  setTimeout(() => elements.historySearch.focus(), 0);
+  elements.historySearch.focus();
 }
 
-function closeHistory() {
+function closeHistory(restoreFocus = true) {
   state.historyReadRevision++;
+  state.historyListRevision++;
+  clearTimeout(elements.historySearch.searchTimer);
+  const wasOpen = !elements.historyDrawer.hidden;
   elements.historyDrawer.hidden = true;
   elements.drawerScrim.hidden = true;
+  if (wasOpen && restoreFocus && state.historyReturnFocus?.isConnected) state.historyReturnFocus.focus();
+  state.historyReturnFocus = null;
 }
 
 function sessionTime(value) {
   const date = new Date(value);
+  if (Number.isNaN(date.valueOf())) return "";
   const today = new Date();
   if (date.toDateString() === today.toDateString()) {
     return date.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
@@ -2095,10 +2572,17 @@ function sessionTime(value) {
   return date.toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" });
 }
 
+function showHistorySessions(sessions) {
+  state.historySessions = sessions;
+  renderHistorySessions(sessions);
+}
+
 function renderHistorySessions(sessions) {
   elements.historyList.replaceChildren();
   if (!sessions.length) {
-    elements.historyList.innerHTML = '<div class="history-empty"><b>还没有匹配的会话</b><span>开始一次 Agent 对话后，会自动保存在这里。</span></div>';
+    elements.historyList.innerHTML = elements.historySearch.value.trim()
+      ? '<div class="history-empty">没有找到匹配的会话。</div>'
+      : '<div class="history-empty">还没有历史会话。发送第一条消息后会保存在这里。</div>';
     return;
   }
   sessions.forEach((session) => {
@@ -2107,10 +2591,13 @@ function renderHistorySessions(sessions) {
     const open = document.createElement("button");
     open.type = "button";
     open.className = "history-open";
+    if (session.session_id === state.sessionId) open.setAttribute("aria-current", "true");
     const heading = document.createElement("span");
     const title = document.createElement("b");
     const time = document.createElement("time");
-    title.textContent = session.title;
+    title.textContent = session.title || "未命名会话";
+    title.title = title.textContent;
+    if (session.updated_at) time.dateTime = session.updated_at;
     time.textContent = sessionTime(session.updated_at);
     heading.append(title, time);
     const preview = document.createElement("p");
@@ -2124,22 +2611,79 @@ function renderHistorySessions(sessions) {
     rename.type = "button";
     rename.className = "history-rename";
     rename.textContent = "改名";
-    rename.addEventListener("click", () => showRenameSession(session, card));
-    card.append(open, rename);
+    rename.disabled = session.status === "pending";
+    card.append(open);
+    if (window.CampusFlowWindows) {
+      rename.addEventListener("click", () => openSessionRename(session));
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "history-remove";
+      remove.textContent = "删除";
+      remove.addEventListener("click", async () => {
+        if (!window.confirm(`删除会话「${session.title}」？`)) return;
+        const owner = state.user?.user_id;
+        remove.disabled = true;
+        try {
+          await api(`/api/v1/sessions/${encodeURIComponent(session.session_id)}`, { method: "DELETE" });
+          if (owner !== state.user?.user_id) return;
+          state.sessionsRevision++;
+          state.sessions = state.sessions.filter(item => item.session_id !== session.session_id);
+          syncSessionSummary();
+          await windowsClient()?.historyDelete?.(owner, session.session_id).catch(() => {});
+          if (owner !== state.user?.user_id) return;
+          if (state.sessionId === session.session_id) resetSession(false);
+          await loadHistory(elements.historySearch.value.trim());
+          showToast("会话已删除");
+        } catch (error) { if (owner === state.user?.user_id) showToast(error.message, "error"); }
+        finally { remove.disabled = false; }
+      });
+      const more = document.createElement("button");
+      more.type = "button";
+      more.className = "history-more";
+      more.textContent = "⋯";
+      more.setAttribute("aria-label", "会话操作");
+      more.setAttribute("aria-expanded", "false");
+      const actions = document.createElement("div");
+      actions.className = "history-actions";
+      actions.hidden = true;
+      actions.append(rename, remove);
+      more.addEventListener("click", () => {
+        const show = actions.hidden;
+        closeHistoryActions();
+        actions.hidden = !show;
+        more.setAttribute("aria-expanded", String(show));
+      });
+      card.append(more, actions);
+    } else {
+      rename.addEventListener("click", () => showRenameSession(session, card));
+      card.append(rename);
+    }
     elements.historyList.append(card);
   });
 }
 
+function closeHistoryActions() {
+  const more = elements.historyList.querySelector('.history-more[aria-expanded="true"]');
+  if (!more) return null;
+  more.setAttribute("aria-expanded", "false");
+  more.nextElementSibling.hidden = true;
+  return more;
+}
+
 async function loadHistory(query = "") {
-  elements.historyList.innerHTML = '<div class="history-empty">正在载入会话…</div>';
+  const owner = state.user;
+  const revision = ++state.historyListRevision;
+  const current = () => owner === state.user && revision === state.historyListRevision &&
+    !elements.historyDrawer.hidden && query === elements.historySearch.value.trim();
+  if (!current()) return;
   try {
-    const suffix = query ? `?query=${encodeURIComponent(query)}` : "";
-    state.sessions = await api(`/api/v1/sessions${suffix}`);
-    elements.todayHistoryCount.textContent = state.sessions.length;
-    renderHistorySessions(state.sessions);
+    const sessions = await readSessions(query);
+    if (sessions && current()) showHistorySessions(sessions);
   } catch (error) {
-    elements.historyList.innerHTML = '<div class="history-empty">载入失败</div>';
-    showToast(error.message, "error");
+    if (current()) {
+      elements.historyList.innerHTML = '<div class="history-empty">会话读取失败，请关闭后重试。</div>';
+      showToast(error.message, "error");
+    }
   }
 }
 
@@ -2150,7 +2694,9 @@ async function openSession(sessionId) {
     const history = await api(`/api/v1/sessions/${encodeURIComponent(sessionId)}/history`);
     if (context.owner !== state.user?.user_id || revision !== state.historyReadRevision) return;
     closeReplyDetails();
-    const session = state.sessions.find((item) => item.session_id === sessionId);
+    const known = state.sessions.find(item => item.session_id === sessionId);
+    const session = known ?? state.historySessions?.find(item => item.session_id === sessionId);
+    if (window.CampusFlowWindows) void rememberDesktopSession(sessionId, context.owner, history, session?.title);
     state.sessionId = sessionId;
     syncCampusPlaceSelection();
     if (session?.model_name) {
@@ -2158,7 +2704,6 @@ async function openSession(sessionId) {
       if (modelInput) modelInput.checked = true;
       elements.modelBadge.textContent = modelLabel(session.model_name);
     }
-    setSessionId();
     clearCampusRouteMaps();
     elements.messages.replaceChildren();
     for (const message of history) {
@@ -2166,7 +2711,10 @@ async function openSession(sessionId) {
       if (message.role === "assistant") appendReplyDetails(article, context, message.tools);
     }
     scrollMessages();
-    closeHistory();
+    closeHistory(false);
+    if (window.CampusFlowWindows && session && !known) upsertSession(session);
+    setSessionId();
+    if (window.CampusFlowWindows && !session) void refreshSessions();
     switchAppTab("agent");
     showToast(`已恢复 ${history.length} 条消息`);
   } catch (error) {
@@ -2174,6 +2722,66 @@ async function openSession(sessionId) {
       showToast(error.message, "error");
     }
   }
+}
+
+async function rememberDesktopSession(sessionId, owner, existing, title) {
+  const desktop = windowsClient();
+  if (!desktop?.historySave || !owner || state.user?.user_id !== owner) return;
+  try {
+    const history = existing ?? await api(`/api/v1/sessions/${encodeURIComponent(sessionId)}/history`);
+    if (!history.length || state.user?.user_id !== owner) return;
+    const savedTitle = state.sessions.find(item => item.session_id === sessionId)?.title;
+    const displayTitle = savedTitle || title || history.find(message => message.role === "user")?.content.slice(0, 48) || "会话";
+    await desktop.historySave(owner, { sessionId, title: displayTitle, messages: history });
+  } catch { /* Online history stays available when local caching fails. */ }
+}
+
+async function showDesktopOfflineHistory() {
+  const desktop = windowsClient();
+  const dialog = $("#windowsOfflineDialog");
+  const list = $("#windowsOfflineList");
+  const messages = $("#windowsOfflineMessages");
+  messages.replaceChildren();
+  list.textContent = "正在读取本机历史…";
+  dialog.showModal();
+  try {
+    const cached = await desktop.historyList();
+    if (!dialog.open) return;
+    list.replaceChildren();
+    if (!cached?.sessions?.length) list.textContent = "这台电脑暂无已保存的会话。";
+    cached?.sessions.forEach((item) => {
+      const button = document.createElement("button");
+      button.className = "wf-button";
+      button.type = "button";
+      button.textContent = item.title;
+      button.addEventListener("click", async () => {
+        try {
+          const entry = await desktop.historyGet(cached.owner, item.sessionId);
+          if (!dialog.open) return;
+          messages.replaceChildren();
+          for (const message of entry?.messages ?? []) {
+            const article = document.createElement("article");
+            article.className = "wf-card";
+            const header = document.createElement("strong");
+            const body = document.createElement("div");
+            header.textContent = message.role === "user" ? "你" : "助手";
+            if (message.role === "assistant" && window.CampusFlowMarkdown) window.CampusFlowMarkdown.render(body, message.content);
+            else body.textContent = message.content;
+            article.append(header, body);
+            if (message.tools?.length) {
+              const details = document.createElement("details");
+              const title = document.createElement("summary");
+              title.textContent = "工具与来源";
+              details.append(title, ...message.tools.map(buildReplyTool));
+              article.append(details);
+            }
+            messages.append(article);
+          }
+        } catch (error) { if (dialog.open) showToast(error.message, "error"); }
+      });
+      list.append(button);
+    });
+  } catch (error) { if (dialog.open) list.textContent = error.message; }
 }
 
 function showRenameSession(session, card) {
@@ -2189,11 +2797,24 @@ function showRenameSession(session, card) {
   const cancel = document.createElement("button");
   cancel.type = "button";
   cancel.textContent = "取消";
-  cancel.addEventListener("click", () => renderHistorySessions(state.sessions));
+  cancel.addEventListener("click", () => renderHistorySessions(state.historySessions));
   form.append(input, save, cancel);
-  form.addEventListener("submit", (event) => {
+  form.addEventListener("submit", async (event) => {
     event.preventDefault();
-    renameSession(session, input.value.trim());
+    const title = input.value.trim();
+    if (!title) {
+      showToast("请输入会话名称。", "error");
+      return;
+    }
+    save.disabled = true;
+    try {
+      if (title !== session.title) await renameSession(session, title);
+      if (card.isConnected) renderHistorySessions(state.historySessions);
+    } catch (error) {
+      if (card.isConnected) showToast(error.message, "error");
+    } finally {
+      save.disabled = false;
+    }
   });
   card.replaceChildren(form);
   input.focus();
@@ -2201,20 +2822,71 @@ function showRenameSession(session, card) {
 }
 
 async function renameSession(session, title) {
-  if (!title || title === session.title) {
-    renderHistorySessions(state.sessions);
+  const owner = state.user;
+  const saved = await api(`/api/v1/sessions/${encodeURIComponent(session.session_id)}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title }),
+  });
+  if (owner !== state.user) return;
+  if (saved?.session_id !== session.session_id || typeof saved.title !== "string" || !saved.title.trim()) {
+    throw new Error("未取得更新后的会话名称，请刷新历史后核对。");
+  }
+  upsertSession(saved);
+  if (!elements.historyDrawer.hidden && elements.historySearch.value.trim()) {
+    void loadHistory(elements.historySearch.value.trim());
+  }
+  if (window.CampusFlowWindows) void rememberDesktopSession(saved.session_id, owner?.user_id, undefined, saved.title);
+  if (saved.title === title) showToast("会话名称已更新");
+  else showToast("服务器调整了标题。更新后端后可保留完整名称。", "error");
+}
+
+let sessionRenameTarget = null;
+
+function openSessionRename(session) {
+  if (!session || session.status === "pending" || elements.sessionRenameDialog.open || !state.user) return;
+  sessionRenameTarget = { session, owner: state.user };
+  elements.sessionRenameInput.value = session.title;
+  elements.sessionRenameStatus.textContent = "";
+  elements.sessionRenameDialog.showModal();
+  elements.sessionRenameInput.focus();
+  elements.sessionRenameInput.select();
+}
+
+async function submitSessionRename(event) {
+  event.preventDefault();
+  const target = sessionRenameTarget;
+  const form = elements.sessionRenameForm;
+  const save = form.querySelector('button[type="submit"]');
+  if (!target || state.user !== target.owner || save.disabled) return;
+  const title = elements.sessionRenameInput.value.trim();
+  if (!title) {
+    elements.sessionRenameStatus.textContent = "请输入会话名称。";
+    elements.sessionRenameInput.focus();
     return;
   }
+  if (title === target.session.title) {
+    elements.sessionRenameDialog.close();
+    return;
+  }
+  form.setAttribute("aria-busy", "true");
+  save.disabled = true;
+  elements.sessionRenameInput.readOnly = true;
+  elements.sessionRenameCancel.disabled = true;
+  elements.sessionRenameStatus.textContent = "";
   try {
-    await api(`/api/v1/sessions/${encodeURIComponent(session.session_id)}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title }),
-    });
-    await loadHistory(elements.historySearch.value.trim());
-    showToast("会话名称已更新");
+    await renameSession(target.session, title);
+    if (sessionRenameTarget !== target || !elements.sessionRenameDialog.open) return;
+    elements.sessionRenameDialog.close();
+    if (!elements.historyDrawer.hidden) elements.historySearch.focus();
   } catch (error) {
-    showToast(error.message, "error");
+    if (sessionRenameTarget !== target || !elements.sessionRenameDialog.open) return;
+    elements.sessionRenameStatus.textContent = error.message || "暂时无法保存，请重试。";
+  } finally {
+    form.removeAttribute("aria-busy");
+    save.disabled = false;
+    elements.sessionRenameInput.readOnly = false;
+    elements.sessionRenameCancel.disabled = false;
   }
 }
 
@@ -2337,6 +3009,7 @@ document.addEventListener("visibilitychange", syncBaiduMapSettings);
 window.addEventListener("pagehide", clearBaiduMapSettingsView);
 
 function switchSettingsTab(tab) {
+  if (windowsClient() && tab !== state.settingsTab) elements.settingsView.scrollTop = 0;
   state.settingsTab = tab;
   $$('[data-settings-tab]').forEach((button) => {
     button.classList.toggle("active", button.dataset.settingsTab === tab);
@@ -2350,11 +3023,87 @@ function switchSettingsTab(tab) {
   if (tab === "admin") loadAdminUsers();
 }
 
-function openSettings() {
+function openSettings(tab = "profile") {
   window.CampusFlowTheme?.refreshControls();
   fillSettingsProfile();
-  switchSettingsTab("profile");
+  switchSettingsTab(tab);
   showOnly("settings");
+  if (windowsClient()) elements.settingsView.scrollTop = 0;
+}
+
+function initializeDesktopNavigation() {
+  if (!windowsClient()) return;
+  const dialog = $("#desktopCommandDialog");
+  if (!dialog) return;
+  const trigger = $("#desktopCommandTrigger");
+  const query = $("#desktopCommandQuery");
+  const empty = $("#desktopCommandEmpty");
+  const commands = [...dialog.querySelectorAll("[data-desktop-destination]")]
+    .filter((button) => windowsClient() || !button.classList.contains("windows-only"));
+
+  function filterCommands() {
+    const search = query.value.trim().toLowerCase();
+    commands.forEach((button) => {
+      button.hidden = !`${button.textContent} ${button.dataset.searchTerms}`.toLowerCase().includes(search);
+    });
+    empty.hidden = commands.some((button) => !button.hidden);
+  }
+
+  function openCommands() {
+    if (elements.appView.hidden || !elements.historyDrawer.hidden || !elements.skillDrawer.hidden ||
+        $("dialog[open]")) return;
+    query.value = "";
+    filterCommands();
+    dialog.showModal();
+    query.focus();
+  }
+
+  function navigate(destination) {
+    if (dialog.open) dialog.close();
+    if (destination === "campus-data" || (destination === "campus" && !windowsClient())) openSettings("data");
+    else if (destination === "settings") openSettings();
+    else if (destination === "history") openHistory();
+    else if (elements.appView.hidden) { state.appTab = destination; showApp(); }
+    else switchAppTab(destination);
+  }
+
+  trigger.addEventListener("click", openCommands);
+  query.addEventListener("input", filterCommands);
+  query.addEventListener("keydown", (event) => {
+    if (event.isComposing || !["Enter", "ArrowDown"].includes(event.key)) return;
+    const first = commands.find((button) => !button.hidden);
+    if (!first) return;
+    event.preventDefault();
+    if (event.key === "Enter") first.click();
+    else first.focus();
+  });
+  document.addEventListener("keydown", (event) => {
+    if (elements.appView.hidden || event.isComposing ||
+        !(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "k") return;
+    event.preventDefault();
+    openCommands();
+  });
+  $$('[data-desktop-destination]').forEach((button) => {
+    button.addEventListener("click", () => navigate(button.dataset.desktopDestination));
+  });
+  if (windowsClient()) window.CampusFlowWindows = {
+    api, toast: showToast, open: navigate, user: () => state.user, uuid: desktopOperationId,
+    campusPlaceError: campusPlaceFailureMessage,
+    focusTasks: () => state.planning?.tasks ?? [],
+    completeFocusTask: async (taskId, button) => {
+      const owner = state.user?.user_id;
+      if (!owner) return;
+      try {
+        const current = await api("/api/v1/planning");
+        const task = current.tasks.find(item => item.task_id === taskId && item.status === "pending");
+        if (state.user?.user_id === owner && task) await setTaskCompleted(task, true, button);
+      } catch (error) {
+        if (state.user?.user_id === owner) showToast(error.message || "无法刷新待办，请恢复连接后重试。", "error");
+      }
+    },
+    reminders: { enabled: desktopRemindersEnabled, set: setDesktopReminders },
+  };
+  windowsClient()?.onReminder?.((title) => { if (state.user) showToast(`待办提醒 · ${title}`); });
 }
 
 function contextListItem(primary, secondary) {
@@ -3209,6 +3958,7 @@ async function checkHealth() {
 }
 
 async function initialize() {
+  initializeDesktopNavigation();
   checkHealth();
   const hduHelpResult = new URLSearchParams(globalThis.location.search).get("hduhelp");
   if (hduHelpResult) {
@@ -3219,12 +3969,19 @@ async function initialize() {
     ), 100);
   }
   try {
-    state.user = await api("/api/v1/me");
+    state.user = await api("/api/v1/me", windowsClient() ? { signal: AbortSignal.timeout(7000) } : undefined);
+    if (windowsClient()?.historyUseOwner) await windowsClient().historyUseOwner(state.user.user_id).catch(() => {});
     if (state.user.onboarding_complete) showApp();
     else showOnboarding();
-  } catch {
+  } catch (error) {
+    if (windowsClient() && error.status === 401) await windowsClient().clear().catch(() => {});
     showOnly("auth");
     switchAuth("login");
+    const desktop = windowsClient();
+    if (desktop?.historyList) {
+      const cached = await desktop.historyList().catch(() => null);
+      $("#windowsOfflineEntry").hidden = !cached?.sessions?.length;
+    }
   }
 }
 
@@ -3235,17 +3992,37 @@ elements.setupLogoutButton.addEventListener("click", logout);
 elements.logoutButton.addEventListener("click", logout);
 elements.settingsLogoutButton.addEventListener("click", logout);
 document.addEventListener("visibilitychange", syncTodayClock);
-elements.userChip.addEventListener("click", openSettings);
-elements.credentialCard.addEventListener("click", openSettings);
+elements.userChip.addEventListener("click", () => openSettings());
+elements.credentialCard.addEventListener("click", () => openSettings());
 elements.settingsBackButton.addEventListener("click", showApp);
 elements.historyButton.addEventListener("click", openHistory);
 elements.agentHistoryButton.addEventListener("click", openHistory);
+$("#windowsRecentRuns")?.addEventListener("click", openDesktopRuns);
+$("#windowsOfflineEntry")?.addEventListener("click", showDesktopOfflineHistory);
 elements.agentControlButton.addEventListener("click", () => elements.agentControlDialog.showModal());
-elements.historyCloseButton.addEventListener("click", closeHistory);
-elements.drawerScrim.addEventListener("click", closeHistory);
+elements.historyCloseButton.addEventListener("click", () => closeHistory());
+elements.drawerScrim.addEventListener("click", () => closeHistory());
+elements.historyDrawer.addEventListener("keydown", event => {
+  if (event.key !== "Escape" || !window.CampusFlowWindows) return;
+  event.preventDefault();
+  const menu = closeHistoryActions();
+  if (menu) menu.focus();
+  else closeHistory();
+});
 elements.historySearch.addEventListener("input", () => {
   clearTimeout(elements.historySearch.searchTimer);
   elements.historySearch.searchTimer = setTimeout(() => loadHistory(elements.historySearch.value.trim()), 180);
+});
+elements.chatRenameButton?.addEventListener("click", () => {
+  openSessionRename(state.sessions.find(item => item.session_id === state.sessionId));
+});
+elements.sessionRenameForm?.addEventListener("submit", submitSessionRename);
+elements.sessionRenameCancel?.addEventListener("click", () => elements.sessionRenameDialog.close());
+elements.sessionRenameDialog?.addEventListener("close", () => {
+  if (!elements.sessionRenameDialog.open) sessionRenameTarget = null;
+});
+elements.sessionRenameDialog?.addEventListener("cancel", event => {
+  if (elements.sessionRenameForm.getAttribute("aria-busy") === "true") event.preventDefault();
 });
 elements.settingsForm.addEventListener("submit", saveSettings);
 elements.baiduMapSettingsForm.addEventListener("submit", event => {
@@ -3304,13 +4081,15 @@ elements.editOnboardingButton.addEventListener("click", editLearningData);
 $$('[data-settings-tab]').forEach((button) => button.addEventListener("click", () => switchSettingsTab(button.dataset.settingsTab)));
 elements.setupBackButton.addEventListener("click", () => { if (state.setupStep > 1) { state.setupStep -= 1; renderSetupStep(); } });
 elements.setupNextButton.addEventListener("click", advanceSetup);
+$("#windowsOfficialCampus")?.addEventListener("click", loadWindowsOfficialCampus);
+$("#windowsSetupCourse")?.addEventListener("submit", addWindowsSetupCourse);
 elements.timetableFile.addEventListener("change", () => handleImageFile(elements.timetableFile.files[0], "timetable"));
 elements.mapFile.addEventListener("change", () => handleImageFile(elements.mapFile.files[0], "map"));
 elements.parseTimetableButton.addEventListener("click", () => parseImage("timetable"));
 elements.parseMapButton.addEventListener("click", () => parseImage("map"));
 elements.composer.addEventListener("submit", (event) => { event.preventDefault(); sendMessage(elements.messageInput.value.trim()); });
 elements.messageInput.addEventListener("input", resizeComposer);
-elements.messageInput.addEventListener("keydown", (event) => {
+if (windowsClient()) elements.messageInput.addEventListener("keydown", (event) => {
   if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); elements.composer.requestSubmit(); }
 });
 $$('input[name="model"]').forEach((radio) => radio.addEventListener("change", () => {
@@ -3332,7 +4111,7 @@ $$('[data-route-origin][data-route-destination]').forEach((button) => button.add
 }));
 elements.newSessionButton.addEventListener("click", resetSession);
 $$('[data-app-tab]').forEach((button) => button.addEventListener("click", () => switchAppTab(button.dataset.appTab)));
-$$('[data-app-action="settings"]').forEach((button) => button.addEventListener("click", openSettings));
+$$('[data-app-action="settings"]').forEach((button) => button.addEventListener("click", () => openSettings()));
 $$('[data-open-agent]').forEach((button) => button.addEventListener("click", () => openAgentWithPrompt(button.dataset.prompt)));
 
 initialize();

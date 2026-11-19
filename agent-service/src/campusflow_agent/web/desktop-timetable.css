@@ -1,0 +1,106 @@
+#windowsTimetableRoot .wt-header,
+#windowsTimetableRoot .wt-toolbar,
+#windowsTimetableRoot .wt-feedback {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+#windowsTimetableRoot :is(h1, h2, p) { margin: 0; }
+#windowsTimetableRoot h2 { font-size: var(--cf-t17); }
+#windowsTimetableRoot .wt-header { flex-wrap: wrap; }
+#windowsTimetableRoot .wt-header h1 { font-size: var(--cf-title); line-height: 1.2; }
+#windowsTimetableRoot .wt-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+#windowsTimetableRoot button {
+  min-height: 36px;
+  padding: 0 11px;
+  border: 1px solid var(--cf-line);
+  border-radius: var(--cf-radius-control);
+  color: var(--cf-ink);
+  background: var(--cf-surface);
+}
+#windowsTimetableRoot button:hover:not(:disabled) { background: var(--cf-surface-soft); }
+#windowsTimetableRoot button:disabled { opacity: .5; }
+#windowsTimetableRoot button.wt-primary { border-color: transparent; color: var(--cf-on-accent); background: var(--cf-btn); box-shadow: var(--cf-btn-shadow); }
+#windowsTimetableRoot button.wt-primary:hover:not(:disabled) { filter: brightness(1.07); }
+#windowsTimetableRoot button.wt-danger { color: var(--cf-danger); }
+#windowsTimetableRoot .wt-feedback { min-height: 54px; color: var(--cf-muted); font-size: .88rem; }
+
+#windowsTimetableRoot .wt-layout { display: grid; align-items: start; grid-template-columns: minmax(0, 1.55fr) minmax(245px, .9fr); gap: 16px; }
+#windowsTimetableRoot .wt-card,
+#windowsTimetableRoot .wt-dialog {
+  min-width: 0;
+  padding: var(--cf-pad);
+  border: 1px solid var(--cf-line);
+  border-radius: var(--cf-radius-card);
+  color: var(--cf-ink);
+  background: var(--cf-surface);
+  box-shadow: var(--cf-card);
+}
+#windowsTimetableRoot .wt-calendar { overflow: hidden; }
+#windowsTimetableRoot .wt-toolbar { flex-wrap: wrap; }
+#windowsTimetableRoot .wt-weekdays,
+#windowsTimetableRoot .wt-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+#windowsTimetableRoot .wt-weekdays { margin: 16px 0 6px; color: var(--cf-muted); font-size: .8rem; text-align: center; }
+#windowsTimetableRoot :is(.wt-time, .wt-day strong) { font-family: var(--cf-num) !important; font-variant-numeric: tabular-nums; }
+#windowsTimetableRoot button.wt-day {
+  display: flex;
+  min-width: 0;
+  min-height: 64px;
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 3px;
+  padding: 5px;
+  text-align: left;
+}
+#windowsTimetableRoot button.wt-other-month { color: var(--cf-muted); background: var(--cf-bg); }
+#windowsTimetableRoot button[aria-current="date"] strong { color: var(--cf-accent-strong); }
+#windowsTimetableRoot button[aria-pressed="true"] { border-color: var(--cf-accent); background: var(--cf-accent-soft); }
+#windowsTimetableRoot :is(.wt-course-count, .wt-task-count) { color: var(--cf-muted); font-size: .72rem; }
+#windowsTimetableRoot .wt-course-count { color: var(--cf-accent-strong); }
+
+#windowsTimetableRoot .wt-agenda { min-height: 172px; }
+#windowsTimetableRoot .wt-agenda > h2 { margin-bottom: 10px; }
+#windowsTimetableRoot .wt-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 4px 8px; border-top: 1px solid var(--cf-line); padding: 12px 0; }
+#windowsTimetableRoot .wt-row > :not(button) { grid-column: 1; overflow-wrap: anywhere; }
+#windowsTimetableRoot .wt-row button { grid-column: 2; grid-row: 1 / span 3; align-self: center; }
+#windowsTimetableRoot .wt-time { color: var(--cf-accent-strong); font-size: .84rem; font-variant-numeric: tabular-nums; }
+#windowsTimetableRoot .wt-muted { color: var(--cf-muted); font-size: .82rem; }
+
+#windowsTimetableRoot .wt-dialog { width: min(540px, calc(100vw - 32px)); max-height: min(710px, 92vh); }
+#windowsTimetableRoot .wt-dialog::backdrop { background: var(--cf-scrim); }
+#windowsTimetableRoot .wt-dialog h2 { margin-bottom: 12px; }
+#windowsTimetableRoot .wt-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+#windowsTimetableRoot .wt-wide { grid-column: 1 / -1; }
+#windowsTimetableRoot :is(.wt-fields, .wt-import-form) label { display: grid; min-width: 0; gap: 4px; color: var(--cf-muted); font-size: .83rem; }
+#windowsTimetableRoot :is(.wt-fields, .wt-import-form) input {
+  width: 100%;
+  min-height: 40px;
+  min-width: 0;
+  padding: 0 9px;
+  border: 1px solid var(--cf-line);
+  border-radius: var(--cf-radius-control);
+  color: var(--cf-ink);
+  background: var(--cf-field);
+}
+#windowsTimetableRoot .wt-dialog-note { margin: 10px 0; color: var(--cf-muted); font-size: .85rem; overflow-wrap: anywhere; }
+#windowsTimetableRoot .wt-dialog-actions { justify-content: flex-end; }
+#windowsTimetableRoot .wt-dialog-actions .wt-danger { margin-right: auto; }
+#windowsTimetableRoot .wt-import { width: min(660px, calc(100vw - 32px)); }
+#windowsTimetableRoot .wt-import-form { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: end; margin-top: 10px; }
+#windowsTimetableRoot .wt-import-rows { max-height: 44vh; overflow: auto; margin-bottom: 10px; }
+#windowsTimetableRoot .wt-import-row { display: flex; align-items: flex-start; gap: 9px; padding: 10px 0; border-top: 1px solid var(--cf-line); }
+#windowsTimetableRoot .wt-import-row label { display: flex; flex: 1; align-items: flex-start; gap: 9px; min-width: 0; }
+#windowsTimetableRoot .wt-import-row button { flex: 0 0 auto; }
+#windowsTimetableRoot .wt-import-row small { display: block; margin-top: 2px; color: var(--cf-muted); overflow-wrap: anywhere; }
+
+@media (max-width: 1050px) {
+  #windowsTimetableRoot .wt-layout { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 520px) {
+  #windowsTimetableRoot .wt-import-form { grid-template-columns: minmax(0, 1fr); }
+  #windowsTimetableRoot .wt-days { gap: 2px; }
+  #windowsTimetableRoot button.wt-day { padding-inline: 2px; }
+}

@@ -58,6 +58,10 @@ jobs:
         if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
         working-directory: arkui-x-client
         run: npm test
+      - name: Windows desktop portable unit checks
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
+        working-directory: desktop-client
+        run: npm test
       - name: Project and configuration preflight (not native compilation)
         if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
         working-directory: arkui-x-client

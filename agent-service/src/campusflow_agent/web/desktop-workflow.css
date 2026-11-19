@@ -1,0 +1,129 @@
+.wf-page { display: grid; align-content: start; gap: 18px; max-width: 1080px; margin-inline: auto; }
+.wf-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 14px; }
+.wf-head h1 { margin: 0; font-size: var(--cf-title); line-height: 1.2; }
+.wf-card { display: grid; gap: 14px; min-width: 0; padding: var(--cf-pad); border: 1px solid var(--cf-line); border-radius: var(--cf-radius-card); background: var(--cf-surface); box-shadow: var(--cf-card); }
+.wf-card h2, .wf-card h3 { margin: 0; font-size: var(--cf-t17); }
+.wf-card p { margin: 0; color: var(--cf-muted); line-height: 1.5; }
+#windowsPlanningRoot { margin-top: 18px; }
+.wf-controls { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; }
+.wf-controls label { display: grid; gap: 5px; flex: 1 1 160px; color: var(--cf-muted); font-size: var(--cf-t14); }
+.wf-input, .wf-button { min-width: 0; min-height: 42px; padding: 8px 12px; border: 1px solid var(--cf-line); border-radius: var(--cf-radius-control); background: var(--cf-surface-soft); color: var(--cf-ink); font: inherit; }
+.wf-button { cursor: pointer; }
+.wf-button.primary { border-color: transparent; color: var(--cf-on-accent); background: var(--cf-btn); box-shadow: var(--cf-btn-shadow); }
+.wf-button:hover:not(:disabled, .primary) { border-color: var(--cf-accent); }
+.wf-button.primary:hover:not(:disabled) { filter: brightness(1.07); }
+.wf-button:disabled { opacity: .55; cursor: not-allowed; }
+.wf-timer { font-size: clamp(2.4rem, 6vw, 4.3rem); font-weight: 650; line-height: 1; letter-spacing: -.035em; }
+.wf-timer, .wf-stat strong { font-family: var(--cf-num) !important; font-variant-numeric: tabular-nums; }
+.wf-stat-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.wf-stat { padding: 15px; background: var(--cf-surface-soft); border-radius: var(--cf-radius-control); }
+.wf-stat span, .wf-row small { display: block; color: var(--cf-muted); }
+.wf-stat strong { display: block; margin-top: 6px; font-size: 1.35rem; }
+.wf-list { display: grid; gap: 0; }
+.wf-row { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; padding: 11px 0; border-bottom: 1px solid var(--cf-line); overflow-wrap: anywhere; }
+.wf-row:last-child { border-bottom: 0; }
+.wf-alert { padding: 10px 14px; border-radius: var(--cf-radius-control); background: var(--cf-accent-soft); color: var(--cf-ink); }
+.wf-note { width: 100%; min-height: 100px; resize: vertical; }
+.wf-details { color: var(--cf-muted); }
+.wf-details summary { padding: 7px 0; cursor: pointer; color: var(--cf-ink); }
+.wf-status:empty { display: none; }
+.wf-row > .wf-focus-conflict, .wf-focus-detail { flex-basis: 100%; }
+.wf-focus-conflict { color: var(--cf-muted); }
+.wf-focus-detail { display: grid; justify-items: start; gap: 12px; min-width: 0; padding: 14px; border-radius: var(--cf-radius-control); background: var(--cf-surface-soft); }
+.wf-focus-detail > div:not(.wf-controls) { width: 100%; }
+html[data-platform="windows"] .history-drawer {
+  inset: 12px 12px 12px auto;
+  width: min(440px, calc(100vw - 24px));
+  max-height: none;
+  border: 1px solid var(--cf-line);
+  border-radius: var(--cf-radius-shell);
+}
+html[data-platform="windows"] .history-head { padding: 10px 12px 10px 18px; }
+html[data-platform="windows"] .history-search { position: relative; padding: 12px 16px 6px; }
+html[data-platform="windows"] .history-search > span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+html[data-platform="windows"] .history-list { gap: 6px; padding: 8px 16px 12px; }
+html[data-platform="windows"] .history-card {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0 4px;
+  overflow: visible;
+  padding-right: 6px;
+  border-color: transparent;
+  background: transparent;
+}
+html[data-platform="windows"] .history-card:is(:hover, :focus-within) {
+  border-color: var(--cf-line);
+  background: var(--cf-surface-soft);
+}
+html[data-platform="windows"] .history-card.active {
+  border-color: color-mix(in srgb, var(--cf-accent) 46%, var(--cf-line));
+  background: var(--cf-accent-soft);
+}
+html[data-platform="windows"] .history-open {
+  display: grid;
+  align-content: center;
+  min-height: 60px;
+  gap: 2px;
+  padding: 8px 6px 8px 12px;
+  border-radius: var(--cf-radius-control);
+}
+html[data-platform="windows"] .history-open > span { align-items: baseline; }
+html[data-platform="windows"] .history-open b { min-width: 0; }
+html[data-platform="windows"] .history-open p { display: block; margin: 0; }
+html[data-platform="windows"] .history-open small {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+html[data-platform="windows"] :is(.history-more, .history-actions button) {
+  min-width: 34px;
+  min-height: 34px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 8px;
+  color: var(--cf-muted);
+  background: transparent;
+}
+html[data-platform="windows"] .history-more { font-size: 1.25rem; line-height: 1; }
+html[data-platform="windows"] :is(.history-more, .history-actions button):hover {
+  color: var(--cf-ink);
+  background: var(--cf-surface-strong);
+}
+html[data-platform="windows"] .history-more[aria-expanded="true"] {
+  color: var(--cf-accent-strong);
+  background: var(--cf-accent-soft);
+}
+html[data-platform="windows"] .history-actions {
+  display: flex;
+  grid-column: 1 / -1;
+  justify-content: flex-end;
+  gap: 4px;
+  margin: 0 3px 0 12px;
+  padding: 3px 0;
+  border-top: 1px solid var(--cf-line);
+  font-size: var(--cf-t13);
+}
+html[data-platform="windows"] .history-actions .history-remove { color: var(--cf-danger); }
+html[data-platform="windows"] .history-new { margin: 4px 16px 16px; }
+
+#sessionRenameDialog { width: min(440px, calc(100vw - 24px)); }
+#sessionRenameForm { display: grid; gap: 12px; }
+#sessionRenameForm label { display: grid; gap: 4px; color: var(--cf-muted); font-size: var(--cf-t14); }
+#sessionRenameInput { min-width: 0; }
+#sessionRenameStatus { margin: 0; color: var(--cf-danger); font-size: var(--cf-t14); overflow-wrap: anywhere; }
+#sessionRenameStatus:empty { display: none; }
+.session-rename-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.session-rename-actions .primary-action { width: auto; min-height: 42px; }
+.windows-speak { align-self: flex-start; }
+#windowsOfflineMessages { display: grid; gap: 8px; padding-top: 10px; }
+@media (max-width: 520px) {
+  .wf-stat-grid { grid-template-columns: minmax(0, 1fr); }
+}

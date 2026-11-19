@@ -2,6 +2,8 @@
 
 CampusFlow 是面向高校学生的跨端 AI Agent。客户端采用 ArkUI-X/ArkTS，以一套主代码构建 HarmonyOS、Android 和 iOS 应用；服务端采用 Python、FastAPI、LangChain 和 DeepSeek。
 
+浏览器可访问后端首页使用 Web 版。Windows x64 的 [行简桌面版](desktop-client/README.md) 与 Web 共用页面和主题。解压启动后，填写手机端使用的后端地址并使用同一账号登录，即可读取同一套课表、待办、计划和会话。[下载 Windows V2.0](https://github.com/lengyu888/CampusFlow/releases/tag/v2.0.0)。
+
 日常使用流程见 [行简使用指南](docs/project-documents/user-journey.md)：准备课表 → 安排待办 → 今日执行 → 按需专注 → 回顾调整。应用内也可从今日、助手空会话或个人设置打开“使用指南”。
 
 > **全分支整合（2026-10-23）**：整合累计业务分支与 Agent 增强，包括安全完成／恢复、专注记录、日／周回看、Markdown 和会话约束。保留清透 iOS、行简纸页两套可切换主题。功能来源、修复和实际验收状态见 [全分支功能清单](docs/project-documents/branch-integration-2026-10-23.md)。历史阶段文档不是本次设备或真实模型验收证明。

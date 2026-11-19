@@ -1,0 +1,26 @@
+html[data-platform="windows"] .chat-workspace .composer-footer .desktop-voice-trigger {
+  min-height: 40px;
+  color: var(--cf-ink);
+  background: var(--cf-surface-soft);
+  border: 1px solid var(--cf-line);
+  border-radius: var(--cf-radius-control);
+  font-weight: 500;
+}
+
+html[data-platform="windows"] .windows-voice-dialog {
+  width: min(460px, calc(100vw - 32px));
+  padding: var(--cf-pad);
+  color: var(--cf-ink);
+  background: var(--cf-surface);
+  border: 1px solid var(--cf-line);
+  border-radius: var(--cf-radius-shell);
+  box-shadow: var(--cf-shadow-lg);
+}
+
+html[data-platform="windows"] .windows-voice-dialog::backdrop { background: var(--cf-scrim); }
+html[data-platform="windows"] .windows-voice-dialog h2 { margin: 0; }
+html[data-platform="windows"] .windows-voice-dialog p { margin: 12px 0 20px; color: var(--cf-muted); line-height: 1.55; }
+html[data-platform="windows"] .windows-voice-dialog textarea { width: 100%; margin-bottom: 16px; resize: vertical; }
+html[data-platform="windows"] .windows-voice-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+html[data-platform="windows"] .windows-voice-actions button { min-height: 40px; padding: 8px 14px; }
+html[data-platform="windows"] .windows-voice-actions button[hidden] { display: none; }

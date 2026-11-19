@@ -1,0 +1,258 @@
+/* Desktop additions inherit the shared palette and layout from themes.css and polish.css. */
+html:not([data-platform="windows"]) .windows-only { display: none !important; }
+
+.auth-form .windows-remember {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.windows-remember input,
+.windows-preference-toggle input {
+  width: 17px;
+  height: 17px;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--cf-accent);
+}
+
+.desktop-command-trigger {
+  display: flex;
+  width: 100%;
+  min-height: 40px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  border: 1px solid var(--cf-line);
+  border-radius: var(--cf-radius-control);
+  color: var(--cf-muted);
+  background: var(--cf-surface);
+  text-align: left;
+  font-size: var(--cf-t13);
+}
+
+.desktop-command-trigger:hover { border-color: var(--cf-accent); color: var(--cf-ink); }
+
+.desktop-command-trigger::before {
+  width: 9px;
+  height: 9px;
+  flex: 0 0 auto;
+  border: 1.5px solid currentColor;
+  border-radius: 50%;
+  content: "";
+}
+
+.desktop-command-trigger span { flex: 1; white-space: nowrap; }
+.desktop-command-trigger kbd { padding: 2px 5px; border: 1px solid var(--cf-line); border-radius: 5px; background: var(--cf-surface-soft); white-space: nowrap; }
+
+.desktop-command-dialog {
+  width: min(520px, calc(100vw - 32px));
+  max-height: calc(100dvh - 48px);
+  padding: var(--cf-pad);
+  overflow-y: auto;
+  border: 1px solid var(--cf-line);
+  border-radius: var(--cf-radius-shell);
+  color: var(--cf-ink);
+  background: var(--cf-surface);
+  box-shadow: var(--cf-shadow-lg);
+}
+
+.desktop-command-dialog::backdrop { background: var(--cf-scrim); }
+.desktop-command-dialog header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.desktop-command-dialog h2 { margin: 0; font-size: var(--cf-t20); }
+.desktop-command-dialog input { width: 100%; }
+.desktop-command-results { display: grid; gap: 4px; margin-top: 12px; }
+.desktop-command-results button { display: grid; gap: 4px; padding: 10px 12px; border: 0; border-radius: var(--cf-radius-control); color: var(--cf-ink); background: transparent; text-align: left; }
+.desktop-command-results button:is(:hover, :focus-visible) { background: var(--cf-accent-soft); }
+.desktop-command-results :is(small, p) { color: var(--cf-muted); font-size: var(--cf-t13); }
+
+.desktop-icon { display: grid; width: 22px; height: 22px; flex: 0 0 auto; place-items: center; font-size: 0; font-style: normal; }
+.desktop-icon::before { font-size: 18px; line-height: 1; }
+.icon-today::before { content: "⌂"; }
+.icon-agent::before { content: "✦"; }
+.icon-plans::before { content: "✓"; }
+.icon-campus::before { content: "⌖"; }
+.icon-skills::before { content: "◇"; }
+.icon-settings::before { content: "⚙"; }
+.icon-history::before { content: "◷"; }
+.icon-timetable::before { content: "▦"; }
+.icon-focus::before { content: "◷"; }
+.icon-review::before { content: "◫"; }
+
+.today-agenda { display: contents; }
+html[data-platform="windows"] .today-agenda {
+  display: grid;
+  min-width: 0;
+  align-content: start;
+  gap: 16px;
+}
+#windowsTodayTaskList:not(:has(.wf-row)) { color: var(--cf-muted); font-size: var(--cf-t14); }
+
+.desktop-task-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.desktop-task-focus { min-height: 36px; color: var(--cf-accent-strong); }
+.plans-surface .surface-heading { justify-content: space-between; }
+
+html[data-platform="windows"] :is(.today-hero h1, .course-block, .next-focus, .goal-card, .context-list, .settings-identity) {
+  overflow-wrap: anywhere;
+}
+
+html[data-platform="windows"] .settings-identity > div { min-width: 0; }
+html[data-platform="windows"] .settings-identity small { white-space: normal; }
+html[data-platform="windows"] .settings-identity > span { flex: 0 0 auto; }
+html[data-platform="windows"] .settings-panel { container: desktop-settings / inline-size; }
+
+@container desktop-settings (max-width: 560px) {
+  html[data-platform="windows"] :is(.subscription-control, .campus-data-hub, .data-columns) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+html[data-platform="windows"] .chat-workspace .chat-heading-actions { flex-wrap: wrap; justify-content: flex-end; }
+html[data-platform="windows"] .chat-session-heading {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+html[data-platform="windows"] #chatHeadingTitle {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+html[data-platform="windows"] #chatRenameButton { flex: 0 0 auto; padding-inline: 8px; }
+html[data-platform="windows"] .chat-workspace .composer-footer { gap: 8px; }
+html[data-platform="windows"] .chat-workspace .composer-footer > button { flex: 0 0 auto; white-space: nowrap; }
+html[data-platform="windows"] .chat-workspace .messages { min-width: 0; }
+html[data-platform="windows"] .app-stage:not(:has([data-app-surface="agent"]:not([hidden]))) { scrollbar-gutter: stable; }
+
+#windowsSetupCourse { margin-block: 14px; }
+#windowsSetupCourse :is(label, input) { min-width: 0; }
+html[data-platform="windows"] .setup-canvas { container: desktop-setup / inline-size; }
+html[data-platform="windows"] .setup-step .upload-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+html[data-platform="windows"] .setup-subscription-card label { min-width: 0; }
+
+@container desktop-setup (max-width: 590px) {
+  html[data-platform="windows"] .setup-subscription-card { grid-template-columns: minmax(0, 1fr) auto; }
+  html[data-platform="windows"] .setup-subscription-card > :is(div, p) { grid-column: 1 / -1; }
+  html[data-platform="windows"] .setup-subscription-card > p { text-align: left; }
+}
+
+@container desktop-setup (max-width: 400px) {
+  html[data-platform="windows"] .setup-step .upload-grid,
+  html[data-platform="windows"] .setup-subscription-card { grid-template-columns: minmax(0, 1fr); }
+}
+
+#windowsStudyWindow > summary { font-weight: 600; }
+.desktop-course-permissions { margin-block: 10px; }
+.desktop-course-permissions fieldset { display: grid; gap: 8px; margin: 6px 0 10px; padding: 10px; border: 1px solid var(--cf-line); border-radius: var(--cf-radius-control); }
+.desktop-course-permissions input { accent-color: var(--cf-accent); }
+
+.windows-preferences-lead { margin: 0 0 20px; color: var(--cf-muted); }
+#windowsPreferencesForm { display: grid; gap: 12px; }
+#windowsPreferencesForm legend { padding: 0 7px; color: var(--cf-muted); }
+.windows-preference-toggle { display: flex; align-items: center; gap: 8px; }
+.windows-preferences-feedback { align-items: center; }
+.windows-preferences-feedback p { margin: 0; color: var(--cf-muted); font-size: var(--cf-t13); }
+
+@media (min-width: 861px) {
+  html[data-platform="windows"] .app-side { gap: 14px; }
+  html[data-platform="windows"] .app-side > .brand,
+  html[data-platform="windows"] .app-side > .desktop-command-trigger,
+  html[data-platform="windows"] .side-foot { flex: 0 0 auto; }
+  html[data-platform="windows"] .app-side .app-nav { min-height: 0; overflow: auto; scrollbar-width: thin; }
+  html[data-platform="windows"] .app-side .app-nav button { flex: 0 0 auto; }
+}
+
+@media (861px <= width <= 1100px) {
+  html[data-platform="windows"] .app-shell { --cf-side: 188px; }
+  html[data-platform="windows"] .app-side { padding-inline: 11px; }
+}
+
+@media (650px <= width <= 1180px) {
+  html[data-platform="windows"] .planning-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  html[data-platform="windows"] .planning-stats article {
+    min-height: 72px;
+    padding: 10px 12px;
+  }
+  html[data-platform="windows"] .planning-stats article:first-child {
+    grid-column: auto;
+    grid-template-columns: minmax(0, 1fr);
+  }
+  html[data-platform="windows"] .planning-stats article:first-child::before { content: none; }
+  html[data-platform="windows"] .planning-stats article:first-child > :is(span, strong) { grid-area: auto; }
+  html[data-platform="windows"] .planning-stats strong { font-size: 1.5rem; }
+}
+
+@media (min-width: 861px) and (max-height: 650px) {
+  html[data-platform="windows"] .app-side { gap: 8px; padding-block: 12px; }
+  html[data-platform="windows"] .app-side .desktop-command-trigger { min-height: 36px; }
+  html[data-platform="windows"] .app-side .app-nav button { min-height: 36px; }
+  html[data-platform="windows"] .app-side .side-foot { gap: 4px; }
+  html[data-platform="windows"] .app-side .user-chip { min-height: 42px; padding-block: 3px; }
+  html[data-platform="windows"] .app-side .topbar-actions .line-button { min-height: 30px; }
+}
+
+@media (max-height: 650px) {
+  html[data-platform="windows"] .today-hero { min-height: 144px; padding-block: 18px; }
+  html[data-platform="windows"] .chat-workspace .chat-heading { min-height: 48px; padding-block: 4px; }
+  html[data-platform="windows"] .chat-workspace .messages { padding-block: 14px; }
+  html[data-platform="windows"] .chat-workspace .composer { margin: 0 10px 10px; padding-block: 5px; }
+  html[data-platform="windows"] .chat-workspace .composer textarea#messageInput {
+    max-height: clamp(52px, 19dvh, 96px);
+    overflow-y: auto;
+  }
+}
+
+@media (540px <= width <= 800px) {
+  html[data-platform="windows"] .gate-view { display: grid; grid-template-columns: minmax(0, .78fr) minmax(0, 1.22fr); }
+  html[data-platform="windows"] .gate-story { min-height: 100dvh; gap: 16px; padding: 20px; }
+  html[data-platform="windows"] .gate-copy h1 { font-size: 1.65rem; }
+  html[data-platform="windows"] .gate-copy p { font-size: var(--cf-t14); }
+  html[data-platform="windows"] .gate-sheet { display: none; }
+}
+
+@media (max-width: 539px) {
+  html[data-platform="windows"] .gate-story { min-height: 0; padding: 12px 16px; }
+  html[data-platform="windows"] .gate-copy { display: none; }
+  html[data-platform="windows"] .auth-stage { padding: 16px; }
+  html[data-platform="windows"] .chat-workspace .chat-heading { flex-wrap: wrap; gap: 0 6px; }
+  html[data-platform="windows"] .chat-session-heading { flex-basis: 100%; }
+  html[data-platform="windows"] .chat-workspace .chat-heading-actions { margin-inline-start: auto; }
+}
+
+@media (max-height: 470px) {
+  html[data-platform="windows"] .auth-card h2 { font-size: 1.5rem; }
+  html[data-platform="windows"] .auth-tabs { margin-block: 10px 12px; }
+  html[data-platform="windows"] .auth-form { gap: 8px; }
+  html[data-platform="windows"] .auth-form input:not([type="checkbox"]) { min-height: 38px; }
+  html[data-platform="windows"] .auth-form .primary-action { min-height: 40px; margin-top: 4px; }
+}
+
+@media (max-width: 860px) {
+  .app-side > .desktop-command-trigger { display: none; }
+  .app-nav:has(> button:nth-child(6 of :not(.windows-only):not([hidden]))) { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: minmax(64px, 1fr); overflow-x: auto; }
+  html[data-platform="windows"] .app-nav { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: minmax(64px, 1fr); overflow-x: auto; }
+  html[data-platform="windows"] .app-side > .desktop-command-trigger {
+    z-index: 1;
+    display: flex;
+    width: auto;
+    min-height: 34px;
+    grid-area: 1 / 1;
+    align-self: center;
+    justify-self: end;
+    margin-inline-end: 6px;
+  }
+  html[data-platform="windows"] .desktop-command-trigger kbd { display: none; }
+}
+
+@media (max-width: 860px) and (max-height: 650px) {
+  html[data-platform="windows"] .settings-layout { padding-top: 10px; gap: 12px; }
+  html[data-platform="windows"] .settings-rail { padding: 8px; }
+  html[data-platform="windows"] .settings-identity { padding: 2px 4px 8px; margin-bottom: 6px; }
+  html[data-platform="windows"] .settings-identity > span { width: 32px; height: 32px; }
+  html[data-platform="windows"] .settings-identity small { margin-top: 0; white-space: nowrap; }
+  html[data-platform="windows"] .settings-nav button { min-height: 36px; }
+}

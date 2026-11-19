@@ -14,6 +14,11 @@
     <link rel="stylesheet" href="/static/themes.css?v=3" />
     <link rel="stylesheet" href="/static/interface.css?v=3" />
     <link rel="stylesheet" href="/static/polish.css?v=3" />
+    <link rel="stylesheet" href="/static/desktop.css?v=5" />
+    <link rel="stylesheet" href="/static/desktop-workflow.css?v=3" />
+    <link rel="stylesheet" href="/static/desktop-campus.css?v=3" />
+    <link rel="stylesheet" href="/static/desktop-timetable.css?v=1" />
+    <link rel="stylesheet" href="/static/desktop-voice.css?v=1" />
   </head>
   <body>
     <div class="grain" aria-hidden="true"></div>
@@ -45,7 +50,9 @@
           <form class="auth-form" id="loginForm">
             <label>邮箱<input name="email" type="email" autocomplete="email" required placeholder="student@example.com" /></label>
             <label>密码<input name="password" type="password" autocomplete="current-password" minlength="8" required placeholder="至少 8 位" /></label>
+            <label class="windows-only windows-remember"><input id="windowsRemember" type="checkbox" /> 在这台电脑上保持登录</label>
             <button class="primary-action" type="submit"><span class="action-label">登录</span><i>↗</i></button>
+              <button id="windowsOfflineEntry" class="line-button windows-only" type="button" hidden>查看本机历史</button>
           </form>
 
           <form class="auth-form" id="registerForm" hidden>
@@ -93,6 +100,11 @@
 
           <div class="setup-step" data-setup-step="2" hidden>
             <h2>导入课表</h2>
+            <form class="wf-card windows-only" id="windowsSetupCourse">
+              <h3>手动添加课程</h3>
+              <div class="wf-controls"><label>课程名称<input class="wf-input" name="title" maxlength="100" required /></label><label>日期<input class="wf-input" name="date" type="date" required /></label><label>开始<input class="wf-input" name="start_time" type="time" required /></label><label>结束<input class="wf-input" name="end_time" type="time" required /></label><label>地点<input class="wf-input" name="location" maxlength="120" /></label></div>
+              <div><button class="wf-button" type="submit">加入课表草稿</button></div>
+            </form>
             <form class="setup-subscription-card" id="setupSubscriptionForm">
               <div><b>订阅课表</b><small>订阅链接加密保存。</small></div>
               <label>订阅链接<input id="setupSubscriptionUrl" type="password" autocomplete="off" placeholder="https://neo.hduhelp.com/…?token=…" required /></label>
@@ -118,6 +130,7 @@
           <div class="setup-step" data-setup-step="3" hidden>
             <h2>识别校园地图</h2>
             <p class="step-lead">上传平面图，提取校园地点。</p>
+            <div class="wf-card windows-only"><button class="wf-button" id="windowsOfficialCampus" type="button">使用内置校园资料</button><label>或手动填写一个校园地点<input class="wf-input" id="windowsManualPlace" maxlength="100" placeholder="例如图书馆" /></label></div>
             <div class="upload-grid">
               <label class="drop-zone" for="mapFile">
                 <input id="mapFile" type="file" accept="image/png,image/jpeg,image/webp,image/gif" />
@@ -144,10 +157,15 @@
     <div class="app-shell" id="appView" hidden>
       <aside class="app-side">
         <a class="brand" href="/" aria-label="CampusFlow 首页"><span class="brand-mark">CF</span><span><strong>行简</strong><small>CampusFlow</small></span></a>
+        <button class="desktop-command-trigger windows-only" id="desktopCommandTrigger" type="button" aria-haspopup="dialog" aria-keyshortcuts="Control+K"><span>查找功能</span><kbd aria-hidden="true">Ctrl K</kbd></button>
         <nav class="app-nav" aria-label="主导航">
         <button class="active" type="button" data-app-tab="today"><i aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M8 3v4M16 3v4M3.5 10h17M8 14.5h3.5"/></svg></i><span>今日</span></button>
         <button type="button" data-app-tab="agent"><i aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M20 11.8a8 8 0 0 1-11.7 7.1L4 20l1.1-4.2A8 8 0 1 1 20 11.8Z"/><path d="M12 8.3l.95 2.55 2.55.95-2.55.95L12 15.3l-.95-2.55-2.55-.95 2.55-.95z"/></svg></i><span>助手</span></button>
         <button type="button" data-app-tab="plans"><i aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M4 6.5 5.5 8 8 5.5M4 12.5 5.5 14 8 11.5M4 18.5 5.5 20 8 17.5M11.5 7H20M11.5 13H20M11.5 19H20"/></svg></i><span>计划</span></button>
+        <button type="button" class="windows-only" data-app-tab="timetable"><i aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M10 10v10M9 3v4M15 3v4"/></svg></i><span>课表</span></button>
+        <button type="button" class="windows-only" data-app-tab="focus"><i aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l3 2M9 3h6"/></svg></i><span>专注</span></button>
+        <button type="button" class="windows-only" data-app-tab="review"><i aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><rect x="5" y="4" width="14" height="16" rx="2"/><path d="M9 15v-2M12 15V9M15 15v-4"/></svg></i><span>回顾</span></button>
+        <button type="button" class="windows-only" data-app-tab="campus"><i aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M3.5 9 12 4l8.5 5M5 10v8m14-8v8M3 20h18M9 12v5m6-5v5"/></svg></i><span>校园服务</span></button>
         <button type="button" data-app-tab="skills"><i aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><rect x="4" y="4" width="7" height="7" rx="2"/><rect x="4" y="13" width="7" height="7" rx="2"/><rect x="13" y="13" width="7" height="7" rx="2"/><path d="M16.5 4.5v6M13.5 7.5h6"/></svg></i><span>能力</span></button>
         <button type="button" data-app-action="settings"><i aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><circle cx="12" cy="8.5" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0"/></svg></i><span>我的</span></button>
       </nav>
@@ -170,11 +188,20 @@
               <button class="primary-action" type="button" data-open-agent data-prompt="请结合我的课表，为今天生成一份可执行的学习安排。"><span>请助手安排今天</span><i>↗</i></button>
             </header>
             <div class="today-grid">
-              <section class="day-timeline dashboard-card">
-                <div class="card-heading"><h2 id="todayListTitle">今日课表</h2><b id="todayCourseCount">0 节课</b></div>
-                <div class="week-strip" id="weekStrip" role="group" aria-label="选择本周日期"></div>
-                <div class="today-course-list" id="todayCourseList"></div>
-              </section>
+              <div class="today-agenda">
+                <section class="day-timeline dashboard-card">
+                  <div class="card-heading"><h2 id="todayListTitle">今日课表</h2><b id="todayCourseCount">0 节课</b></div>
+                  <div class="week-strip" id="weekStrip" role="group" aria-label="选择本周日期"></div>
+                  <div class="today-course-list" id="todayCourseList"></div>
+                </section>
+                <section class="wf-card windows-only" id="windowsTodayTasks" aria-labelledby="windowsTodayTasksTitle"><h2 id="windowsTodayTasksTitle">今日待办</h2><div class="wf-list" id="windowsTodayTaskList" aria-live="polite"></div></section>
+                <details class="wf-card wf-details windows-only" id="windowsStudyWindow">
+                  <summary>找一段学习时间</summary>
+                  <div class="wf-controls"><label>课表与待办前后预留<select class="wf-input" id="windowsStudyBuffer"><option value="0">不预留</option><option value="5">5 分钟</option><option value="10">10 分钟</option><option value="15">15 分钟</option></select></label></div>
+                  <p id="windowsStudyStatus" role="status"></p>
+                  <div class="wf-controls"><button class="wf-button primary" id="windowsStudyCapture" type="button" disabled>留 25 分钟复习</button></div>
+                </details>
+              </div>
               <aside class="today-side">
                 <section class="dashboard-card next-focus"><span>接下来</span><h2 id="nextCourseTitle">今天没有课程</h2><p id="nextCourseMeta">适合安排一段完整的自主学习时间。</p><b class="next-countdown" id="nextCountdown"></b><button type="button" data-open-agent data-prompt="根据我的近期课程，推荐今天最值得优先复习的内容和地点。">询问助手</button></section>
                 <section class="dashboard-card suggestion-strip"><span>学习建议</span><p id="todaySuggestion">正在读取课表…</p><button type="button" data-open-agent data-prompt="查看我的课表和校园地点，为我生成一个今天就能完成的小目标。">请助手安排</button></section>
@@ -211,8 +238,12 @@
         </dialog>
 
         <section class="chat-panel panel">
-          <div class="chat-heading"><h2>助手</h2><div class="chat-heading-actions">
+          <div class="chat-heading"><div class="chat-session-heading">
+            <h2 id="chatHeadingTitle">助手</h2>
+            <button class="chat-small-button windows-only" id="chatRenameButton" type="button" aria-haspopup="dialog" aria-label="修改会话名称" hidden>改名</button>
+          </div><div class="chat-heading-actions">
             <span class="model-badge" id="modelBadge">V4 PRO</span>
+            <button class="chat-small-button windows-only" id="windowsRecentRuns" type="button" aria-haspopup="dialog">运行记录</button>
             <button class="chat-small-button" id="agentHistoryButton" type="button">历史</button>
             <button class="chat-small-button" id="agentControlButton" type="button" aria-haspopup="dialog">设置</button>
           </div></div>
@@ -229,7 +260,7 @@
           </section>
 
           <section class="app-surface plans-surface" data-app-surface="plans" hidden>
-            <div class="surface-heading"><h1>计划</h1></div>
+            <div class="surface-heading"><h1>计划</h1><button class="primary-action windows-only windows-plan-add" id="windowsPlanAdd" type="button">添加待办</button></div>
             <div class="planning-stats">
               <article><span>整体进度</span><strong id="planProgress">0%</strong><i><b id="planProgressBar"></b></i></article>
               <article><span>全部待办</span><strong id="planTaskCount">0</strong></article>
@@ -253,6 +284,7 @@
                 <button class="primary-action" type="button" data-open-agent data-prompt="请结合我的课表，把本周学习目标拆成包含里程碑、时间块和提醒的完整计划，并先生成待确认提案。"><span>请助手制定计划</span><i>↗</i></button>
               </aside>
             </div>
+            <div id="windowsPlanningRoot" class="windows-only"></div>
           </section>
 
           <section class="app-surface skills-surface" data-app-surface="skills" hidden>
@@ -268,15 +300,30 @@
               <div class="skill-audit-list" id="skillAuditList"><div class="skill-library-empty">暂无活动记录</div></div>
             </section>
           </section>
+          <section class="app-surface windows-only" data-app-surface="timetable" hidden><div id="windowsTimetableRoot"></div></section>
+          <section class="app-surface windows-only" data-app-surface="focus" hidden><div id="windowsFocusRoot"></div></section>
+          <section class="app-surface windows-only" data-app-surface="review" hidden><div id="windowsReviewRoot"></div></section>
+          <section class="app-surface windows-only" data-app-surface="campus" hidden><div id="windowsCampusRoot"></div></section>
       </div>
 
-      <aside class="history-drawer" id="historyDrawer" hidden>
-        <div class="history-head"><h2>历史会话</h2><button id="historyCloseButton" type="button" aria-label="关闭历史会话">×</button></div>
-        <label class="history-search">搜索<input id="historySearch" type="search" placeholder="搜索标题或消息内容" /></label>
+      <aside class="history-drawer" id="historyDrawer" aria-labelledby="historyDrawerTitle" hidden>
+        <div class="history-head"><h2 id="historyDrawerTitle">历史会话</h2><button id="historyCloseButton" type="button" aria-label="关闭历史会话">×</button></div>
+        <label class="history-search"><span>搜索</span><input id="historySearch" type="search" placeholder="搜索标题或消息内容" /></label>
         <div class="history-list" id="historyList"></div>
         <button class="primary-action history-new" id="newSessionButton" type="button"><span>新建会话</span><i>＋</i></button>
       </aside>
       <div class="drawer-scrim" id="drawerScrim" hidden></div>
+      <dialog class="desktop-command-dialog" id="sessionRenameDialog" aria-labelledby="sessionRenameTitle">
+        <form id="sessionRenameForm">
+          <h2 id="sessionRenameTitle">修改会话名称</h2>
+          <label>会话名称<input id="sessionRenameInput" maxlength="80" required autocomplete="off" /></label>
+          <p id="sessionRenameStatus" role="status"></p>
+          <div class="session-rename-actions">
+            <button class="line-button" id="sessionRenameCancel" type="button">取消</button>
+            <button class="primary-action" type="submit">保存</button>
+          </div>
+        </form>
+      </dialog>
       <aside class="skill-drawer" id="skillDrawer" hidden aria-labelledby="skillDrawerName">
         <div class="skill-drawer-head"><div><span id="skillDrawerCategory">OFFICIAL SKILL</span><small id="skillDrawerVersion">VERSION</small></div><button id="skillDrawerClose" type="button" aria-label="关闭能力详情">×</button></div>
         <div class="skill-drawer-body">
@@ -294,7 +341,33 @@
         </div>
       </aside>
       <div class="skill-scrim" id="skillScrim" hidden></div>
+      <dialog class="desktop-command-dialog" id="desktopCommandDialog" aria-labelledby="desktopCommandTitle">
+        <header><h2 id="desktopCommandTitle">查找功能</h2><form method="dialog"><button class="line-button" type="submit">关闭</button></form></header>
+        <input id="desktopCommandQuery" type="search" placeholder="搜索课表、待办、设置…" aria-label="功能名称" autocomplete="off" />
+        <div class="desktop-command-results">
+          <button type="button" data-desktop-destination="today" data-search-terms="首页 今天 今日课程"><span>今日</span><small>课表与接下来的安排</small></button>
+          <button type="button" data-desktop-destination="agent" data-search-terms="聊天 对话 AI"><span>助手</span><small>询问课程或制定计划</small></button>
+          <button type="button" data-desktop-destination="plans" data-search-terms="待办 任务 日程"><span>计划</span><small>待办与目标计划</small></button>
+          <button type="button" data-desktop-destination="campus" data-search-terms="课表 地图 订阅 杭电 HDUHelp"><span>校园数据</span><small>课表订阅、档案和地点</small></button>
+          <button type="button" data-desktop-destination="history" data-search-terms="聊天 记录"><span>历史会话</span><small>查找与继续已有对话</small></button>
+          <button type="button" data-desktop-destination="skills" data-search-terms="技能 工具 skill"><span>能力管理</span><small>浏览已安装的能力与权限</small></button>
+          <button type="button" data-desktop-destination="settings" data-search-terms="我的 主题 外观 账户 密钥"><span>个人设置</span><small>账号、主题和服务配置</small></button>
+          <button type="button" class="windows-only" data-desktop-destination="timetable" data-search-terms="课程 日历 课程表"><span>课表</span><small>查看课程日历与编辑课程</small></button>
+          <button type="button" class="windows-only" data-desktop-destination="focus" data-search-terms="计时 番茄钟"><span>专注</span><small>为一项待办计时</small></button>
+          <button type="button" class="windows-only" data-desktop-destination="review" data-search-terms="复盘 统计 笔记"><span>回顾</span><small>查看每天或每周的完成记录</small></button>
+          <p id="desktopCommandEmpty" role="status" hidden>没有匹配的功能。</p>
+        </div>
+      </dialog>
+      <dialog class="desktop-command-dialog" id="windowsRunsDialog" aria-labelledby="windowsRunsTitle">
+        <header><h2 id="windowsRunsTitle">运行记录</h2><form method="dialog"><button class="line-button" type="submit">关闭</button></form></header>
+        <div class="wf-list" id="windowsRunList"></div>
+      </dialog>
     </div>
+    <dialog class="desktop-command-dialog" id="windowsOfflineDialog" aria-labelledby="windowsOfflineTitle">
+      <header><h2 id="windowsOfflineTitle">本机历史 · 只读</h2><form method="dialog"><button class="line-button" type="submit">关闭</button></form></header>
+      <div class="wf-list" id="windowsOfflineList"></div>
+      <div id="windowsOfflineMessages"></div>
+    </dialog>
 
     <section class="settings-view" id="settingsView" hidden>
       <header class="topbar settings-topbar">
@@ -313,6 +386,7 @@
           <nav class="settings-nav">
             <button class="active" type="button" data-settings-tab="profile">个人设置</button>
             <button type="button" data-settings-tab="data">校园数据</button>
+            <button class="windows-only" type="button" data-settings-tab="learning">学习偏好</button>
             <button id="adminTabButton" type="button" data-settings-tab="admin" hidden>用户管理</button>
           </nav>
         </aside>
@@ -351,6 +425,25 @@
               <button class="line-button" id="clearBaiduServerAk" type="button" hidden disabled>服务端恢复服务器默认配置</button>
               <p class="wide" id="baiduMapSettingsStatus" role="status" aria-live="polite"></p>
               <button class="primary-action settings-save" id="saveBaiduMapSettings" type="submit" disabled><span class="action-label">保存地图配置</span><i>↗</i></button>
+            </form>
+          </div>
+
+          <div class="settings-panel windows-only" data-settings-panel="learning" id="windowsPreferences" hidden>
+            <div class="settings-heading"><h1>学习偏好</h1></div>
+            <p class="windows-preferences-lead">与手机端同步，供助手制定后续计划时参考。</p>
+            <form id="windowsPreferencesForm">
+              <fieldset class="wf-card" disabled>
+                <legend>学习节奏</legend>
+                <label class="windows-preference-toggle"><input type="checkbox" name="enabled" /> 启用学习偏好</label>
+                <div class="wf-controls">
+                  <label>单次学习（分钟）<input class="wf-input" name="session_minutes" type="number" min="15" max="120" required /></label>
+                  <label>每次休息（分钟）<input class="wf-input" name="break_minutes" type="number" min="0" max="30" required /></label>
+                  <label>每日学习（分钟）<input class="wf-input" name="daily_minutes" type="number" min="30" max="480" required /></label>
+                  <label>适合学习的时段<select class="wf-input" name="preferred_period"><option value="any">不限</option><option value="morning">上午</option><option value="afternoon">下午</option><option value="evening">晚上</option></select></label>
+                </div>
+                <div class="wf-controls"><button class="wf-button primary" type="submit">保存偏好</button><button class="wf-button" id="windowsPreferencesClear" type="button">清除偏好</button></div>
+              </fieldset>
+              <div class="wf-controls windows-preferences-feedback"><p id="windowsPreferencesStatus" role="status"></p><button class="wf-button" id="windowsPreferencesReload" type="button">读取最新值</button><button class="wf-button" id="windowsPreferencesRetry" type="button" hidden>核对上次保存</button></div>
             </form>
           </div>
 
@@ -466,7 +559,13 @@
     <script src="/static/vendor/marked-18.1.1.umd.js" defer></script>
     <script src="/static/vendor/purify-3.4.17.min.js" defer></script>
     <script src="/static/markdown.js?v=2" defer></script>
-    <script src="/static/app.js?v=22" defer></script>
+    <script src="/static/app.js?v=23" defer></script>
+    <script src="/static/desktop-workflow.js?v=2" defer></script>
+    <script src="/static/desktop-campus.js?v=3" defer></script>
+    <script src="/static/desktop-timetable.js?v=1" defer></script>
+    <script src="/static/desktop-planning.js?v=1" defer></script>
+    <script src="/static/desktop-preferences.js?v=1" defer></script>
+    <script src="/static/desktop-voice.js?v=1" defer></script>
     <script src="/static/motion.js?v=2" defer></script>
   </body>
 </html>
